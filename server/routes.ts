@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
+import { pdfParser } from "./pdfParser";
 import multer from "multer";
 import { z } from "zod";
 import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
@@ -75,12 +76,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
-      // TODO: Integrate with PDF parsing service here
-      // For now, return success with processing status
+      // Parse PDF asynchronously
+      pdfParser.parsePDF(req.file.path, bidPackage.id)
+        .then(() => {
+          console.log(`PDF parsing completed for bid package ${bidPackage.id}`);
+        })
+        .catch((error) => {
+          console.error(`PDF parsing failed for bid package ${bidPackage.id}:`, error);
+        });
+
       res.json({
         success: true,
         bidPackage,
-        message: "Bid package uploaded successfully. Processing will begin shortly.",
+        message: "Bid package uploaded successfully. Processing has begun.",
       });
       
     } catch (error) {
