@@ -28,14 +28,21 @@ export default function Dashboard() {
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
   });
 
+  // Get the latest completed bid package 
+  const latestBidPackage = bidPackages.find(pkg => pkg.status === 'completed');
+
   const { data: pairings = [], refetch: refetchPairings } = useQuery({
-    queryKey: ["/api/pairings/search"],
-    queryFn: () => api.searchPairings({ ...searchFilters, search: searchQuery }),
+    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
+    queryFn: () => api.searchPairings({ 
+      ...searchFilters, 
+      search: searchQuery,
+      bidPackageId: latestBidPackage?.id // Only search current bid package
+    }),
+    enabled: !!latestBidPackage, // Only run if we have a completed bid package
   });
 
-  const latestBidPackage = bidPackages[0];
-
   const handleSearch = () => {
+    // Query will auto-refresh due to dependency on searchQuery and searchFilters
     refetchPairings();
   };
 
@@ -219,9 +226,14 @@ export default function Dashboard() {
                   <h2 className="text-lg font-semibold text-gray-900">Pairing Analysis</h2>
                   <div className="mt-4 sm:mt-0 flex items-center space-x-2">
                     <span className="text-sm text-gray-500">
-                      {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} Bid Package` : 'No Bid Package'}
+                      {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} Bid Package` : 'No Completed Bid Package'}
                     </span>
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    {latestBidPackage && (
+                      <div className="w-2 h-2 bg-green-500 rounded-full" title="Ready to search"></div>
+                    )}
+                    {!latestBidPackage && bidPackages.some(pkg => pkg.status === 'processing') && (
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
+                    )}
                   </div>
                 </div>
 
@@ -254,15 +266,39 @@ export default function Dashboard() {
                 </div>
 
                 {/* Advanced Filters */}
-                <FiltersPanel onFiltersChange={setSearchFilters} />
+                <FiltersPanel onFiltersChange={(newFilters) => {
+                  setSearchFilters(prev => ({ ...prev, ...newFilters }));
+                }} />
               </CardContent>
             </Card>
 
             {/* Results Table */}
-            <PairingTable 
-              pairings={pairings} 
-              onPairingClick={handlePairingClick}
-            />
+            {!latestBidPackage ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="text-gray-500">
+                    <Plane className="mx-auto h-12 w-12 mb-4 text-gray-300" />
+                    <h3 className="text-lg font-medium mb-2">No Bid Package Ready</h3>
+                    <p>Upload a bid package above and wait for processing to complete before searching pairings.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : pairings.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="text-gray-500">
+                    <Search className="mx-auto h-12 w-12 mb-4 text-gray-300" />
+                    <h3 className="text-lg font-medium mb-2">No Pairings Found</h3>
+                    <p>Try adjusting your search filters or search terms to find pairings.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <PairingTable 
+                pairings={pairings} 
+                onPairingClick={handlePairingClick}
+              />
+            )}
 
             {/* Seniority Analysis Chart */}
             <SeniorityChart />
