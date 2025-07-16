@@ -193,40 +193,26 @@ export class PDFParser {
         });
       }
       
-      // Look for total credit line at the end (this is actually layover time, not total)
-      const totalMatch = line.match(/(\d{1,2}\.\d{2})\/\s*9\.00\s+\.00CRD\s+(\d{1,2}\.\d{2})TL/);
-      if (totalMatch) {
-        // Don't use this - it's layover time, not total pairing time
-        // We'll calculate totals from individual flight segments
+      // Look for the actual total credit and block hours line
+      const totalCreditMatch = line.match(/TOTAL CREDIT\s+(\d{1,2}\.\d{2})\s+(\d{1,2}\.\d{2})BL/);
+      if (totalCreditMatch) {
+        creditHours = totalCreditMatch[1];
+        blockHours = totalCreditMatch[2];
       }
       
-      // TAFB calculation - estimate based on layovers and flight pattern
-      if (layovers.length > 0) {
-        const totalLayoverTime = layovers.reduce((sum, layover) => {
-          return sum + parseFloat(layover.duration);
-        }, 0);
-        const estimatedTafb = Math.ceil(totalLayoverTime / 24) + 1;
-        tafb = `${estimatedTafb}d 00:00`;
+      // Look for TAFB in the total line
+      const tafbMatch = line.match(/TAFB\s+(\d+)D\s+(\d{1,2}\.\d{2})/);
+      if (tafbMatch) {
+        tafb = `${tafbMatch[1]}d ${tafbMatch[2]}`;
       }
+      
+      // Look for TOTAL PAY line
+      const totalPayMatch = line.match(/TOTAL PAY\s+(\d{1,2}\.\d{2})/);
+      if (totalPayMatch) {
+        payHours = totalPayMatch[1];
+      }
+      
     }
-    
-    // Calculate total credit and block hours from flight segments
-    let totalBlockHours = 0;
-    flightSegments.forEach(segment => {
-      const blockTime = parseFloat(segment.blockTime);
-      if (!isNaN(blockTime)) {
-        totalBlockHours += blockTime;
-      }
-    });
-    
-    // Format back to hours:minutes format
-    const totalHours = Math.floor(totalBlockHours);
-    const totalMinutes = Math.round((totalBlockHours - totalHours) * 60);
-    const formattedTotal = `${totalHours}.${totalMinutes.toString().padStart(2, '0')}`;
-    
-    // Credit hours typically equal block hours for regular flights
-    creditHours = formattedTotal;
-    blockHours = formattedTotal;
     
     // Generate route from flight segments
     const route = this.parseRoute(flightSegments);

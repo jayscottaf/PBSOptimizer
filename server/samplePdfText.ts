@@ -10,6 +10,9 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
          563    LGA 1829  MCI 2054  3.25             11.26/13.00 11.26/12.30 2  
          MCI 18.51/MCI MARRIOTT DWTN             7.49/ 9.00  .00CRD  7.49TL    
  B      2068    MCI 1715  LGA 2113  2.58              3.58/12.00  3.58/11.30 2  
+                                                                                
+TOTAL CREDIT 10.47    10.47BL    TAFB 2D 3.58    2.40DHD
+TOTAL PAY 10.47  
 
 #7995  SU              EFFECTIVE AUG03 ONLY                  CHECK-IN AT 10.30 
                                                                                 
@@ -20,6 +23,9 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
                                                          2.40DHD 
          ORD 20.40/PALMER HOUSE                  5.19/ 9.00  .00CRD  7.59TL    
  B      1241    ORD 1700  LGA 2031  2.31              3.31/12.00  3.31/11.30 2  
+                                                                                
+TOTAL CREDIT 7.10    7.10BL    TAFB 2D 3.31    2.40DHD
+TOTAL PAY 7.10  
 
 #8001  FR              EFFECTIVE AUG15-AUG. 22               CHECK-IN AT 10.30 
                                                                                 
@@ -29,6 +35,9 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
         2801    LGA 1855  ORD 2047  2.52             11.17/13.00 11.17/12.30 2  
          ORD 18.43/PALMER HOUSE                  7.54/ 9.00  .00CRD  7.54TL    
  B      1241    ORD 1700  LGA 2031  2.31              3.31/12.00  3.31/11.30 2  
+                                                                                
+TOTAL CREDIT 9.14    9.14BL    TAFB 2D 3.31    0.00DHD
+TOTAL PAY 9.14  
 
 #8006  WE              EFFECTIVE AUG27 ONLY                  CHECK-IN AT 10.30 
                                                                                 

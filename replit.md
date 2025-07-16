@@ -48,9 +48,10 @@ The application uses a well-structured PostgreSQL schema with the following main
 
 ### PDF Processing System
 - **Upload Handling**: Secure PDF file uploads with type validation
-- **Text Extraction**: Preserves complete pairing text blocks for detailed analysis
-- **Structured Parsing**: Extracts specific fields into searchable database columns
+- **Text Extraction**: Custom parser for Delta bid package format with complete pairing text preservation
+- **Structured Parsing**: Extracts pairing numbers, effective dates, flight segments, layovers, credit hours, block hours, and total pay
 - **Status Tracking**: Processing status monitoring (processing, completed, failed)
+- **Delta Format Support**: Handles NYC A220 bid packages with TOTAL CREDIT and TOTAL PAY line extraction
 
 ### Search and Filter System
 - **Advanced Filtering**: Multi-criteria search including credit hours, block time, TAFB
