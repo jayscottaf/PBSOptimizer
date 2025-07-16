@@ -32,7 +32,7 @@ export const pairings = pgTable("pairings", {
   blockHours: decimal("block_hours", { precision: 4, scale: 2 }).notNull(),
   tafb: text("tafb").notNull(), // Time Away From Base
   fdp: text("fdp"), // Flight Duty Period
-  payHours: decimal("pay_hours", { precision: 4, scale: 2 }),
+  payHours: text("pay_hours"), // Time format like "12:43"
   sitEdpPay: decimal("sit_edp_pay", { precision: 4, scale: 2 }),
   carveouts: text("carveouts"),
   deadheads: integer("deadheads").default(0),

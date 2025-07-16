@@ -193,8 +193,8 @@ export class PDFParser {
         });
       }
       
-      // Look for the actual total credit and block hours line
-      const totalCreditMatch = line.match(/TOTAL CREDIT\s+(\d{1,2}\.\d{2})\s+(\d{1,2}\.\d{2})BL/);
+      // Look for the actual total credit and block hours line - updated format
+      const totalCreditMatch = line.match(/TOTAL CREDIT\s+(\d{1,2}\.\d{2})TL\s+(\d{1,2}\.\d{2})BL/);
       if (totalCreditMatch) {
         creditHours = totalCreditMatch[1];
         blockHours = totalCreditMatch[2];
@@ -206,8 +206,8 @@ export class PDFParser {
         tafb = `${tafbMatch[1]}d ${tafbMatch[2]}`;
       }
       
-      // Look for TOTAL PAY line
-      const totalPayMatch = line.match(/TOTAL PAY\s+(\d{1,2}\.\d{2})/);
+      // Look for TOTAL PAY line with time format (e.g., "12:43TL")
+      const totalPayMatch = line.match(/TOTAL PAY\s+(\d{1,2}:\d{2})TL/);
       if (totalPayMatch) {
         payHours = totalPayMatch[1];
       }

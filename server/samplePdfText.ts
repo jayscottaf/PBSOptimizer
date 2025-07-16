@@ -11,8 +11,8 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
          MCI 18.51/MCI MARRIOTT DWTN             7.49/ 9.00  .00CRD  7.49TL    
  B      2068    MCI 1715  LGA 2113  2.58              3.58/12.00  3.58/11.30 2  
                                                                                 
-TOTAL CREDIT 10.47    10.47BL    TAFB 2D 3.58    2.40DHD
-TOTAL PAY 10.47  
+TOTAL CREDIT 10.47TL  10.47BL    .00CR  15.24FDP        TAFB  35.15
+TOTAL PAY    12:43TL   .00SIT   1.56EDP   .00HOL   .00CARVE  
 
 #7995  SU              EFFECTIVE AUG03 ONLY                  CHECK-IN AT 10.30 
                                                                                 
@@ -24,8 +24,8 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
          ORD 20.40/PALMER HOUSE                  5.19/ 9.00  .00CRD  7.59TL    
  B      1241    ORD 1700  LGA 2031  2.31              3.31/12.00  3.31/11.30 2  
                                                                                 
-TOTAL CREDIT 7.10    7.10BL    TAFB 2D 3.31    2.40DHD
-TOTAL PAY 7.10  
+TOTAL CREDIT 7.10TL   7.10BL    .00CR  12.15FDP        TAFB  27.31
+TOTAL PAY    7:10TL   .00SIT   .45EDP   .00HOL   .00CARVE  
 
 #8001  FR              EFFECTIVE AUG15-AUG. 22               CHECK-IN AT 10.30 
                                                                                 
@@ -36,8 +36,8 @@ DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX
          ORD 18.43/PALMER HOUSE                  7.54/ 9.00  .00CRD  7.54TL    
  B      1241    ORD 1700  LGA 2031  2.31              3.31/12.00  3.31/11.30 2  
                                                                                 
-TOTAL CREDIT 9.14    9.14BL    TAFB 2D 3.31    0.00DHD
-TOTAL PAY 9.14  
+TOTAL CREDIT 9.14TL   9.14BL    .00CR  11.17FDP        TAFB  27.31
+TOTAL PAY    9:14TL   .00SIT   .00EDP   .00HOL   .00CARVE  
 
 #8006  WE              EFFECTIVE AUG27 ONLY                  CHECK-IN AT 10.30 
                                                                                 
