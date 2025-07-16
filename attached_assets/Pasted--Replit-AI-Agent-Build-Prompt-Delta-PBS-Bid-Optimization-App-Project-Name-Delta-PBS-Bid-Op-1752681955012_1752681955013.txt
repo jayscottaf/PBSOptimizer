@@ -1,0 +1,104 @@
+🧠 Replit AI Agent Build Prompt – Delta PBS Bid Optimization App
+
+**Project Name:** Delta PBS Bid Optimization App
+**Goal:** Build a full-stack web app for Delta  pilots  to parse monthly bid packages, store pairing data (full text and parsed fields), track historical bid awards, and predict the likelihood of holding trips based on seniority trends.
+
+---
+
+## 📦 Core Features
+
+### 1. PDF Bid Package Parser
+
+* Upload Delta PBS bid packages (PDF format).
+* Extract **the full text block for each pairing**, preserving every detail:
+
+  * Pairing #
+  * Effective dates
+  * Day-by-day flight segments (flight #, departure/arrival airports, block time, turn time)
+  * Deadhead segments (marked DHD)
+  * Layover details (city, hotel, rest duration)
+  * Totals: credit, block, pay, TAFB, FDP, SIT/EDP pay, carveouts, etc.
+* Parse and save structured fields into a PostgreSQL database for analytics.
+
+### 2. Historical Bid & Award Database
+
+* covert HTML formatted bid history into a readable format to Store past bid packages and PBS composite award results.
+* Link awarded pairings to seniority numbers.
+* Allow queries like:
+
+  * “Show all pairings awarded to seniority 15,750–15,900 last April.”
+  * “What was the most junior FO to hold pairing #7856 last March?”
+
+### 3. Frontend Web Interface
+
+* Built in React + Tailwind CSS.
+
+  ## Features:
+
+  * Input the current seniority number
+  * PDF upload UI
+  * Pairing search & filter UI pulldown(block time, credit, TAFB, deadheads, etc.)
+  * Seniority trend visualizations (charts/graphs)
+  * Display predicted hold probabilities per pairing.
+  * View full-text pairing blocks in an easy to read format.
+
+### 4. Backend API
+
+* Node.js + Express or Python FastAPI.
+* Endpoints:
+
+  * `/upload` → parse PDF and populate DB
+  * `/pairings` → list all pairings
+  * `/pairings/filter` → apply user filters
+  * `/history` → query historical awards
+
+### 5. Predictive Hold Probability Engine
+
+* Start with rule-based thresholds using historical award data.
+* Future upgrade: ML model (scikit-learn) to improve predictions.
+
+### 6. AI Assistant Integration
+
+* Chat UI using chatgpt for natural language queries like:
+
+  * “Find 6-day pseudo-rotations using 3- and 4-day trips.”
+  * “Show pairings with avg block <4:45/day and credit >5:45/day.”
+  * “Which trips similar to #7758 were awarded to seniority 15,860 last May?”
+
+---
+
+## 🏗 Tech Stack
+
+| Layer        | Technology            |
+| ------------ | --------------------- |
+| Frontend     | React + Tailwind CSS  |
+| Backend      | Node.js + Express     |
+| DB           | PostgreSQL (Neon)     |
+| Parsing      | pdfplumber / PyMuPDF  |
+| AI Assistant | OpenAI Assistants API |
+| Hosting      | Replit                |
+
+---
+
+## 🎯 First Deliverable (Phase 1)
+
+* Build PDF parser + DB
+* Upload NYC220 August 2025 bid package and populate DB
+* Verify extraction of pairing #7666 and top 10 highest pay trips
+* Confirm full-text pairing blocks are stored for later display.
+
+---
+
+## 📦 Future Phases
+
+1. Add award history analytics
+2. Build a predictive hold probability model
+3. Optimize for multi-user support
+
+---
+
+## 🔥 User Context
+
+Jason Mergl – NYC-based Delta A220 FO
+Seniority: \~15,860 (Top 57%)
+Goal: Reduce commuting, maximize credit, combine 3- and 4-day trips into 6-day pseudo-rotations, avoid reserve.
