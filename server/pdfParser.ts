@@ -284,29 +284,35 @@ export class PDFParser {
       
       console.log(`Successfully parsed ${parsedPairings.length} pairings`);
       
-      // Save pairings to database
-      for (const pairing of parsedPairings) {
-        const pairingData: InsertPairing = {
-          bidPackageId,
-          pairingNumber: pairing.pairingNumber,
-          effectiveDates: pairing.effectiveDates,
-          route: pairing.route || "TBD",
-          creditHours: pairing.creditHours,
-          blockHours: pairing.blockHours,
-          tafb: pairing.tafb,
-          fdp: pairing.fdp || undefined,
-          payHours: pairing.payHours || undefined,
-          sitEdpPay: pairing.sitEdpPay || undefined,
-          carveouts: pairing.carveouts || undefined,
-          deadheads: pairing.deadheads,
-          layovers: pairing.layovers,
-          flightSegments: pairing.flightSegments,
-          fullTextBlock: pairing.fullTextBlock,
-          holdProbability: pairing.holdProbability
-        };
+      // Save pairings to database in batches for better performance
+      const batchSize = 50;
+      for (let i = 0; i < parsedPairings.length; i += batchSize) {
+        const batch = parsedPairings.slice(i, i + batchSize);
         
-        await storage.createPairing(pairingData);
-        console.log(`Saved pairing ${pairing.pairingNumber} to database`);
+        for (const pairing of batch) {
+          const pairingData: InsertPairing = {
+            bidPackageId,
+            pairingNumber: pairing.pairingNumber,
+            effectiveDates: pairing.effectiveDates,
+            route: pairing.route || "TBD",
+            creditHours: pairing.creditHours,
+            blockHours: pairing.blockHours,
+            tafb: pairing.tafb,
+            fdp: pairing.fdp || undefined,
+            payHours: pairing.payHours || undefined,
+            sitEdpPay: pairing.sitEdpPay || undefined,
+            carveouts: pairing.carveouts || undefined,
+            deadheads: pairing.deadheads,
+            layovers: pairing.layovers,
+            flightSegments: pairing.flightSegments,
+            fullTextBlock: pairing.fullTextBlock,
+            holdProbability: pairing.holdProbability
+          };
+          
+          await storage.createPairing(pairingData);
+        }
+        
+        console.log(`Saved batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(parsedPairings.length/batchSize)} (${batch.length} pairings)`);
       }
       
       // Update bid package status to completed

@@ -28,8 +28,8 @@ export default function Dashboard() {
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
   });
 
-  // Get the latest completed bid package 
-  const latestBidPackage = bidPackages.find(pkg => pkg.status === 'completed');
+  // Get the latest bid package (completed or processing)
+  const latestBidPackage = (bidPackages as any[]).find((pkg: any) => pkg.status === 'completed' || pkg.status === 'processing');
 
   const { data: pairings = [], refetch: refetchPairings } = useQuery({
     queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
@@ -38,7 +38,7 @@ export default function Dashboard() {
       search: searchQuery,
       bidPackageId: latestBidPackage?.id // Show only current bid package pairings
     }),
-    enabled: !!latestBidPackage, // Only run if we have a completed bid package
+    enabled: !!latestBidPackage, // Only run if we have a bid package
   });
 
   const handleSearch = () => {
@@ -131,12 +131,12 @@ export default function Dashboard() {
             </Card>
 
             {/* Bid Package Status */}
-            {bidPackages.length > 0 && (
+            {(bidPackages as any[]).length > 0 && (
               <Card>
                 <CardContent className="p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Package Status</h2>
                   <div className="space-y-3">
-                    {bidPackages.slice(0, 3).map((pkg) => (
+                    {(bidPackages as any[]).slice(0, 3).map((pkg: any) => (
                       <div key={pkg.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex-1">
                           <div className="font-medium text-sm text-gray-900">{pkg.name}</div>
@@ -213,7 +213,7 @@ export default function Dashboard() {
             </Card>
 
             {/* Quick Stats */}
-            <StatsPanel pairings={pairings} />
+            <StatsPanel pairings={pairings} bidPackage={latestBidPackage} />
           </div>
 
           {/* Main Panel */}
@@ -231,7 +231,7 @@ export default function Dashboard() {
                     {latestBidPackage && (
                       <div className="w-2 h-2 bg-green-500 rounded-full" title="Current bid package"></div>
                     )}
-                    {!latestBidPackage && bidPackages.some(pkg => pkg.status === 'processing') && (
+                    {!latestBidPackage && (bidPackages as any[]).some((pkg: any) => pkg.status === 'processing') && (
                       <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
                     )}
                   </div>
