@@ -3,16 +3,40 @@ import type { SearchFilters } from "@/lib/api";
 
 interface FiltersPanelProps {
   onFiltersChange: (filters: SearchFilters) => void;
+  bidPackages?: Array<{id: number; name: string; month: string; year: number; status: string}>;
 }
 
-export function FiltersPanel({ onFiltersChange }: FiltersPanelProps) {
+export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanelProps) {
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
     const numericValue = key.includes('Min') || key.includes('Max') ? parseFloat(value) : value;
     onFiltersChange({ [key]: numericValue });
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Bid Package</label>
+        <Select onValueChange={(value) => {
+          if (value === "all") {
+            onFiltersChange({ bidPackageId: undefined });
+          } else {
+            onFiltersChange({ bidPackageId: parseInt(value) });
+          }
+        }}>
+          <SelectTrigger className="text-sm">
+            <SelectValue placeholder="All Packages" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Packages</SelectItem>
+            {bidPackages.filter(pkg => pkg.status === 'completed').map(pkg => (
+              <SelectItem key={pkg.id} value={pkg.id.toString()}>
+                {pkg.month} {pkg.year}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {

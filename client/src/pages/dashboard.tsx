@@ -28,17 +28,16 @@ export default function Dashboard() {
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
   });
 
-  // Get the latest completed bid package 
+  // Get the latest completed bid package for display purposes
   const latestBidPackage = bidPackages.find(pkg => pkg.status === 'completed');
 
   const { data: pairings = [], refetch: refetchPairings } = useQuery({
-    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
+    queryKey: ["/api/pairings/search", searchFilters, searchQuery],
     queryFn: () => api.searchPairings({ 
       ...searchFilters, 
-      search: searchQuery,
-      bidPackageId: latestBidPackage?.id // Only search current bid package
+      search: searchQuery
+      // No bidPackageId filter - show all pairings from all bid packages
     }),
-    enabled: !!latestBidPackage, // Only run if we have a completed bid package
   });
 
   const handleSearch = () => {
@@ -226,14 +225,9 @@ export default function Dashboard() {
                   <h2 className="text-lg font-semibold text-gray-900">Pairing Analysis</h2>
                   <div className="mt-4 sm:mt-0 flex items-center space-x-2">
                     <span className="text-sm text-gray-500">
-                      {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} Bid Package` : 'No Completed Bid Package'}
+                      Showing All Pairings ({pairings.length} total)
                     </span>
-                    {latestBidPackage && (
-                      <div className="w-2 h-2 bg-green-500 rounded-full" title="Ready to search"></div>
-                    )}
-                    {!latestBidPackage && bidPackages.some(pkg => pkg.status === 'processing') && (
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
-                    )}
+                    <div className="w-2 h-2 bg-blue-500 rounded-full" title="All bid packages"></div>
                   </div>
                 </div>
 
@@ -266,30 +260,23 @@ export default function Dashboard() {
                 </div>
 
                 {/* Advanced Filters */}
-                <FiltersPanel onFiltersChange={(newFilters) => {
-                  setSearchFilters(prev => ({ ...prev, ...newFilters }));
-                }} />
+                <FiltersPanel 
+                  bidPackages={bidPackages}
+                  onFiltersChange={(newFilters) => {
+                    setSearchFilters(prev => ({ ...prev, ...newFilters }));
+                  }} 
+                />
               </CardContent>
             </Card>
 
             {/* Results Table */}
-            {!latestBidPackage ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <div className="text-gray-500">
-                    <Plane className="mx-auto h-12 w-12 mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium mb-2">No Bid Package Ready</h3>
-                    <p>Upload a bid package above and wait for processing to complete before searching pairings.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : pairings.length === 0 ? (
+            {pairings.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center">
                   <div className="text-gray-500">
                     <Search className="mx-auto h-12 w-12 mb-4 text-gray-300" />
                     <h3 className="text-lg font-medium mb-2">No Pairings Found</h3>
-                    <p>Try adjusting your search filters or search terms to find pairings.</p>
+                    <p>Try adjusting your search filters, uploading a bid package, or clearing filters to see all pairings.</p>
                   </div>
                 </CardContent>
               </Card>
