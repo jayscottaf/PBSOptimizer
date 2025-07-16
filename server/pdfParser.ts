@@ -161,18 +161,19 @@ export class PDFParser {
         }
       }
       
-      // Flight segment pattern: A DH 2810 LGA 1130 ORD 1310 2.40 1.15 223
-      // Format: DAY FLIGHT T DEPARTS ARRIVES C BLK. TURN BLK/MAX FDP/MAX PWA FDP/MAX
-      const flightMatch = line.match(/^([A-Z])\s+(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+      // Flight segment pattern: Match both formats:
+      // 1. A DH 2810 LGA 1130 ORD 1310 2.40 1.15 223
+      // 2.      563 LGA 1925 MCI 2145 3.20
+      const flightMatch = line.match(/^([A-Z]?\s*)((?:DH\s+)?(\d{3,4}))\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
       if (flightMatch) {
         const segment: FlightSegment = {
-          date: flightMatch[1], // Day code (A, B, C, etc.)
-          flightNumber: flightMatch[2],
-          departure: flightMatch[3],
-          departureTime: flightMatch[4],
-          arrival: flightMatch[5],
-          arrivalTime: flightMatch[6],
-          blockTime: flightMatch[7],
+          date: flightMatch[1].trim() || 'A', // Day code (A, B, C, etc.) or default to A
+          flightNumber: flightMatch[3],
+          departure: flightMatch[4],
+          departureTime: flightMatch[5],
+          arrival: flightMatch[6],
+          arrivalTime: flightMatch[7],
+          blockTime: flightMatch[8],
           isDeadhead: line.includes('DH ')
         };
         

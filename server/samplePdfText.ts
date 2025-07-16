@@ -43,10 +43,15 @@ TOTAL PAY    9:14TL   .00SIT   .00EDP   .00HOL   .00CARVE
                                                                                 
 DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX    
  A      2810    LGA 1130  ORD 1309  2.39  1.16 223 M                         2  
-        1074    ORD 1425  LGA 1748  2.23  1.07     M                         2  
-        2801    LGA 1855  ORD 2047  2.52             11.17/13.00 11.17/12.30 2  
-         ORD 18.43/PALMER HOUSE                  7.54/ 9.00  .00CRD  7.54TL    
- B      1241    ORD 1700  LGA 2031  2.31              3.31/12.00  3.31/11.30 2  
+         ORD 16.08/PALMER HOUSE                  2.39/ 9.00  .00CRD  2.39TL    
+ B      1074    ORD 1425  LGA 1748  2.23  1.37                               2  
+         563    LGA 1925  MCI 2145  3.20       221    8.20/12.00  8.20/11.30 2  
+         MCI 12.50/MCI MARRIOTT DWTN             5.43/ 9.00  .00CRD  5.43TL    
+ C       884    MCI 1205  LGA 1558  2.53              3.53/13.00  3.53/12.30 2  
+                                                    2.53/ 9.00  .00CRD  2.53TL  
+                                                  .00MCD  .00TRP  .00DPA  .00ADG 
+TOTAL CREDIT 16.30TL  16.30BL     .00CR   23.30FDP                TAFB  53.58 
+TOTAL PAY    18:17TL    .00SIT   1.47EDP    .00HOL    .00CARVE  
 
 #8181  MO TH           EFFECTIVE AUG11-AUG. 28               CHECK-IN AT 17.55 
                  EXCEPT AUG 14 AUG 18 AUG 21 AUG 25                             

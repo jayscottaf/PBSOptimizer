@@ -52,6 +52,8 @@ The application uses a well-structured PostgreSQL schema with the following main
 - **Structured Parsing**: Extracts pairing numbers, effective dates, flight segments, layovers, credit hours, block hours, and total pay
 - **Status Tracking**: Processing status monitoring (processing, completed, failed)
 - **Delta Format Support**: Handles NYC A220 bid packages with TOTAL CREDIT and TOTAL PAY line extraction
+- **Multi-Day Parsing**: Correctly extracts complex multi-day pairings with multiple flight segments and layovers
+- **Pay Hours Format**: Supports time-based pay hours format (e.g., 12:43 = 12 hours 43 minutes)
 
 ### Search and Filter System
 - **Advanced Filtering**: Multi-criteria search including credit hours, block time, TAFB
