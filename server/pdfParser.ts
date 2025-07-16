@@ -193,11 +193,11 @@ export class PDFParser {
         });
       }
       
-      // Look for total credit line at the end
+      // Look for total credit line at the end (this is actually layover time, not total)
       const totalMatch = line.match(/(\d{1,2}\.\d{2})\/\s*9\.00\s+\.00CRD\s+(\d{1,2}\.\d{2})TL/);
       if (totalMatch) {
-        creditHours = totalMatch[2];
-        blockHours = totalMatch[1];
+        // Don't use this - it's layover time, not total pairing time
+        // We'll calculate totals from individual flight segments
       }
       
       // TAFB calculation - estimate based on layovers and flight pattern
@@ -209,6 +209,24 @@ export class PDFParser {
         tafb = `${estimatedTafb}d 00:00`;
       }
     }
+    
+    // Calculate total credit and block hours from flight segments
+    let totalBlockHours = 0;
+    flightSegments.forEach(segment => {
+      const blockTime = parseFloat(segment.blockTime);
+      if (!isNaN(blockTime)) {
+        totalBlockHours += blockTime;
+      }
+    });
+    
+    // Format back to hours:minutes format
+    const totalHours = Math.floor(totalBlockHours);
+    const totalMinutes = Math.round((totalBlockHours - totalHours) * 60);
+    const formattedTotal = `${totalHours}.${totalMinutes.toString().padStart(2, '0')}`;
+    
+    // Credit hours typically equal block hours for regular flights
+    creditHours = formattedTotal;
+    blockHours = formattedTotal;
     
     // Generate route from flight segments
     const route = this.parseRoute(flightSegments);
