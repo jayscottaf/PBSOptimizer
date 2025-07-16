@@ -13,30 +13,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-      
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Bid Package</label>
-        <Select onValueChange={(value) => {
-          if (value === "all") {
-            onFiltersChange({ bidPackageId: undefined });
-          } else {
-            onFiltersChange({ bidPackageId: parseInt(value) });
-          }
-        }}>
-          <SelectTrigger className="text-sm">
-            <SelectValue placeholder="All Packages" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Packages</SelectItem>
-            {bidPackages.filter(pkg => pkg.status === 'completed').map(pkg => (
-              <SelectItem key={pkg.id} value={pkg.id.toString()}>
-                {pkg.month} {pkg.year}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {
