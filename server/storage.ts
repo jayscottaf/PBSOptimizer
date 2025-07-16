@@ -160,10 +160,10 @@ export class DatabaseStorage implements IStorage {
     if (conditions.length > 0) {
       return await db.select().from(pairings)
         .where(and(...conditions))
-        .orderBy(desc(pairings.holdProbability));
+        .orderBy(asc(pairings.pairingNumber));
     }
     
-    return await db.select().from(pairings).orderBy(desc(pairings.holdProbability));
+    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
   }
 
   async createBidHistory(bidHistoryData: InsertBidHistory): Promise<BidHistory> {

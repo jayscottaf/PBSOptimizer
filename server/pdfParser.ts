@@ -248,9 +248,17 @@ export class PDFParser {
   }
 
   private async extractTextFromPDF(filePath: string): Promise<string> {
-    // For now, use the sample text from the actual PDF
-    // In a production environment, you would use a proper PDF parsing library
-    return samplePdfText;
+    const fs = require('fs');
+    const pdfParse = require('pdf-parse');
+    
+    try {
+      const pdfBuffer = fs.readFileSync(filePath);
+      const data = await pdfParse(pdfBuffer);
+      return data.text;
+    } catch (error) {
+      console.error('Error extracting text from PDF:', error);
+      throw new Error(`Failed to extract text from PDF: ${error}`);
+    }
   }
 
   async parsePDF(filePath: string, bidPackageId: number): Promise<void> {
