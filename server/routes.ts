@@ -76,13 +76,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
-      // Parse PDF asynchronously
+      // Parse PDF asynchronously and update status
       pdfParser.parsePDF(req.file.path, bidPackage.id)
-        .then(() => {
+        .then(async () => {
           console.log(`PDF parsing completed for bid package ${bidPackage.id}`);
+          await storage.updateBidPackageStatus(bidPackage.id, "completed");
         })
-        .catch((error) => {
+        .catch(async (error) => {
           console.error(`PDF parsing failed for bid package ${bidPackage.id}:`, error);
+          await storage.updateBidPackageStatus(bidPackage.id, "failed");
         });
 
       res.json({

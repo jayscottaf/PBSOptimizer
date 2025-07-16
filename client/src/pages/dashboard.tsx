@@ -23,8 +23,9 @@ export default function Dashboard() {
   const [activeFilters, setActiveFilters] = useState<string[]>(["High Credit"]);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
 
-  const { data: bidPackages = [] } = useQuery({
+  const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["/api/bid-packages"],
+    refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
   });
 
   const { data: pairings = [], refetch: refetchPairings } = useQuery({
@@ -106,14 +107,57 @@ export default function Dashboard() {
                   <FileUpload 
                     onUpload={(file) => {
                       console.log("File uploaded:", file);
+                      // Refresh the bid packages list to show new upload
+                      refetchBidPackages();
                     }}
                   />
-                  <div className="text-xs text-gray-500 flex items-center">
-                    <span>ℹ️ Supports NYC A220 bid packages (PDF format)</span>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div className="flex items-center">
+                      <span>ℹ️ Supports NYC A220 bid packages (PDF format)</span>
+                    </div>
+                    <div>
+                      <span>📊 Processing extracts all pairing data for search</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Bid Package Status */}
+            {bidPackages.length > 0 && (
+              <Card>
+                <CardContent className="p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Package Status</h2>
+                  <div className="space-y-3">
+                    {bidPackages.slice(0, 3).map((pkg) => (
+                      <div key={pkg.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm text-gray-900">{pkg.name}</div>
+                          <div className="text-xs text-gray-500">{pkg.month} {pkg.year}</div>
+                        </div>
+                        <div>
+                          {pkg.status === 'processing' && (
+                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                              Processing...
+                            </Badge>
+                          )}
+                          {pkg.status === 'completed' && (
+                            <Badge variant="default" className="bg-green-100 text-green-800">
+                              Ready to Search
+                            </Badge>
+                          )}
+                          {pkg.status === 'failed' && (
+                            <Badge variant="destructive" className="bg-red-100 text-red-800">
+                              Failed
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Seniority Input */}
             <Card>
