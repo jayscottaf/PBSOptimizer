@@ -172,22 +172,33 @@ export class PDFParser {
         // New day starts
         currentDay = dayFlightMatch[1];
         const isDeadhead = line.includes('DH');
-        const segment: FlightSegment = {
-          date: currentDay,
-          flightNumber: dayFlightMatch[2],
-          departure: dayFlightMatch[3],
-          departureTime: dayFlightMatch[4],
-          arrival: dayFlightMatch[5],
-          arrivalTime: dayFlightMatch[6],
-          blockTime: dayFlightMatch[7],
-          isDeadhead
-        };
         
-        if (segment.isDeadhead) {
-          deadheads++;
+        // Check for duplicates before adding
+        const isDuplicate = flightSegments.some(seg => 
+          seg.flightNumber === dayFlightMatch[2] && 
+          seg.departure === dayFlightMatch[3] && 
+          seg.departureTime === dayFlightMatch[4] &&
+          seg.date === currentDay
+        );
+        
+        if (!isDuplicate) {
+          const segment: FlightSegment = {
+            date: currentDay,
+            flightNumber: dayFlightMatch[2],
+            departure: dayFlightMatch[3],
+            departureTime: dayFlightMatch[4],
+            arrival: dayFlightMatch[5],
+            arrivalTime: dayFlightMatch[6],
+            blockTime: dayFlightMatch[7],
+            isDeadhead
+          };
+          
+          if (segment.isDeadhead) {
+            deadheads++;
+          }
+          
+          flightSegments.push(segment);
         }
-        
-        flightSegments.push(segment);
         
         // Look ahead for continuation flights and multi-leg flights within the same day
         for (let j = i + 1; j < lines.length; j++) {
@@ -288,6 +299,116 @@ export class PDFParser {
           // If we can't match any flight pattern, stop looking ahead
           break;
         }
+      }
+      
+      // Additional flight parsing patterns for missed segments
+      // Pattern 1: Standalone flight numbers that were missed: "1482    ATL 1246  IAD 1431* 1.45"
+      const standaloneFlight = line.match(/^\s*(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      if (standaloneFlight && currentDay) {
+        // Check for duplicates before adding
+        const isDuplicate = flightSegments.some(seg => 
+          seg.flightNumber === standaloneFlight[1] && 
+          seg.departure === standaloneFlight[2] && 
+          seg.departureTime === standaloneFlight[3] &&
+          seg.date === currentDay
+        );
+        
+        if (!isDuplicate) {
+          const segment: FlightSegment = {
+            date: currentDay,
+            flightNumber: standaloneFlight[1],
+            departure: standaloneFlight[2],
+            departureTime: standaloneFlight[3],
+            arrival: standaloneFlight[4],
+            arrivalTime: standaloneFlight[5],
+            blockTime: standaloneFlight[6],
+            isDeadhead: false
+          };
+          
+          flightSegments.push(segment);
+        }
+      }
+      
+      // Pattern 2: Day letters that start new days: "D      2275    PDX 0715  SEA 0813   .58"
+      // Handle both ".58" and "0.58" formats
+      const dayStartMatch = line.match(/^([A-E])\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{2})/);
+      if (dayStartMatch) {
+        currentDay = dayStartMatch[1];
+        let blockTime = dayStartMatch[7];
+        // Handle ".58" format by adding leading zero
+        if (blockTime.startsWith('.')) {
+          blockTime = '0' + blockTime;
+        }
+        
+        // Check for duplicates before adding
+        const isDuplicate = flightSegments.some(seg => 
+          seg.flightNumber === dayStartMatch[2] && 
+          seg.departure === dayStartMatch[3] && 
+          seg.departureTime === dayStartMatch[4] &&
+          seg.date === currentDay
+        );
+        
+        if (!isDuplicate) {
+          const segment: FlightSegment = {
+            date: currentDay,
+            flightNumber: dayStartMatch[2],
+            departure: dayStartMatch[3],
+            departureTime: dayStartMatch[4],
+            arrival: dayStartMatch[5],
+            arrivalTime: dayStartMatch[6],
+            blockTime: blockTime,
+            isDeadhead: false
+          };
+          
+          flightSegments.push(segment);
+        }
+      }
+      
+      // Pattern 3: Single day flight at start of line: "E       454    DFW 0710  JFK 1200  3.50"
+      const singleDayFlight = line.match(/^([A-E])\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+      if (singleDayFlight && !dayStartMatch) { // Avoid duplicate processing
+        currentDay = singleDayFlight[1];
+        
+        // Check for duplicates before adding
+        const isDuplicate = flightSegments.some(seg => 
+          seg.flightNumber === singleDayFlight[2] && 
+          seg.departure === singleDayFlight[3] && 
+          seg.departureTime === singleDayFlight[4] &&
+          seg.date === currentDay
+        );
+        
+        if (!isDuplicate) {
+          const segment: FlightSegment = {
+            date: currentDay,
+            flightNumber: singleDayFlight[2],
+            departure: singleDayFlight[3],
+            departureTime: singleDayFlight[4],
+            arrival: singleDayFlight[5],
+            arrivalTime: singleDayFlight[6],
+            blockTime: singleDayFlight[7],
+            isDeadhead: false
+          };
+          
+          flightSegments.push(segment);
+        }
+      }
+      
+      // Pattern 4: Handle standalone continuation flights without day letters: "ORD 1859  LGA 2230  2.31"
+      const continuationFlightMatch = line.match(/^\s*([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      if (continuationFlightMatch && flightSegments.length > 0 && !standaloneFlight && !dayStartMatch && !singleDayFlight) {
+        const lastFlight = flightSegments[flightSegments.length - 1];
+        const contSegment: FlightSegment = {
+          date: currentDay,
+          flightNumber: lastFlight.flightNumber, // Use previous flight number
+          departure: continuationFlightMatch[1],
+          departureTime: continuationFlightMatch[2],
+          arrival: continuationFlightMatch[3],
+          arrivalTime: continuationFlightMatch[4],
+          blockTime: continuationFlightMatch[5],
+          isDeadhead: false
+        };
+        
+        flightSegments.push(contSegment);
       }
       
       // Layover pattern: ORD 18.43/PALMER HOUSE
