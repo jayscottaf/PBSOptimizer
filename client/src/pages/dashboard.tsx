@@ -123,7 +123,7 @@ export default function Dashboard() {
                   />
                   <div className="text-xs text-gray-500 space-y-1">
                     <div className="flex items-center">
-                      <span>ℹ️ Supports NYC A220 bid packages (PDF format)</span>
+                      <span>ℹ️ Supports NYC A220 bid packages (PDF or TXT format)</span>
                     </div>
                     <div>
                       <span>📊 Processing extracts all pairing data for search</span>

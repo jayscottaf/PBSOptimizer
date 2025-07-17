@@ -336,6 +336,24 @@ export class PDFParser {
     return pairing;
   }
 
+  private async extractTextFromTXT(filePath: string): Promise<string> {
+    try {
+      console.log(`Reading text from: ${filePath}`);
+      
+      // Verify file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`TXT file not found: ${filePath}`);
+      }
+      
+      const text = fs.readFileSync(filePath, 'utf8');
+      console.log(`TXT file read successfully: ${text.length} characters`);
+      return text;
+    } catch (error) {
+      console.error('Error reading TXT file:', error);
+      throw new Error(`Failed to read TXT file: ${error.message}`);
+    }
+  }
+
   private async extractTextFromPDF(filePath: string): Promise<string> {
     try {
       console.log(`Attempting to extract text from: ${filePath}`);
@@ -369,12 +387,18 @@ export class PDFParser {
     }
   }
 
-  async parsePDF(filePath: string, bidPackageId: number): Promise<void> {
+  async parseFile(filePath: string, bidPackageId: number, mimeType: string): Promise<void> {
     try {
-      console.log(`Starting PDF parsing for bid package ${bidPackageId}`);
+      console.log(`Starting file parsing for bid package ${bidPackageId}`);
       
-      const text = await this.extractTextFromPDF(filePath);
-      console.log(`PDF parsed successfully, ${text.length} characters`);
+      let text: string;
+      if (mimeType === 'text/plain') {
+        text = await this.extractTextFromTXT(filePath);
+        console.log(`TXT file parsed successfully, ${text.length} characters`);
+      } else {
+        text = await this.extractTextFromPDF(filePath);
+        console.log(`PDF parsed successfully, ${text.length} characters`);
+      }
       
       // Extract pairing blocks from the text
       const pairingBlocks = this.extractPairingBlocks(text);
@@ -427,13 +451,17 @@ export class PDFParser {
       // Update bid package status to completed
       await storage.updateBidPackageStatus(bidPackageId, "completed");
       
-      console.log(`PDF parsing completed for bid package ${bidPackageId}`);
+      console.log(`File parsing completed for bid package ${bidPackageId}`);
       
     } catch (error) {
-      console.error('Error parsing PDF:', error);
+      console.error('Error parsing file:', error);
       await storage.updateBidPackageStatus(bidPackageId, "failed");
       throw error;
     }
+  }
+
+  async parsePDF(filePath: string, bidPackageId: number): Promise<void> {
+    return this.parseFile(filePath, bidPackageId, 'application/pdf');
   }
 }
 

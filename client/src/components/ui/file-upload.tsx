@@ -42,10 +42,10 @@ export function FileUpload({ onUpload }: FileUploadProps) {
   };
 
   const handleFile = async (file: File) => {
-    if (file.type !== 'application/pdf') {
+    if (file.type !== 'application/pdf' && file.type !== 'text/plain') {
       toast({
         title: "Invalid file type",
-        description: "Please upload a PDF file.",
+        description: "Please upload a PDF or TXT file.",
         variant: "destructive",
       });
       return;
@@ -98,7 +98,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
     >
       <CloudUpload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
       <p className="text-sm text-gray-600 mb-2">
-        {isUploading ? 'Uploading...' : 'Drop PDF here or click to browse'}
+        {isUploading ? 'Uploading...' : 'Drop PDF or TXT file here or click to browse'}
       </p>
       <Button 
         variant="link" 
@@ -110,7 +110,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.txt"
         onChange={handleFileSelect}
         className="hidden"
       />

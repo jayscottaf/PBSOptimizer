@@ -11,10 +11,10 @@ import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
 const upload = multer({
   dest: 'uploads/',
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'));
+      cb(new Error('Only PDF and TXT files are allowed'));
     }
   },
   limits: {
@@ -76,14 +76,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
-      // Parse PDF asynchronously and update status
-      pdfParser.parsePDF(req.file.path, bidPackage.id)
+      // Parse file asynchronously and update status
+      pdfParser.parseFile(req.file.path, bidPackage.id, req.file.mimetype)
         .then(async () => {
-          console.log(`PDF parsing completed for bid package ${bidPackage.id}`);
+          console.log(`File parsing completed for bid package ${bidPackage.id}`);
           await storage.updateBidPackageStatus(bidPackage.id, "completed");
         })
         .catch(async (error) => {
-          console.error(`PDF parsing failed for bid package ${bidPackage.id}:`, error);
+          console.error(`File parsing failed for bid package ${bidPackage.id}:`, error);
           await storage.updateBidPackageStatus(bidPackage.id, "failed");
         });
 
