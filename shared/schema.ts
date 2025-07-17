@@ -40,6 +40,7 @@ export const pairings = pgTable("pairings", {
   flightSegments: jsonb("flight_segments").notNull(), // Array of flight segment details
   fullTextBlock: text("full_text_block").notNull(), // Complete pairing text from PDF
   holdProbability: integer("hold_probability").default(0), // Percentage 0-100
+  pairingDays: integer("pairing_days").default(1), // Number of days (calculated from flight segment day letters)
 });
 
 export const bidHistory = pgTable("bid_history", {

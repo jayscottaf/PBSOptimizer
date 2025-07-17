@@ -29,6 +29,7 @@ export interface Pairing {
   flightSegments: any;
   fullTextBlock: string;
   holdProbability: number;
+  pairingDays?: number;
 }
 
 export interface SearchFilters {

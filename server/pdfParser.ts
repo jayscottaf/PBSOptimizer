@@ -40,6 +40,7 @@ interface ParsedPairing {
   flightSegments: FlightSegment[];
   fullTextBlock: string;
   holdProbability: number;
+  pairingDays: number;
 }
 
 export class PDFParser {
@@ -201,23 +202,10 @@ export class PDFParser {
         blockHours = totalCreditMatch[2];
       }
       
-      // Look for TAFB in various formats
-      const tafbMatch = line.match(/TAFB\s+(\d+)D\s+(\d{1,2}\.\d{2})/);
-      const tafbAltMatch = line.match(/(\d{1,3}\.\d{2})\s*TAFB/);
-      const tafbSimpleMatch = line.match(/TAFB\s+(\d{1,3}\.\d{2})/);
-      
+      // Look for TAFB - it's just the hours value, not converted to days
+      const tafbMatch = line.match(/TAFB\s+(\d{1,3}\.\d{2})/);
       if (tafbMatch) {
-        tafb = `${tafbMatch[1]}d ${tafbMatch[2]}`;
-      } else if (tafbAltMatch) {
-        const hours = parseFloat(tafbAltMatch[1]);
-        const days = Math.floor(hours / 24);
-        const remainingHours = (hours % 24).toFixed(2);
-        tafb = `${days}d ${remainingHours}`;
-      } else if (tafbSimpleMatch) {
-        const hours = parseFloat(tafbSimpleMatch[1]);
-        const days = Math.floor(hours / 24);
-        const remainingHours = (hours % 24).toFixed(2);
-        tafb = `${days}d ${remainingHours}`;
+        tafb = tafbMatch[1]; // Keep as raw hours (e.g., "100.53")
       }
       
       // Look for TOTAL PAY line with time format (e.g., "12:43TL")
@@ -236,13 +224,17 @@ export class PDFParser {
       effectiveDates = "AUG01-AUG31";
     }
     
+    // Calculate pairing days from unique day letters in flight segments
+    const uniqueDays = [...new Set(flightSegments.map(seg => seg.date))].sort();
+    const pairingDays = uniqueDays.length;
+    
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
       route,
       creditHours: creditHours || "0.00",
       blockHours: blockHours || "0.00",
-      tafb: tafb || "1d 00:00",
+      tafb: tafb || "0.00",
       fdp: fdp || undefined,
       payHours: payHours || undefined,
       sitEdpPay: sitEdpPay || undefined,
@@ -251,7 +243,8 @@ export class PDFParser {
       layovers,
       flightSegments,
       fullTextBlock: block,
-      holdProbability: 0 // Will be calculated
+      holdProbability: 0, // Will be calculated
+      pairingDays
     };
     
     // Calculate hold probability
@@ -329,7 +322,8 @@ export class PDFParser {
             layovers: pairing.layovers,
             flightSegments: pairing.flightSegments,
             fullTextBlock: pairing.fullTextBlock,
-            holdProbability: pairing.holdProbability
+            holdProbability: pairing.holdProbability,
+            pairingDays: pairing.pairingDays
           };
           
           await storage.createPairing(pairingData);

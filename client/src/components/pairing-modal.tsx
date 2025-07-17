@@ -61,7 +61,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   {pairing.payHours && <div><span className="text-gray-600">Total Pay:</span> {pairing.payHours}</div>}
                   <div><span className="text-gray-600">Credit:</span> {pairing.creditHours}</div>
                   <div><span className="text-gray-600">Block:</span> {pairing.blockHours}</div>
-                  <div><span className="text-gray-600">TAFB:</span> {pairing.tafb}</div>
+                  <div><span className="text-gray-600">TAFB:</span> {pairing.tafb} hours</div>
+                  <div><span className="text-gray-600">Days:</span> {(pairing as any).pairingDays || 'N/A'}</div>
                   {pairing.fdp && <div><span className="text-gray-600">FDP:</span> {pairing.fdp}</div>}
                   {pairing.deadheads > 0 && <div><span className="text-gray-600">Deadheads:</span> {pairing.deadheads}</div>}
                 </CardContent>
