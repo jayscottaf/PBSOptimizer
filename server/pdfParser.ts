@@ -201,10 +201,23 @@ export class PDFParser {
         blockHours = totalCreditMatch[2];
       }
       
-      // Look for TAFB in the total line
+      // Look for TAFB in various formats
       const tafbMatch = line.match(/TAFB\s+(\d+)D\s+(\d{1,2}\.\d{2})/);
+      const tafbAltMatch = line.match(/(\d{1,3}\.\d{2})\s*TAFB/);
+      const tafbSimpleMatch = line.match(/TAFB\s+(\d{1,3}\.\d{2})/);
+      
       if (tafbMatch) {
         tafb = `${tafbMatch[1]}d ${tafbMatch[2]}`;
+      } else if (tafbAltMatch) {
+        const hours = parseFloat(tafbAltMatch[1]);
+        const days = Math.floor(hours / 24);
+        const remainingHours = (hours % 24).toFixed(2);
+        tafb = `${days}d ${remainingHours}`;
+      } else if (tafbSimpleMatch) {
+        const hours = parseFloat(tafbSimpleMatch[1]);
+        const days = Math.floor(hours / 24);
+        const remainingHours = (hours % 24).toFixed(2);
+        tafb = `${days}d ${remainingHours}`;
       }
       
       // Look for TOTAL PAY line with time format (e.g., "12:43TL")
@@ -248,11 +261,21 @@ export class PDFParser {
   }
 
   private async extractTextFromPDF(filePath: string): Promise<string> {
-    const fs = require('fs');
-    const pdfParse = require('pdf-parse');
-    
     try {
       const pdfBuffer = fs.readFileSync(filePath);
+      
+      // Try multiple import approaches for pdf-parse
+      let pdfParse;
+      try {
+        pdfParse = require('pdf-parse');
+      } catch (requireError) {
+        try {
+          pdfParse = (await import('pdf-parse')).default;
+        } catch (importError) {
+          throw new Error(`Failed to load pdf-parse library: ${requireError.message} | ${importError.message}`);
+        }
+      }
+      
       const data = await pdfParse(pdfBuffer);
       return data.text;
     } catch (error) {

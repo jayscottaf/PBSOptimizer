@@ -58,6 +58,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 <CardContent className="p-4 bg-gray-50 font-mono text-sm space-y-1">
                   <div><span className="text-gray-600">Pairing:</span> {pairing.pairingNumber}</div>
                   <div><span className="text-gray-600">Effective:</span> {pairing.effectiveDates}</div>
+                  {pairing.payHours && <div><span className="text-gray-600">Total Pay:</span> {pairing.payHours}</div>}
                   <div><span className="text-gray-600">Credit:</span> {pairing.creditHours}</div>
                   <div><span className="text-gray-600">Block:</span> {pairing.blockHours}</div>
                   <div><span className="text-gray-600">TAFB:</span> {pairing.tafb}</div>
@@ -72,20 +73,34 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
               <h4 className="font-semibold text-gray-900">Flight Segments</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {flightSegments.length > 0 ? (
-                  flightSegments.map((segment: any, index: number) => (
-                    <Card key={index}>
-                      <CardContent className="p-3 bg-blue-50 border border-blue-200 font-mono text-sm">
-                        <div className="font-medium text-blue-900">
-                          Day {index + 1} - {segment.date || 'Date TBD'}
-                        </div>
-                        <div className="mt-1 text-blue-800">
-                          {segment.flightNumber} {segment.departure} {segment.departureTime} {segment.arrival} {segment.arrivalTime} ({segment.blockTime})
-                          {segment.turnTime && <><br />Turn: {segment.turnTime}</>}
-                          {segment.layover && <> | Layover: {segment.layover}</>}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                  (() => {
+                    // Group flights by day letter (A, B, C, etc.)
+                    const groupedByDay = flightSegments.reduce((acc: any, segment: any) => {
+                      const dayLetter = segment.date || 'A';
+                      if (!acc[dayLetter]) acc[dayLetter] = [];
+                      acc[dayLetter].push(segment);
+                      return acc;
+                    }, {});
+
+                    const dayOrder = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+                    const sortedDays = dayOrder.filter(day => groupedByDay[day]);
+
+                    return sortedDays.map((dayLetter, dayIndex) => (
+                      <Card key={dayLetter}>
+                        <CardContent className="p-3 bg-blue-50 border border-blue-200 font-mono text-sm">
+                          <div className="font-medium text-blue-900 mb-2">
+                            Day {dayIndex + 1} - {dayLetter}
+                          </div>
+                          {groupedByDay[dayLetter].map((segment: any, segIndex: number) => (
+                            <div key={segIndex} className="text-blue-800 mb-1">
+                              {segment.flightNumber} {segment.departure} {segment.departureTime} {segment.arrival} {segment.arrivalTime} ({segment.blockTime})
+                              {segment.isDeadhead && <span className="text-orange-600 ml-2">[DH]</span>}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    ));
+                  })()
                 ) : (
                   <div className="text-gray-500 text-sm">No flight segment details available</div>
                 )}
