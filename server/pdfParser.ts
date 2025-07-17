@@ -340,8 +340,8 @@ export class PDFParser {
     try {
       const pdfBuffer = fs.readFileSync(filePath);
       
-      // Use synchronous require for pdf-parse to avoid ES module conflicts
-      const pdfParse = require('pdf-parse');
+      // Use dynamic import for pdf-parse in ES module environment
+      const pdfParse = (await import('pdf-parse')).default;
       
       const data = await pdfParse(pdfBuffer);
       return data.text;
