@@ -35,6 +35,7 @@ export interface IStorage {
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
+  updatePairingFlightSegments(id: number, flightSegments: any[]): Promise<void>;
   searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
@@ -172,6 +173,12 @@ export class DatabaseStorage implements IStorage {
       .values(bidHistoryData)
       .returning();
     return newBidHistory;
+  }
+
+  async updatePairingFlightSegments(id: number, flightSegments: any[]): Promise<void> {
+    await db.update(pairings)
+      .set({ flightSegments })
+      .where(eq(pairings.id, id));
   }
 
   async getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]> {

@@ -168,6 +168,9 @@ export class PDFParser {
       // Handle asterisks and extra formatting: "A    1188    LGA 0715  ORD 0851* 2.36"
       const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
       
+      // Also capture continuation flights without day letter: "ORD 1859  LGA 2230  2.31"
+      const continuationFlightMatch = line.match(/^\s*([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      
       if (dayFlightMatch) {
         // New day starts
         currentDay = dayFlightMatch[1];
@@ -288,6 +291,22 @@ export class PDFParser {
           // If we can't match any flight pattern, stop looking ahead
           break;
         }
+      } else if (continuationFlightMatch && flightSegments.length > 0) {
+        // Handle standalone continuation flights without day letters: "ORD 1859  LGA 2230  2.31"
+        // These appear to be additional segments of the previous flight
+        const lastFlight = flightSegments[flightSegments.length - 1];
+        const contSegment: FlightSegment = {
+          date: currentDay,
+          flightNumber: lastFlight.flightNumber, // Use previous flight number
+          departure: continuationFlightMatch[1],
+          departureTime: continuationFlightMatch[2],
+          arrival: continuationFlightMatch[3],
+          arrivalTime: continuationFlightMatch[4],
+          blockTime: continuationFlightMatch[5],
+          isDeadhead: false
+        };
+        
+        flightSegments.push(contSegment);
       }
       
       // Layover pattern: ORD 18.43/PALMER HOUSE
