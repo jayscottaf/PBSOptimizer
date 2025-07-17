@@ -127,4 +127,13 @@ export const api = {
     const response = await apiRequest("GET", `/api/history/${pairingNumber}`);
     return response.json();
   },
+
+  // AI Chat Analysis
+  analyzePairings: async (message: string, bidPackageId?: number) => {
+    const response = await apiRequest("POST", "/api/chat/analyze", { 
+      message, 
+      bidPackageId 
+    });
+    return response.json();
+  },
 };

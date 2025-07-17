@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { FileUpload } from "@/components/ui/file-upload";
 import { PairingTable } from "@/components/pairing-table";
 import { PairingModal } from "@/components/pairing-modal";
+import { PairingChat } from "@/components/pairing-chat";
 import { FiltersPanel } from "@/components/filters-panel";
 import { SeniorityChart } from "@/components/seniority-chart";
 import { StatsPanel } from "@/components/stats-panel";
 import { Plane, Settings, Search, Plus, X, RefreshCw, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Dashboard() {
   const [seniorityNumber, setSeniorityNumber] = useState("15860");
@@ -127,7 +129,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
+
           {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
             {/* Upload Section */}
@@ -245,92 +247,114 @@ export default function Dashboard() {
 
           {/* Main Panel */}
           <div className="lg:col-span-3 space-y-6">
-            
-            {/* Search and Filters */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Pairing Analysis</h2>
-                  <div className="mt-4 sm:mt-0 flex items-center space-x-2">
-                    <span className="text-sm text-gray-500">
-                      {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} - ${pairings.length} pairings` : 'No Completed Bid Package'}
-                    </span>
-                    {latestBidPackage && (
-                      <div className="w-2 h-2 bg-green-500 rounded-full" title="Current bid package"></div>
-                    )}
-                    {!latestBidPackage && (bidPackages as any[]).some((pkg: any) => pkg.status === 'processing') && (
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
-                    )}
-                  </div>
-                </div>
+            <Tabs defaultValue="search" className="w-full">
+              {/* Tabs Header */}
+              <TabsList className="w-full">
+                <TabsTrigger value="search" className="flex-1">Search & Filter</TabsTrigger>
+                <TabsTrigger value="analysis" className="flex-1">Analysis</TabsTrigger>
+                <TabsTrigger value="chat" className="flex-1">AI Assistant</TabsTrigger>
+              </TabsList>
 
-                {/* Search Bar */}
-                <div className="mb-6">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input 
-                      className="pl-10"
-                      placeholder="Search pairings by number, destinations, or criteria..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              {/* Search and Filters */}
+              <TabsContent value="search" className="space-y-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                      <h2 className="text-lg font-semibold text-gray-900">Pairing Analysis</h2>
+                      <div className="mt-4 sm:mt-0 flex items-center space-x-2">
+                        <span className="text-sm text-gray-500">
+                          {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} - ${pairings.length} pairings` : 'No Completed Bid Package'}
+                        </span>
+                        {latestBidPackage && (
+                          <div className="w-2 h-2 bg-green-500 rounded-full" title="Current bid package"></div>
+                        )}
+                        {!latestBidPackage && (bidPackages as any[]).some((pkg: any) => pkg.status === 'processing') && (
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="mb-6">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input 
+                          className="pl-10"
+                          placeholder="Search pairings by number, destinations, or criteria..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {activeFilters.map((filter) => (
+                        <Badge key={filter} variant="default" className="bg-blue-600 hover:bg-blue-700">
+                          <span>{filter}</span>
+                          <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => removeFilter(filter)} />
+                        </Badge>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={addFilter}>
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Filter
+                      </Button>
+                    </div>
+
+                    {/* Advanced Filters */}
+                    <FiltersPanel 
+                      onFiltersChange={(newFilters) => {
+                        setSearchFilters(prev => ({ ...prev, ...newFilters }));
+                      }} 
                     />
-                  </div>
+                  </CardContent>
+                </Card>
+
+                {/* Results Table */}
+                {!latestBidPackage ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <div className="text-gray-500">
+                        <Plane className="mx-auto h-12 w-12 mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium mb-2">No Bid Package Ready</h3>
+                        <p>Upload a bid package above and wait for processing to complete before viewing pairings.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : pairings.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <div className="text-gray-500">
+                        <Search className="mx-auto h-12 w-12 mb-4 text-gray-300" />
+                        <h3 className="text-lg font-medium mb-2">No Pairings Found</h3>
+                        <p>Try adjusting your search filters, uploading a bid package, or clearing filters to see all pairings.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <PairingTable 
+                    pairings={pairings} 
+                    onPairingClick={handlePairingClick}
+                  />
+                )}
+              </TabsContent>
+
+              {/* Analysis */}
+              <TabsContent value="analysis" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <StatsPanel 
+                    totalPairings={pairings.length}
+                    bidPackages={bidPackages as any[]}
+                  />
+                  <SeniorityChart />
                 </div>
+              </TabsContent>
 
-                {/* Filter Pills */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {activeFilters.map((filter) => (
-                    <Badge key={filter} variant="default" className="bg-blue-600 hover:bg-blue-700">
-                      <span>{filter}</span>
-                      <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => removeFilter(filter)} />
-                    </Badge>
-                  ))}
-                  <Button variant="outline" size="sm" onClick={addFilter}>
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Filter
-                  </Button>
-                </div>
-
-                {/* Advanced Filters */}
-                <FiltersPanel 
-                  onFiltersChange={(newFilters) => {
-                    setSearchFilters(prev => ({ ...prev, ...newFilters }));
-                  }} 
-                />
-              </CardContent>
-            </Card>
-
-            {/* Results Table */}
-            {!latestBidPackage ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <div className="text-gray-500">
-                    <Plane className="mx-auto h-12 w-12 mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium mb-2">No Bid Package Ready</h3>
-                    <p>Upload a bid package above and wait for processing to complete before viewing pairings.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : pairings.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <div className="text-gray-500">
-                    <Search className="mx-auto h-12 w-12 mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium mb-2">No Pairings Found</h3>
-                    <p>Try adjusting your search filters, uploading a bid package, or clearing filters to see all pairings.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <PairingTable 
-                pairings={pairings} 
-                onPairingClick={handlePairingClick}
-              />
-            )}
-
-            {/* Seniority Analysis Chart */}
-            <SeniorityChart />
+              <TabsContent value="chat" className="space-y-6">
+                <PairingChat bidPackageId={latestBidPackage?.id} />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
