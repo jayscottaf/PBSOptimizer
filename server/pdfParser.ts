@@ -345,15 +345,25 @@ export class PDFParser {
         throw new Error(`PDF file not found: ${filePath}`);
       }
       
-      const pdfBuffer = fs.readFileSync(filePath);
-      console.log(`PDF buffer loaded: ${pdfBuffer.length} bytes`);
+      // Use standalone Node.js worker to avoid tsx/ES module conflicts
+      const { execSync } = require('child_process');
+      const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, { 
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large PDFs
+      });
       
-      // Use direct require for pdf-parse - most reliable method
-      const pdfParse = require('pdf-parse');
+      const lines = result.trim().split('\n');
+      const successIndex = lines.findIndex(line => line === 'SUCCESS');
       
-      const data = await pdfParse(pdfBuffer);
-      console.log(`PDF parsed successfully: ${data.text.length} characters extracted`);
-      return data.text;
+      if (successIndex === -1) {
+        throw new Error('PDF parsing worker did not report success');
+      }
+      
+      const jsonResult = lines.slice(successIndex + 1).join('\n');
+      const parsed = JSON.parse(jsonResult);
+      
+      console.log(`PDF parsed successfully: ${parsed.text.length} characters extracted`);
+      return parsed.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
       throw new Error(`Failed to extract text from PDF: ${error.message}`);
