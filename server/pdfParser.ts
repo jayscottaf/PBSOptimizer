@@ -338,12 +338,34 @@ export class PDFParser {
 
   private async extractTextFromPDF(filePath: string): Promise<string> {
     try {
-      const pdfBuffer = fs.readFileSync(filePath);
+      console.log(`Attempting to extract text from: ${filePath}`);
       
-      // Use dynamic import for pdf-parse in ES module environment
-      const pdfParse = (await import('pdf-parse')).default;
+      // Verify file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`PDF file not found: ${filePath}`);
+      }
+      
+      const pdfBuffer = fs.readFileSync(filePath);
+      console.log(`PDF buffer loaded: ${pdfBuffer.length} bytes`);
+      
+      // Try different import strategies for pdf-parse
+      let pdfParse;
+      try {
+        // Method 1: CommonJS require
+        pdfParse = require('pdf-parse');
+      } catch (requireError) {
+        try {
+          // Method 2: ES6 import
+          const imported = await import('pdf-parse');
+          pdfParse = imported.default || imported;
+        } catch (importError) {
+          console.error('Both require and import failed:', { requireError: requireError.message, importError: importError.message });
+          throw new Error('Unable to load pdf-parse library');
+        }
+      }
       
       const data = await pdfParse(pdfBuffer);
+      console.log(`PDF parsed successfully: ${data.text.length} characters extracted`);
       return data.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
