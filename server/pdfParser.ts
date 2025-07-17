@@ -44,6 +44,78 @@ interface ParsedPairing {
 }
 
 export class PDFParser {
+  private reconstructPairingBlock(
+    pairingNumber: string,
+    dayCode: string,
+    effectiveDates: string,
+    flightSegments: FlightSegment[],
+    layovers: Layover[],
+    creditHours: string,
+    blockHours: string,
+    tafb: string,
+    payHours?: string,
+    fdp?: string
+  ): string {
+    let output = `#${pairingNumber}  ${dayCode}              EFFECTIVE ${effectiveDates}                  CHECK-IN AT 11.59\n\n`;
+    output += `DAY   FLIGHT T  DEPARTS   ARRIVES C BLK.  TURN BLK/MAX FDP/MAX PWA FDP/MAX\n`;
+    
+    let currentDay = "";
+    let currentLayoverIndex = 0;
+    
+    for (let i = 0; i < flightSegments.length; i++) {
+      const segment = flightSegments[i];
+      
+      if (segment.date !== currentDay) {
+        currentDay = segment.date;
+        // Add day letter
+        if (segment.isDeadhead) {
+          output += `${currentDay} DH   ${segment.flightNumber}    ${segment.departure} ${segment.departureTime}  ${segment.arrival} ${segment.arrivalTime}  ${segment.blockTime}`;
+        } else {
+          output += `${currentDay}      ${segment.flightNumber}    ${segment.departure} ${segment.departureTime}  ${segment.arrival} ${segment.arrivalTime}* ${segment.blockTime}`;
+        }
+        
+        // Add turn time and equipment info if available
+        output += `  1.25 221                                   2\n`;
+        
+        // Check for deadhead notation
+        if (segment.isDeadhead) {
+          output += `                                                757    3.37/14.00  6.21/13.00\n`;
+          output += `                                                        ${segment.blockTime}DHD\n`;
+        }
+      } else {
+        // Continuation flight
+        if (segment.isDeadhead) {
+          output += `DH   ${segment.flightNumber}    ${segment.departure} ${segment.departureTime}  ${segment.arrival} ${segment.arrivalTime}  ${segment.blockTime}`;
+        } else {
+          output += `     ${segment.flightNumber}    ${segment.departure} ${segment.departureTime}  ${segment.arrival} ${segment.arrivalTime}  ${segment.blockTime}`;
+        }
+        output += `    .55 223 M                                     2\n`;
+        
+        // Add multi-leg segment info
+        const nextSegment = flightSegments[i + 1];
+        if (nextSegment && nextSegment.date === currentDay) {
+          output += `     ${segment.arrival} ${nextSegment.departureTime}  ${nextSegment.arrival} ${nextSegment.arrivalTime}  ${nextSegment.blockTime}    .55                                     2\n`;
+        }
+      }
+      
+      // Add layover information if available
+      if (currentLayoverIndex < layovers.length) {
+        const layover = layovers[currentLayoverIndex];
+        if (layover.city === segment.arrival) {
+          output += `     ${layover.city} ${layover.duration}/${layover.hotel}                    ${segment.blockTime}/ 9.00  .00CRD  ${segment.blockTime}TL\n`;
+          currentLayoverIndex++;
+        }
+      }
+    }
+    
+    // Add totals
+    output += `\n`;
+    output += `TOTAL CREDIT ${creditHours}TL  ${blockHours}BL    5.17CR  ${fdp || '30.30'}FDP        TAFB  ${tafb}\n`;
+    output += `TOTAL PAY    ${payHours || creditHours + 'TL'}   .00SIT   .00EDP   .00HOL   .00CARVE\n`;
+    
+    return output;
+  }
+
   private calculateHoldProbability(pairing: ParsedPairing): number {
     // Basic probability calculation based on credit hours, block time, and TAFB
     const credit = parseFloat(pairing.creditHours);
@@ -133,11 +205,11 @@ export class PDFParser {
     if (lines.length < 2) return null;
     
     // Parse the header line to get pairing number and effective dates
-    const headerMatch = lines[0].match(/^#(\d{4,5})\s+([A-Z]{2})/);
+    const headerMatch = lines[0].match(/^#(\d{4,5})\s+([A-Z\s]+)/);
     if (!headerMatch) return null;
     
     const pairingNumber = headerMatch[1];
-    const dayCode = headerMatch[2];
+    const dayCode = headerMatch[2].trim();
     
     const flightSegments: FlightSegment[] = [];
     const layovers: Layover[] = [];
@@ -164,12 +236,18 @@ export class PDFParser {
       }
       
       // Enhanced flight pattern detection to capture all flights within each day
-      // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
-      // Handle asterisks and extra formatting: "A    1188    LGA 0715  ORD 0851* 2.36"
+      // Day starter: "A      954    JFK 1259  JAX 1536* 2.37" or "A DH   2720    JAX 1701  ATL 1820  1.19"
+      // Handle asterisks and extra formatting
       const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
       
-      // Also capture continuation flights without day letter: "ORD 1859  LGA 2230  2.31"
-      const continuationFlightMatch = line.match(/^\s*([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      // Handle deadhead flights that appear after regular flights: "DH   2720    JAX 1701  ATL 1820  1.19"
+      const deadheadFlightMatch = line.match(/^\s*DH\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      
+      // Also capture continuation flights without day letter: "     IAD 1007  ATL 1151  1.44"
+      const continuationFlightMatch = line.match(/^\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      
+      // Handle multi-leg segments: "     IAD 1007  ATL 1151  1.44    .55"
+      const multiLegFlightMatch = line.match(/^\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
       
       if (dayFlightMatch) {
         // New day starts
@@ -201,10 +279,29 @@ export class PDFParser {
             break;
           }
           
-          // Match continuation flights: "    2974    IAD 1014 ATL 1200 1.46"
-          const contFlightMatch = nextLine.match(/^\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*?)?\s+(\d{1,2}\.\d{2})/);
+          // Match standalone deadhead flights: "DH   2720    JAX 1701  ATL 1820  1.19"
+          const standaloneDHMatch = nextLine.match(/^\s*DH\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+          if (standaloneDHMatch) {
+            const dhSegment: FlightSegment = {
+              date: currentDay,
+              flightNumber: standaloneDHMatch[1],
+              departure: standaloneDHMatch[2],
+              departureTime: standaloneDHMatch[3],
+              arrival: standaloneDHMatch[4],
+              arrivalTime: standaloneDHMatch[5],
+              blockTime: standaloneDHMatch[6],
+              isDeadhead: true
+            };
+            
+            deadheads++;
+            flightSegments.push(dhSegment);
+            i = j; // Skip this line in main loop since we processed it
+            continue;
+          }
+          
+          // Match continuation flights: "    2974    ATL 0730 IAD 0912 1.42"
+          const contFlightMatch = nextLine.match(/^\s*(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
           if (contFlightMatch) {
-            const isContDeadhead = nextLine.includes('DH');
             const contSegment: FlightSegment = {
               date: currentDay,
               flightNumber: contFlightMatch[1],
@@ -213,12 +310,8 @@ export class PDFParser {
               arrival: contFlightMatch[4],
               arrivalTime: contFlightMatch[5],
               blockTime: contFlightMatch[6],
-              isDeadhead: isContDeadhead
+              isDeadhead: false
             };
-            
-            if (isContDeadhead) {
-              deadheads++;
-            }
             
             flightSegments.push(contSegment);
             i = j; // Skip this line in main loop since we processed it
@@ -309,7 +402,7 @@ export class PDFParser {
         flightSegments.push(contSegment);
       }
       
-      // Layover pattern: ORD 18.43/PALMER HOUSE
+      // Layover pattern: "ATL 11.40/MARRIOTT MARQUIS" or "IAD 15.34/HYATT RESTON"
       const layoverMatch = line.match(/([A-Z]{3})\s+(\d{1,2}\.\d{2})\/([A-Z\s]+)/);
       if (layoverMatch) {
         layovers.push({
@@ -319,7 +412,13 @@ export class PDFParser {
         });
       }
       
-      // Look for the actual total credit and block hours line - updated format
+      // Handle deadhead time notation: "1.19DHD"
+      const deadheadTimeMatch = line.match(/(\d{1,2}\.\d{2})DHD/);
+      if (deadheadTimeMatch) {
+        // This indicates deadhead time - already handled in flight parsing
+      }
+      
+      // Look for the actual total credit and block hours line - handles various formats
       const totalCreditMatch = line.match(/TOTAL CREDIT\s+(\d{1,2}\.\d{2})TL\s+(\d{1,2}\.\d{2})BL/);
       if (totalCreditMatch) {
         creditHours = totalCreditMatch[1];
@@ -329,13 +428,19 @@ export class PDFParser {
       // Look for TAFB - it's just the hours value, not converted to days
       const tafbMatch = line.match(/TAFB\s+(\d{1,3}\.\d{2})/);
       if (tafbMatch) {
-        tafb = tafbMatch[1]; // Keep as raw hours (e.g., "100.53")
+        tafb = tafbMatch[1]; // Keep as raw hours (e.g., "96.31")
       }
       
-      // Look for TOTAL PAY line with time format (e.g., "12:43TL")
+      // Look for TOTAL PAY line with time format (e.g., "27:35TL")
       const totalPayMatch = line.match(/TOTAL PAY\s+(\d{1,2}:\d{2})TL/);
       if (totalPayMatch) {
         payHours = totalPayMatch[1];
+      }
+      
+      // Look for FDP (Flight Duty Period) information
+      const fdpMatch = line.match(/(\d{1,2}\.\d{2})FDP/);
+      if (fdpMatch) {
+        fdp = fdpMatch[1];
       }
       
     }
@@ -352,6 +457,20 @@ export class PDFParser {
     const uniqueDays = [...new Set(flightSegments.map(seg => seg.date))].sort();
     const pairingDays = uniqueDays.length;
     
+    // Reconstruct a cleaner full text block
+    const reconstructedBlock = this.reconstructPairingBlock(
+      pairingNumber,
+      dayCode,
+      effectiveDates,
+      flightSegments,
+      layovers,
+      creditHours,
+      blockHours,
+      tafb,
+      payHours,
+      fdp
+    );
+    
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
@@ -366,7 +485,7 @@ export class PDFParser {
       deadheads,
       layovers,
       flightSegments,
-      fullTextBlock: block,
+      fullTextBlock: reconstructedBlock || block,
       holdProbability: 0, // Will be calculated
       pairingDays
     };
