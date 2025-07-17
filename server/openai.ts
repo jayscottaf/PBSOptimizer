@@ -251,10 +251,23 @@ export class PairingAnalysisService {
   }
 
   private async findPairingsByDuration(storage: any, params: any) {
+    // First get all pairings to see what pairingDays values exist
+    const allPairings = await storage.searchPairings({ 
+      bidPackageId: params.bidPackageId
+    });
+    
+    console.log(`Total pairings in bid package ${params.bidPackageId}: ${allPairings.length}`);
+    console.log('Sample pairingDays values:', allPairings.slice(0, 10).map(p => ({ 
+      pairingNumber: p.pairingNumber, 
+      pairingDays: p.pairingDays 
+    })));
+    
     const pairings = await storage.searchPairings({ 
       bidPackageId: params.bidPackageId,
       pairingDays: params.days
     });
+    
+    console.log(`Found ${pairings.length} pairings with ${params.days} days`);
     
     return {
       count: pairings.length,
@@ -267,7 +280,9 @@ export class PairingAnalysisService {
         tafb: p.tafb,
         pairingDays: p.pairingDays,
         holdProbability: p.holdProbability
-      }))
+      })),
+      // Add debug info
+      allPairingDaysFound: [...new Set(allPairings.map(p => p.pairingDays))].sort()
     };
   }
 }
