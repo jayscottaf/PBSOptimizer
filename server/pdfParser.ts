@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
@@ -346,7 +346,6 @@ export class PDFParser {
       }
       
       // Use standalone Node.js worker to avoid tsx/ES module conflicts
-      const { execSync } = await import('child_process');
       const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, { 
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large PDFs
