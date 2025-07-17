@@ -45,11 +45,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-screen overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Pairing Details - {pairing.pairingNumber}</span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+          <DialogTitle>
+            Pairing Details - {pairing.pairingNumber}
           </DialogTitle>
           <DialogDescription>
             Detailed view of pairing {pairing.pairingNumber} with flight segments, layovers, and bid history.
