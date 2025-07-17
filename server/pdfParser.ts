@@ -242,6 +242,26 @@ export class PDFParser {
             continue;
           }
           
+          // Also check for standalone deadhead flights that might be on their own line
+          const deadheadMatch = nextLine.match(/^\s*DH\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+          if (deadheadMatch) {
+            const dhSegment: FlightSegment = {
+              date: currentDay,
+              flightNumber: deadheadMatch[1],
+              departure: deadheadMatch[2],
+              departureTime: deadheadMatch[3],
+              arrival: deadheadMatch[4],
+              arrivalTime: deadheadMatch[5],
+              blockTime: deadheadMatch[6],
+              isDeadhead: true
+            };
+            
+            deadheads++;
+            flightSegments.push(dhSegment);
+            i = j; // Skip this line
+            continue;
+          }
+          
           // If we can't match any flight pattern, stop looking ahead
           break;
         }
