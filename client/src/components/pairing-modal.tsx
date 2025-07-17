@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
               <X className="h-4 w-4" />
             </Button>
           </DialogTitle>
+          <DialogDescription>
+            Detailed view of pairing {pairing.pairingNumber} with flight segments, layovers, and bid history.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6">

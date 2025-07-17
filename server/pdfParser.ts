@@ -150,6 +150,7 @@ export class PDFParser {
     let carveouts = "";
     let deadheads = 0;
     let effectiveDates = "";
+    let currentDay = "A"; // Track current day for continuation flights
     
     // Extract effective dates from the block
     for (let i = 1; i < lines.length; i++) {
@@ -162,25 +163,44 @@ export class PDFParser {
         }
       }
       
-      // Flight segment pattern: Match both formats:
-      // 1. A DH 2810 LGA 1130 ORD 1310 2.40 1.15 223
-      // 2.      563 LGA 1925 MCI 2145 3.20
-      const flightMatch = line.match(/^([A-Z]?\s*)((?:DH\s+)?(\d{3,4}))\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
-      if (flightMatch) {
+      // Flight pattern detection: Match both day starters and continuation flights
+      // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57"
+      const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+      // Continuation flight: "    2773 MSP 1835 SAT 2125 2.50"
+      const continuationFlightMatch = line.match(/^\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+      
+      if (dayFlightMatch) {
+        // New day starts
+        currentDay = dayFlightMatch[1];
+        const isDeadhead = line.includes('DH');
         const segment: FlightSegment = {
-          date: flightMatch[1].trim() || 'A', // Day code (A, B, C, etc.) or default to A
-          flightNumber: flightMatch[3],
-          departure: flightMatch[4],
-          departureTime: flightMatch[5],
-          arrival: flightMatch[6],
-          arrivalTime: flightMatch[7],
-          blockTime: flightMatch[8],
-          isDeadhead: line.includes('DH ')
+          date: currentDay,
+          flightNumber: dayFlightMatch[2],
+          departure: dayFlightMatch[3],
+          departureTime: dayFlightMatch[4],
+          arrival: dayFlightMatch[5],
+          arrivalTime: dayFlightMatch[6],
+          blockTime: dayFlightMatch[7],
+          isDeadhead
         };
         
         if (segment.isDeadhead) {
           deadheads++;
         }
+        
+        flightSegments.push(segment);
+      } else if (continuationFlightMatch && currentDay) {
+        // Continuation flight on the same day
+        const segment: FlightSegment = {
+          date: currentDay,
+          flightNumber: continuationFlightMatch[1],
+          departure: continuationFlightMatch[2],
+          departureTime: continuationFlightMatch[3],
+          arrival: continuationFlightMatch[4],
+          arrivalTime: continuationFlightMatch[5],
+          blockTime: continuationFlightMatch[6],
+          isDeadhead: false
+        };
         
         flightSegments.push(segment);
       }
