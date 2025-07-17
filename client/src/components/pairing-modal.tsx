@@ -27,6 +27,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-screen overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Loading Pairing</DialogTitle>
+            <DialogDescription>Please wait while we fetch pairing details...</DialogDescription>
+          </DialogHeader>
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-500">Loading pairing details...</div>
           </div>
@@ -65,7 +69,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   <div><span className="text-gray-600">Credit:</span> {pairing.creditHours}</div>
                   <div><span className="text-gray-600">Block:</span> {pairing.blockHours}</div>
                   <div><span className="text-gray-600">TAFB:</span> {pairing.tafb} hours</div>
-                  <div><span className="text-gray-600">Days:</span> {(pairing as any).pairingDays || 'N/A'}</div>
+                  <div><span className="text-gray-600">Days:</span> {pairing.pairingDays || 'N/A'}</div>
                   {pairing.fdp && <div><span className="text-gray-600">FDP:</span> {pairing.fdp}</div>}
                   {pairing.deadheads > 0 && <div><span className="text-gray-600">Deadheads:</span> {pairing.deadheads}</div>}
                 </CardContent>
