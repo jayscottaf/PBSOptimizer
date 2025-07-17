@@ -223,6 +223,7 @@ export class PDFParser {
           }
           
           // Match multi-leg format (same flight, different segment): "        IAD 1014 ATL 1200 1.46"
+          // Also handle formats with additional data: "                 ORD 1859  LGA 2230  2.31           M 10.30/13.00 10.30/12.30 2"
           const multiLegMatch = nextLine.match(/^\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
           if (multiLegMatch && flightSegments.length > 0) {
             // This is another leg of the previous flight
@@ -239,6 +240,27 @@ export class PDFParser {
             };
             
             flightSegments.push(multiLegSegment);
+            i = j; // Skip this line in main loop
+            continue;
+          }
+          
+          // Handle lines that start with spaces and contain flight data but no flight number
+          // These are continuation segments of the previous flight
+          const continuationMatch = nextLine.match(/^\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+          if (continuationMatch && flightSegments.length > 0) {
+            const lastFlight = flightSegments[flightSegments.length - 1];
+            const continuationSegment: FlightSegment = {
+              date: currentDay,
+              flightNumber: lastFlight.flightNumber, // Same flight number as previous
+              departure: continuationMatch[1],
+              departureTime: continuationMatch[2],
+              arrival: continuationMatch[3],
+              arrivalTime: continuationMatch[4],
+              blockTime: continuationMatch[5],
+              isDeadhead: false
+            };
+            
+            flightSegments.push(continuationSegment);
             i = j; // Skip this line in main loop
             continue;
           }
