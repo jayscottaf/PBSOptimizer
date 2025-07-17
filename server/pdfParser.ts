@@ -163,11 +163,9 @@ export class PDFParser {
         }
       }
       
-      // Flight pattern detection: Match both day starters and continuation flights
-      // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57"
+      // Enhanced flight pattern detection to capture all flights within each day
+      // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
       const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
-      // Continuation flight: "    2773 MSP 1835 SAT 2125 2.50"
-      const continuationFlightMatch = line.match(/^\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
       
       if (dayFlightMatch) {
         // New day starts
@@ -189,20 +187,64 @@ export class PDFParser {
         }
         
         flightSegments.push(segment);
-      } else if (continuationFlightMatch && currentDay) {
-        // Continuation flight on the same day
-        const segment: FlightSegment = {
-          date: currentDay,
-          flightNumber: continuationFlightMatch[1],
-          departure: continuationFlightMatch[2],
-          departureTime: continuationFlightMatch[3],
-          arrival: continuationFlightMatch[4],
-          arrivalTime: continuationFlightMatch[5],
-          blockTime: continuationFlightMatch[6],
-          isDeadhead: false
-        };
         
-        flightSegments.push(segment);
+        // Look ahead for continuation flights and multi-leg flights within the same day
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextLine = lines[j].trim();
+          
+          // Stop if we encounter another day letter or important keywords
+          if (nextLine.match(/^[A-E]\s/) || nextLine.includes('TOTAL') || nextLine.includes('TAFB') || nextLine === '') {
+            break;
+          }
+          
+          // Match continuation flights: "    2974    IAD 1014 ATL 1200 1.46"
+          const contFlightMatch = nextLine.match(/^\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*?)?\s+(\d{1,2}\.\d{2})/);
+          if (contFlightMatch) {
+            const isContDeadhead = nextLine.includes('DH');
+            const contSegment: FlightSegment = {
+              date: currentDay,
+              flightNumber: contFlightMatch[1],
+              departure: contFlightMatch[2],
+              departureTime: contFlightMatch[3],
+              arrival: contFlightMatch[4],
+              arrivalTime: contFlightMatch[5],
+              blockTime: contFlightMatch[6],
+              isDeadhead: isContDeadhead
+            };
+            
+            if (isContDeadhead) {
+              deadheads++;
+            }
+            
+            flightSegments.push(contSegment);
+            i = j; // Skip this line in main loop since we processed it
+            continue;
+          }
+          
+          // Match multi-leg format (same flight, different segment): "        IAD 1014 ATL 1200 1.46"
+          const multiLegMatch = nextLine.match(/^\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+          if (multiLegMatch && flightSegments.length > 0) {
+            // This is another leg of the previous flight
+            const lastFlight = flightSegments[flightSegments.length - 1];
+            const multiLegSegment: FlightSegment = {
+              date: currentDay,
+              flightNumber: lastFlight.flightNumber, // Same flight number
+              departure: multiLegMatch[1],
+              departureTime: multiLegMatch[2],
+              arrival: multiLegMatch[3],
+              arrivalTime: multiLegMatch[4],
+              blockTime: multiLegMatch[5],
+              isDeadhead: false
+            };
+            
+            flightSegments.push(multiLegSegment);
+            i = j; // Skip this line in main loop
+            continue;
+          }
+          
+          // If we can't match any flight pattern, stop looking ahead
+          break;
+        }
       }
       
       // Layover pattern: ORD 18.43/PALMER HOUSE
