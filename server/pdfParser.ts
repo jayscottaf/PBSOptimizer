@@ -346,7 +346,7 @@ export class PDFParser {
       }
       
       // Use standalone Node.js worker to avoid tsx/ES module conflicts
-      const { execSync } = require('child_process');
+      const { execSync } = await import('child_process');
       const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, { 
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large PDFs
