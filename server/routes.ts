@@ -74,9 +74,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aircraft,
       });
 
-      // Clear all existing data before uploading new bid package
-      await storage.clearAllData();
-      
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
       // Parse file asynchronously and update status

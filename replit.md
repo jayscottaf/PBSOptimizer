@@ -2,9 +2,7 @@
 
 ## Overview
 
-The Delta PBS Bid Optimization App is a full-stack web application designed for Delta pilots to parse monthly bid packages, store pairing data, track historical bid awards, and predict hold likelihood. The application processes PDF and TXT bid packages, extracts detailed pairing information, and provides analytics to help pilots make informed bidding decisions.
-
-**Current Status:** Optimized for single-document workflow with automatic database clearing on new uploads for maximum performance.
+The Delta PBS Bid Optimization App is a full-stack web application designed for Delta pilots to parse monthly bid packages, store pairing data, track historical bid awards, and predict hold likelihood. The application processes PDF bid packages, extracts detailed pairing information, and provides analytics to help pilots make informed bidding decisions.
 
 ## User Preferences
 
@@ -32,7 +30,6 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM for type-safe database operations
 - **Schema Management**: Drizzle Kit for migrations and schema management
 - **Connection**: Neon serverless connection pooling with WebSocket support
-- **Data Strategy**: Single-document approach - database clears on each new upload for optimal performance
 
 ## Key Components
 
@@ -70,21 +67,11 @@ The application uses a well-structured PostgreSQL schema with the following main
 
 ## Data Flow
 
-1. **File Upload**: Pilots upload monthly bid packages (PDF or TXT) through the file upload component
-2. **Database Reset**: System automatically clears all existing data for optimal performance
-3. **Processing Pipeline**: Server extracts text, parses structured data, and stores in database
-4. **Search Interface**: Real-time filtering and search across current month pairing data
-5. **Detail Views**: Modal dialogs showing complete pairing information
-6. **Analytics**: Current month analysis for hold predictions and optimization
-
-## Recent Changes (July 17, 2025)
-
-### Single-Document Architecture Implementation
-- **Performance Optimization**: Eliminated 94.4% data duplication by implementing automatic database clearing
-- **Storage Efficiency**: Reduced database size from 9,642 to ~534 unique pairing records per upload
-- **Enhanced Parser**: Fixed missing flight segment issue in pairing 8078 and similar continuation flights
-- **Cross-Format Support**: Enhanced parser handles both PDF and TXT uploads with same logic
-- **System Benefits**: 95% faster search queries, no duplicate results, cleaner data management
+1. **PDF Upload**: Pilots upload monthly bid packages through the file upload component
+2. **Processing Pipeline**: Server extracts text, parses structured data, and stores in database
+3. **Search Interface**: Real-time filtering and search across pairing data
+4. **Detail Views**: Modal dialogs showing complete pairing information and history
+5. **Analytics**: Historical data analysis for seniority trends and hold predictions
 
 ## External Dependencies
 

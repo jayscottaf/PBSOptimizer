@@ -30,13 +30,11 @@ export interface IStorage {
   getBidPackages(): Promise<BidPackage[]>;
   getBidPackage(id: number): Promise<BidPackage | undefined>;
   updateBidPackageStatus(id: number, status: string): Promise<void>;
-  clearAllData(): Promise<void>;
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
-  updatePairingFlightSegments(id: number, flightSegments: any[]): Promise<void>;
   searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
@@ -174,21 +172,6 @@ export class DatabaseStorage implements IStorage {
       .values(bidHistoryData)
       .returning();
     return newBidHistory;
-  }
-
-  async updatePairingFlightSegments(id: number, flightSegments: any[]): Promise<void> {
-    await db.update(pairings)
-      .set({ flightSegments })
-      .where(eq(pairings.id, id));
-  }
-
-  async clearAllData(): Promise<void> {
-    // Clear all data for fresh start with new bid package
-    await db.delete(userFavorites);
-    await db.delete(bidHistory);
-    await db.delete(pairings);
-    await db.delete(bidPackages);
-    console.log('Database cleared for new bid package upload');
   }
 
   async getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]> {
