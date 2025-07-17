@@ -165,7 +165,8 @@ export class PDFParser {
       
       // Enhanced flight pattern detection to capture all flights within each day
       // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
-      const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/);
+      // Handle asterisks and extra formatting: "A    1188    LGA 0715  ORD 0851* 2.36"
+      const dayFlightMatch = line.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
       
       if (dayFlightMatch) {
         // New day starts
