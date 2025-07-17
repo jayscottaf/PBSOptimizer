@@ -28,8 +28,11 @@ export default function Dashboard() {
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
   });
 
-  // Get the latest bid package (completed or processing)
-  const latestBidPackage = (bidPackages as any[]).find((pkg: any) => pkg.status === 'completed' || pkg.status === 'processing');
+  // Get the latest completed bid package (prioritize newest)
+  const latestBidPackage = (bidPackages as any[])
+    .filter((pkg: any) => pkg.status === 'completed')
+    .sort((a: any, b: any) => b.id - a.id)[0] || 
+    (bidPackages as any[]).find((pkg: any) => pkg.status === 'processing');
 
   const { data: pairings = [], refetch: refetchPairings } = useQuery({
     queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
