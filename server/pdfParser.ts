@@ -248,12 +248,10 @@ export class PDFParser {
   }
 
   private async extractTextFromPDF(filePath: string): Promise<string> {
-    const fs = require('fs');
-    const pdfParse = require('pdf-parse');
-    
     try {
       const pdfBuffer = fs.readFileSync(filePath);
-      const data = await pdfParse(pdfBuffer);
+      const pdfParse = await import('pdf-parse');
+      const data = await pdfParse.default(pdfBuffer);
       return data.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);

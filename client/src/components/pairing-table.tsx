@@ -37,29 +37,29 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
         </div>
       </div>
       
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      <div className="overflow-x-auto min-w-0">
+        <table className="w-full min-w-[800px]">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 Pairing #
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                 Route
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
                 Credit
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
                 Block
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 TAFB
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                 Hold %
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 Actions
               </th>
             </tr>
@@ -78,47 +78,47 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => onPairingClick(pairing.id)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <span className="font-mono font-medium text-gray-900">
+                      <span className="font-mono font-medium text-gray-900 text-sm">
                         {pairing.pairingNumber}
                       </span>
                       {pairing.holdProbability >= 80 && (
-                        <Star className="text-yellow-400 ml-2 h-4 w-4" />
+                        <Star className="text-yellow-400 ml-2 h-4 w-4 flex-shrink-0" />
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{pairing.route}</div>
-                    <div className="text-xs text-gray-500">{pairing.effectiveDates}</div>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 truncate max-w-[140px]" title={pairing.route}>{pairing.route}</div>
+                    <div className="text-xs text-gray-500 truncate max-w-[140px]" title={pairing.effectiveDates}>{pairing.effectiveDates}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span className="font-mono text-sm font-medium text-gray-900">
                       {pairing.creditHours}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span className="font-mono text-sm text-gray-600">
                       {pairing.blockHours}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-600">{pairing.tafb}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2 min-w-[100px]">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[50px]">
                         <div 
                           className={`h-2 rounded-full ${getProgressColor(pairing.holdProbability)}`}
                           style={{ width: `${pairing.holdProbability}%` }}
                         />
                       </div>
-                      <span className={`text-sm font-medium ${getHoldProbabilityColor(pairing.holdProbability)}`}>
+                      <span className={`text-xs font-medium ${getHoldProbabilityColor(pairing.holdProbability)} flex-shrink-0`}>
                         {pairing.holdProbability}%
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Button 
                       variant="ghost" 
                       size="sm"

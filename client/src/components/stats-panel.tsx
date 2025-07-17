@@ -16,6 +16,10 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
   // Expected total for NYC A220 is typically 500-600 pairings
   const expectedTotal = 534;
   const progressPercentage = Math.min((totalPairings / expectedTotal) * 100, 100);
+  
+  // Show processing status for current bid package
+  const isProcessing = bidPackage?.status === 'processing';
+  const isFailed = bidPackage?.status === 'failed';
 
   return (
     <Card>
@@ -26,18 +30,28 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
             <span className="text-sm text-gray-600">Total Pairings</span>
             <div className="flex items-center space-x-2">
               <span className="font-medium text-gray-900">{totalPairings}</span>
-              {bidPackage?.status === 'processing' && (
-                <span className="text-xs text-orange-600">Loading...</span>
+              {isProcessing && (
+                <span className="text-xs text-orange-600">Processing...</span>
+              )}
+              {isFailed && (
+                <span className="text-xs text-red-600">Failed</span>
               )}
             </div>
           </div>
-          {bidPackage?.status === 'processing' && (
+          {isProcessing && (
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-gray-500">
                 <span>Processing bid package</span>
                 <span>{Math.round(progressPercentage)}%</span>
               </div>
               <Progress value={progressPercentage} className="h-2" />
+            </div>
+          )}
+          {isFailed && (
+            <div className="space-y-2">
+              <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                PDF processing failed. Please try uploading again.
+              </div>
             </div>
           )}
           <div className="flex justify-between items-center">
