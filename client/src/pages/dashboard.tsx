@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type SearchFilters } from "@/lib/api";
+import { clearAllCache, clearPairingCache, refreshAllData } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +13,7 @@ import { PairingModal } from "@/components/pairing-modal";
 import { FiltersPanel } from "@/components/filters-panel";
 import { SeniorityChart } from "@/components/seniority-chart";
 import { StatsPanel } from "@/components/stats-panel";
-import { Plane, Settings, Search, Plus, X } from "lucide-react";
+import { Plane, Settings, Search, Plus, X, RefreshCw, Trash2 } from "lucide-react";
 
 export default function Dashboard() {
   const [seniorityNumber, setSeniorityNumber] = useState("15860");
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["/api/bid-packages"],
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
+    staleTime: 0, // Always fetch fresh data
   });
 
   // Get the latest completed bid package (prioritize newest)
@@ -42,6 +44,7 @@ export default function Dashboard() {
       bidPackageId: latestBidPackage?.id // Show only current bid package pairings
     }),
     enabled: !!latestBidPackage, // Only run if we have a bid package
+    staleTime: 0, // Always fetch fresh data
   });
 
   const handleSearch = () => {
@@ -96,9 +99,27 @@ export default function Dashboard() {
                 <span className="text-gray-400">|</span>
                 <span>NYC A220 FO</span>
               </div>
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => refreshAllData()}
+                  title="Refresh all data"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => clearAllCache()}
+                  title="Clear all cache"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

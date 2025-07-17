@@ -15,7 +15,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   const { data: pairing, isLoading } = useQuery({
     queryKey: ["/api/pairings", pairingId],
     queryFn: () => api.getPairing(pairingId),
-    staleTime: 0, // Force fresh data fetch
+    staleTime: 0, // Always fetch fresh data
     refetchOnMount: true,
   });
 

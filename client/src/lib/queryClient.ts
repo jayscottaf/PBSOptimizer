@@ -47,7 +47,8 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes instead of Infinity
+      staleTime: 0, // Always fetch fresh data
+      cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
       retry: false,
     },
     mutations: {
@@ -55,3 +56,20 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Cache clearing utilities
+export const clearAllCache = () => {
+  queryClient.clear();
+  console.log('🗑️ All cache cleared');
+};
+
+export const clearPairingCache = () => {
+  queryClient.removeQueries({ queryKey: ['/api/pairings'] });
+  queryClient.removeQueries({ queryKey: ['/api/pairings/search'] });
+  console.log('🗑️ Pairing cache cleared');
+};
+
+export const refreshAllData = async () => {
+  await queryClient.invalidateQueries();
+  console.log('🔄 All data refreshed');
+};
