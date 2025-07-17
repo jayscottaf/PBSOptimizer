@@ -32,6 +32,9 @@ const searchFiltersSchema = z.object({
   blockMax: z.number().optional(),
   tafb: z.string().optional(),
   holdProbabilityMin: z.number().optional(),
+  pairingDays: z.number().optional(),
+  pairingDaysMin: z.number().optional(),
+  pairingDaysMax: z.number().optional(),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {

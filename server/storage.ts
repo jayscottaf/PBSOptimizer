@@ -45,6 +45,9 @@ export interface IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
+	pairingDays?: number;
+	pairingDaysMin?: number;
+	pairingDaysMax?: number;
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -144,35 +147,50 @@ export class DatabaseStorage implements IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
+	pairingDays?: number;
+	pairingDaysMin?: number;
+	pairingDaysMax?: number;
   }): Promise<Pairing[]> {
     const conditions = [];
-    
+
     if (filters.bidPackageId) {
       conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
     }
-    
+
     if (filters.search) {
       conditions.push(like(pairings.route, `%${filters.search}%`));
     }
-    
+
     if (filters.creditMin) {
       conditions.push(gte(pairings.creditHours, filters.creditMin.toString()));
     }
-    
+
     if (filters.creditMax) {
       conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
     }
-    
+
     if (filters.holdProbabilityMin) {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
-    
+
+	if (filters.pairingDays) {
+      conditions.push(eq(pairings.pairingDays, filters.pairingDays));
+    }
+
+    if (filters.pairingDaysMin) {
+      conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
+    }
+
+    if (filters.pairingDaysMax) {
+      conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+    }
+
     if (conditions.length > 0) {
       return await db.select().from(pairings)
         .where(and(...conditions))
         .orderBy(asc(pairings.pairingNumber));
     }
-    
+
     return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
   }
 
@@ -216,7 +234,7 @@ export class DatabaseStorage implements IStorage {
       .from(userFavorites)
       .innerJoin(pairings, eq(userFavorites.pairingId, pairings.id))
       .where(eq(userFavorites.userId, userId));
-    
+
     return result.map(r => r.pairing);
   }
 }

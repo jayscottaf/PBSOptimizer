@@ -33,7 +33,10 @@ export class PairingAnalysisService {
               blockMin: { type: "number", description: "Minimum block hours" },
               blockMax: { type: "number", description: "Maximum block hours" },
               tafb: { type: "string", description: "TAFB filter (3d, 4d, 5d+)" },
-              holdProbabilityMin: { type: "number", description: "Minimum hold probability percentage" }
+              holdProbabilityMin: { type: "number", description: "Minimum hold probability percentage" },
+              pairingDays: { type: "number", description: "Filter by specific number of pairing days (1, 2, 3, 4, 5, etc.)" },
+              pairingDaysMin: { type: "number", description: "Minimum number of pairing days" },
+              pairingDaysMax: { type: "number", description: "Maximum number of pairing days" }
             }
           }
         },
@@ -56,6 +59,17 @@ export class PairingAnalysisService {
             type: "object",
             properties: {
               bidPackageId: { type: "number", description: "ID of the bid package" }
+            }
+          }
+        },
+        {
+          name: "findPairingsByDuration",
+          description: "Find pairings by specific duration (number of days)",
+          parameters: {
+            type: "object",
+            properties: {
+              bidPackageId: { type: "number", description: "ID of the bid package" },
+              days: { type: "number", description: "Number of days (1, 2, 3, 4, 5, etc.)" }
             }
           }
         }
@@ -117,6 +131,10 @@ export class PairingAnalysisService {
 
           case "getPairingStats":
             functionResult = await this.getPairingStats(storage, functionArgs);
+            break;
+
+          case "findPairingsByDuration":
+            functionResult = await this.findPairingsByDuration(storage, functionArgs);
             break;
 
           default:
@@ -213,6 +231,13 @@ export class PairingAnalysisService {
     const blockHours = pairings.map((p: any) => parseFloat(p.blockHours?.replace(':', '.')) || 0);
     const holdProbabilities = pairings.map((p: any) => p.holdProbability || 0);
 
+    // Count pairings by duration
+    const pairingsByDays = {};
+    pairings.forEach((p: any) => {
+      const days = p.pairingDays || 1;
+      pairingsByDays[days] = (pairingsByDays[days] || 0) + 1;
+    });
+
     return {
       totalPairings: pairings.length,
       averageCredit: (creditHours.reduce((a, b) => a + b, 0) / creditHours.length).toFixed(2),
@@ -220,7 +245,29 @@ export class PairingAnalysisService {
       averageHoldProbability: (holdProbabilities.reduce((a, b) => a + b, 0) / holdProbabilities.length).toFixed(1),
       highProbabilityPairings: pairings.filter((p: any) => p.holdProbability >= 80).length,
       mediumProbabilityPairings: pairings.filter((p: any) => p.holdProbability >= 50 && p.holdProbability < 80).length,
-      lowProbabilityPairings: pairings.filter((p: any) => p.holdProbability < 50).length
+      lowProbabilityPairings: pairings.filter((p: any) => p.holdProbability < 50).length,
+      pairingsByDays
+    };
+  }
+
+  private async findPairingsByDuration(storage: any, params: any) {
+    const pairings = await storage.searchPairings({ 
+      bidPackageId: params.bidPackageId,
+      pairingDays: params.days
+    });
+    
+    return {
+      count: pairings.length,
+      days: params.days,
+      pairings: pairings.map((p: any) => ({
+        pairingNumber: p.pairingNumber,
+        route: p.route,
+        creditHours: p.creditHours,
+        blockHours: p.blockHours,
+        tafb: p.tafb,
+        pairingDays: p.pairingDays,
+        holdProbability: p.holdProbability
+      }))
     };
   }
 }
