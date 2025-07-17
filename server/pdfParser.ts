@@ -340,23 +340,14 @@ export class PDFParser {
     try {
       const pdfBuffer = fs.readFileSync(filePath);
       
-      // Try multiple import approaches for pdf-parse
-      let pdfParse;
-      try {
-        pdfParse = require('pdf-parse');
-      } catch (requireError) {
-        try {
-          pdfParse = (await import('pdf-parse')).default;
-        } catch (importError) {
-          throw new Error(`Failed to load pdf-parse library: ${requireError.message} | ${importError.message}`);
-        }
-      }
+      // Use synchronous require for pdf-parse to avoid ES module conflicts
+      const pdfParse = require('pdf-parse');
       
       const data = await pdfParse(pdfBuffer);
       return data.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
-      throw new Error(`Failed to extract text from PDF: ${error}`);
+      throw new Error(`Failed to extract text from PDF: ${error.message}`);
     }
   }
 
