@@ -110,15 +110,62 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
+    // Handle complex multi-criteria queries
+    if (message.includes('4-day') && message.includes('credit-to-block') && message.includes('hold prob')) {
+      const allPairings = await this.storage.getPairings(query.bidPackageId);
+      
+      // Filter for 4-day pairings with credit-to-block ratio > 1.2 and hold probability > 75%
+      const filteredPairings = allPairings.filter(p => {
+        const creditHours = parseFloat(p.creditHours.toString());
+        const blockHours = parseFloat(p.blockHours.toString());
+        const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+        const holdProb = parseInt(p.holdProbability?.toString() || '0');
+        
+        return p.pairingDays === 4 && efficiency > 1.2 && holdProb > 75;
+      });
+
+      // Sort by efficiency and limit results
+      const sortedPairings = filteredPairings
+        .sort((a, b) => {
+          const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
+          const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
+          return effB - effA;
+        })
+        .slice(0, this.MAX_PAIRINGS_TO_SEND);
+
+      return {
+        type: 'filtered_4day_analysis',
+        matchingPairings: sortedPairings.map(p => ({
+          pairingNumber: p.pairingNumber,
+          creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+          blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
+          holdProbability: p.holdProbability,
+          pairingDays: p.pairingDays,
+          route: p.route,
+          tafb: p.tafb,
+          layovers: p.layovers
+        })),
+        filterCriteria: {
+          pairingDays: 4,
+          minEfficiency: 1.2,
+          minHoldProbability: 75
+        },
+        totalMatching: filteredPairings.length,
+        totalSearched: allPairings.length,
+        truncated: sortedPairings.length < filteredPairings.length
+      };
+    }
+
     if (message.includes('efficient') || message.includes('credit per block')) {
       const result = await this.storage.getTopEfficientPairings(query.bidPackageId, this.MAX_PAIRINGS_TO_SEND);
       return {
         type: 'efficiency_analysis',
         topPairings: result.pairings.map(p => ({
           pairingNumber: p.pairingNumber,
-          creditHours: this.formatHours(+p.creditHours),
-          blockHours: this.formatHours(+p.blockHours),
-          efficiency: (+p.creditHours / +p.blockHours).toFixed(2),
+          creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+          blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
           holdProbability: p.holdProbability,
           pairingDays: p.pairingDays
         })),
@@ -126,15 +173,12 @@ export class HybridOpenAIService {
           totalPairings: result.stats.totalPairings,
           avgEfficiency: result.stats.avgEfficiency.toFixed(2),
           topEfficiency: result.stats.topEfficiency.toFixed(2),
-          avgCredit: this.formatHours(+result.stats.avgCredit),
-          avgBlock: this.formatHours(+result.stats.avgBlock)
+          avgCredit: this.formatHours(parseFloat(result.stats.avgCredit.toString())),
+          avgBlock: this.formatHours(parseFloat(result.stats.avgBlock.toString()))
         },
         truncated: result.pairings.length < result.stats.totalPairings
       };
     }
-
-    // ... (Other intent handlers remain unchanged. Same fixes applied: parseFloat for numbers)
-    // For brevity, I can include all other intent handlers if you want
 
     const result = await this.storage.getPairingStatsSummary(query.bidPackageId);
     return {
@@ -202,12 +246,15 @@ export class HybridOpenAIService {
   private getAvailableFunctions(): any[] {
     return [
       {
-        name: "getTopEfficientPairings",
-        description: "Get top efficient pairings (credit-to-block ratio)",
-        parameters: {
-          type: "object",
-          properties: {
-            limit: { type: "number", description: "Max pairings to return" }
+        type: "function",
+        function: {
+          name: "getTopEfficientPairings",
+          description: "Get top efficient pairings (credit-to-block ratio)",
+          parameters: {
+            type: "object",
+            properties: {
+              limit: { type: "number", description: "Max pairings to return" }
+            }
           }
         }
       }

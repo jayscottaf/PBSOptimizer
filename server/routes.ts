@@ -159,6 +159,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Verify pairing by number endpoint
+  app.get("/api/verify-pairing/:pairingNumber", async (req, res) => {
+    try {
+      const { pairingNumber } = req.params;
+      const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
+      
+      if (!bidPackageId) {
+        const bidPackages = await storage.getBidPackages();
+        if (bidPackages.length === 0) {
+          return res.status(404).json({ message: "No bid packages found" });
+        }
+        // Use most recent bid package
+        const recentBidPackage = bidPackages[0];
+        const allPairings = await storage.getPairings(recentBidPackage.id);
+        const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
+        
+        if (!pairing) {
+          return res.status(404).json({ 
+            message: "Pairing not found", 
+            pairingNumber, 
+            bidPackageId: recentBidPackage.id,
+            totalPairings: allPairings.length,
+            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
+          });
+        }
+        
+        res.json({
+          found: true,
+          pairing,
+          bidPackageId: recentBidPackage.id,
+          verified: true
+        });
+      } else {
+        const allPairings = await storage.getPairings(bidPackageId);
+        const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
+        
+        if (!pairing) {
+          return res.status(404).json({ 
+            message: "Pairing not found", 
+            pairingNumber, 
+            bidPackageId,
+            totalPairings: allPairings.length,
+            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
+          });
+        }
+        
+        res.json({
+          found: true,
+          pairing,
+          bidPackageId,
+          verified: true
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying pairing:", error);
+      res.status(500).json({ message: "Failed to verify pairing" });
+    }
+  });
+
   // Get bid history for a pairing
   app.get("/api/history/:pairingNumber", async (req, res) => {
     try {
