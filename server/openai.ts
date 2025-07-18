@@ -117,6 +117,8 @@ export class PairingAnalysisService {
           When users say "good layovers" → use analyzePairingsByLayover with minDuration: 12+
           When users say "long layovers" → use analyzePairingsByLayover with minDuration: 24+
           When users say city names → use search parameter with city code
+          When users mention specific numbers (e.g., "pairing 7813", "show me 7813") → use findPairingByNumber
+          When users ask about "pairing details" with a number → use findPairingByNumber
 
           SEARCH STRATEGY:
           1. Parse natural language for multiple criteria
@@ -320,27 +322,58 @@ export class PairingAnalysisService {
   }
 
   private async findPairingByNumber(storage: any, params: any) {
-    const pairings = await storage.searchPairings({ 
-      bidPackageId: params.bidPackageId,
-      search: params.pairingNumber
+    console.log(`Searching for pairing number: ${params.pairingNumber} in bid package ${params.bidPackageId}`);
+    
+    // First try exact pairing number match
+    const allPairings = await storage.searchPairings({ 
+      bidPackageId: params.bidPackageId
     });
-
-    console.log(`Searching for pairing number: ${params.pairingNumber}`);
-    console.log(`Found ${pairings.length} pairings matching search`);
-
-    // Filter to exact matches
-    const exactMatches = pairings.filter((p: any) => 
-      p.pairingNumber === params.pairingNumber
-    );
-
+    
+    console.log(`Total pairings in bid package: ${allPairings.length}`);
+    
+    // Try multiple search patterns
+    const searchPatterns = [
+      params.pairingNumber,
+      params.pairingNumber.toString(),
+      params.pairingNumber.padStart(4, '0'), // Try with leading zeros
+      params.pairingNumber.padStart(5, '0')  // Try with more leading zeros
+    ];
+    
+    let exactMatches = [];
+    
+    for (const pattern of searchPatterns) {
+      exactMatches = allPairings.filter((p: any) => 
+        p.pairingNumber === pattern || 
+        p.pairingNumber?.toString() === pattern ||
+        p.pairingNumber?.includes(pattern)
+      );
+      
+      if (exactMatches.length > 0) {
+        console.log(`Found ${exactMatches.length} matches with pattern: ${pattern}`);
+        break;
+      }
+    }
+    
+    // If no exact matches, try partial matches
     if (exactMatches.length === 0) {
+      const partialMatches = allPairings.filter((p: any) => 
+        p.pairingNumber?.includes(params.pairingNumber) ||
+        p.pairingNumber?.toString().includes(params.pairingNumber.toString())
+      );
+      
+      console.log(`Found ${partialMatches.length} partial matches`);
+      
       return {
         found: false,
         message: `Pairing ${params.pairingNumber} not found in bid package ${params.bidPackageId}`,
-        similarPairings: pairings.slice(0, 5).map((p: any) => ({
+        searchedFor: params.pairingNumber,
+        totalPairings: allPairings.length,
+        similarPairings: partialMatches.slice(0, 5).map((p: any) => ({
           pairingNumber: p.pairingNumber,
           route: p.route
-        }))
+        })),
+        // Add sample pairing numbers for debugging
+        samplePairings: allPairings.slice(0, 10).map((p: any) => p.pairingNumber)
       };
     }
 
@@ -357,7 +390,8 @@ export class PairingAnalysisService {
         holdProbability: pairing.holdProbability,
         layovers: pairing.layovers,
         effectiveDates: pairing.effectiveDates,
-        payHours: pairing.payHours
+        payHours: pairing.payHours,
+        fullText: pairing.fullText // Include full text for complete details
       }
     };
   }
