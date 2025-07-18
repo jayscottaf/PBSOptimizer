@@ -5,7 +5,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const ASSISTANT_ID = "asst_07IFIcu3kejuJQHiYq5ueiTC";
+const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID || "asst_07IFIcu3kejuJQHiYq5ueiTC";
 
 export class OpenAIAssistantService {
   /**
