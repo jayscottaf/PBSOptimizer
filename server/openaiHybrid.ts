@@ -124,8 +124,8 @@ export class HybridOpenAIService {
           type: 'specific_pairing',
           pairing: {
             pairingNumber: pairing.pairingNumber,
-            creditHours: this.formatHours(pairing.creditHours),
-            blockHours: this.formatHours(pairing.blockHours),
+            creditHours: pairing.creditHours.toString(),
+            blockHours: pairing.blockHours.toString(),
             tafb: pairing.tafb,
             route: pairing.route,
             pairingDays: pairing.pairingDays,
@@ -482,6 +482,11 @@ export class HybridOpenAIService {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   }
 
+  private formatHoursDeltaPBS(hours: number): string {
+    // Return original Delta PBS format (28.19, 16.58)
+    return hours.toString();
+  }
+
   private getSystemPrompt(): string {
     return `You are a Delta PBS Bid Optimization Assistant. Analyze pilot pairing data and provide specific, actionable insights.
 
@@ -491,6 +496,11 @@ When provided with pairing data:
 - If no pairings match the criteria, clearly state this
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data
+
+IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in the data:
+- Show credit hours like: "28.19 credit hours" (not "28 hours and 19 minutes")
+- Show block hours like: "16.58 block hours" (not "16 hours and 58 minutes")
+- Match the exact decimal format from the bid package data
 
 Use the backend-processed summaries to provide accurate analysis within token limits.`;
   }
