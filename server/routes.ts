@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
 import { PairingAnalysisService } from "./openai";
+import { openaiAssistant } from "./openaiAssistant";
 import multer from "multer";
 import { z } from "zod";
 import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
@@ -250,6 +251,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in chat analysis:", error);
       res.status(500).json({ message: "Failed to analyze pairing data" });
+    }
+  });
+
+  // OpenAI Assistant API endpoint
+  app.post("/api/askAssistant", async (req, res) => {
+    try {
+      const { question } = req.body;
+      
+      if (!question) {
+        return res.status(400).json({ message: "Question is required" });
+      }
+
+      const reply = await openaiAssistant.askPBSAssistant(question);
+      
+      res.json({ reply });
+    } catch (error) {
+      console.error("Error asking PBS Assistant:", error);
+      res.status(500).json({ message: "Failed to get response from PBS Assistant" });
     }
   });
 
