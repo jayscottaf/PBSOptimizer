@@ -260,6 +260,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (analysisError) {
           console.log("Analysis service failed, falling back to basic assistant:", analysisError);
+          
+          // If it's a rate limit error, provide a specific message
+          if (analysisError.message && analysisError.message.includes('rate_limit_exceeded')) {
+            res.json({ 
+              reply: "I'm experiencing high demand right now. Please try your question again in a moment, or try asking for more specific information to reduce the processing load."
+            });
+            return;
+          }
         }
       }
 

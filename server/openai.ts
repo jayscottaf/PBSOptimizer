@@ -176,7 +176,31 @@ export class PairingAnalysisService {
             functionResult = { error: "Unknown function" };
         }
 
-        // Send the function result back to ChatGPT for final response
+        // Create a summarized version of the function result to avoid token limits
+        let summarizedResult = functionResult;
+        
+        // If the result has many pairings, summarize it
+        if (functionResult && functionResult.pairings && functionResult.pairings.length > 5) {
+          summarizedResult = {
+            ...functionResult,
+            pairings: functionResult.pairings.slice(0, 5),
+            totalShown: 5,
+            totalFound: functionResult.pairings.length
+          };
+        }
+        
+        // If it's a single pairing result, keep essential info only
+        if (functionResult && functionResult.pairing && functionResult.pairing.fullText) {
+          summarizedResult = {
+            ...functionResult,
+            pairing: {
+              ...functionResult.pairing,
+              fullText: functionResult.pairing.fullText?.substring(0, 500) + "..." // Truncate long text
+            }
+          };
+        }
+
+        // Send the summarized function result back to ChatGPT for final response
         const finalCompletion = await openai.chat.completions.create({
           model: "gpt-4",
           messages: [
@@ -196,14 +220,14 @@ export class PairingAnalysisService {
             {
               role: "function",
               name: functionName,
-              content: JSON.stringify(functionResult)
+              content: JSON.stringify(summarizedResult)
             }
           ]
         });
 
         return {
           response: finalCompletion.choices[0].message.content || "I couldn't analyze that data.",
-          data: functionResult
+          data: functionResult // Return the full data to the client, even though we sent summarized to OpenAI
         };
       } else {
         // Direct response without function call
