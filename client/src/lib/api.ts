@@ -129,11 +129,25 @@ export const api = {
   },
 
   // AI Chat Analysis
-  analyzePairings: async (message: string, bidPackageId?: number) => {
-    const response = await apiRequest("POST", "/api/chat/analyze", { 
-      message, 
-      bidPackageId 
+  async analyzePairings(question: string, bidPackageId?: number) {
+    // Include bidPackageId in the question context if provided
+    const contextualQuestion = bidPackageId 
+      ? `Analyzing bid package #${bidPackageId}: ${question}`
+      : question;
+
+    const response = await fetch('/api/askAssistant', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ question: contextualQuestion }),
     });
-    return response.json();
+
+    if (!response.ok) {
+      throw new Error('Failed to get response from PBS Assistant');
+    }
+
+    const result = await response.json();
+    return { response: result.reply, data: null };
   },
 };

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
-import { PairingAnalysisService } from "./openai";
+
 import { openaiAssistant } from "./openaiAssistant";
 import multer from "multer";
 import { z } from "zod";
@@ -39,8 +39,6 @@ const searchFiltersSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
-  const analysisService = new PairingAnalysisService();
   
   // Seed database endpoint (development only)
   app.post("/api/seed", async (req, res) => {
@@ -233,26 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI-powered pairing analysis chat endpoint
-  app.post("/api/chat/analyze", async (req, res) => {
-    try {
-      const { message, bidPackageId } = req.body;
-      
-      if (!message) {
-        return res.status(400).json({ message: "Message is required" });
-      }
-
-      const result = await analysisService.analyzeQuery(
-        { message, bidPackageId },
-        storage
-      );
-      
-      res.json(result);
-    } catch (error) {
-      console.error("Error in chat analysis:", error);
-      res.status(500).json({ message: "Failed to analyze pairing data" });
-    }
-  });
+  
 
   // OpenAI Assistant API endpoint
   app.post("/api/askAssistant", async (req, res) => {
