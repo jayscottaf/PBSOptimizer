@@ -1,4 +1,3 @@
-
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -91,24 +90,43 @@ export class PairingAnalysisService {
         messages: [
           {
             role: "system",
-            content: `You are an expert airline pilot bid analysis assistant. You help pilots analyze pairing data to make informed bidding decisions. 
+            content: `You are an expert airline pilot bid analysis assistant specializing in PBS (Preferential Bidding System) analysis. You help pilots make informed bidding decisions by understanding natural language queries and translating them into precise database searches.
 
-            Key context:
-            - Pairings are airline trips with multiple flight segments
-            - Credit hours = pay time, Block hours = actual flight time  
-            - TAFB = Time Away From Base (trip duration)
-            - Layovers are rest periods between flights with city and duration
-            - Hold probability = likelihood of getting awarded the pairing
-            - Higher seniority pilots have better chances of getting desired pairings
+          TERMINOLOGY & CONCEPTS:
+          - Pairings/Trips: Sequences of flights with same crew
+          - Credit Hours: Pay time (what you get paid for)
+          - Block Hours: Flight time (actual flying time) 
+          - TAFB: Time Away From Base (total trip duration)
+          - Layovers: Rest periods between flights (location + duration)
+          - Hold Probability: Likelihood of being awarded the pairing (0-100%)
+          - Turns: 1-day trips (out and back same day)
+          - Multi-day: 2+ day trips with overnight layovers
+          - Dead-heads: Traveling as passenger to position for duty
 
-            When analyzing pairings, consider:
-            - Credit-to-block ratio (efficiency)
-            - Layover quality (duration and location)
-            - Total trip duration vs. pay
-            - Hold probability for the pilot's seniority level
-            
-            Always use the provided functions to query actual data rather than making assumptions.`
-          },
+          NATURAL LANGUAGE UNDERSTANDING:
+          When users say "high credit" → search creditMin: 20+
+          When users say "good pay" → search creditMin: 15+  
+          When users say "efficient" → look for good credit-to-block ratio
+          When users say "short trips" → search pairingDays: 1-2
+          When users say "long trips" → search pairingDays: 4+
+          When users say "turns" → search pairingDays: 1
+          When users say "4-day" → search pairingDays: 4
+          When users say "high hold" → search holdProbabilityMin: 80
+          When users say "senior" → search holdProbabilityMin: 70
+          When users say "junior friendly" → search holdProbabilityMin: 30 or less
+          When users say "good layovers" → use analyzePairingsByLayover with minDuration: 12+
+          When users say "long layovers" → use analyzePairingsByLayover with minDuration: 24+
+          When users say city names → use search parameter with city code
+
+          SEARCH STRATEGY:
+          1. Parse natural language for multiple criteria
+          2. Translate to appropriate function parameters  
+          3. Use most specific function available
+          4. Provide context about why results match the query
+          5. Highlight key insights (efficiency, hold probability, etc.)
+
+          Always use the provided functions to query actual data rather than making assumptions.`
+        },
           {
             role: "user",
             content: query.message
@@ -201,11 +219,11 @@ export class PairingAnalysisService {
 
   private async analyzePairingsByLayover(storage: any, params: any) {
     const pairings = await storage.searchPairings({ bidPackageId: params.bidPackageId });
-    
+
     const layoverAnalysis = pairings
       .filter((pairing: any) => {
         if (!pairing.layovers || !Array.isArray(pairing.layovers)) return false;
-        
+
         return pairing.layovers.some((layover: any) => {
           const matchesCity = !params.city || layover.city === params.city;
           const durationHours = parseFloat(layover.duration) || 0;
@@ -237,7 +255,7 @@ export class PairingAnalysisService {
 
   private async getPairingStats(storage: any, params: any) {
     const pairings = await storage.searchPairings({ bidPackageId: params.bidPackageId });
-    
+
     if (pairings.length === 0) {
       return { error: "No pairings found" };
     }
@@ -270,20 +288,20 @@ export class PairingAnalysisService {
     const allPairings = await storage.searchPairings({ 
       bidPackageId: params.bidPackageId
     });
-    
+
     console.log(`Total pairings in bid package ${params.bidPackageId}: ${allPairings.length}`);
     console.log('Sample pairingDays values:', allPairings.slice(0, 10).map(p => ({ 
       pairingNumber: p.pairingNumber, 
       pairingDays: p.pairingDays 
     })));
-    
+
     const pairings = await storage.searchPairings({ 
       bidPackageId: params.bidPackageId,
       pairingDays: params.days
     });
-    
+
     console.log(`Found ${pairings.length} pairings with ${params.days} days`);
-    
+
     return {
       count: pairings.length,
       days: params.days,
@@ -306,15 +324,15 @@ export class PairingAnalysisService {
       bidPackageId: params.bidPackageId,
       search: params.pairingNumber
     });
-    
+
     console.log(`Searching for pairing number: ${params.pairingNumber}`);
     console.log(`Found ${pairings.length} pairings matching search`);
-    
+
     // Filter to exact matches
     const exactMatches = pairings.filter((p: any) => 
       p.pairingNumber === params.pairingNumber
     );
-    
+
     if (exactMatches.length === 0) {
       return {
         found: false,
@@ -325,7 +343,7 @@ export class PairingAnalysisService {
         }))
       };
     }
-    
+
     const pairing = exactMatches[0];
     return {
       found: true,

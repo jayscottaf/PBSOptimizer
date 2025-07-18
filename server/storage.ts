@@ -161,7 +161,9 @@ export class DatabaseStorage implements IStorage {
       conditions.push(
         or(
           like(pairings.route, `%${filters.search}%`),
-          like(pairings.pairingNumber, `%${filters.search}%`)
+          like(pairings.pairingNumber, `%${filters.search}%`),
+          like(pairings.effectiveDates, `%${filters.search}%`),
+          like(pairings.fullTextBlock, `%${filters.search}%`)
         )
       );
     }
