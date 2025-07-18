@@ -110,8 +110,85 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
-    // Handle complex multi-criteria queries
-    if (message.includes('4-day') && message.includes('credit-to-block') && message.includes('hold prob')) {
+    // Handle 4-day pairing requests (both simple and complex)
+    if (message.includes('4-day')) {
+      const allPairings = await this.storage.getPairings(query.bidPackageId);
+      
+      // Filter for 4-day pairings
+      const fourDayPairings = allPairings.filter(p => p.pairingDays === 4);
+
+      // If it's a complex query with additional criteria
+      if (message.includes('credit-to-block') && message.includes('hold prob')) {
+        const filteredPairings = fourDayPairings.filter(p => {
+          const creditHours = parseFloat(p.creditHours.toString());
+          const blockHours = parseFloat(p.blockHours.toString());
+          const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+          const holdProb = parseInt(p.holdProbability?.toString() || '0');
+          
+          return efficiency > 1.2 && holdProb > 75;
+        });
+
+        const sortedPairings = filteredPairings
+          .sort((a, b) => {
+            const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
+            const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
+            return effB - effA;
+          })
+          .slice(0, this.MAX_PAIRINGS_TO_SEND);
+
+        return {
+          type: 'filtered_4day_analysis',
+          matchingPairings: sortedPairings.map(p => ({
+            pairingNumber: p.pairingNumber,
+            creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+            blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+            efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
+            holdProbability: p.holdProbability,
+            pairingDays: p.pairingDays,
+            route: p.route,
+            tafb: p.tafb,
+            layovers: p.layovers
+          })),
+          filterCriteria: {
+            pairingDays: 4,
+            minEfficiency: 1.2,
+            minHoldProbability: 75
+          },
+          totalMatching: filteredPairings.length,
+          totalSearched: allPairings.length,
+          truncated: sortedPairings.length < filteredPairings.length
+        };
+      }
+
+      // Simple 4-day pairing request
+      const sortedFourDayPairings = fourDayPairings
+        .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+        .slice(0, this.MAX_PAIRINGS_TO_SEND);
+
+      return {
+        type: 'simple_4day_analysis',
+        matchingPairings: sortedFourDayPairings.map(p => ({
+          pairingNumber: p.pairingNumber,
+          creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+          blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
+          holdProbability: p.holdProbability,
+          pairingDays: p.pairingDays,
+          route: p.route,
+          tafb: p.tafb,
+          layovers: p.layovers
+        })),
+        filterCriteria: {
+          pairingDays: 4
+        },
+        totalMatching: fourDayPairings.length,
+        totalSearched: allPairings.length,
+        truncated: sortedFourDayPairings.length < fourDayPairings.length
+      };
+    }
+
+    // Handle complex multi-criteria queries (keep existing logic)
+    if (message.includes('credit-to-block') && message.includes('hold prob')) {
       const allPairings = await this.storage.getPairings(query.bidPackageId);
       
       // Filter for 4-day pairings with credit-to-block ratio > 1.2 and hold probability > 75%
@@ -218,7 +295,46 @@ export class HybridOpenAIService {
           data: efficientResult,
           truncated: efficientResult.pairings.length < efficientResult.stats.totalPairings
         };
-      // ... (Other function handlers)
+      
+      case 'get4DayPairings':
+        const allPairings = await this.storage.getPairings(bidPackageId);
+        let fourDayPairings = allPairings.filter(p => p.pairingDays === 4);
+        
+        // Apply additional filters if provided
+        if (args.minEfficiency) {
+          fourDayPairings = fourDayPairings.filter(p => {
+            const creditHours = parseFloat(p.creditHours.toString());
+            const blockHours = parseFloat(p.blockHours.toString());
+            const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+            return efficiency >= args.minEfficiency;
+          });
+        }
+        
+        if (args.minHoldProb) {
+          fourDayPairings = fourDayPairings.filter(p => {
+            const holdProb = parseInt(p.holdProbability?.toString() || '0');
+            return holdProb >= args.minHoldProb;
+          });
+        }
+        
+        // Sort by credit hours descending
+        const sortedPairings = fourDayPairings
+          .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+          .slice(0, args.limit || 20);
+        
+        return {
+          response: `Found ${fourDayPairings.length} 4-day pairings${args.minEfficiency ? ` with efficiency >= ${args.minEfficiency}` : ''}${args.minHoldProb ? ` and hold probability >= ${args.minHoldProb}%` : ''}.`,
+          data: {
+            pairings: sortedPairings,
+            stats: {
+              totalFound: fourDayPairings.length,
+              totalSearched: allPairings.length,
+              avgCredit: fourDayPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / fourDayPairings.length
+            }
+          },
+          truncated: sortedPairings.length < fourDayPairings.length
+        };
+      
       default:
         throw new Error(`Unknown function: ${functionName}`);
     }
@@ -240,7 +356,16 @@ export class HybridOpenAIService {
   }
 
   private getSystemPrompt(): string {
-    return `You are a Delta PBS Bid Optimization Assistant. Use backend summaries to avoid token limits and provide actionable pairing analysis.`;
+    return `You are a Delta PBS Bid Optimization Assistant. Analyze pilot pairing data and provide specific, actionable insights.
+
+When provided with pairing data:
+- Always show the actual pairing numbers found
+- Include key metrics like credit hours, block hours, efficiency ratios, and hold probabilities
+- If no pairings match the criteria, clearly state this
+- For 4-day pairing requests, focus on the 4-day pairings specifically
+- Provide practical bidding advice based on the data
+
+Use the backend-processed summaries to provide accurate analysis within token limits.`;
   }
 
   private getAvailableFunctions(): any[] {
@@ -254,6 +379,21 @@ export class HybridOpenAIService {
             type: "object",
             properties: {
               limit: { type: "number", description: "Max pairings to return" }
+            }
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "get4DayPairings",
+          description: "Get 4-day pairings with optional filtering",
+          parameters: {
+            type: "object",
+            properties: {
+              limit: { type: "number", description: "Max pairings to return" },
+              minEfficiency: { type: "number", description: "Minimum credit-to-block ratio" },
+              minHoldProb: { type: "number", description: "Minimum hold probability" }
             }
           }
         }
