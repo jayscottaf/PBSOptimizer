@@ -1,4 +1,7 @@
+
 import OpenAI from 'openai';
+import { DatabaseStorage } from './storage';
+import { HybridOpenAIService } from './openaiHybrid';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -569,3 +572,7 @@ export class PairingAnalysisService {
     };
   }
 }
+
+// Create and export hybrid service
+const storage = new DatabaseStorage();
+export const hybridService = new HybridOpenAIService(storage);

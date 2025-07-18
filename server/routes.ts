@@ -236,7 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post("/api/askAssistant", async (req, res) => {
     try {
-      const { question } = req.body;
+      const { question, bidPackageId } = req.body;
       
       if (!question) {
         return res.status(400).json({ message: "Question is required" });
@@ -244,25 +244,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Extract bidPackageId from question if it contains "bid package #25" pattern
       const bidPackageMatch = question.match(/bid package #(\d+)/);
-      let bidPackageId = bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined;
+      let finalBidPackageId = bidPackageId || (bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined);
 
       // If no bid package ID found, try to get the most recent one
-      if (!bidPackageId) {
+      if (!finalBidPackageId) {
         const bidPackages = await storage.getBidPackages();
         if (bidPackages.length > 0) {
-          bidPackageId = bidPackages[0].id;
-          console.log(`Using most recent bid package ID: ${bidPackageId}`);
+          finalBidPackageId = bidPackages[0].id;
+          console.log(`Using most recent bid package ID: ${finalBidPackageId}`);
         }
       }
 
       // Try hybrid analysis service first (handles token limits)
-      if (bidPackageId) {
+      if (finalBidPackageId) {
         try {
-          const { HybridOpenAIService } = await import("./openaiHybrid");
-          const hybridService = new HybridOpenAIService(storage);
+          const { hybridService } = await import("./openai");
           const result = await hybridService.analyzeQuery({ 
             message: question, 
-            bidPackageId 
+            bidPackageId: finalBidPackageId 
           });
           
           res.json({ 
@@ -296,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const analysisService = new PairingAnalysisService();
             const result = await analysisService.analyzeQuery({ 
               message: question, 
-              bidPackageId 
+              bidPackageId: finalBidPackageId 
             }, storage);
             
             res.json({ reply: result.response, data: result.data });

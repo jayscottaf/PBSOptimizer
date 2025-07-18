@@ -219,4 +219,44 @@ Acknowledge when data is truncated and suggest narrower queries. Combine PBS exp
       { name: "getPairingStatsSummary", description: "Get overall stats for all pairings", parameters: { type: "object", properties: {} } }
     ];
   }
+
+  private async handleFunctionCall(functionCall: any, bidPackageId: number): Promise<HybridAnalysisResponse> {
+    const functionName = functionCall.name;
+    const functionArgs = JSON.parse(functionCall.arguments || '{}');
+
+    let functionResult: any;
+
+    try {
+      switch (functionName) {
+        case "getTopEfficientPairings":
+          functionResult = await this.storage.getTopEfficientPairings(bidPackageId, functionArgs.limit || 20);
+          break;
+
+        case "getTopCreditPairings":
+          functionResult = await this.storage.getTopCreditPairings(bidPackageId, functionArgs.limit || 20);
+          break;
+
+        case "getPairingStatsSummary":
+          functionResult = await this.storage.getPairingStatsSummary(bidPackageId);
+          break;
+
+        default:
+          functionResult = { error: "Unknown function" };
+      }
+
+      return {
+        response: `Function ${functionName} executed successfully. Here's the analysis:`,
+        data: functionResult,
+        truncated: functionResult.truncated || false
+      };
+
+    } catch (error) {
+      console.error(`Error executing function ${functionName}:`, error);
+      return {
+        response: `Error executing ${functionName}: ${error.message}`,
+        data: null,
+        truncated: false
+      };
+    }
+  }
 }
