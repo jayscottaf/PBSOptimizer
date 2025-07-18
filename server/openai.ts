@@ -82,6 +82,17 @@ export class PairingAnalysisService {
               pairingNumber: { type: "string", description: "The pairing number to search for" }
             }
           }
+        },
+        {
+          name: "getPayAnalysis",
+          description: "Analyze pay rates and compensation across pairings",
+          parameters: {
+            type: "object",
+            properties: {
+              bidPackageId: { type: "number", description: "ID of the bid package" },
+              payType: { type: "string", description: "Type of pay analysis (credit, block, efficiency)" }
+            }
+          }
         }
       ];
 
@@ -127,6 +138,8 @@ export class PairingAnalysisService {
           4. Provide context about why results match the query
           5. Highlight key insights (efficiency, hold probability, etc.)
 
+          IMPORTANT: You have full access to the pairing database through the provided functions. Never ask the user to provide pairing data or pay information - you can access all of this through the database functions. When users ask about pay, compensation, or any pairing analysis, use the available functions to get the actual data from the database.
+
           Always use the provided functions to query actual data rather than making assumptions.`
         },
           {
@@ -170,6 +183,10 @@ export class PairingAnalysisService {
 
           case "findPairingByNumber":
             functionResult = await this.findPairingByNumber(storage, functionArgs);
+            break;
+
+          case "getPayAnalysis":
+            functionResult = await this.getPayAnalysis(storage, functionArgs);
             break;
 
           default:
@@ -237,8 +254,24 @@ export class PairingAnalysisService {
       }
     } catch (error) {
       console.error('OpenAI API error:', error);
+      
+      // Check if it's a rate limit error
+      if (error.message && error.message.includes('rate_limit_exceeded')) {
+        return {
+          response: "I'm experiencing high demand right now. Please try your question again in a moment."
+        };
+      }
+      
+      // Check if it's a context length error
+      if (error.message && error.message.includes('context_length_exceeded')) {
+        return {
+          response: "Your query is too complex. Please try asking for more specific information or break it down into smaller questions."
+        };
+      }
+      
+      // Generic error with more helpful message
       return {
-        response: "I'm sorry, I encountered an error while analyzing your request. Please try again."
+        response: "I encountered an error while analyzing your request. This might be due to a temporary issue with the AI service. Please try again, or try asking a more specific question about your pairings."
       };
     }
   }
@@ -417,6 +450,59 @@ export class PairingAnalysisService {
         payHours: pairing.payHours,
         fullText: pairing.fullText // Include full text for complete details
       }
+    };
+  }
+
+  private async getPayAnalysis(storage: any, params: any) {
+    const pairings = await storage.searchPairings({ bidPackageId: params.bidPackageId });
+
+    if (pairings.length === 0) {
+      return { error: "No pairings found in this bid package" };
+    }
+
+    // Parse pay/credit hours (convert from HH:MM format to decimal)
+    const parseHours = (timeStr: string) => {
+      if (!timeStr) return 0;
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours + (minutes || 0) / 60;
+    };
+
+    const payData = pairings.map((p: any) => ({
+      pairingNumber: p.pairingNumber,
+      creditHours: parseHours(p.creditHours),
+      blockHours: parseHours(p.blockHours),
+      payHours: parseHours(p.payHours || p.creditHours), // Use payHours if available, fallback to creditHours
+      pairingDays: p.pairingDays || 1,
+      efficiency: parseHours(p.creditHours) / (parseHours(p.blockHours) || 1),
+      dailyPay: parseHours(p.creditHours) / (p.pairingDays || 1),
+      holdProbability: p.holdProbability || 0
+    })).filter(p => p.creditHours > 0);
+
+    // Sort by different criteria based on payType
+    let sortedPairings = [...payData];
+    if (params.payType === 'credit') {
+      sortedPairings.sort((a, b) => b.creditHours - a.creditHours);
+    } else if (params.payType === 'efficiency') {
+      sortedPairings.sort((a, b) => b.efficiency - a.efficiency);
+    } else {
+      sortedPairings.sort((a, b) => b.dailyPay - a.dailyPay);
+    }
+
+    const stats = {
+      totalPairings: payData.length,
+      averageCredit: (payData.reduce((sum, p) => sum + p.creditHours, 0) / payData.length).toFixed(2),
+      averageDailyPay: (payData.reduce((sum, p) => sum + p.dailyPay, 0) / payData.length).toFixed(2),
+      averageEfficiency: (payData.reduce((sum, p) => sum + p.efficiency, 0) / payData.length).toFixed(2),
+      highestCredit: Math.max(...payData.map(p => p.creditHours)).toFixed(2),
+      highestDailyPay: Math.max(...payData.map(p => p.dailyPay)).toFixed(2),
+      mostEfficient: Math.max(...payData.map(p => p.efficiency)).toFixed(2)
+    };
+
+    return {
+      stats,
+      topPairings: sortedPairings.slice(0, 10),
+      payType: params.payType || 'general',
+      analysisType: 'Pay and Compensation Analysis'
     };
   }
 }
