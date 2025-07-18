@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,42 +56,25 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/askAssistant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: userMessage.content,
-          bidPackageId: bidPackageId
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-
+      const result = await api.analyzePairings(input.trim(), bidPackageId);
+      
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: data.reply || 'Sorry, I couldn\'t process your request.',
-        timestamp: new Date()
+        content: result.response,
+        timestamp: new Date(),
+        data: result.data
       };
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Chat error:', error);
-
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+        content: 'Sorry, I encountered an error while analyzing your request. Please make sure you have uploaded a bid package and try again.',
         timestamp: new Date()
       };
-
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -117,7 +101,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           )}
         </CardTitle>
       </CardHeader>
-
+      
       <CardContent className="flex-1 flex flex-col p-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 space-y-4">
@@ -154,7 +138,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               </div>
             </div>
           ))}
-
+          
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-gray-100 rounded-lg px-4 py-2">
@@ -166,7 +150,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               </div>
             </div>
           )}
-
+          
           <div ref={messagesEndRef} />
         </div>
 
@@ -188,7 +172,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               <Send className="h-4 w-4" />
             </Button>
           </form>
-
+          
           {!bidPackageId && (
             <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
               Upload a bid package to enable full analysis capabilities
