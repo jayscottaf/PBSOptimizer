@@ -307,6 +307,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If no bid package ID found, try to get the most recent one
       if (!finalBidPackageId) {
+
+
+  // Database verification endpoint
+  app.get("/api/verify-data", async (req, res) => {
+    try {
+      const bidPackages = await storage.getBidPackages();
+      const verification = {};
+      
+      for (const bidPackage of bidPackages) {
+        const pairings = await storage.getPairings(bidPackage.id);
+        const stats = await storage.getPairingStatsSummary(bidPackage.id);
+        
+        verification[bidPackage.id] = {
+          bidPackage: {
+            id: bidPackage.id,
+            name: bidPackage.name,
+            month: bidPackage.month,
+            year: bidPackage.year,
+            status: bidPackage.status
+          },
+          pairings: {
+            total: pairings.length,
+            sample: pairings.slice(0, 5).map(p => ({
+              pairingNumber: p.pairingNumber,
+              creditHours: p.creditHours,
+              blockHours: p.blockHours,
+              pairingDays: p.pairingDays,
+              holdProbability: p.holdProbability
+            }))
+          },
+          stats: {
+            totalPairings: stats.totalPairings,
+            avgCreditHours: stats.avgCreditHours.toFixed(2),
+            avgBlockHours: stats.avgBlockHours.toFixed(2),
+            avgPairingDays: stats.avgPairingDays.toFixed(1),
+            dayDistribution: stats.dayDistribution
+          },
+          dataIntegrity: {
+            hasPairings: pairings.length > 0,
+            hasValidCreditHours: pairings.filter(p => p.creditHours > 0).length,
+            hasValidBlockHours: pairings.filter(p => p.blockHours > 0).length,
+            hasValidPairingNumbers: pairings.filter(p => p.pairingNumber && p.pairingNumber.length > 0).length,
+            hasHoldProbabilities: pairings.filter(p => p.holdProbability !== null && p.holdProbability !== undefined).length
+          }
+        };
+      }
+      
+      res.json({
+        success: true,
+        totalBidPackages: bidPackages.length,
+        verification
+      });
+    } catch (error) {
+      console.error("Error verifying data:", error);
+      res.status(500).json({ message: "Failed to verify data" });
+    }
+  });
+
+  // Check specific pairing 7758 in detail
+  app.get("/api/debug-pairing-7758", async (req, res) => {
+    try {
+      const bidPackages = await storage.getBidPackages();
+      const bidPackage = bidPackages[0]; // Most recent
+      
+      const allPairings = await storage.getPairings(bidPackage.id);
+      const pairing7758 = allPairings.find(p => p.pairingNumber === "7758");
+      
+      if (!pairing7758) {
+        return res.json({
+          found: false,
+          message: "Pairing 7758 not found",
+          totalPairings: allPairings.length,
+          samplePairings: allPairings.slice(0, 10).map(p => ({
+            pairingNumber: p.pairingNumber,
+            creditHours: p.creditHours,
+            blockHours: p.blockHours
+          }))
+        });
+      }
+      
+      res.json({
+        found: true,
+        pairing: {
+          pairingNumber: pairing7758.pairingNumber,
+          creditHours: pairing7758.creditHours,
+          blockHours: pairing7758.blockHours,
+          route: pairing7758.route,
+          pairingDays: pairing7758.pairingDays,
+          holdProbability: pairing7758.holdProbability,
+          effectiveDates: pairing7758.effectiveDates,
+          tafb: pairing7758.tafb,
+          layovers: pairing7758.layovers,
+          flightSegments: pairing7758.flightSegments,
+          fullTextBlock: pairing7758.fullTextBlock ? pairing7758.fullTextBlock.substring(0, 500) + "..." : null
+        },
+        rawData: {
+          creditHours: pairing7758.creditHours,
+          blockHours: pairing7758.blockHours,
+          creditType: typeof pairing7758.creditHours,
+          blockType: typeof pairing7758.blockHours
+        }
+      });
+    } catch (error) {
+      console.error("Error debugging pairing 7758:", error);
+      res.status(500).json({ message: "Failed to debug pairing" });
+    }
+  });
+
+
         const bidPackages = await storage.getBidPackages();
         if (bidPackages.length > 0) {
           finalBidPackageId = bidPackages[0].id;
