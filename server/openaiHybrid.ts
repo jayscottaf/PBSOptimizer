@@ -110,128 +110,28 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
-    // Handle 4-day pairing requests (both simple and complex)
-    if (message.includes('4-day')) {
-      const allPairings = await this.storage.getPairings(query.bidPackageId);
-      
-      // Filter for 4-day pairings
-      const fourDayPairings = allPairings.filter(p => p.pairingDays === 4);
+    // Extract pairing duration from the message (1-day, 2-day, etc.)
+    const durationMatch = message.match(/(\d+)[-\s]?day/);
+    const requestedDays = durationMatch ? parseInt(durationMatch[1]) : null;
 
-      // If it's a complex query with additional criteria
-      if (message.includes('credit-to-block') && message.includes('hold prob')) {
-        const filteredPairings = fourDayPairings.filter(p => {
-          const creditHours = parseFloat(p.creditHours.toString());
-          const blockHours = parseFloat(p.blockHours.toString());
-          const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
-          const holdProb = parseInt(p.holdProbability?.toString() || '0');
-          
-          return efficiency > 1.2 && holdProb > 75;
-        });
-
-        const sortedPairings = filteredPairings
-          .sort((a, b) => {
-            const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
-            const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
-            return effB - effA;
-          })
-          .slice(0, this.MAX_PAIRINGS_TO_SEND);
-
-        return {
-          type: 'filtered_4day_analysis',
-          matchingPairings: sortedPairings.map(p => ({
-            pairingNumber: p.pairingNumber,
-            creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
-            blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-            efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-            holdProbability: p.holdProbability,
-            pairingDays: p.pairingDays,
-            route: p.route,
-            tafb: p.tafb,
-            layovers: p.layovers
-          })),
-          filterCriteria: {
-            pairingDays: 4,
-            minEfficiency: 1.2,
-            minHoldProbability: 75
-          },
-          totalMatching: filteredPairings.length,
-          totalSearched: allPairings.length,
-          truncated: sortedPairings.length < filteredPairings.length
-        };
-      }
-
-      // Simple 4-day pairing request
-      const sortedFourDayPairings = fourDayPairings
-        .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
-        .slice(0, this.MAX_PAIRINGS_TO_SEND);
-
-      return {
-        type: 'simple_4day_analysis',
-        matchingPairings: sortedFourDayPairings.map(p => ({
-          pairingNumber: p.pairingNumber,
-          creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
-          blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-          holdProbability: p.holdProbability,
-          pairingDays: p.pairingDays,
-          route: p.route,
-          tafb: p.tafb,
-          layovers: p.layovers
-        })),
-        filterCriteria: {
-          pairingDays: 4
-        },
-        totalMatching: fourDayPairings.length,
-        totalSearched: allPairings.length,
-        truncated: sortedFourDayPairings.length < fourDayPairings.length
-      };
+    // Handle specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
+    if (requestedDays) {
+      return await this.handleDurationSpecificQuery(query, requestedDays, message);
     }
 
-    // Handle complex multi-criteria queries (keep existing logic)
-    if (message.includes('credit-to-block') && message.includes('hold prob')) {
-      const allPairings = await this.storage.getPairings(query.bidPackageId);
-      
-      // Filter for 4-day pairings with credit-to-block ratio > 1.2 and hold probability > 75%
-      const filteredPairings = allPairings.filter(p => {
-        const creditHours = parseFloat(p.creditHours.toString());
-        const blockHours = parseFloat(p.blockHours.toString());
-        const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
-        const holdProb = parseInt(p.holdProbability?.toString() || '0');
-        
-        return p.pairingDays === 4 && efficiency > 1.2 && holdProb > 75;
-      });
+    // Handle turn queries (1-day pairings)
+    if (message.includes('turn') || message.includes('turns')) {
+      return await this.handleDurationSpecificQuery(query, 1, message);
+    }
 
-      // Sort by efficiency and limit results
-      const sortedPairings = filteredPairings
-        .sort((a, b) => {
-          const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
-          const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
-          return effB - effA;
-        })
-        .slice(0, this.MAX_PAIRINGS_TO_SEND);
+    // Handle multi-day queries without specific duration
+    if (message.includes('multi-day') || message.includes('long trip')) {
+      return await this.handleMultiDayQuery(query, message);
+    }
 
-      return {
-        type: 'filtered_4day_analysis',
-        matchingPairings: sortedPairings.map(p => ({
-          pairingNumber: p.pairingNumber,
-          creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
-          blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-          holdProbability: p.holdProbability,
-          pairingDays: p.pairingDays,
-          route: p.route,
-          tafb: p.tafb,
-          layovers: p.layovers
-        })),
-        filterCriteria: {
-          pairingDays: 4,
-          minEfficiency: 1.2,
-          minHoldProbability: 75
-        },
-        totalMatching: filteredPairings.length,
-        totalSearched: allPairings.length,
-        truncated: sortedPairings.length < filteredPairings.length
-      };
+    // Handle short trip queries
+    if (message.includes('short trip') || message.includes('day trip')) {
+      return await this.handleShortTripQuery(query, message);
     }
 
     if (message.includes('efficient') || message.includes('credit per block')) {
@@ -265,6 +165,154 @@ export class HybridOpenAIService {
     };
   }
 
+  private async handleDurationSpecificQuery(query: HybridAnalysisQuery, days: number, message: string): Promise<any> {
+    const allPairings = await this.storage.getPairings(query.bidPackageId);
+    
+    // Filter for specific duration pairings
+    const durationPairings = allPairings.filter(p => p.pairingDays === days);
+
+    // Check for additional criteria
+    let filteredPairings = durationPairings;
+    const filterCriteria: any = { pairingDays: days };
+
+    // Apply efficiency filter if mentioned
+    if (message.includes('credit-to-block') || message.includes('efficient')) {
+      const minEfficiency = this.extractEfficiencyThreshold(message);
+      filteredPairings = filteredPairings.filter(p => {
+        const creditHours = parseFloat(p.creditHours.toString());
+        const blockHours = parseFloat(p.blockHours.toString());
+        const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+        return efficiency >= minEfficiency;
+      });
+      filterCriteria.minEfficiency = minEfficiency;
+    }
+
+    // Apply hold probability filter if mentioned
+    if (message.includes('hold prob') || message.includes('senior') || message.includes('junior')) {
+      const minHoldProb = this.extractHoldProbabilityThreshold(message);
+      filteredPairings = filteredPairings.filter(p => {
+        const holdProb = parseInt(p.holdProbability?.toString() || '0');
+        return holdProb >= minHoldProb;
+      });
+      filterCriteria.minHoldProbability = minHoldProb;
+    }
+
+    // Sort by credit hours (or efficiency if efficiency filter applied)
+    const sortedPairings = filteredPairings
+      .sort((a, b) => {
+        if (filterCriteria.minEfficiency) {
+          const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
+          const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
+          return effB - effA;
+        }
+        return parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString());
+      })
+      .slice(0, this.MAX_PAIRINGS_TO_SEND);
+
+    return {
+      type: `duration_${days}day_analysis`,
+      matchingPairings: sortedPairings.map(p => ({
+        pairingNumber: p.pairingNumber,
+        creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+        blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+        efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
+        holdProbability: p.holdProbability,
+        pairingDays: p.pairingDays,
+        route: p.route,
+        tafb: p.tafb,
+        layovers: p.layovers
+      })),
+      filterCriteria,
+      totalMatching: filteredPairings.length,
+      totalSearched: allPairings.length,
+      truncated: sortedPairings.length < filteredPairings.length
+    };
+  }
+
+  private async handleMultiDayQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+    const allPairings = await this.storage.getPairings(query.bidPackageId);
+    
+    // Filter for multi-day pairings (2+ days)
+    const multiDayPairings = allPairings.filter(p => p.pairingDays >= 2);
+
+    // Group by duration
+    const groupedByDuration = multiDayPairings.reduce((acc, p) => {
+      const key = `${p.pairingDays}day`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(p);
+      return acc;
+    }, {} as any);
+
+    // Get top pairings from each duration group
+    const topFromEachDuration = Object.entries(groupedByDuration)
+      .map(([duration, pairings]: [string, any]) => ({
+        duration,
+        count: pairings.length,
+        topPairings: pairings
+          .sort((a: any, b: any) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+          .slice(0, 5)
+      }));
+
+    return {
+      type: 'multi_day_analysis',
+      durationBreakdown: topFromEachDuration,
+      totalMultiDay: multiDayPairings.length,
+      totalSearched: allPairings.length,
+      truncated: false
+    };
+  }
+
+  private async handleShortTripQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+    const allPairings = await this.storage.getPairings(query.bidPackageId);
+    
+    // Filter for short trips (1-2 days)
+    const shortTripPairings = allPairings.filter(p => p.pairingDays <= 2);
+
+    const sortedPairings = shortTripPairings
+      .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+      .slice(0, this.MAX_PAIRINGS_TO_SEND);
+
+    return {
+      type: 'short_trip_analysis',
+      matchingPairings: sortedPairings.map(p => ({
+        pairingNumber: p.pairingNumber,
+        creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+        blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+        efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
+        holdProbability: p.holdProbability,
+        pairingDays: p.pairingDays,
+        route: p.route,
+        tafb: p.tafb
+      })),
+      filterCriteria: { maxPairingDays: 2 },
+      totalMatching: shortTripPairings.length,
+      totalSearched: allPairings.length,
+      truncated: sortedPairings.length < shortTripPairings.length
+    };
+  }
+
+  private extractEfficiencyThreshold(message: string): number {
+    const efficiencyMatch = message.match(/efficiency.*?(\d+\.?\d*)/);
+    if (efficiencyMatch) return parseFloat(efficiencyMatch[1]);
+    
+    if (message.includes('credit-to-block') && message.includes('above')) {
+      const aboveMatch = message.match(/above\s+(\d+\.?\d*)/);
+      if (aboveMatch) return parseFloat(aboveMatch[1]);
+    }
+    
+    return 1.2; // Default threshold
+  }
+
+  private extractHoldProbabilityThreshold(message: string): number {
+    const holdMatch = message.match(/hold.*?(\d+)/);
+    if (holdMatch) return parseInt(holdMatch[1]);
+    
+    if (message.includes('senior')) return 70;
+    if (message.includes('junior')) return 30;
+    
+    return 75; // Default threshold
+  }
+
   private async handleLargeDatasetRequest(query: HybridAnalysisQuery): Promise<HybridAnalysisResponse> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
     return {
@@ -296,13 +344,13 @@ export class HybridOpenAIService {
           truncated: efficientResult.pairings.length < efficientResult.stats.totalPairings
         };
       
-      case 'get4DayPairings':
+      case 'getPairingsByDuration':
         const allPairings = await this.storage.getPairings(bidPackageId);
-        let fourDayPairings = allPairings.filter(p => p.pairingDays === 4);
+        let durationPairings = allPairings.filter(p => p.pairingDays === args.days);
         
         // Apply additional filters if provided
         if (args.minEfficiency) {
-          fourDayPairings = fourDayPairings.filter(p => {
+          durationPairings = durationPairings.filter(p => {
             const creditHours = parseFloat(p.creditHours.toString());
             const blockHours = parseFloat(p.blockHours.toString());
             const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
@@ -311,28 +359,62 @@ export class HybridOpenAIService {
         }
         
         if (args.minHoldProb) {
-          fourDayPairings = fourDayPairings.filter(p => {
+          durationPairings = durationPairings.filter(p => {
             const holdProb = parseInt(p.holdProbability?.toString() || '0');
             return holdProb >= args.minHoldProb;
           });
         }
         
         // Sort by credit hours descending
-        const sortedPairings = fourDayPairings
+        const sortedPairings = durationPairings
           .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
           .slice(0, args.limit || 20);
         
         return {
-          response: `Found ${fourDayPairings.length} 4-day pairings${args.minEfficiency ? ` with efficiency >= ${args.minEfficiency}` : ''}${args.minHoldProb ? ` and hold probability >= ${args.minHoldProb}%` : ''}.`,
+          response: `Found ${durationPairings.length} ${args.days}-day pairings${args.minEfficiency ? ` with efficiency >= ${args.minEfficiency}` : ''}${args.minHoldProb ? ` and hold probability >= ${args.minHoldProb}%` : ''}.`,
           data: {
             pairings: sortedPairings,
             stats: {
-              totalFound: fourDayPairings.length,
+              totalFound: durationPairings.length,
               totalSearched: allPairings.length,
-              avgCredit: fourDayPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / fourDayPairings.length
+              avgCredit: durationPairings.length > 0 ? durationPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / durationPairings.length : 0
             }
           },
-          truncated: sortedPairings.length < fourDayPairings.length
+          truncated: sortedPairings.length < durationPairings.length
+        };
+
+      case 'getMultiDayAnalysis':
+        const allPairingsForMulti = await this.storage.getPairings(bidPackageId);
+        const multiDayPairings = allPairingsForMulti.filter(p => p.pairingDays >= 2);
+        
+        // Group by duration
+        const groupedByDuration = multiDayPairings.reduce((acc, p) => {
+          const key = p.pairingDays;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(p);
+          return acc;
+        }, {} as any);
+
+        // Get top pairings from each duration group
+        const analysisResults = Object.entries(groupedByDuration)
+          .map(([duration, pairings]: [string, any]) => ({
+            duration: parseInt(duration),
+            count: pairings.length,
+            avgCredit: pairings.reduce((sum: number, p: any) => sum + parseFloat(p.creditHours.toString()), 0) / pairings.length,
+            topPairings: pairings
+              .sort((a: any, b: any) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+              .slice(0, args.limit || 5)
+          }))
+          .sort((a, b) => b.count - a.count);
+
+        return {
+          response: `Multi-day analysis complete. Found ${multiDayPairings.length} pairings across ${Object.keys(groupedByDuration).length} duration categories.`,
+          data: {
+            durationBreakdown: analysisResults,
+            totalMultiDay: multiDayPairings.length,
+            totalSearched: allPairingsForMulti.length
+          },
+          truncated: false
         };
       
       default:
@@ -386,14 +468,28 @@ Use the backend-processed summaries to provide accurate analysis within token li
       {
         type: "function",
         function: {
-          name: "get4DayPairings",
-          description: "Get 4-day pairings with optional filtering",
+          name: "getPairingsByDuration",
+          description: "Get pairings by specific duration (1-day, 2-day, 3-day, 4-day, 5-day, etc.)",
           parameters: {
             type: "object",
             properties: {
+              days: { type: "number", description: "Number of days (1, 2, 3, 4, 5, etc.)" },
               limit: { type: "number", description: "Max pairings to return" },
               minEfficiency: { type: "number", description: "Minimum credit-to-block ratio" },
               minHoldProb: { type: "number", description: "Minimum hold probability" }
+            }
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "getMultiDayAnalysis",
+          description: "Get analysis of all multi-day pairings (2+ days) grouped by duration",
+          parameters: {
+            type: "object",
+            properties: {
+              limit: { type: "number", description: "Max pairings per duration group" }
             }
           }
         }
