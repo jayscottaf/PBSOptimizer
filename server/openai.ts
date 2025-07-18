@@ -140,6 +140,8 @@ export class PairingAnalysisService {
 
           IMPORTANT: You have full access to the pairing database through the provided functions. Never ask the user to provide pairing data or pay information - you can access all of this through the database functions. When users ask about pay, compensation, or any pairing analysis, use the available functions to get the actual data from the database.
 
+          DATA LIMITATIONS: Due to response size limits, function results may show only the first few results (typically 3-5 pairings). When this happens, acknowledge the limitation and note that more results are available in the database. Focus on the key insights from the sample data provided.
+
           Always use the provided functions to query actual data rather than making assumptions.`
         },
           {
@@ -193,29 +195,8 @@ export class PairingAnalysisService {
             functionResult = { error: "Unknown function" };
         }
 
-        // Create a summarized version of the function result to avoid token limits
-        let summarizedResult = functionResult;
-        
-        // If the result has many pairings, summarize it
-        if (functionResult && functionResult.pairings && functionResult.pairings.length > 5) {
-          summarizedResult = {
-            ...functionResult,
-            pairings: functionResult.pairings.slice(0, 5),
-            totalShown: 5,
-            totalFound: functionResult.pairings.length
-          };
-        }
-        
-        // If it's a single pairing result, keep essential info only
-        if (functionResult && functionResult.pairing && functionResult.pairing.fullText) {
-          summarizedResult = {
-            ...functionResult,
-            pairing: {
-              ...functionResult.pairing,
-              fullText: functionResult.pairing.fullText?.substring(0, 500) + "..." // Truncate long text
-            }
-          };
-        }
+        // Create a heavily summarized version of the function result to avoid token limits
+        let summarizedResult = this.truncateForOpenAI(functionResult);
 
         // Send the summarized function result back to ChatGPT for final response
         const finalCompletion = await openai.chat.completions.create({
@@ -265,7 +246,14 @@ export class PairingAnalysisService {
       // Check if it's a context length error
       if (error.message && error.message.includes('context_length_exceeded')) {
         return {
-          response: "Your query is too complex. Please try asking for more specific information or break it down into smaller questions."
+          response: "Your query returned too much data to process at once. Please try asking for more specific information, such as filtering by specific criteria (e.g., 'show me 4-day pairings with high credit hours') or break it down into smaller questions."
+        };
+      }
+
+      // Check if it's a token limit error (request too large)
+      if (error.message && error.message.includes('Request too large')) {
+        return {
+          response: "The amount of data for your query is too large to process. Please try asking for more specific information (e.g., 'show me the top 5 highest credit pairings' or 'analyze 3-day pairings only') to get a more focused analysis."
         };
       }
       
@@ -451,6 +439,81 @@ export class PairingAnalysisService {
         fullText: pairing.fullText // Include full text for complete details
       }
     };
+  }
+
+  private truncateForOpenAI(functionResult: any): any {
+    if (!functionResult) return functionResult;
+
+    // Handle arrays of pairings - limit to 3 items max
+    if (functionResult.pairings && Array.isArray(functionResult.pairings)) {
+      const truncatedPairings = functionResult.pairings.slice(0, 3).map((pairing: any) => ({
+        pairingNumber: pairing.pairingNumber,
+        route: pairing.route?.substring(0, 100) || 'N/A',
+        creditHours: pairing.creditHours,
+        blockHours: pairing.blockHours,
+        tafb: pairing.tafb,
+        pairingDays: pairing.pairingDays,
+        holdProbability: pairing.holdProbability,
+        // Remove large text fields
+        layovers: pairing.layovers ? pairing.layovers.slice(0, 2) : []
+      }));
+
+      return {
+        ...functionResult,
+        pairings: truncatedPairings,
+        totalShown: Math.min(3, functionResult.pairings.length),
+        totalFound: functionResult.pairings.length,
+        note: functionResult.pairings.length > 3 ? `Showing first 3 of ${functionResult.pairings.length} results` : undefined
+      };
+    }
+
+    // Handle single pairing result
+    if (functionResult.pairing) {
+      return {
+        ...functionResult,
+        pairing: {
+          pairingNumber: functionResult.pairing.pairingNumber,
+          route: functionResult.pairing.route?.substring(0, 100) || 'N/A',
+          creditHours: functionResult.pairing.creditHours,
+          blockHours: functionResult.pairing.blockHours,
+          tafb: functionResult.pairing.tafb,
+          pairingDays: functionResult.pairing.pairingDays,
+          holdProbability: functionResult.pairing.holdProbability,
+          layovers: functionResult.pairing.layovers ? functionResult.pairing.layovers.slice(0, 2) : [],
+          effectiveDates: functionResult.pairing.effectiveDates?.substring(0, 50) || 'N/A',
+          // Remove or truncate large text fields
+          fullText: functionResult.pairing.fullText ? 
+            functionResult.pairing.fullText.substring(0, 200) + "..." : 'N/A'
+        }
+      };
+    }
+
+    // Handle other result types (stats, analysis, etc.)
+    if (functionResult.topPairings && Array.isArray(functionResult.topPairings)) {
+      return {
+        ...functionResult,
+        topPairings: functionResult.topPairings.slice(0, 3).map((pairing: any) => ({
+          pairingNumber: pairing.pairingNumber,
+          creditHours: pairing.creditHours,
+          dailyPay: pairing.dailyPay,
+          efficiency: pairing.efficiency,
+          holdProbability: pairing.holdProbability
+        })),
+        totalShown: Math.min(3, functionResult.topPairings.length),
+        totalFound: functionResult.topPairings.length
+      };
+    }
+
+    // For other result types, return as-is but remove any large text fields
+    const cleanResult = { ...functionResult };
+    if (cleanResult.fullText) {
+      cleanResult.fullText = cleanResult.fullText.substring(0, 200) + "...";
+    }
+    if (cleanResult.details) {
+      cleanResult.details = cleanResult.details.substring(0, 200) + "...";
+    }
+
+    return cleanResult;
   }
 
   private async getPayAnalysis(storage: any, params: any) {
