@@ -116,6 +116,35 @@ The application follows a monorepo structure with shared TypeScript types betwee
 
 ## Recent Changes
 
+**July 18, 2025**: Implemented Hybrid OpenAI Token Optimization System
+
+**Token Limit Fix**: Resolved critical OpenAI token limit issues (201,225 tokens → 8,000 limit)
+- Created hybrid analysis system using pre-processed data summaries
+- Backend functions handle heavy data processing instead of sending raw datasets
+- Intelligent query routing based on intent detection
+- Large dataset fallback for comprehensive queries
+
+**Enhanced Analytics Engine**: Added comprehensive backend data processing functions:
+- `getTopEfficientPairings()` - Credit-to-block ratio analysis
+- `getTopCreditPairings()` - Highest paying pairings
+- `getTopHoldProbabilityPairings()` - Best award likelihood
+- `getPairingStatsSummary()` - Complete statistical overview
+- `analyzePairingsByLayoverSummary()` - Layover city analysis
+- `getDeadheadAnalysis()` - Deadhead pairing insights
+- `getPairingDurationAnalysis()` - Trip duration breakdown
+
+**Smart Query Processing**: AI assistant now handles complex queries efficiently:
+- "Show me efficient pairings" → Returns top 20 with efficiency ratios
+- "What are high credit pairings?" → Returns highest paying with statistics
+- "Give me all pairings with deadheads" → Direct DB fallback (534 pairings)
+- Truncation awareness with guidance for query refinement
+
+**Production-Ready Features**:
+- Error handling for rate limits and context length exceeded
+- Automatic bid package ID detection
+- Comprehensive fallback chain (Hybrid → Legacy → Basic Assistant)
+- Token estimation and pre-processing validation
+
 **July 17, 2025**: Resolved systematic parsing issue affecting 62% of pairings
 
 **Parser Enhancement**: Added comprehensive flight segment detection patterns:

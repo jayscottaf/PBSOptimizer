@@ -45,9 +45,9 @@ export interface IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-	pairingDays?: number;
-	pairingDaysMin?: number;
-	pairingDaysMax?: number;
+        pairingDays?: number;
+        pairingDaysMin?: number;
+        pairingDaysMax?: number;
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -58,6 +58,15 @@ export interface IStorage {
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
   removeUserFavorite(userId: number, pairingId: number): Promise<void>;
   getUserFavorites(userId: number): Promise<Pairing[]>;
+
+  // Enhanced analytics operations for OpenAI integration
+  getTopEfficientPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
+  getTopCreditPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
+  getTopHoldProbabilityPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
+  getPairingStatsSummary(bidPackageId: number): Promise<any>;
+  analyzePairingsByLayoverSummary(bidPackageId: number, city?: string): Promise<any>;
+  getDeadheadAnalysis(bidPackageId: number): Promise<any>;
+  getPairingDurationAnalysis(bidPackageId: number): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -147,9 +156,9 @@ export class DatabaseStorage implements IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-	pairingDays?: number;
-	pairingDaysMin?: number;
-	pairingDaysMax?: number;
+        pairingDays?: number;
+        pairingDaysMin?: number;
+        pairingDaysMax?: number;
   }): Promise<Pairing[]> {
     const conditions = [];
 
@@ -180,7 +189,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
 
-	if (filters.pairingDays) {
+        if (filters.pairingDays) {
       conditions.push(eq(pairings.pairingDays, filters.pairingDays));
     }
 
@@ -243,6 +252,211 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userFavorites.userId, userId));
 
     return result.map(r => r.pairing);
+  }
+
+  // Enhanced analytics operations for OpenAI token optimization
+  async getTopEfficientPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    // Calculate efficiency (credit hours / block hours ratio)
+    const pairingsWithEfficiency = allPairings.map(p => ({
+      ...p,
+      efficiency: p.blockHours > 0 ? p.creditHours / p.blockHours : 0
+    }));
+
+    // Sort by efficiency descending
+    const topPairings = pairingsWithEfficiency
+      .sort((a, b) => b.efficiency - a.efficiency)
+      .slice(0, limit);
+
+    const stats = {
+      totalPairings: allPairings.length,
+      avgEfficiency: pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length,
+      topEfficiency: topPairings[0]?.efficiency || 0,
+      avgCredit: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
+      avgBlock: allPairings.reduce((sum, p) => sum + p.blockHours, 0) / allPairings.length
+    };
+
+    return { pairings: topPairings, stats };
+  }
+
+  async getTopCreditPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+    const topPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId))
+      .orderBy(desc(pairings.creditHours))
+      .limit(limit);
+
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const stats = {
+      totalPairings: allPairings.length,
+      maxCredit: topPairings[0]?.creditHours || 0,
+      avgCredit: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
+      minCredit: Math.min(...allPairings.map(p => p.creditHours))
+    };
+
+    return { pairings: topPairings, stats };
+  }
+
+  async getTopHoldProbabilityPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+    const topPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId))
+      .orderBy(desc(pairings.holdProbability))
+      .limit(limit);
+
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const stats = {
+      totalPairings: allPairings.length,
+      maxHold: topPairings[0]?.holdProbability || 0,
+      avgHold: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
+      highHoldCount: allPairings.filter(p => (p.holdProbability || 0) >= 80).length
+    };
+
+    return { pairings: topPairings, stats };
+  }
+
+  async getPairingStatsSummary(bidPackageId: number): Promise<any> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const turnCount = allPairings.filter(p => p.pairingDays === 1).length;
+    const multiDayCount = allPairings.filter(p => p.pairingDays > 1).length;
+    const deadheadCount = allPairings.filter(p => p.fullText?.includes('DH')).length;
+
+    return {
+      totalPairings: allPairings.length,
+      avgCreditHours: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
+      avgBlockHours: allPairings.reduce((sum, p) => sum + p.blockHours, 0) / allPairings.length,
+      avgPairingDays: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length,
+      avgHoldProbability: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
+      maxCreditHours: Math.max(...allPairings.map(p => p.creditHours)),
+      minCreditHours: Math.min(...allPairings.map(p => p.creditHours)),
+      maxBlockHours: Math.max(...allPairings.map(p => p.blockHours)),
+      turnCount,
+      multiDayCount,
+      deadheadCount,
+      dayDistribution: {
+        '1day': allPairings.filter(p => p.pairingDays === 1).length,
+        '2day': allPairings.filter(p => p.pairingDays === 2).length,
+        '3day': allPairings.filter(p => p.pairingDays === 3).length,
+        '4day': allPairings.filter(p => p.pairingDays === 4).length,
+        '5day+': allPairings.filter(p => p.pairingDays >= 5).length,
+      }
+    };
+  }
+
+  async analyzePairingsByLayoverSummary(bidPackageId: number, city?: string): Promise<any> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const layoverAnalysis = allPairings.reduce((acc, p) => {
+      if (p.layovers && Array.isArray(p.layovers)) {
+        p.layovers.forEach((layover: any) => {
+          if (!city || layover.city === city) {
+            if (!acc[layover.city]) {
+              acc[layover.city] = { count: 0, totalDuration: 0, pairings: [] };
+            }
+            acc[layover.city].count++;
+            acc[layover.city].totalDuration += layover.duration || 0;
+            acc[layover.city].pairings.push(p.pairingNumber);
+          }
+        });
+      }
+      return acc;
+    }, {} as any);
+
+    // Convert to summary format
+    const summary = Object.entries(layoverAnalysis).map(([city, data]: [string, any]) => ({
+      city,
+      count: data.count,
+      avgDuration: data.totalDuration / data.count,
+      pairings: data.pairings.slice(0, 10) // Limit to first 10 pairings
+    })).sort((a, b) => b.count - a.count);
+
+    return {
+      totalLayovers: Object.values(layoverAnalysis).reduce((sum: number, data: any) => sum + data.count, 0),
+      uniqueCities: Object.keys(layoverAnalysis).length,
+      topCities: summary.slice(0, 10),
+      requestedCity: city ? layoverAnalysis[city] : null
+    };
+  }
+
+  async getDeadheadAnalysis(bidPackageId: number): Promise<any> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const deadheadPairings = allPairings.filter(p => p.fullText?.includes('DH'));
+    const nonDeadheadPairings = allPairings.filter(p => !p.fullText?.includes('DH'));
+
+    return {
+      totalPairings: allPairings.length,
+      deadheadCount: deadheadPairings.length,
+      deadheadPercentage: (deadheadPairings.length / allPairings.length) * 100,
+      avgCreditWithDeadhead: deadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / deadheadPairings.length,
+      avgCreditWithoutDeadhead: nonDeadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / nonDeadheadPairings.length,
+      topDeadheadPairings: deadheadPairings
+        .sort((a, b) => b.creditHours - a.creditHours)
+        .slice(0, 10)
+        .map(p => ({ pairingNumber: p.pairingNumber, creditHours: p.creditHours, blockHours: p.blockHours }))
+    };
+  }
+
+  async getPairingDurationAnalysis(bidPackageId: number): Promise<any> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    const durationGroups = allPairings.reduce((acc, p) => {
+      const key = `${p.pairingDays}day`;
+      if (!acc[key]) {
+        acc[key] = { count: 0, totalCredit: 0, totalBlock: 0, pairings: [] };
+      }
+      acc[key].count++;
+      acc[key].totalCredit += p.creditHours;
+      acc[key].totalBlock += p.blockHours;
+      acc[key].pairings.push({
+        pairingNumber: p.pairingNumber,
+        creditHours: p.creditHours,
+        blockHours: p.blockHours,
+        holdProbability: p.holdProbability
+      });
+      return acc;
+    }, {} as any);
+
+    // Calculate averages and sort pairings
+    Object.values(durationGroups).forEach((group: any) => {
+      group.avgCredit = group.totalCredit / group.count;
+      group.avgBlock = group.totalBlock / group.count;
+      group.pairings = group.pairings.sort((a: any, b: any) => b.creditHours - a.creditHours).slice(0, 10);
+    });
+
+    return {
+      totalPairings: allPairings.length,
+      durationBreakdown: durationGroups,
+      mostCommonDuration: Object.entries(durationGroups).sort(([,a]: [string, any], [,b]: [string, any]) => b.count - a.count)[0]?.[0],
+      avgDuration: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length
+    };
   }
 }
 

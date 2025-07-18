@@ -1,0 +1,53 @@
+I’m building a Delta Airlines Preferential Bidding System (PBS) Bid Optimization app using Node.js, TypeScript, Express, and PostgreSQL (with Drizzle ORM). The backend integrates with OpenAI Assistants API.
+
+Currently, the assistant fails on large pairing datasets due to OpenAI token limits (e.g., 183k tokens sent when GPT-4 limit is 10k). Fix this with a hybrid strategy where:
+
+✅ Backend handles all heavy data processing:
+- Search, filter, sort, and aggregate pairing data
+- Functions like searchPairings, analyzePairingsByLayover, getPairingStats process the full dataset
+- Example: `getTopEfficientPairings(limit = 20)` returns top pairings and summary stats
+
+✅ Send only small JSON summaries to OpenAI:
+Example JSON to send:
+{
+  "topPairings": [
+    {"pairingNumber": "7812", "creditHours": "22:15", "blockHours": "15:00", "efficiency": 1.48, "holdProbability": 85},
+    {"pairingNumber": "7745", "creditHours": "18:20", "blockHours": "12:30", "efficiency": 1.46, "holdProbability": 70}
+  ],
+  "summaryStats": {
+    "totalPairings": 534,
+    "avgCredit": "18:45",
+    "avgBlock": "12:30",
+    "avgEfficiency": 1.32,
+    "highestCredit": "33:07",
+    "mostEfficientScore": 2.12
+  }
+}
+
+✅ Backend fallback for large queries:
+- If a pilot asks for "all pairings with >3 deadheads" or "full dataset dump," skip GPT and send DB results directly
+- Use pagination for large results
+
+✅ Update `server/openai.ts`:
+- Replace raw dataset sends with backend pre-processed JSON summaries
+- Teach GPT to acknowledge truncation:
+  - "Showing top 20 results. Ask for narrower filters for more details."
+
+✅ Update system prompt for GPT:
+“You are a Delta Airlines PBS (Preferential Bidding System) Bid Optimization Assistant. Your job is to analyze pilot queries using pre-processed data summaries from the backend. When data is truncated (e.g., top 20 results), acknowledge this and advise the pilot to refine their query for more detail. Combine backend pairing summaries with Delta PBS Reference Handbook, Scheduling Reference Handbook, Delta PWA, FAR 117 Quick Reference Guide, and NAVBLUE PBS Bidder Guide (available via file_search) to provide Delta-specific PBS advice.”
+
+✅ Error handling improvements:
+- Catch "Request too large" errors and return a friendly message:
+  - "This query is too large. Please refine your filters or request a summary."
+
+✅ Make it Replit-ready:
+- Use TypeScript, ES Modules
+- API key and assistant ID pulled from `.env`
+- Expose `/api/askAssistant` for frontend POST requests with `{ question: string }`
+- Ensure backend functions (searchPairings, analyzePairingsByLayover, getPairingStats, etc.) are accessible to GPT
+
+✅ Deliverables:
+1. Refactored `server/openai.ts` with hybrid flow
+2. Updated system prompt with truncation awareness
+3. Updated Express routes to support fallback
+4. Production-ready code with clean comments

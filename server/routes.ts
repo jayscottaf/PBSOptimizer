@@ -233,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   
 
-  // OpenAI Assistant API endpoint
+  // OpenAI Assistant API endpoint with hybrid token optimization
   app.post("/api/askAssistant", async (req, res) => {
     try {
       const { question } = req.body;
@@ -244,34 +244,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Extract bidPackageId from question if it contains "bid package #25" pattern
       const bidPackageMatch = question.match(/bid package #(\d+)/);
-      const bidPackageId = bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined;
+      let bidPackageId = bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined;
 
-      // Try to use the advanced pairing analysis service first
+      // If no bid package ID found, try to get the most recent one
+      if (!bidPackageId) {
+        const bidPackages = await storage.getBidPackages();
+        if (bidPackages.length > 0) {
+          bidPackageId = bidPackages[0].id;
+          console.log(`Using most recent bid package ID: ${bidPackageId}`);
+        }
+      }
+
+      // Try hybrid analysis service first (handles token limits)
       if (bidPackageId) {
         try {
-          const { PairingAnalysisService } = await import("./openai");
-          const analysisService = new PairingAnalysisService();
-          const result = await analysisService.analyzeQuery({ 
+          const { HybridOpenAIService } = await import("./openaiHybrid");
+          const hybridService = new HybridOpenAIService(storage);
+          const result = await hybridService.analyzeQuery({ 
             message: question, 
             bidPackageId 
-          }, storage);
+          });
           
-          res.json({ reply: result.response, data: result.data });
+          res.json({ 
+            reply: result.response, 
+            data: result.data,
+            truncated: result.truncated 
+          });
           return;
-        } catch (analysisError) {
-          console.log("Analysis service failed, falling back to basic assistant:", analysisError);
+        } catch (hybridError) {
+          console.log("Hybrid service failed, trying legacy analysis:", hybridError);
           
           // If it's a rate limit error, provide a specific message
-          if (analysisError.message && analysisError.message.includes('rate_limit_exceeded')) {
+          if (hybridError.message && hybridError.message.includes('rate_limit_exceeded')) {
             res.json({ 
               reply: "I'm experiencing high demand right now. Please try your question again in a moment, or try asking for more specific information to reduce the processing load."
             });
             return;
           }
+
+          // If it's a token limit error, provide helpful guidance
+          if (hybridError.message && hybridError.message.includes('context_length_exceeded')) {
+            res.json({ 
+              reply: "This query involves too much data to process at once. Please refine your search with more specific filters, such as:\n\n• 'Show me high credit 3-day pairings'\n• 'Find efficient turns with good hold probability'\n• 'Analyze layovers in DFW'\n\nThis will help me provide more detailed insights."
+            });
+            return;
+          }
+
+          // Try the legacy analysis service as fallback
+          try {
+            const { PairingAnalysisService } = await import("./openai");
+            const analysisService = new PairingAnalysisService();
+            const result = await analysisService.analyzeQuery({ 
+              message: question, 
+              bidPackageId 
+            }, storage);
+            
+            res.json({ reply: result.response, data: result.data });
+            return;
+          } catch (legacyError) {
+            console.log("Legacy analysis also failed, falling back to basic assistant:", legacyError);
+          }
         }
       }
 
-      // Fallback to basic assistant
+      // Final fallback to basic assistant
       const reply = await openaiAssistant.askPBSAssistant(question);
       res.json({ reply });
       
