@@ -469,6 +469,14 @@ export class HybridOpenAIService {
   }
 
   private formatHours(hours: number): string {
+    // Handle HH.MM format (e.g., 28.19 = 28 hours 19 minutes)
+    const hoursStr = hours.toString();
+    if (hoursStr.includes('.')) {
+      const [h, m] = hoursStr.split('.');
+      return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+    }
+    
+    // Handle decimal hours format (e.g., 28.33 = 28 hours 20 minutes)
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
