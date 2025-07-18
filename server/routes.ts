@@ -406,3 +406,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+
+
+
+  // Database verification endpoint
+  app.get("/api/verify-data", async (req, res) => {
+    try {
+      const bidPackages = await storage.getBidPackages();
+      const verification = {};
+      
+      for (const bidPackage of bidPackages) {
+        const pairings = await storage.getPairings(bidPackage.id);
+        const stats = await storage.getPairingStatsSummary(bidPackage.id);
+        
+        verification[bidPackage.id] = {
+          bidPackage: {
+            id: bidPackage.id,
+            name: bidPackage.name,
+            month: bidPackage.month,
+            year: bidPackage.year,
+            status: bidPackage.status
+          },
+          pairings: {
+            total: pairings.length,
+            sample: pairings.slice(0, 5).map(p => ({
+              pairingNumber: p.pairingNumber,
+              creditHours: p.creditHours,
+              blockHours: p.blockHours,
+              pairingDays: p.pairingDays,
+              holdProbability: p.holdProbability
+            }))
+          },
+          stats: {
+            totalPairings: stats.totalPairings,
+            avgCreditHours: stats.avgCreditHours.toFixed(2),
+            avgBlockHours: stats.avgBlockHours.toFixed(2),
+            avgPairingDays: stats.avgPairingDays.toFixed(1),
+            dayDistribution: stats.dayDistribution
+          },
+          dataIntegrity: {
+            hasPairings: pairings.length > 0,
+            hasValidCreditHours: pairings.filter(p => p.creditHours > 0).length,
+            hasValidBlockHours: pairings.filter(p => p.blockHours > 0).length,
+            hasValidPairingNumbers: pairings.filter(p => p.pairingNumber && p.pairingNumber.length > 0).length,
+            hasHoldProbabilities: pairings.filter(p => p.holdProbability !== null && p.holdProbability !== undefined).length
+          }
+        };
+      }
+      
+      res.json({
+        success: true,
+        totalBidPackages: bidPackages.length,
+        verification
+      });
+    } catch (error) {
+      console.error("Error verifying data:", error);
+      res.status(500).json({ message: "Failed to verify data" });
+    }
+  });
