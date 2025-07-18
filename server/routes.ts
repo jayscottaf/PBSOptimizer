@@ -403,12 +403,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
-  return httpServer;
-}
-
-
-
   // Database verification endpoint
   app.get("/api/verify-data", async (req, res) => {
     try {
@@ -464,3 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to verify data" });
     }
   });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}

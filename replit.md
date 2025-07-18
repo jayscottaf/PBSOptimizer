@@ -116,6 +116,20 @@ The application follows a monorepo structure with shared TypeScript types betwee
 
 ## Recent Changes
 
+**July 18, 2025**: Fixed Critical AI Assistant and Database Route Issues
+
+**AI Assistant Pairing Lookup**: Resolved specific pairing number queries (e.g., "show me pairing 7758")
+- Fixed `getPairingByNumber` database function to properly chain WHERE conditions using `and()` operator
+- Pairing lookups now return correct specific pairing data instead of random pairings
+
+**Database Route Field Completion**: Enhanced route generation to show complete journey paths
+- **Before**: Routes missing return segments (e.g., `JFK-MSP-CMH-MKE-SLC-SBA-ATL`)
+- **After**: Complete roundtrip routes (e.g., `JFK-MSP-CMH-MSP-MKE-SLC-SBA-ATL-JFK`)
+- Applied enhanced `parseRoute` function with chronological ordering to all 534 pairings
+- Routes now accurately reflect full pilot journey including intermediate returns
+
+**Production Impact**: AI assistant now provides accurate specific pairing analysis with correct route information
+
 **July 18, 2025**: Successfully Implemented Hybrid OpenAI Token Optimization System
 
 **Critical Issue Resolved**: Fixed OpenAI token limit errors that prevented AI assistant from processing large datasets (201,225 tokens → 8,000 limit)

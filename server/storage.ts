@@ -36,6 +36,7 @@ export interface IStorage {
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
+  getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
   searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
@@ -144,6 +145,17 @@ export class DatabaseStorage implements IStorage {
 
   async getPairing(id: number): Promise<Pairing | undefined> {
     const [pairing] = await db.select().from(pairings).where(eq(pairings.id, id));
+    return pairing || undefined;
+  }
+
+  async getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined> {
+    let whereConditions = [eq(pairings.pairingNumber, pairingNumber)];
+    
+    if (bidPackageId) {
+      whereConditions.push(eq(pairings.bidPackageId, bidPackageId));
+    }
+    
+    const [pairing] = await db.select().from(pairings).where(and(...whereConditions));
     return pairing || undefined;
   }
 

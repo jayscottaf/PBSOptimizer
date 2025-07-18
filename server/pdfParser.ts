@@ -79,14 +79,42 @@ export class PDFParser {
   }
 
   private parseRoute(flightSegments: FlightSegment[]): string {
-    const airports = new Set<string>();
-    flightSegments.forEach(segment => {
-      if (!segment.isDeadhead) {
-        airports.add(segment.departure);
-        airports.add(segment.arrival);
-      }
+    // Build the complete route path in chronological order
+    const routePath: string[] = [];
+    
+    if (flightSegments.length === 0) {
+      return "";
+    }
+    
+    // Sort segments by date and time for proper chronological order
+    const sortedSegments = [...flightSegments].sort((a, b) => {
+      // First sort by date (A, B, C, D, E)
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      
+      // Then sort by departure time within the same date
+      return a.departureTime.localeCompare(b.departureTime);
     });
-    return Array.from(airports).join('-');
+    
+    // Start with the first departure airport
+    if (sortedSegments.length > 0) {
+      routePath.push(sortedSegments[0].departure);
+    }
+    
+    // Add each arrival airport in chronological order
+    for (const segment of sortedSegments) {
+      routePath.push(segment.arrival);
+    }
+    
+    // Remove consecutive duplicates while preserving the full journey
+    const cleanedRoute: string[] = [];
+    for (let i = 0; i < routePath.length; i++) {
+      if (i === 0 || routePath[i] !== routePath[i - 1]) {
+        cleanedRoute.push(routePath[i]);
+      }
+    }
+    
+    return cleanedRoute.join('-');
   }
 
   private extractPairingBlocks(text: string): string[] {
