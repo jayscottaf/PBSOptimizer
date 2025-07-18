@@ -69,12 +69,13 @@ export class HybridOpenAIService {
           }
         ],
         functions: this.getAvailableFunctions(),
+        function_call: "auto",
         max_tokens: 1000,
         temperature: 0.7
       });
 
-      const response = completion.choices[0]?.message?.content;
-      const functionCall = completion.choices[0]?.message?.function_call;
+      const message = completion.choices[0]?.message;
+      const functionCall = message?.function_call;
 
       if (functionCall) {
         console.log('Function call requested:', functionCall.name);
@@ -83,6 +84,7 @@ export class HybridOpenAIService {
         return functionResult;
       }
 
+      const response = message?.content;
       if (!response) throw new Error('No response from OpenAI');
 
       const result: HybridAnalysisResponse = {
@@ -250,10 +252,10 @@ Acknowledge when data is truncated and suggest narrower queries. Combine PBS exp
         truncated: functionResult.truncated || false
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error executing function ${functionName}:`, error);
       return {
-        response: `Error executing ${functionName}: ${error.message}`,
+        response: `Error executing ${functionName}: ${error.message || error}`,
         data: null,
         truncated: false
       };
