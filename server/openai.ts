@@ -72,6 +72,17 @@ export class PairingAnalysisService {
               days: { type: "number", description: "Number of days (1, 2, 3, 4, 5, etc.)" }
             }
           }
+        },
+        {
+          name: "findPairingByNumber",
+          description: "Find a specific pairing by its pairing number",
+          parameters: {
+            type: "object",
+            properties: {
+              bidPackageId: { type: "number", description: "ID of the bid package" },
+              pairingNumber: { type: "string", description: "The pairing number to search for" }
+            }
+          }
         }
       ];
 
@@ -135,6 +146,10 @@ export class PairingAnalysisService {
 
           case "findPairingsByDuration":
             functionResult = await this.findPairingsByDuration(storage, functionArgs);
+            break;
+
+          case "findPairingByNumber":
+            functionResult = await this.findPairingByNumber(storage, functionArgs);
             break;
 
           default:
@@ -283,6 +298,49 @@ export class PairingAnalysisService {
       })),
       // Add debug info
       allPairingDaysFound: [...new Set(allPairings.map(p => p.pairingDays))].sort()
+    };
+  }
+
+  private async findPairingByNumber(storage: any, params: any) {
+    const pairings = await storage.searchPairings({ 
+      bidPackageId: params.bidPackageId,
+      search: params.pairingNumber
+    });
+    
+    console.log(`Searching for pairing number: ${params.pairingNumber}`);
+    console.log(`Found ${pairings.length} pairings matching search`);
+    
+    // Filter to exact matches
+    const exactMatches = pairings.filter((p: any) => 
+      p.pairingNumber === params.pairingNumber
+    );
+    
+    if (exactMatches.length === 0) {
+      return {
+        found: false,
+        message: `Pairing ${params.pairingNumber} not found in bid package ${params.bidPackageId}`,
+        similarPairings: pairings.slice(0, 5).map((p: any) => ({
+          pairingNumber: p.pairingNumber,
+          route: p.route
+        }))
+      };
+    }
+    
+    const pairing = exactMatches[0];
+    return {
+      found: true,
+      pairing: {
+        pairingNumber: pairing.pairingNumber,
+        route: pairing.route,
+        creditHours: pairing.creditHours,
+        blockHours: pairing.blockHours,
+        tafb: pairing.tafb,
+        pairingDays: pairing.pairingDays,
+        holdProbability: pairing.holdProbability,
+        layovers: pairing.layovers,
+        effectiveDates: pairing.effectiveDates,
+        payHours: pairing.payHours
+      }
     };
   }
 }
