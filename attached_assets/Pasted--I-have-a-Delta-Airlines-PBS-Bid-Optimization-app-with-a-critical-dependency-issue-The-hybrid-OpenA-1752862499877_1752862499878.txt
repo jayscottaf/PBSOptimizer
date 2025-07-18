@@ -1,0 +1,33 @@
+"I have a Delta Airlines PBS Bid Optimization app with a critical dependency issue. The hybrid OpenAI service keeps failing with this error:
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'fast-safe-stringify' imported from /home/runner/workspace/server/openaiHybrid.ts
+Current State:
+
+The app is running on Node.js with TypeScript (using tsx)
+Package.json shows the app uses ES modules ("type": "module")
+The hybrid service imports: import safeStringify from 'fast-safe-stringify';
+Both fast-safe-stringify and tiktoken packages were recently installed
+The error persists and causes fallback to basic assistant (no access to actual pairing data)
+534 pairings in the database but users only get generic responses
+Files to examine:
+
+server/openaiHybrid.ts - Contains the failing import
+package.json - Check if packages are properly listed
+server/routes.ts - Shows the fallback logic when hybrid service fails
+What I need you to do:
+
+Verify package installation: Check if fast-safe-stringify and tiktoken are actually in package.json dependencies
+Fix import syntax: The import might be incorrect for ES modules - check if it should be import * as safeStringify or import { stringify as safeStringify }
+Install missing dependencies: If packages aren't in package.json, install them properly
+Test the fix: Ensure the hybrid service can start without import errors
+Verify functionality: Make sure the AI assistant can access real pairing data instead of falling back to basic responses
+Expected outcome:
+
+No more 'ERR_MODULE_NOT_FOUND' errors in console
+Hybrid OpenAI service works properly
+AI assistant returns actual pairing numbers and data from the 534 pairings
+Users get detailed responses with real credit hours, block times, and pairing analysis
+Test case:
+Ask the AI assistant: 'Show me 4-day pairings with credit-to-block ratios above 1.2' and verify it returns actual pairing numbers (not generic responses).
+
+Please provide the exact steps and code changes needed to resolve this dependency issue."
