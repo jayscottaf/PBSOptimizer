@@ -148,6 +148,9 @@ export const api = {
     }
 
     const result = await response.json();
-    return { response: result.reply, data: null };
+    return { 
+      response: result.reply, 
+      data: result.data || null 
+    };
   },
 };

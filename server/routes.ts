@@ -242,9 +242,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Question is required" });
       }
 
+      // Extract bidPackageId from question if it contains "bid package #25" pattern
+      const bidPackageMatch = question.match(/bid package #(\d+)/);
+      const bidPackageId = bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined;
+
+      // Try to use the advanced pairing analysis service first
+      if (bidPackageId) {
+        try {
+          const { PairingAnalysisService } = await import("./openai");
+          const analysisService = new PairingAnalysisService();
+          const result = await analysisService.analyzeQuery({ 
+            message: question, 
+            bidPackageId 
+          }, storage);
+          
+          res.json({ reply: result.response, data: result.data });
+          return;
+        } catch (analysisError) {
+          console.log("Analysis service failed, falling back to basic assistant:", analysisError);
+        }
+      }
+
+      // Fallback to basic assistant
       const reply = await openaiAssistant.askPBSAssistant(question);
-      
       res.json({ reply });
+      
     } catch (error) {
       console.error("Error asking PBS Assistant:", error);
       res.status(500).json({ message: "Failed to get response from PBS Assistant" });
