@@ -150,6 +150,20 @@ The application follows a monorepo structure with shared TypeScript types betwee
 
 **Data Accuracy Confirmed**: System processes authentic data from 534 pairings with correct Delta PBS decimal time format throughout
 
+**July 19, 2025**: Resolved Missing Flight Segment Issue in Parser
+
+**Flight Segment Extraction Fix**: Corrected parser to capture continuation flights without day prefixes
+- **Issue**: Flight 2608 (SLC-IDA) missing from pairing 7745 flight segments despite being in full text
+- **Root Cause**: Parser pattern didn't handle `.57` block time format (missing leading zero)
+- **Solution**: Enhanced regex pattern to handle `(\d{0,2}\.?\d{1,2})` format and normalize `.57` to `0.57`
+- **Database Update**: Applied fix to pairing 7745, now shows complete 7-segment journey
+
+**Route Completion**: Updated route generation to include all intermediate stops
+- **Before**: `JFK-DFW-SLC-SLC-MSP-DFW-JFK` (missing IDA)
+- **After**: `JFK-DFW-SLC-IDA-SLC-MSP-DFW-JFK` (complete journey)
+
+**Parsing Enhancement**: System now captures all flight types including continuation flights on same day without day prefixes
+
 **July 18, 2025**: Successfully Implemented Hybrid OpenAI Token Optimization System
 
 **Critical Issue Resolved**: Fixed OpenAI token limit errors that prevented AI assistant from processing large datasets (201,225 tokens → 8,000 limit)

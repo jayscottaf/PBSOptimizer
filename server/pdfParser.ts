@@ -330,9 +330,14 @@ export class PDFParser {
       }
       
       // Additional flight parsing patterns for missed segments
-      // Pattern 1: Standalone flight numbers that were missed: "1482    ATL 1246  IAD 1431* 1.45"
-      const standaloneFlight = line.match(/^\s*(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
+      // Pattern 1: Standalone flight numbers that were missed: "1482    ATL 1246  IAD 1431* 1.45" or "2608    SLC 2130  IDA 2227   .57"
+      const standaloneFlight = line.match(/^\s*(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{1,2})/);
       if (standaloneFlight && currentDay) {
+        // Handle block time format (add leading zero if starts with decimal)
+        let blockTime = standaloneFlight[6];
+        if (blockTime.startsWith('.')) {
+          blockTime = '0' + blockTime;
+        }
         // Check for duplicates before adding
         const isDuplicate = flightSegments.some(seg => 
           seg.flightNumber === standaloneFlight[1] && 
@@ -349,7 +354,7 @@ export class PDFParser {
             departureTime: standaloneFlight[3],
             arrival: standaloneFlight[4],
             arrivalTime: standaloneFlight[5],
-            blockTime: standaloneFlight[6],
+            blockTime: blockTime,
             isDeadhead: false
           };
           
