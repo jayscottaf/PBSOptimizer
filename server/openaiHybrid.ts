@@ -110,10 +110,20 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
-    // Check for specific pairing number requests first (only explicit pairing requests)
-    const pairingMatch = message.match(/pairing\s+#?(\d+)/i) || 
-                         message.match(/show\s+me\s+pairing\s+#?(\d+)/i) || 
-                         message.match(/#(\d{4,5})/i);
+    // Extract pairing duration from the message FIRST (1-day, 2-day, etc.)
+    const durationMatch = message.match(/(\d+)[-\s]?day/);
+    const requestedDays = durationMatch ? parseInt(durationMatch[1]) : null;
+
+    // Handle specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
+    if (requestedDays) {
+      return await this.handleDurationSpecificQuery(query, requestedDays, message);
+    }
+
+    // Check for specific pairing number requests (only very explicit pairing requests)
+    const pairingMatch = message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) || 
+                         message.match(/#(\d{4,5})/i) ||
+                         (message.match(/\b(\d{4,5})\b/) && (message.includes('pairing') || message.match(/^(?:show\s+me\s+)?(\d{4,5})$/)));
+    
     if (pairingMatch) {
       const pairingNumber = pairingMatch[1];
       const pairing = await this.storage.getPairingByNumber(pairingNumber, query.bidPackageId);
@@ -144,15 +154,6 @@ export class HybridOpenAIService {
           truncated: false
         };
       }
-    }
-
-    // Extract pairing duration from the message (1-day, 2-day, etc.)
-    const durationMatch = message.match(/(\d+)[-\s]?day/);
-    const requestedDays = durationMatch ? parseInt(durationMatch[1]) : null;
-
-    // Handle specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
-    if (requestedDays) {
-      return await this.handleDurationSpecificQuery(query, requestedDays, message);
     }
 
     // Handle turn queries (1-day pairings)
