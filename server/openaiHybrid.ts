@@ -341,9 +341,11 @@ export class HybridOpenAIService {
   }
 
   private extractHoldProbabilityThreshold(message: string): number {
-    const holdMatch = message.match(/hold.*?(\d+)/);
+    // Look for explicit hold probability percentages with proper context
+    const holdMatch = message.match(/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i);
     if (holdMatch) return parseInt(holdMatch[1]);
     
+    // Fallback to seniority-based defaults
     if (message.includes('senior')) return 70;
     if (message.includes('junior')) return 30;
     

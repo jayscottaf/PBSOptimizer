@@ -164,6 +164,23 @@ The application follows a monorepo structure with shared TypeScript types betwee
 
 **Parsing Enhancement**: System now captures all flight types including continuation flights on same day without day prefixes
 
+**July 19, 2025**: Fixed Critical AI Assistant Hold Probability Filtering Bug
+
+**Root Cause Resolved**: Corrected flawed regex pattern in multi-criteria query processing
+- **Issue**: Complex queries with multiple numeric criteria incorrectly extracted wrong hold probability thresholds
+- **Example**: "at least 70% hold probability...layovers longer than 20 hours" extracted 20% instead of 70%
+- **Impact**: AI recommended pairings with 50% hold probability when user required 70% minimum
+
+**Technical Fix**: Enhanced `extractHoldProbabilityThreshold` function regex pattern
+- **Before**: `/hold.*?(\d+)/` - matched any number after "hold" keyword
+- **After**: `/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i` - matches specific percentage context
+- **Result**: Correctly extracts "at least 70% hold probability" → 70%, ignores "20 hours" → no false match
+
+**Data Integrity Restored**: AI assistant now provides accurate filtering recommendations
+- Complex multi-criteria queries work consistently across all processing paths
+- Maintains all existing fallback logic (junior=30%, senior=70%, default=75%)
+- No breaking changes to efficiency analysis or other query types
+
 **July 18, 2025**: Successfully Implemented Hybrid OpenAI Token Optimization System
 
 **Critical Issue Resolved**: Fixed OpenAI token limit errors that prevented AI assistant from processing large datasets (201,225 tokens → 8,000 limit)
