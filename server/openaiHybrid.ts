@@ -110,11 +110,10 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
-    // Check for specific pairing number requests first
+    // Check for specific pairing number requests first (only explicit pairing requests)
     const pairingMatch = message.match(/pairing\s+#?(\d+)/i) || 
-                         message.match(/show\s+me\s+#?(\d+)/i) || 
-                         message.match(/#(\d+)/i) || 
-                         message.match(/\b(\d{4})\b/i); // Match 4-digit numbers like 7758
+                         message.match(/show\s+me\s+pairing\s+#?(\d+)/i) || 
+                         message.match(/#(\d{4,5})/i);
     if (pairingMatch) {
       const pairingNumber = pairingMatch[1];
       const pairing = await this.storage.getPairingByNumber(pairingNumber, query.bidPackageId);
