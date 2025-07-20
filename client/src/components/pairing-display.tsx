@@ -17,6 +17,7 @@ interface PairingInfo {
   effectiveDates?: string;
   payHours?: string;
   fullText?: string;
+  fullTextBlock?: string;
 }
 
 interface PairingDisplayProps {
@@ -119,13 +120,13 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
         </div>
       )}
 
-      {pairing.fullText && (
+      {(pairing.fullText || pairing.fullTextBlock) && (
         <div>
           <div className="font-medium mb-2">Full Pairing Text:</div>
           <Card>
             <CardContent className="p-3">
               <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-3 rounded border overflow-x-auto max-h-64">
-                {pairing.fullText}
+                {pairing.fullTextBlock || pairing.fullText}
               </pre>
             </CardContent>
           </Card>

@@ -439,7 +439,8 @@ export class PairingAnalysisService {
         layovers: pairing.layovers,
         effectiveDates: pairing.effectiveDates,
         payHours: pairing.payHours,
-        fullText: pairing.fullText // Include full text for complete details
+        fullText: pairing.fullText, // Truncated version for OpenAI
+        fullTextBlock: pairing.fullTextBlock // Complete version for display
       }
     };
   }
@@ -457,8 +458,16 @@ export class PairingAnalysisService {
         tafb: pairing.tafb,
         pairingDays: pairing.pairingDays,
         holdProbability: pairing.holdProbability,
-        // Remove large text fields
-        layovers: pairing.layovers ? pairing.layovers.slice(0, 2) : []
+        // Remove large text fields  
+        layovers: pairing.layovers ? pairing.layovers.slice(0, 2) : [],
+        effectiveDates: pairing.effectiveDates?.substring(0, 50) || 'N/A',
+        payHours: pairing.payHours,
+        // Keep both versions - truncated for OpenAI context, full for display
+        fullText: pairing.fullText ? pairing.fullText.substring(0, 200) + "..." : 'N/A',
+        fullTextBlock: pairing.fullTextBlockrs.slicers.slice(0, 2) : [],
+        // Keep both truncated and full text versions
+        fullText: pairing.fullText ? pairing.fullText.substring(0, 200) + "..." : 'N/A',
+        fullTextBlock: pairing.fullTextBlockrs.slice(0, 2) : []
       }));
 
       return {
@@ -486,7 +495,11 @@ export class PairingAnalysisService {
           effectiveDates: functionResult.pairing.effectiveDates?.substring(0, 50) || 'N/A',
           // Remove or truncate large text fields
           fullText: functionResult.pairing.fullText ? 
-            functionResult.pairing.fullText.substring(0, 200) + "..." : 'N/A'
+            functionResult.pairing.fullText.substring(0, 200) + "..." :
+            'N/A',
+            'N/A',
+          // Keep the complete fullTextBlock for display purposes
+          fullTextBlock: functionResult.pairing.fullTextBlock 'N/A'
         }
       };
     }
