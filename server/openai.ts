@@ -1,4 +1,3 @@
-
 import OpenAI from 'openai';
 import { DatabaseStorage } from './storage';
 import { HybridOpenAIService } from './openaiHybrid';
@@ -238,14 +237,14 @@ export class PairingAnalysisService {
       }
     } catch (error) {
       console.error('OpenAI API error:', error);
-      
+
       // Check if it's a rate limit error
       if (error.message && error.message.includes('rate_limit_exceeded')) {
         return {
           response: "I'm experiencing high demand right now. Please try your question again in a moment."
         };
       }
-      
+
       // Check if it's a context length error
       if (error.message && error.message.includes('context_length_exceeded')) {
         return {
@@ -259,7 +258,7 @@ export class PairingAnalysisService {
           response: "The amount of data for your query is too large to process. Please try asking for more specific information (e.g., 'show me the top 5 highest credit pairings' or 'analyze 3-day pairings only') to get a more focused analysis."
         };
       }
-      
+
       // Generic error with more helpful message
       return {
         response: "I encountered an error while analyzing your request. This might be due to a temporary issue with the AI service. Please try again, or try asking a more specific question about your pairings."
@@ -371,14 +370,14 @@ export class PairingAnalysisService {
 
   private async findPairingByNumber(storage: any, params: any) {
     console.log(`Searching for pairing number: ${params.pairingNumber} in bid package ${params.bidPackageId}`);
-    
+
     // First try exact pairing number match
     const allPairings = await storage.searchPairings({ 
       bidPackageId: params.bidPackageId
     });
-    
+
     console.log(`Total pairings in bid package: ${allPairings.length}`);
-    
+
     // Try multiple search patterns
     const searchPatterns = [
       params.pairingNumber,
@@ -386,31 +385,31 @@ export class PairingAnalysisService {
       params.pairingNumber.padStart(4, '0'), // Try with leading zeros
       params.pairingNumber.padStart(5, '0')  // Try with more leading zeros
     ];
-    
+
     let exactMatches = [];
-    
+
     for (const pattern of searchPatterns) {
       exactMatches = allPairings.filter((p: any) => 
         p.pairingNumber === pattern || 
         p.pairingNumber?.toString() === pattern ||
         p.pairingNumber?.includes(pattern)
       );
-      
+
       if (exactMatches.length > 0) {
         console.log(`Found ${exactMatches.length} matches with pattern: ${pattern}`);
         break;
       }
     }
-    
+
     // If no exact matches, try partial matches
     if (exactMatches.length === 0) {
       const partialMatches = allPairings.filter((p: any) => 
         p.pairingNumber?.includes(params.pairingNumber) ||
         p.pairingNumber?.toString().includes(params.pairingNumber.toString())
       );
-      
+
       console.log(`Found ${partialMatches.length} partial matches`);
-      
+
       return {
         found: false,
         message: `Pairing ${params.pairingNumber} not found in bid package ${params.bidPackageId}`,
@@ -464,10 +463,7 @@ export class PairingAnalysisService {
         payHours: pairing.payHours,
         // Keep both versions - truncated for OpenAI context, full for display
         fullText: pairing.fullText ? pairing.fullText.substring(0, 200) + "..." : 'N/A',
-        fullTextBlock: pairing.fullTextBlockrs.slicers.slice(0, 2) : [],
-        // Keep both truncated and full text versions
-        fullText: pairing.fullText ? pairing.fullText.substring(0, 200) + "..." : 'N/A',
-        fullTextBlock: pairing.fullTextBlockrs.slice(0, 2) : []
+        fullTextBlock: pairing.fullTextBlock
       }));
 
       return {
@@ -497,9 +493,8 @@ export class PairingAnalysisService {
           fullText: functionResult.pairing.fullText ? 
             functionResult.pairing.fullText.substring(0, 200) + "..." :
             'N/A',
-            'N/A',
           // Keep the complete fullTextBlock for display purposes
-          fullTextBlock: functionResult.pairing.fullTextBlock 'N/A'
+          fullTextBlock: functionResult.pairing.fullTextBlock
         }
       };
     }
