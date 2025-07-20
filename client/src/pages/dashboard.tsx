@@ -354,7 +354,7 @@ export default function Dashboard() {
               <TabsContent value="chat" className="space-y-6">
                 <PairingChat 
                   bidPackageId={latestBidPackage?.id} 
-                  onPairingClick={openPairingModal}
+                  onPairingClick={handlePairingClick}
                 />
               </TabsContent>
             </Tabs>
