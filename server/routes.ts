@@ -117,8 +117,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
       
+      // Allow unlimited fetch when limit is explicitly set to -1 (for stats)
+      const actualLimit = limit === -1 ? undefined : limit;
+      
       // Validate pagination parameters
-      if (limit > 500) {
+      if (limit > 500 && limit !== -1) {
         return res.status(400).json({ message: "Limit cannot exceed 500" });
       }
       
@@ -126,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Offset cannot be negative" });
       }
       
-      const pairings = await storage.getPairings(bidPackageId, limit, offset);
+      const pairings = await storage.getPairings(bidPackageId, actualLimit, offset);
       const total = await storage.getPairingsCount(bidPackageId);
       
       // Ensure pairings is always an array
@@ -136,9 +139,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pairings: safePairings,
         pagination: {
           total,
-          limit,
+          limit: actualLimit || total,
           offset,
-          hasNext: offset + limit < total,
+          hasNext: actualLimit ? offset + actualLimit < total : false,
           hasPrev: offset > 0
         }
       });
@@ -157,12 +160,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = filters.limit || 50;
       const offset = filters.offset || 0;
       
+      // Allow unlimited search when limit is -1
+      const actualLimit = limit === -1 ? undefined : limit;
+      
       // Validate pagination
-      if (limit > 500) {
+      if (limit > 500 && limit !== -1) {
         return res.status(400).json({ message: "Limit cannot exceed 500" });
       }
       
-      const pairings = await storage.searchPairings({ ...filters, limit, offset });
+      const pairings = await storage.searchPairings({ ...filters, limit: actualLimit, offset });
       
       // Ensure pairings is always an array
       const safePairings = Array.isArray(pairings) ? pairings : [];

@@ -13,7 +13,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
   // Fetch ALL pairings for this bid package to get accurate stats
   const { data: allPairingsData } = useQuery({
     queryKey: ["allPairings", bidPackage?.id],
-    queryFn: () => bidPackage?.id ? api.getPairings(bidPackage.id, 1000) : Promise.resolve({ pairings: [] }),
+    queryFn: () => bidPackage?.id ? api.getPairings(bidPackage.id, -1) : Promise.resolve({ pairings: [] }),
     enabled: !!bidPackage?.id
   });
 
