@@ -36,6 +36,8 @@ const searchFiltersSchema = z.object({
   pairingDays: z.number().optional(),
   pairingDaysMin: z.number().optional(),
   pairingDaysMax: z.number().optional(),
+  limit: z.number().min(1).max(500).optional(),
+  offset: z.number().min(0).optional(),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -108,18 +110,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get pairings with optional filtering
+  // Get pairings with optional filtering and pagination
   app.get("/api/pairings", async (req, res) => {
     try {
       const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
       
-      if (bidPackageId) {
-        const pairings = await storage.getPairings(bidPackageId);
-        res.json(pairings);
-      } else {
-        const pairings = await storage.getPairings();
-        res.json(pairings);
+      // Validate pagination parameters
+      if (limit > 500) {
+        return res.status(400).json({ message: "Limit cannot exceed 500" });
       }
+      
+      if (offset < 0) {
+        return res.status(400).json({ message: "Offset cannot be negative" });
+      }
+      
+      const pairings = await storage.getPairings(bidPackageId, limit, offset);
+      const total = await storage.getPairingsCount(bidPackageId);
+      
+      // Ensure pairings is always an array
+      const safePairings = Array.isArray(pairings) ? pairings : [];
+      
+      res.json({
+        pairings: safePairings,
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasNext: offset + limit < total,
+          hasPrev: offset > 0
+        }
+      });
     } catch (error) {
       console.error("Error fetching pairings:", error);
       res.status(500).json({ message: "Failed to fetch pairings" });
@@ -130,8 +152,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/pairings/search", async (req, res) => {
     try {
       const filters = searchFiltersSchema.parse(req.body);
-      const pairings = await storage.searchPairings(filters);
-      res.json(pairings);
+      
+      // Add pagination defaults
+      const limit = filters.limit || 50;
+      const offset = filters.offset || 0;
+      
+      // Validate pagination
+      if (limit > 500) {
+        return res.status(400).json({ message: "Limit cannot exceed 500" });
+      }
+      
+      const pairings = await storage.searchPairings({ ...filters, limit, offset });
+      
+      // Ensure pairings is always an array
+      const safePairings = Array.isArray(pairings) ? pairings : [];
+      
+      res.json({ pairings: safePairings });
     } catch (error) {
       console.error("Error searching pairings:", error);
       if (error instanceof z.ZodError) {

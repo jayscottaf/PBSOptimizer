@@ -80,15 +80,44 @@ export const api = {
   },
 
   // Pairings
-  getPairings: async (bidPackageId?: number): Promise<Pairing[]> => {
-    const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
+  getPairings: async (bidPackageId?: number, limit?: number, offset?: number): Promise<{ pairings: Pairing[], pagination?: any }> => {
+    let url = "/api/pairings";
+    const params = new URLSearchParams();
+    
+    if (bidPackageId) params.append("bidPackageId", bidPackageId.toString());
+    if (limit) params.append("limit", limit.toString());
+    if (offset) params.append("offset", offset.toString());
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    
     const response = await apiRequest("GET", url);
-    return response.json();
+    const result = await response.json();
+    
+    // Handle both old and new response formats for backward compatibility
+    if (Array.isArray(result)) {
+      return { pairings: result };
+    }
+    
+    return {
+      pairings: Array.isArray(result.pairings) ? result.pairings : [],
+      pagination: result.pagination
+    };
   },
 
-  searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
+  searchPairings: async (filters: SearchFilters & { limit?: number; offset?: number }): Promise<{ pairings: Pairing[] }> => {
     const response = await apiRequest("POST", "/api/pairings/search", filters);
-    return response.json();
+    const result = await response.json();
+    
+    // Handle both old and new response formats for backward compatibility
+    if (Array.isArray(result)) {
+      return { pairings: result };
+    }
+    
+    return {
+      pairings: Array.isArray(result.pairings) ? result.pairings : []
+    };
   },
 
   getPairing: async (id: number): Promise<Pairing> => {

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod.js";
@@ -20,7 +20,11 @@ export const bidPackages = pgTable("bid_packages", {
   aircraft: text("aircraft").notNull(),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   status: text("status").notNull().default("processing"), // processing, completed, failed
-});
+}, (table) => ({
+  monthYearIdx: index("bid_packages_month_year_idx").on(table.month, table.year),
+  baseAircraftIdx: index("bid_packages_base_aircraft_idx").on(table.base, table.aircraft),
+  statusIdx: index("bid_packages_status_idx").on(table.status),
+}));
 
 export const pairings = pgTable("pairings", {
   id: serial("id").primaryKey(),
@@ -41,7 +45,15 @@ export const pairings = pgTable("pairings", {
   fullTextBlock: text("full_text_block").notNull(), // Complete pairing text from PDF
   holdProbability: integer("hold_probability").default(0), // Percentage 0-100
   pairingDays: integer("pairing_days").default(1), // Number of days (calculated from flight segment day letters)
-});
+}, (table) => ({
+  bidPackageIdx: index("pairings_bid_package_idx").on(table.bidPackageId),
+  pairingNumberIdx: index("pairings_number_idx").on(table.pairingNumber),
+  creditHoursIdx: index("pairings_credit_hours_idx").on(table.creditHours),
+  blockHoursIdx: index("pairings_block_hours_idx").on(table.blockHours),
+  holdProbabilityIdx: index("pairings_hold_probability_idx").on(table.holdProbability),
+  pairingDaysIdx: index("pairings_days_idx").on(table.pairingDays),
+  compoundSearchIdx: index("pairings_search_idx").on(table.bidPackageId, table.creditHours, table.blockHours),
+}));
 
 export const bidHistory = pgTable("bid_history", {
   id: serial("id").primaryKey(),
@@ -57,7 +69,11 @@ export const userFavorites = pgTable("user_favorites", {
   userId: integer("user_id").references(() => users.id).notNull(),
   pairingId: integer("pairing_id").references(() => pairings.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("user_favorites_user_idx").on(table.userId),
+  pairingIdIdx: index("user_favorites_pairing_idx").on(table.pairingId),
+  userPairingIdx: index("user_favorites_user_pairing_idx").on(table.userId, table.pairingId),
+}));
 
 export const chatHistory = pgTable("chat_history", {
   id: serial("id").primaryKey(),
