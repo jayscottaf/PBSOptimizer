@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,7 +86,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           if (history.length > 0) {
             const lastMessage = history[history.length - 1];
             const firstUserMessage = history.find(msg => msg.messageType === 'user');
-            
+
             conversationSummaries.push({
               sessionId: storedSessionId,
               title: firstUserMessage ? 
@@ -126,7 +125,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       console.log('Loading chat history for session:', sessionId);
       const history = await api.getChatHistory(sessionId);
       console.log('Chat history loaded:', history.length, 'messages');
-      
+
       if (history.length === 0) {
         // Add welcome message if no history exists
         const welcomeMessage: ChatMessage = {
@@ -136,7 +135,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           timestamp: new Date()
         };
         setMessages([welcomeMessage]);
-        
+
         // Save welcome message to database
         try {
           await api.saveChatMessage({
@@ -165,6 +164,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message, error.stack);
+      }
       // Show welcome message on error
       const welcomeMessage: ChatMessage = {
         id: '1',
@@ -182,13 +184,13 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem('chatSessionId', newSessionId);
       setSessionId(newSessionId);
-      
+
       // Clear current messages
       setMessages([]);
-      
+
       // Reload conversation list to include the old session
       await loadConversationList();
-      
+
       console.log('Started new conversation with session:', newSessionId);
     } catch (error) {
       console.error('Failed to start new conversation:', error);
@@ -309,7 +311,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) {
       return 'Today';
     } else if (diffDays === 1) {
