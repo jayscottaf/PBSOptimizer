@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { Pairing, BidPackage } from "@/lib/api";
 
@@ -8,15 +8,28 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
+  if (!pairings || !Array.isArray(pairings)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Statistics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">No pairing data available</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const totalPairings = pairings.length;
   const likelyToHold = pairings.filter(p => p.holdProbability >= 70).length;
   const highCredit = pairings.filter(p => parseFloat(p.creditHours) >= 5.5).length;
   const sixDayCombo = pairings.filter(p => p.tafb.includes('6d') || p.tafb.includes('7d')).length;
-  
+
   // Expected total for NYC A220 is typically 500-600 pairings
   const expectedTotal = 534;
   const progressPercentage = Math.min((totalPairings / expectedTotal) * 100, 100);
-  
+
   // Show processing status for current bid package
   const isProcessing = bidPackage?.status === 'processing';
   const isFailed = bidPackage?.status === 'failed';

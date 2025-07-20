@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,12 +77,13 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     } catch (error) {
       console.error('Failed to load chat history:', error);
       // Show welcome message on error
-      setMessages([{
+      const welcomeMessage: ChatMessage = {
         id: '1',
         type: 'assistant',
         content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
         timestamp: new Date()
-      }]);
+      };
+      setMessages([welcomeMessage]);
     }
   };
 
@@ -150,7 +150,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
     try {
       const result = await api.analyzePairings(input.trim(), bidPackageId);
-      
+
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
@@ -229,7 +229,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           </Button>
         </CardTitle>
       </CardHeader>
-      
+
       <CardContent className="flex-1 flex flex-col p-0">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 space-y-4">
@@ -266,7 +266,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               </div>
             </div>
           ))}
-          
+
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-gray-100 rounded-lg px-4 py-2">
@@ -278,7 +278,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -300,7 +300,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               <Send className="h-4 w-4" />
             </Button>
           </form>
-          
+
           {!bidPackageId && (
             <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
               Upload a bid package to enable full analysis capabilities
