@@ -348,13 +348,13 @@ export class HybridOpenAIService {
     const durationMatch = message.match(/(?:over|longer than|above)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/);
     const minDuration = durationMatch ? parseFloat(durationMatch[1]) : 0;
 
-    // Collect all layovers from all pairings
+    // Collect layovers from all pairings, filtering by city FIRST if specified
     const allLayovers: any[] = [];
     
     allPairings.forEach(pairing => {
       if (pairing.layovers && Array.isArray(pairing.layovers)) {
         pairing.layovers.forEach((layover: any) => {
-          // Filter by city if specified
+          // STRICT city filtering - only include layovers in the specified city
           if (targetCity && layover.city !== targetCity) return;
           
           // Parse duration (handle both "18.43" and "18:43" formats)
@@ -678,6 +678,12 @@ When provided with pairing data:
 - If no pairings match the criteria, clearly state this
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data
+
+CRITICAL FOR LAYOVER QUERIES:
+- When a specific city is mentioned (e.g., "layovers in DFW"), ONLY show layovers in that exact city
+- If the data is filtered for a specific city, confirm this in your response (e.g., "The longest layovers in DFW are:")
+- Do not mix layovers from different cities when a specific city is requested
+- If no layovers exist in the requested city, clearly state this
 
 IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in the data:
 - Show credit hours like: "28.19 credit hours" (not "28 hours and 19 minutes")
