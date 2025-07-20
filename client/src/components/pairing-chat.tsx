@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface ChatMessage {
@@ -20,17 +20,98 @@ interface PairingChatProps {
 }
 
 export function PairingChat({ bidPackageId }: PairingChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      type: 'assistant',
-      content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Generate or retrieve session ID
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem('chatSessionId');
+    if (storedSessionId) {
+      setSessionId(storedSessionId);
+    } else {
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('chatSessionId', newSessionId);
+      setSessionId(newSessionId);
+    }
+  }, []);
+
+  // Load chat history when session ID is available
+  useEffect(() => {
+    if (sessionId) {
+      loadChatHistory();
+    }
+  }, [sessionId]);
+
+  const loadChatHistory = async () => {
+    try {
+      const history = await api.getChatHistory(sessionId);
+      if (history.length === 0) {
+        // Add welcome message if no history exists
+        const welcomeMessage: ChatMessage = {
+          id: '1',
+          type: 'assistant',
+          content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+          timestamp: new Date()
+        };
+        setMessages([welcomeMessage]);
+        // Save welcome message to database
+        await api.saveChatMessage({
+          sessionId,
+          bidPackageId,
+          messageType: 'assistant',
+          content: welcomeMessage.content
+        });
+      } else {
+        // Convert database history to chat messages
+        const chatMessages: ChatMessage[] = history.map((msg) => ({
+          id: msg.id.toString(),
+          type: msg.messageType as 'user' | 'assistant',
+          content: msg.content,
+          timestamp: new Date(msg.createdAt),
+          data: msg.messageData
+        }));
+        setMessages(chatMessages);
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      // Show welcome message on error
+      setMessages([{
+        id: '1',
+        type: 'assistant',
+        content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+        timestamp: new Date()
+      }]);
+    }
+  };
+
+  const clearChat = async () => {
+    try {
+      await api.clearChatHistory(sessionId);
+      // Generate new session ID
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('chatSessionId', newSessionId);
+      setSessionId(newSessionId);
+      // Reset to welcome message
+      const welcomeMessage: ChatMessage = {
+        id: '1',
+        type: 'assistant',
+        content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+        timestamp: new Date()
+      };
+      setMessages([welcomeMessage]);
+      await api.saveChatMessage({
+        sessionId: newSessionId,
+        bidPackageId,
+        messageType: 'assistant',
+        content: welcomeMessage.content
+      });
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -42,7 +123,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !sessionId) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -54,6 +135,18 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+
+    // Save user message to database
+    try {
+      await api.saveChatMessage({
+        sessionId,
+        bidPackageId,
+        messageType: 'user',
+        content: userMessage.content
+      });
+    } catch (error) {
+      console.error('Failed to save user message:', error);
+    }
 
     try {
       const result = await api.analyzePairings(input.trim(), bidPackageId);
@@ -67,6 +160,19 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Save assistant message to database
+      try {
+        await api.saveChatMessage({
+          sessionId,
+          bidPackageId,
+          messageType: 'assistant',
+          content: assistantMessage.content,
+          messageData: assistantMessage.data
+        });
+      } catch (saveError) {
+        console.error('Failed to save assistant message:', saveError);
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: ChatMessage = {
@@ -76,6 +182,18 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+
+      // Save error message to database
+      try {
+        await api.saveChatMessage({
+          sessionId,
+          bidPackageId,
+          messageType: 'assistant',
+          content: errorMessage.content
+        });
+      } catch (saveError) {
+        console.error('Failed to save error message:', saveError);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -91,14 +209,24 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   return (
     <Card className="h-[600px] flex flex-col">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center space-x-2">
-          <Bot className="h-5 w-5 text-blue-600" />
-          <span>Pairing Analysis Assistant</span>
-          {bidPackageId && (
-            <Badge variant="secondary" className="text-xs">
-              Analyzing Bid Package #{bidPackageId}
-            </Badge>
-          )}
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Bot className="h-5 w-5 text-blue-600" />
+            <span>Pairing Analysis Assistant</span>
+            {bidPackageId && (
+              <Badge variant="secondary" className="text-xs">
+                Analyzing Bid Package #{bidPackageId}
+              </Badge>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearChat}
+            title="Clear chat history"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       

@@ -153,4 +153,26 @@ export const api = {
       data: result.data || null 
     };
   },
+
+  // Chat History
+  async getChatHistory(sessionId: string) {
+    const response = await apiRequest("GET", `/api/chat-history/${sessionId}`);
+    return response.json();
+  },
+
+  async saveChatMessage(data: {
+    sessionId: string;
+    bidPackageId?: number;
+    messageType: 'user' | 'assistant';
+    content: string;
+    messageData?: any;
+  }) {
+    const response = await apiRequest("POST", "/api/chat-history", data);
+    return response.json();
+  },
+
+  async clearChatHistory(sessionId: string) {
+    const response = await apiRequest("DELETE", `/api/chat-history/${sessionId}`);
+    return response.json();
+  },
 };

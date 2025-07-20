@@ -4,6 +4,7 @@ import {
   pairings, 
   bidHistory, 
   userFavorites,
+  chatHistory,
   type User, 
   type InsertUser,
   type BidPackage,
@@ -13,7 +14,9 @@ import {
   type BidHistory,
   type InsertBidHistory,
   type UserFavorite,
-  type InsertUserFavorite
+  type InsertUserFavorite,
+  type ChatHistory,
+  type InsertChatHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, like, gte, lte, or } from "drizzle-orm";
@@ -55,19 +58,15 @@ export interface IStorage {
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
   getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]>;
 
-  // User Favorites operations
+  // User favorites
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
   removeUserFavorite(userId: number, pairingId: number): Promise<void>;
   getUserFavorites(userId: number): Promise<Pairing[]>;
 
-  // Enhanced analytics operations for OpenAI integration
-  getTopEfficientPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
-  getTopCreditPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
-  getTopHoldProbabilityPairings(bidPackageId: number, limit?: number): Promise<{ pairings: Pairing[], stats: any }>;
-  getPairingStatsSummary(bidPackageId: number): Promise<any>;
-  analyzePairingsByLayoverSummary(bidPackageId: number, city?: string): Promise<any>;
-  getDeadheadAnalysis(bidPackageId: number): Promise<any>;
-  getPairingDurationAnalysis(bidPackageId: number): Promise<any>;
+  // Chat history
+  saveChatMessage(message: InsertChatHistory): Promise<ChatHistory>;
+  getChatHistory(sessionId: string): Promise<ChatHistory[]>;
+  clearChatHistory(sessionId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -118,7 +117,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async clearAllData(): Promise<void> {
-    // Clear all data in the correct order to avoid foreign key constraints
+    await db.delete(chatHistory);
     await db.delete(userFavorites);
     await db.delete(bidHistory);
     await db.delete(pairings);
@@ -150,11 +149,11 @@ export class DatabaseStorage implements IStorage {
 
   async getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined> {
     let whereConditions = [eq(pairings.pairingNumber, pairingNumber)];
-    
+
     if (bidPackageId) {
       whereConditions.push(eq(pairings.bidPackageId, bidPackageId));
     }
-    
+
     const [pairing] = await db.select().from(pairings).where(and(...whereConditions));
     return pairing || undefined;
   }
@@ -264,6 +263,24 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userFavorites.userId, userId));
 
     return result.map(r => r.pairing);
+  }
+
+  // Chat history methods
+  async saveChatMessage(message: InsertChatHistory): Promise<ChatHistory> {
+    const [savedMessage] = await db.insert(chatHistory).values(message).returning();
+    return savedMessage;
+  }
+
+  async getChatHistory(sessionId: string): Promise<ChatHistory[]> {
+    return await db
+      .select()
+      .from(chatHistory)
+      .where(eq(chatHistory.sessionId, sessionId))
+      .orderBy(asc(chatHistory.createdAt));
+  }
+
+  async clearChatHistory(sessionId: string): Promise<void> {
+    await db.delete(chatHistory).where(eq(chatHistory.sessionId, sessionId));
   }
 
   // Enhanced analytics operations for OpenAI token optimization

@@ -292,6 +292,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   
 
+  // Chat history endpoints
+  app.get("/api/chat-history/:sessionId", async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const history = await storage.getChatHistory(sessionId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching chat history:", error);
+      res.status(500).json({ message: "Failed to fetch chat history" });
+    }
+  });
+
+  app.post("/api/chat-history", async (req, res) => {
+    try {
+      const { sessionId, bidPackageId, messageType, content, messageData } = req.body;
+      const savedMessage = await storage.saveChatMessage({
+        sessionId,
+        bidPackageId,
+        messageType,
+        content,
+        messageData
+      });
+      res.json(savedMessage);
+    } catch (error) {
+      console.error("Error saving chat message:", error);
+      res.status(500).json({ message: "Failed to save chat message" });
+    }
+  });
+
+  app.delete("/api/chat-history/:sessionId", async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      await storage.clearChatHistory(sessionId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error clearing chat history:", error);
+      res.status(500).json({ message: "Failed to clear chat history" });
+    }
+  });
+
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post("/api/askAssistant", async (req, res) => {
     try {

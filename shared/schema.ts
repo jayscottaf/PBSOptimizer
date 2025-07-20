@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -54,8 +54,18 @@ export const bidHistory = pgTable("bid_history", {
 
 export const userFavorites = pgTable("user_favorites", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
-  pairingId: integer("pairing_id").notNull().references(() => pairings.id),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  pairingId: integer("pairing_id").references(() => pairings.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const chatHistory = pgTable("chat_history", {
+  id: serial("id").primaryKey(),
+  sessionId: varchar("session_id", { length: 255 }).notNull(),
+  bidPackageId: integer("bid_package_id").references(() => bidPackages.id),
+  messageType: varchar("message_type", { length: 20 }).notNull(), // 'user' or 'assistant'
+  content: text("content").notNull(),
+  messageData: json("message_data"), // For storing any structured data
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -123,3 +133,6 @@ export type BidHistory = typeof bidHistory.$inferSelect;
 export type InsertBidHistory = z.infer<typeof insertBidHistorySchema>;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
+
+export type ChatHistory = typeof chatHistory.$inferSelect;
+export type InsertChatHistory = typeof chatHistory.$inferInsert;
