@@ -29,34 +29,46 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
   const [showModal, setShowModal] = useState(false);
 
   const hoverContent = (
-    <div className="space-y-2">
+    <div className="space-y-2 max-w-96">
       <div className="font-semibold">{pairing.pairingNumber}</div>
-      {pairing.route && (
+      {(pairing.fullTextBlock || pairing.fullText) ? (
         <div className="text-sm">
-          <span className="text-gray-600">Route:</span> {pairing.route.substring(0, 100)}
-          {pairing.route.length > 100 && '...'}
+          <span className="text-gray-600">Full Pairing Text Preview:</span>
+          <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-2 rounded border mt-1 max-h-32 overflow-y-auto">
+            {(pairing.fullTextBlock || pairing.fullText || '').substring(0, 300)}
+            {(pairing.fullTextBlock || pairing.fullText || '').length > 300 && '...'}
+          </pre>
         </div>
-      )}
-      {pairing.creditHours && (
-        <div className="text-sm">
-          <span className="text-gray-600">Credit:</span> {pairing.creditHours}
-        </div>
-      )}
-      {pairing.blockHours && (
-        <div className="text-sm">
-          <span className="text-gray-600">Block:</span> {pairing.blockHours}
-        </div>
-      )}
-      {pairing.tafb && (
-        <div className="text-sm">
-          <span className="text-gray-600">TAFB:</span> {pairing.tafb}
-        </div>
-      )}
-      {pairing.holdProbability !== undefined && (
-        <div className="text-sm">
-          <span className="text-gray-600">Hold %:</span> 
-          <Badge variant="secondary" className="ml-1">{pairing.holdProbability}%</Badge>
-        </div>
+      ) : (
+        <>
+          {pairing.route && (
+            <div className="text-sm">
+              <span className="text-gray-600">Route:</span> {String(pairing.route).substring(0, 100)}
+              {String(pairing.route).length > 100 && '...'}
+            </div>
+          )}
+          {pairing.creditHours && (
+            <div className="text-sm">
+              <span className="text-gray-600">Credit:</span> {String(pairing.creditHours)}
+            </div>
+          )}
+          {pairing.blockHours && (
+            <div className="text-sm">
+              <span className="text-gray-600">Block:</span> {String(pairing.blockHours)}
+            </div>
+          )}
+          {pairing.tafb && (
+            <div className="text-sm">
+              <span className="text-gray-600">TAFB:</span> {String(pairing.tafb)}
+            </div>
+          )}
+          {pairing.holdProbability !== undefined && (
+            <div className="text-sm">
+              <span className="text-gray-600">Hold %:</span> 
+              <Badge variant="secondary" className="ml-1">{pairing.holdProbability}%</Badge>
+            </div>
+          )}
+        </>
       )}
       <div className="text-xs text-blue-600 mt-2">
         Click to view full details
@@ -68,26 +80,26 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <div><span className="font-medium">Pairing:</span> {pairing.pairingNumber}</div>
+          <div><span className="font-medium">Pairing:</span> {String(pairing.pairingNumber || '')}</div>
           {pairing.effectiveDates && (
-            <div><span className="font-medium">Effective:</span> {pairing.effectiveDates}</div>
+            <div><span className="font-medium">Effective:</span> {String(pairing.effectiveDates)}</div>
           )}
           {pairing.creditHours && (
-            <div><span className="font-medium">Credit:</span> {pairing.creditHours}</div>
+            <div><span className="font-medium">Credit:</span> {String(pairing.creditHours)}</div>
           )}
           {pairing.blockHours && (
-            <div><span className="font-medium">Block:</span> {pairing.blockHours}</div>
+            <div><span className="font-medium">Block:</span> {String(pairing.blockHours)}</div>
           )}
           {pairing.payHours && (
-            <div><span className="font-medium">Pay:</span> {pairing.payHours}</div>
+            <div><span className="font-medium">Pay:</span> {String(pairing.payHours)}</div>
           )}
         </div>
         <div className="space-y-2">
           {pairing.tafb && (
-            <div><span className="font-medium">TAFB:</span> {pairing.tafb}</div>
+            <div><span className="font-medium">TAFB:</span> {String(pairing.tafb)}</div>
           )}
           {pairing.pairingDays && (
-            <div><span className="font-medium">Days:</span> {pairing.pairingDays}</div>
+            <div><span className="font-medium">Days:</span> {String(pairing.pairingDays)}</div>
           )}
           {pairing.holdProbability !== undefined && (
             <div>
@@ -103,18 +115,18 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
           <div className="font-medium mb-2">Route:</div>
           <Card>
             <CardContent className="p-3">
-              <div className="text-sm font-mono">{pairing.route}</div>
+              <div className="text-sm font-mono">{String(pairing.route)}</div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {pairing.layovers && pairing.layovers.length > 0 && (
+      {pairing.layovers && Array.isArray(pairing.layovers) && pairing.layovers.length > 0 && (
         <div>
           <div className="font-medium mb-2">Layovers:</div>
           <div className="flex flex-wrap gap-2">
             {pairing.layovers.map((layover, index) => (
-              <Badge key={index} variant="outline">{layover}</Badge>
+              <Badge key={index} variant="outline">{String(layover)}</Badge>
             ))}
           </div>
         </div>
