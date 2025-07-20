@@ -1,88 +1,98 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, type SearchFilters } from "@/lib/api";
-import { clearAllCache, clearPairingCache, refreshAllData } from "@/lib/queryClient";
+
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Plane, 
+  Search, 
+  X, 
+  CloudUpload, 
+  BarChart2, 
+  User, 
+  RefreshCw, 
+  Trash2, 
+  Settings,
+  Info
+} from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
+import { StatsPanel } from "@/components/stats-panel";
 import { PairingTable } from "@/components/pairing-table";
-import { PairingModal } from "@/components/pairing-modal";
 import { PairingChat } from "@/components/pairing-chat";
 import { FiltersPanel } from "@/components/filters-panel";
-import { SeniorityChart } from "@/components/seniority-chart";
-import { StatsPanel } from "@/components/stats-panel";
-import { Plane, Settings, Search, Plus, X, RefreshCw, Trash2 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+
+interface SearchFilters {
+  search?: string;
+  creditMin?: number;
+  creditMax?: number;
+  blockMin?: number;
+  blockMax?: number;
+  tafb?: string;
+  holdProbabilityMin?: number;
+  pairingDays?: number;
+  pairingDaysMin?: number;
+  pairingDaysMax?: number;
+}
 
 export default function Dashboard() {
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
   const [seniorityNumber, setSeniorityNumber] = useState("15860");
-  const [base, setBase] = useState("NYC (JFK/LGA)");
+  const [base, setBase] = useState("NYC");
   const [aircraft, setAircraft] = useState("A220");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPairingId, setSelectedPairingId] = useState<number | null>(null);
-  const [activeFilters, setActiveFilters] = useState<string[]>(["High Credit"]);
-  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
-    queryKey: ["/api/bid-packages"],
-    refetchInterval: 5000, // Auto-refresh every 5 seconds to show status updates
-    staleTime: 0, // Always fetch fresh data
+    queryKey: ["bidPackages"],
+    queryFn: api.getBidPackages,
   });
 
-  // Get the latest completed bid package (prioritize newest)
-  const latestBidPackage = (bidPackages as any[])
-    .filter((pkg: any) => pkg.status === 'completed')
-    .sort((a: any, b: any) => b.id - a.id)[0] || 
-    (bidPackages as any[]).find((pkg: any) => pkg.status === 'processing');
-
-  const { data: pairings = [], refetch: refetchPairings } = useQuery({
-    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
-    queryFn: () => api.searchPairings({ 
-      ...searchFilters, 
-      search: searchQuery,
-      bidPackageId: latestBidPackage?.id // Show only current bid package pairings
+  const latestBidPackage = (bidPackages as any[]).find((pkg: any) => pkg.status === "completed");
+  
+  const { data: pairings = [] } = useQuery({
+    queryKey: ["pairings", latestBidPackage?.id, filters],
+    queryFn: () => api.searchPairings({
+      bidPackageId: latestBidPackage?.id,
+      ...filters
     }),
-    enabled: !!latestBidPackage, // Only run if we have a bid package
-    staleTime: 0, // Always fetch fresh data
+    enabled: !!latestBidPackage,
   });
 
-  const handleSearch = () => {
-    // Query will auto-refresh due to dependency on searchQuery and searchFilters
-    refetchPairings();
+  const removeFilter = (keyToRemove: string) => {
+    setActiveFilters(prev => prev.filter(f => f.key !== keyToRemove));
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      delete newFilters[keyToRemove as keyof SearchFilters];
+      return newFilters;
+    });
   };
 
-  const removeFilter = (filter: string) => {
-    setActiveFilters(activeFilters.filter(f => f !== filter));
-  };
-
-  const addFilter = () => {
-    // This would open a filter selection dialog
-    console.log("Add filter clicked");
-  };
-
-  const handlePairingClick = (pairingId: number) => {
-    setSelectedPairingId(pairingId);
-  };
-
-  const closePairingModal = () => {
-    setSelectedPairingId(null);
+  const addFilter = (key: string, label: string, value: any) => {
+    if (value) {
+      setActiveFilters(prev => [
+        ...prev.filter(f => f.key !== key),
+        { key, label, value }
+      ]);
+      setFilters(prev => ({ ...prev, [key]: value }));
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Modern Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2">
                 <Plane className="text-blue-600 h-6 w-6" />
                 <h1 className="text-xl font-bold text-gray-900">Delta PBS Optimizer</h1>
               </div>
-              <div className="hidden md:flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+              <nav className="hidden md:flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
                 <Button variant="secondary" size="sm" className="bg-white text-gray-900 shadow-sm">
                   Bid Analysis
                 </Button>
@@ -92,34 +102,27 @@ export default function Dashboard() {
                 <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
                   Predictions
                 </Button>
-              </div>
+              </nav>
             </div>
             <div className="flex items-center space-x-4">
               <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-600">
                 <span>Seniority:</span>
                 <span className="font-mono font-medium text-blue-600">#{seniorityNumber}</span>
                 <span className="text-gray-400">|</span>
-                <span>NYC A220 FO</span>
+                <span className="font-medium">{base} {aircraft} FO</span>
               </div>
               <div className="flex items-center space-x-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => refreshAllData()}
-                  title="Refresh all data"
-                >
+                <Button variant="ghost" size="sm">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => clearAllCache()}
-                  title="Clear all cache"
-                >
+                <Button variant="ghost" size="sm">
                   <Trash2 className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm">
                   <Settings className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <User className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -127,245 +130,259 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-
-          {/* Sidebar */}
+          
+          {/* Left Column */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Upload Section */}
+            
+            {/* Upload Bid Package Card */}
             <Card>
-              <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Bid Package</h2>
-                <div className="space-y-4">
-                  <FileUpload 
-                    onUpload={(file) => {
-                      console.log("File uploaded:", file);
-                      // Refresh the bid packages list to show new upload
-                      refetchBidPackages();
-                    }}
-                  />
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div className="flex items-center">
-                      <span>ℹ️ Supports NYC A220 bid packages (PDF or TXT format)</span>
-                    </div>
-                    <div>
-                      <span>📊 Processing extracts all pairing data for search</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Bid Package Status */}
-            {(bidPackages as any[]).length > 0 && (
-              <Card>
-                <CardContent className="p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Bid Package Status</h2>
-                  <div className="space-y-3">
-                    {(bidPackages as any[]).slice(0, 3).map((pkg: any) => (
-                      <div key={pkg.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm text-gray-900">{pkg.name}</div>
-                          <div className="text-xs text-gray-500">{pkg.month} {pkg.year}</div>
-                          <div className="text-xs text-gray-400">
-                            Uploaded: {new Date(pkg.uploadedAt).toLocaleString()}
-                          </div>
-                        </div>
-                        <div>
-                          {pkg.status === 'processing' && (
-                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                              Processing...
-                            </Badge>
-                          )}
-                          {pkg.status === 'completed' && (
-                            <Badge variant="default" className="bg-green-100 text-green-800">
-                              Ready to Search
-                            </Badge>
-                          )}
-                          {pkg.status === 'failed' && (
-                            <Badge variant="destructive" className="bg-red-100 text-red-800">
-                              Failed
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Seniority Input */}
-            <Card>
-              <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Info</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Seniority Number</label>
-                    <Input 
-                      type="number" 
-                      placeholder="15860" 
-                      value={seniorityNumber}
-                      onChange={(e) => setSeniorityNumber(e.target.value)}
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-gray-900">Upload Bid Package</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                  <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="mt-4">
+                    <FileUpload 
+                      onUpload={(file) => {
+                        console.log("File uploaded:", file);
+                        refetchBidPackages();
+                      }}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Base</label>
-                    <Select value={base} onValueChange={setBase}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NYC (JFK/LGA)">NYC (JFK/LGA)</SelectItem>
-                        <SelectItem value="ATL">ATL</SelectItem>
-                        <SelectItem value="LAX">LAX</SelectItem>
-                        <SelectItem value="SEA">SEA</SelectItem>
-                      </SelectContent>
-                    </Select>
+                </div>
+                <div className="text-xs text-gray-500 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Info className="h-3 w-3" />
+                    <span>Supports NYC A220 bid packages (PDF or TXT format)</span>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Aircraft</label>
-                    <Select value={aircraft} onValueChange={setAircraft}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A220">A220</SelectItem>
-                        <SelectItem value="A319/320/321">A319/320/321</SelectItem>
-                        <SelectItem value="737-800/900">737-800/900</SelectItem>
-                        <SelectItem value="757/767">757/767</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center space-x-2">
+                    <BarChart2 className="h-3 w-3" />
+                    <span>Processing extracts all pairing data for search</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Quick Stats */}
-            <StatsPanel pairings={pairings} bidPackage={latestBidPackage} />
+            {/* Your Info Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-gray-900">Your Info</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
+                  <Input
+                    value={seniorityNumber}
+                    onChange={(e) => setSeniorityNumber(e.target.value)}
+                    placeholder="Enter seniority number"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
+                  <Select value={base} onValueChange={setBase}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select base" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NYC">NYC</SelectItem>
+                      <SelectItem value="ATL">ATL</SelectItem>
+                      <SelectItem value="DFW">DFW</SelectItem>
+                      <SelectItem value="LAX">LAX</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
+                  <Select value={aircraft} onValueChange={setAircraft}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select aircraft" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="A220">A220</SelectItem>
+                      <SelectItem value="A320">A320</SelectItem>
+                      <SelectItem value="A350">A350</SelectItem>
+                      <SelectItem value="B737">B737</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatsPanel pairings={pairings} />
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Main Panel */}
-          <div className="lg:col-span-3 space-y-6">
-            <Tabs defaultValue="search" className="w-full">
-              {/* Tabs Header */}
-              <TabsList className="w-full">
-                <TabsTrigger value="search" className="flex-1">Search & Filter</TabsTrigger>
-                <TabsTrigger value="analysis" className="flex-1">Analysis</TabsTrigger>
-                <TabsTrigger value="chat" className="flex-1">AI Assistant</TabsTrigger>
-              </TabsList>
+          {/* Right Column - Main Content */}
+          <div className="lg:col-span-3">
+            <Card>
+              <CardContent className="p-0">
+                <Tabs defaultValue="search" className="w-full">
+                  <div className="border-b">
+                    <TabsList className="h-12 w-full justify-start rounded-none bg-transparent p-0">
+                      <TabsTrigger 
+                        value="search" 
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                      >
+                        Search & Filter
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="analysis"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                      >
+                        Analysis
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="assistant"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                      >
+                        AI Assistant
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-              {/* Search and Filters */}
-              <TabsContent value="search" className="space-y-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-                      <h2 className="text-lg font-semibold text-gray-900">Pairing Analysis</h2>
-                      <div className="mt-4 sm:mt-0 flex items-center space-x-2">
-                        <span className="text-sm text-gray-500">
-                          {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} - ${pairings.length} pairings` : 'No Completed Bid Package'}
-                        </span>
-                        {latestBidPackage && (
-                          <div className="w-2 h-2 bg-green-500 rounded-full" title="Current bid package"></div>
+                  {/* Search & Filter Tab */}
+                  <TabsContent value="search" className="p-6 space-y-6">
+                    {latestBidPackage ? (
+                      <>
+                        {/* Search Bar */}
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            placeholder="Search pairings..."
+                            className="pl-10"
+                            value={filters.search || ''}
+                            onChange={(e) => addFilter('search', 'Search', e.target.value)}
+                          />
+                        </div>
+
+                        {/* Active Filters */}
+                        {activeFilters.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {activeFilters.map((filter) => (
+                              <Badge key={filter.key} variant="secondary" className="flex items-center gap-1">
+                                {filter.label}: {filter.value}
+                                <X 
+                                  className="h-3 w-3 cursor-pointer" 
+                                  onClick={() => removeFilter(filter.key)}
+                                />
+                              </Badge>
+                            ))}
+                          </div>
                         )}
-                        {!latestBidPackage && (bidPackages as any[]).some((pkg: any) => pkg.status === 'processing') && (
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" title="Processing upload"></div>
-                        )}
+
+                        {/* Filter Controls */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <Select onValueChange={(value) => addFilter('creditRange', 'Credit Range', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Credit Range" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low (0-15)</SelectItem>
+                              <SelectItem value="medium">Medium (16-25)</SelectItem>
+                              <SelectItem value="high">High (26+)</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Select onValueChange={(value) => addFilter('blockTime', 'Block Time', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Block Time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="short">Short (0-15h)</SelectItem>
+                              <SelectItem value="medium">Medium (16-20h)</SelectItem>
+                              <SelectItem value="long">Long (21h+)</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Select onValueChange={(value) => addFilter('tafb', 'TAFB', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="TAFB" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1-day">1 Day</SelectItem>
+                              <SelectItem value="2-day">2 Days</SelectItem>
+                              <SelectItem value="3-day">3 Days</SelectItem>
+                              <SelectItem value="4-day">4+ Days</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Select onValueChange={(value) => addFilter('holdProbability', 'Hold Probability', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Hold Probability" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="high">High (80%+)</SelectItem>
+                              <SelectItem value="medium">Medium (50-80%)</SelectItem>
+                              <SelectItem value="low">Low (<50%)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Results */}
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
+                            <span className="text-sm text-gray-500">
+                              {latestBidPackage.month} {latestBidPackage.year} - {pairings.length} pairings
+                            </span>
+                          </div>
+                          <PairingTable pairings={pairings} />
+                        </div>
+                      </>
+                    ) : (
+                      // Empty State for No Bid Package
+                      <div className="text-center py-12">
+                        <Plane className="mx-auto h-24 w-24 text-gray-300" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package Ready</h3>
+                        <p className="mt-2 text-sm text-gray-500">
+                          Upload a bid package to start analyzing pairings and planning your bids.
+                        </p>
                       </div>
+                    )}
+                  </TabsContent>
+
+                  {/* Analysis Tab */}
+                  <TabsContent value="analysis" className="p-6">
+                    <div className="text-center py-12">
+                      <BarChart2 className="mx-auto h-24 w-24 text-gray-300" />
+                      <h3 className="mt-4 text-lg font-medium text-gray-900">No Data for Analysis</h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Advanced analytics and visualizations will appear here once you have pairing data.
+                      </p>
                     </div>
+                  </TabsContent>
 
-                    {/* Search Bar */}
-                    <div className="mb-6">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                        <Input 
-                          className="pl-10"
-                          placeholder="Search pairings by number, destinations, or criteria..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                        />
+                  {/* AI Assistant Tab */}
+                  <TabsContent value="assistant" className="p-6">
+                    {latestBidPackage ? (
+                      <PairingChat bidPackageId={latestBidPackage.id} />
+                    ) : (
+                      <div className="text-center py-12">
+                        <User className="mx-auto h-24 w-24 text-gray-300" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
+                        <p className="mt-2 text-sm text-gray-500">
+                          Upload a bid package to start chatting with your AI assistant about pairing analysis.
+                        </p>
                       </div>
-                    </div>
-
-                    {/* Filter Pills */}
-                    <div className="flex flex-wrap gap-2 mb-6">
-                      {activeFilters.map((filter) => (
-                        <Badge key={filter} variant="default" className="bg-blue-600 hover:bg-blue-700">
-                          <span>{filter}</span>
-                          <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => removeFilter(filter)} />
-                        </Badge>
-                      ))}
-                      <Button variant="outline" size="sm" onClick={addFilter}>
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add Filter
-                      </Button>
-                    </div>
-
-                    {/* Advanced Filters */}
-                    <FiltersPanel 
-                      onFiltersChange={(newFilters) => {
-                        setSearchFilters(prev => ({ ...prev, ...newFilters }));
-                      }} 
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Results Table */}
-                {!latestBidPackage ? (
-                  <Card>
-                    <CardContent className="p-8 text-center">
-                      <div className="text-gray-500">
-                        <Plane className="mx-auto h-12 w-12 mb-4 text-gray-300" />
-                        <h3 className="text-lg font-medium mb-2">No Bid Package Ready</h3>
-                        <p>Upload a bid package above and wait for processing to complete before viewing pairings.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : pairings.length === 0 ? (
-                  <Card>
-                    <CardContent className="p-8 text-center">
-                      <div className="text-gray-500">
-                        <Search className="mx-auto h-12 w-12 mb-4 text-gray-300" />
-                        <h3 className="text-lg font-medium mb-2">No Pairings Found</h3>
-                        <p>Try adjusting your search filters, uploading a bid package, or clearing filters to see all pairings.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <PairingTable 
-                    pairings={pairings} 
-                    onPairingClick={handlePairingClick}
-                  />
-                )}
-              </TabsContent>
-
-              {/* Analysis */}
-              <TabsContent value="analysis" className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <StatsPanel 
-                    totalPairings={pairings.length}
-                    bidPackages={bidPackages as any[]}
-                  />
-                  <SeniorityChart />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="chat" className="space-y-6">
-                <PairingChat bidPackageId={latestBidPackage?.id} />
-              </TabsContent>
-            </Tabs>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
-
-      {/* Pairing Detail Modal */}
-      {selectedPairingId && (
-        <PairingModal 
-          pairingId={selectedPairingId}
-          onClose={closePairingModal}
-        />
-      )}
     </div>
   );
 }
