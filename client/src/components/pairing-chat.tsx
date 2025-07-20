@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
 import { api } from "@/lib/api";
+import type { BidPackage } from "@/lib/api";
 
 interface ChatMessage {
   id: string;
@@ -34,6 +35,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const [sessionId, setSessionId] = useState<string>('');
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showConversations, setShowConversations] = useState(false);
+  const [currentBidPackage, setCurrentBidPackage] = useState<BidPackage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Generate or retrieve session ID
@@ -55,6 +57,23 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       loadChatHistory();
     }
   }, [sessionId]);
+
+  // Load current bid package data
+  useEffect(() => {
+    const loadCurrentBidPackage = async () => {
+      if (bidPackageId) {
+        try {
+          const bidPackages = await api.getBidPackages();
+          const currentPackage = bidPackages.find(pkg => pkg.id === bidPackageId);
+          setCurrentBidPackage(currentPackage || null);
+        } catch (error) {
+          console.error('Failed to load current bid package:', error);
+        }
+      }
+    };
+
+    loadCurrentBidPackage();
+  }, [bidPackageId]);
 
   const loadConversationList = async () => {
     try {
@@ -358,9 +377,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
             <div className="flex items-center space-x-2">
               <Bot className="h-5 w-5 text-blue-600" />
               <span>Pairing Analysis Assistant</span>
-              {bidPackageId && (
+              {currentBidPackage && (
                 <Badge variant="secondary" className="text-xs">
-                  Analyzing Bid Package #{bidPackageId}
+                  {currentBidPackage.base} {currentBidPackage.aircraft} {currentBidPackage.month} Bid Package
                 </Badge>
               )}
             </div>
@@ -457,7 +476,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               </Button>
             </form>
 
-            {!bidPackageId && (
+            {!currentBidPackage && (
               <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
                 Upload a bid package to enable full analysis capabilities
               </div>
