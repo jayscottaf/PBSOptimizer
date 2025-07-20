@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,14 +74,14 @@ export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) 
       setSessionId(newSessionId);
     }
     loadConversationList();
-  }, []);
+  }, [loadConversationList]);
 
   // Load chat history when session ID is available
   useEffect(() => {
     if (sessionId) {
       loadChatHistory();
     }
-  }, [sessionId]);
+  }, [sessionId, loadChatHistory]);
 
   // Load current bid package data
   useEffect(() => {
@@ -100,7 +100,7 @@ export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) 
     loadCurrentBidPackage();
   }, [bidPackageId]);
 
-  const loadConversationList = async () => {
+  const loadConversationList = useCallback(async () => {
     try {
       // Get all stored session IDs from localStorage
       const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
@@ -134,7 +134,7 @@ export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) 
     } catch (error) {
       console.error('Failed to load conversation list:', error);
     }
-  };
+  }, []);
 
   const saveSessionToList = (sessionId: string) => {
     const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
@@ -146,7 +146,12 @@ export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) 
     }
   };
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
+    if (!sessionId) {
+      console.log('No sessionId available, skipping chat history load');
+      return;
+    }
+
     try {
       console.log('Loading chat history for session:', sessionId);
       const history = await api.getChatHistory(sessionId);
@@ -202,7 +207,7 @@ export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) 
       };
       setMessages([welcomeMessage]);
     }
-  };
+  }, [sessionId, bidPackageId]);
 
   const startNewConversation = async () => {
     try {
