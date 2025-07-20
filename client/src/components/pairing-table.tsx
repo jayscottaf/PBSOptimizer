@@ -8,9 +8,17 @@ import type { Pairing } from "@/lib/api";
 interface PairingTableProps {
   pairings: Pairing[];
   onPairingClick: (pairingId: number) => void;
+  pagination?: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  onPageChange?: (offset: number) => void;
 }
 
-export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
+export function PairingTable({ pairings, onPairingClick, pagination, onPageChange }: PairingTableProps) {
   const getHoldProbabilityColor = (probability: number) => {
     if (probability >= 80) return "text-green-600";
     if (probability >= 50) return "text-yellow-600";
@@ -151,26 +159,53 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
       </div>
 
       {/* Pagination */}
-      {pairings.length > 0 && (
+      {pagination && pairings.length > 0 && (
         <div className="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
-            <Button variant="outline">Previous</Button>
-            <Button variant="outline">Next</Button>
+            <Button 
+              variant="outline" 
+              disabled={!pagination.hasPrev}
+              onClick={() => onPageChange && onPageChange(Math.max(0, pagination.offset - pagination.limit))}
+            >
+              Previous
+            </Button>
+            <Button 
+              variant="outline" 
+              disabled={!pagination.hasNext}
+              onClick={() => onPageChange && onPageChange(pagination.offset + pagination.limit)}
+            >
+              Next
+            </Button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">1</span> to{" "}
-                <span className="font-medium">{Math.min(20, pairings.length)}</span> of{" "}
-                <span className="font-medium">{pairings.length}</span> results
+                Showing <span className="font-medium">{pagination.offset + 1}</span> to{" "}
+                <span className="font-medium">{Math.min(pagination.offset + pagination.limit, pagination.total)}</span> of{" "}
+                <span className="font-medium">{pagination.total}</span> results
               </p>
             </div>
             <div className="flex space-x-1">
-              <Button variant="outline" size="sm">Previous</Button>
-              <Button variant="default" size="sm">1</Button>
-              <Button variant="outline" size="sm">2</Button>
-              <Button variant="outline" size="sm">3</Button>
-              <Button variant="outline" size="sm">Next</Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={!pagination.hasPrev}
+                onClick={() => onPageChange && onPageChange(Math.max(0, pagination.offset - pagination.limit))}
+              >
+                Previous
+              </Button>
+              {/* Current page indicator */}
+              <Button variant="default" size="sm">
+                {Math.floor(pagination.offset / pagination.limit) + 1}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={!pagination.hasNext}
+                onClick={() => onPageChange && onPageChange(pagination.offset + pagination.limit)}
+              >
+                Next
+              </Button>
             </div>
           </div>
         </div>

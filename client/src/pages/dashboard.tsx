@@ -23,7 +23,9 @@ export default function Dashboard() {
   const [aircraft, setAircraft] = useState("A220");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPairingId, setSelectedPairingId] = useState<number | null>(null);
-  const [activeFilters, setActiveFilters] = useState<string[]>(["High Credit"]);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [pageSize] = useState(50);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
@@ -39,11 +41,13 @@ export default function Dashboard() {
     (bidPackages as any[]).find((pkg: any) => pkg.status === 'processing');
 
   const { data: pairingsData, refetch: refetchPairings } = useQuery({
-    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
+    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery, currentOffset, pageSize],
     queryFn: () => api.searchPairings({ 
       ...searchFilters, 
       search: searchQuery,
-      bidPackageId: latestBidPackage?.id // Show only current bid package pairings
+      bidPackageId: latestBidPackage?.id, // Show only current bid package pairings
+      limit: pageSize,
+      offset: currentOffset,
     }),
     enabled: !!latestBidPackage, // Only run if we have a bid package
     staleTime: 0, // Always fetch fresh data
@@ -73,6 +77,10 @@ export default function Dashboard() {
   const closePairingModal = () => {
     setSelectedPairingId(null);
   };
+
+    const handlePageChange = (newOffset: number) => {
+        setCurrentOffset(newOffset);
+    };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -339,6 +347,8 @@ export default function Dashboard() {
                   <PairingTable 
                     pairings={pairings} 
                     onPairingClick={handlePairingClick}
+                    pagination={pairingsData?.pagination}
+                    onPageChange={handlePageChange}
                   />
                 )}
               </TabsContent>
