@@ -1,9 +1,10 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Loader2, Trash2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface ChatMessage {
@@ -12,6 +13,14 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   data?: any;
+}
+
+interface ConversationSummary {
+  sessionId: string;
+  title: string;
+  lastMessage: string;
+  lastActivity: Date;
+  messageCount: number;
 }
 
 interface PairingChatProps {
@@ -23,6 +32,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showConversations, setShowConversations] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Generate or retrieve session ID
@@ -35,6 +46,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       localStorage.setItem('chatSessionId', newSessionId);
       setSessionId(newSessionId);
     }
+    loadConversationList();
   }, []);
 
   // Load chat history when session ID is available
@@ -43,6 +55,52 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       loadChatHistory();
     }
   }, [sessionId]);
+
+  const loadConversationList = async () => {
+    try {
+      // Get all stored session IDs from localStorage
+      const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
+      const conversationSummaries: ConversationSummary[] = [];
+
+      for (const storedSessionId of storedSessions) {
+        try {
+          const history = await api.getChatHistory(storedSessionId);
+          if (history.length > 0) {
+            const lastMessage = history[history.length - 1];
+            const firstUserMessage = history.find(msg => msg.messageType === 'user');
+            
+            conversationSummaries.push({
+              sessionId: storedSessionId,
+              title: firstUserMessage ? 
+                firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '') :
+                'New Conversation',
+              lastMessage: lastMessage.content.substring(0, 100) + (lastMessage.content.length > 100 ? '...' : ''),
+              lastActivity: new Date(lastMessage.createdAt),
+              messageCount: history.length
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to load conversation ${storedSessionId}:`, error);
+        }
+      }
+
+      // Sort by last activity, most recent first
+      conversationSummaries.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+      setConversations(conversationSummaries);
+    } catch (error) {
+      console.error('Failed to load conversation list:', error);
+    }
+  };
+
+  const saveSessionToList = (sessionId: string) => {
+    const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
+    if (!storedSessions.includes(sessionId)) {
+      storedSessions.unshift(sessionId);
+      // Keep only last 50 conversations
+      const limitedSessions = storedSessions.slice(0, 50);
+      localStorage.setItem('conversationSessions', JSON.stringify(limitedSessions));
+    }
+  };
 
   const loadChatHistory = async () => {
     try {
@@ -69,6 +127,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
             content: welcomeMessage.content
           });
           console.log('Welcome message saved successfully');
+          saveSessionToList(sessionId);
         } catch (saveError) {
           console.error('Failed to save welcome message:', saveError);
         }
@@ -83,6 +142,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         }));
         setMessages(chatMessages);
         console.log('Chat messages loaded and set in state');
+        saveSessionToList(sessionId);
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
@@ -97,29 +157,33 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     }
   };
 
-  const clearChat = async () => {
+  const startNewConversation = async () => {
     try {
-      await api.clearChatHistory(sessionId);
       // Generate new session ID
       const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem('chatSessionId', newSessionId);
       setSessionId(newSessionId);
-      // Reset to welcome message
-      const welcomeMessage: ChatMessage = {
-        id: '1',
-        type: 'assistant',
-        content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
-        timestamp: new Date()
-      };
-      setMessages([welcomeMessage]);
-      await api.saveChatMessage({
-        sessionId: newSessionId,
-        bidPackageId,
-        messageType: 'assistant',
-        content: welcomeMessage.content
-      });
+      
+      // Clear current messages
+      setMessages([]);
+      
+      // Reload conversation list to include the old session
+      await loadConversationList();
+      
+      console.log('Started new conversation with session:', newSessionId);
     } catch (error) {
-      console.error('Failed to clear chat history:', error);
+      console.error('Failed to start new conversation:', error);
+    }
+  };
+
+  const loadConversation = async (selectedSessionId: string) => {
+    try {
+      localStorage.setItem('chatSessionId', selectedSessionId);
+      setSessionId(selectedSessionId);
+      setShowConversations(false);
+      console.log('Switched to conversation:', selectedSessionId);
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
     }
   };
 
@@ -155,6 +219,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         content: userMessage.content
       });
       console.log('User message saved successfully');
+      saveSessionToList(sessionId);
     } catch (error) {
       console.error('Failed to save user message:', error, error.message || error);
     }
@@ -182,6 +247,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           messageData: assistantMessage.data
         });
         console.log('Assistant message saved successfully');
+        // Reload conversation list to update the last message
+        await loadConversationList();
       } catch (saveError) {
         console.error('Failed to save assistant message:', saveError, saveError.message || saveError);
       }
@@ -219,108 +286,185 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     });
   };
 
-  return (
-    <Card className="h-[600px] flex flex-col">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Bot className="h-5 w-5 text-blue-600" />
-            <span>Pairing Analysis Assistant</span>
-            {bidPackageId && (
-              <Badge variant="secondary" className="text-xs">
-                Analyzing Bid Package #{bidPackageId}
-              </Badge>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearChat}
-            title="Clear chat history"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </CardTitle>
-      </CardHeader>
+  const formatRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
 
-      <CardContent className="flex-1 flex flex-col p-0">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.type === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}
+  return (
+    <div className="flex h-[600px]">
+      {/* Conversation Sidebar */}
+      {showConversations && (
+        <Card className="w-80 mr-4 flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between">
+              <span className="text-sm">Conversations</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConversations(false)}
               >
-                <div className="flex items-start space-x-2">
-                  {message.type === 'assistant' && (
-                    <Bot className="h-4 w-4 mt-0.5 text-blue-600 flex-shrink-0" />
-                  )}
-                  {message.type === 'user' && (
-                    <User className="h-4 w-4 mt-0.5 text-white flex-shrink-0" />
-                  )}
-                  <div className="flex-1">
-                    <div className="whitespace-pre-wrap text-sm">
-                      {message.content}
+                <X className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto p-2">
+            <div className="space-y-2">
+              {conversations.map((conv) => (
+                <Button
+                  key={conv.sessionId}
+                  variant={conv.sessionId === sessionId ? "secondary" : "ghost"}
+                  className="w-full justify-start h-auto p-3 text-left"
+                  onClick={() => loadConversation(conv.sessionId)}
+                >
+                  <div className="flex flex-col items-start w-full">
+                    <div className="font-medium text-sm truncate w-full">
+                      {conv.title}
                     </div>
-                    <div className={`text-xs mt-1 ${
-                      message.type === 'user' ? 'text-blue-200' : 'text-gray-500'
-                    }`}>
-                      {formatTimestamp(message.timestamp)}
+                    <div className="text-xs text-gray-500 truncate w-full">
+                      {conv.lastMessage}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {formatRelativeTime(conv.lastActivity)} • {conv.messageCount} messages
+                    </div>
+                  </div>
+                </Button>
+              ))}
+              {conversations.length === 0 && (
+                <div className="text-center text-gray-500 text-sm py-8">
+                  No conversations yet
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Chat Interface */}
+      <Card className="flex-1 flex flex-col">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Bot className="h-5 w-5 text-blue-600" />
+              <span>Pairing Analysis Assistant</span>
+              {bidPackageId && (
+                <Badge variant="secondary" className="text-xs">
+                  Analyzing Bid Package #{bidPackageId}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConversations(!showConversations)}
+                title="Show conversations"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={startNewConversation}
+                title="Start a new conversation"
+              >
+                <Plus className="h-4 w-4" />
+                New Conversation
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="flex-1 flex flex-col p-0">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    message.type === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-start space-x-2">
+                    {message.type === 'assistant' && (
+                      <Bot className="h-4 w-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                    )}
+                    {message.type === 'user' && (
+                      <User className="h-4 w-4 mt-0.5 text-white flex-shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <div className="whitespace-pre-wrap text-sm">
+                        {message.content}
+                      </div>
+                      <div className={`text-xs mt-1 ${
+                        message.type === 'user' ? 'text-blue-200' : 'text-gray-500'
+                      }`}>
+                        {formatTimestamp(message.timestamp)}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-4 py-2">
-                <div className="flex items-center space-x-2">
-                  <Bot className="h-4 w-4 text-blue-600" />
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  <span className="text-sm text-gray-600">Analyzing...</span>
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-lg px-4 py-2">
+                  <div className="flex items-center space-x-2">
+                    <Bot className="h-4 w-4 text-blue-600" />
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    <span className="text-sm text-gray-600">Analyzing...</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
-        </div>
+            <div ref={messagesEndRef} />
+          </div>
 
-        {/* Input */}
-        <div className="border-t p-4">
-          <form onSubmit={handleSubmit} className="flex space-x-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about your pairings..."
-              className="flex-1"
-              disabled={isLoading}
-            />
-            <Button 
-              type="submit" 
-              disabled={isLoading || !input.trim()}
-              size="icon"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
+          {/* Input */}
+          <div className="border-t p-4">
+            <form onSubmit={handleSubmit} className="flex space-x-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about your pairings..."
+                className="flex-1"
+                disabled={isLoading}
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoading || !input.trim()}
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
 
-          {!bidPackageId && (
-            <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-              Upload a bid package to enable full analysis capabilities
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            {!bidPackageId && (
+              <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                Upload a bid package to enable full analysis capabilities
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
