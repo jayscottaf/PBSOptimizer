@@ -71,6 +71,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { name, month, year, base, aircraft } = req.body;
 
+      // Delete all existing bid packages and their associated data
+      const existingPackages = await storage.getBidPackages();
+      if (existingPackages.length > 0) {
+        console.log(`Removing ${existingPackages.length} existing bid packages before uploading new one`);
+        await Promise.all(existingPackages.map(pkg => storage.deleteBidPackage(pkg.id)));
+      }
+
       const bidPackageData = insertBidPackageSchema.parse({
         name,
         month,

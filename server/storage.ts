@@ -33,6 +33,7 @@ export interface IStorage {
   getBidPackages(): Promise<BidPackage[]>;
   getBidPackage(id: number): Promise<BidPackage | undefined>;
   updateBidPackageStatus(id: number, status: string): Promise<void>;
+  deleteBidPackage(id: number): Promise<void>;
   clearAllData(): Promise<void>;
 
   // Pairing operations
@@ -114,6 +115,19 @@ export class DatabaseStorage implements IStorage {
     await db.update(bidPackages)
       .set({ status })
       .where(eq(bidPackages.id, id));
+  }
+
+  async deleteBidPackage(id: number): Promise<void> {
+    // Delete associated data in the correct order (foreign key constraints)
+    await db.delete(chatHistory).where(eq(chatHistory.bidPackageId, id));
+    await db.delete(userFavorites).where(
+      eq(userFavorites.pairingId, 
+        db.select({ id: pairings.id }).from(pairings).where(eq(pairings.bidPackageId, id))
+      )
+    );
+    await db.delete(pairings).where(eq(pairings.bidPackageId, id));
+    await db.delete(bidPackages).where(eq(bidPackages.id, id));
+    console.log(`Deleted bid package ${id} and all associated data`);
   }
 
   async clearAllData(): Promise<void> {
