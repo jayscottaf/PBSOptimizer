@@ -129,29 +129,44 @@ export const api = {
   },
 
   // AI Chat Analysis
-  async analyzePairings(question: string, bidPackageId?: number) {
-    // Include bidPackageId in the question context if provided
-    const contextualQuestion = bidPackageId 
-      ? `Analyzing bid package #${bidPackageId}: ${question}`
-      : question;
+  async analyzePairings(question: string, bidPackageId?: number): Promise<{ response: string; data?: any }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    const response = await fetch('/api/askAssistant', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ question: contextualQuestion }),
-    });
+    try {
+      const contextualQuestion = bidPackageId
+        ? `Analyzing bid package #${bidPackageId}: ${question}`
+        : question;
+      const response = await fetch('/api/askAssistant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: contextualQuestion }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to get response from PBS Assistant');
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result || typeof result.reply !== 'string') {
+        throw new Error('Invalid response format from server');
+      }
+
+      return { response: result.reply, data: result.data };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out after 30 seconds');
+      }
+      throw error;
     }
-
-    const result = await response.json();
-    return { 
-      response: result.reply, 
-      data: result.data || null 
-    };
   },
 
   // Chat History
