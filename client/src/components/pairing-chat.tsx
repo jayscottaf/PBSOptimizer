@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BidPackage } from "@/lib/api";
@@ -25,9 +26,10 @@ interface ConversationSummary {
 
 interface PairingChatProps {
   bidPackageId?: number;
+  onPairingClick?: (pairingId: number) => void;
 }
 
-export function PairingChat({ bidPackageId }: PairingChatProps) {
+export function PairingChat({ bidPackageId, onPairingClick }: PairingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +37,31 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showConversations, setShowConversations] = useState(false);
   const [currentBidPackage, setCurrentBidPackage] = useState<BidPackage | null>(null);
+  const [pairingCache, setPairingCache] = useState<{ [key: string]: any }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Function to fetch pairing data
+  const fetchPairingData = async (pairingNumber: string) => {
+    if (pairingCache[pairingNumber]) {
+      return pairingCache[pairingNumber];
+    }
+
+    try {
+      const pairings = await api.searchPairings({ 
+        pairingNumber,
+        bidPackageId 
+      });
+      
+      const pairing = pairings.find(p => p.pairingNumber === pairingNumber);
+      if (pairing) {
+        setPairingCache(prev => ({ ...prev, [pairingNumber]: pairing }));
+        return pairing;
+      }
+    } catch (error) {
+      console.error('Failed to fetch pairing:', error);
+    }
+    return null;
+  };
 
   // Generate or retrieve session ID
   useEffect(() => {
@@ -323,6 +349,122 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     }
   };
 
+  // Component to render clickable pairing links with tooltips
+  const PairingLink = ({ pairingNumber }: { pairingNumber: string }) => {
+    const [pairingData, setPairingData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleMouseEnter = async () => {
+      if (!pairingData && !isLoading) {
+        setIsLoading(true);
+        const data = await fetchPairingData(pairingNumber);
+        setPairingData(data);
+        setIsLoading(false);
+      }
+    };
+
+    const handleClick = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (!pairingData && !isLoading) {
+        setIsLoading(true);
+        const data = await fetchPairingData(pairingNumber);
+        setPairingData(data);
+        setIsLoading(false);
+        
+        if (data && onPairingClick) {
+          onPairingClick(data.id);
+        }
+      } else if (pairingData && onPairingClick) {
+        onPairingClick(pairingData.id);
+      }
+    };
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="font-mono font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline"
+              onMouseEnter={handleMouseEnter}
+              onClick={handleClick}
+            >
+              {pairingNumber}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-md p-3 bg-gray-900 text-white">
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading pairing details...</span>
+              </div>
+            ) : pairingData ? (
+              <div className="space-y-2">
+                <div className="font-semibold">Pairing {pairingData.pairingNumber}</div>
+                <div className="text-sm space-y-1">
+                  <div><strong>Route:</strong> {pairingData.route}</div>
+                  <div><strong>Credit:</strong> {pairingData.creditHours} | <strong>Block:</strong> {pairingData.blockHours}</div>
+                  <div><strong>TAFB:</strong> {pairingData.tafb} hours | <strong>Days:</strong> {pairingData.pairingDays}</div>
+                  <div><strong>Hold:</strong> {pairingData.holdProbability}%</div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-600">
+                  <div className="text-xs text-gray-300 mb-1">Full Pairing Text:</div>
+                  <div className="text-xs font-mono bg-gray-800 p-2 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
+                    {pairingData.fullText || 'No full text available'}
+                  </div>
+                </div>
+                <div className="text-xs text-blue-300 mt-2">Click to view detailed modal</div>
+              </div>
+            ) : (
+              <div className="text-sm">
+                <div>Pairing {pairingNumber}</div>
+                <div className="text-gray-300 text-xs mt-1">Hover to load details</div>
+              </div>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
+  // Function to parse and render message content with clickable pairing links
+  const renderMessageContent = (content: string) => {
+    // Regex to match pairing numbers in various formats
+    const pairingRegex = /\*\*Pairing\s+(\d{4,5})\*\*/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = pairingRegex.exec(content)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(content.slice(lastIndex, match.index));
+      }
+      
+      // Add the pairing link component
+      parts.push(
+        <PairingLink key={`pairing-${match[1]}-${match.index}`} pairingNumber={match[1]} />
+      );
+      
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      parts.push(content.slice(lastIndex));
+    }
+
+    // If no pairing numbers found, return original content
+    if (parts.length === 0) {
+      return content;
+    }
+
+    return parts.map((part, index) => 
+      typeof part === 'string' ? part : <React.Fragment key={index}>{part}</React.Fragment>
+    );
+  };
+
   return (
     <div className="flex h-[600px]">
       {/* Conversation Sidebar */}
@@ -431,7 +573,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
                     )}
                     <div className="flex-1">
                       <div className="whitespace-pre-wrap text-sm">
-                        {message.content}
+                        {message.type === 'assistant' ? renderMessageContent(message.content) : message.content}
                       </div>
                       <div className={`text-xs mt-1 ${
                         message.type === 'user' ? 'text-blue-200' : 'text-gray-500'

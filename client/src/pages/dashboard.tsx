@@ -352,7 +352,10 @@ export default function Dashboard() {
               </TabsContent>
 
               <TabsContent value="chat" className="space-y-6">
-                <PairingChat bidPackageId={latestBidPackage?.id} />
+                <PairingChat 
+                  bidPackageId={latestBidPackage?.id} 
+                  onPairingClick={openPairingModal}
+                />
               </TabsContent>
             </Tabs>
           </div>
