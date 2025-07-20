@@ -1,0 +1,38 @@
+Please implement the following UI improvements for our Delta PBS Bid Optimization App using Next.js (App Router), Tailwind CSS, and shadcn/ui components:
+
+Overall Layout & Structure:
+
+Refactor the main content area to create a responsive grid layout.
+On larger screens, position the left column with "Upload Bid Package", "Your Info", and "Quick Stats" sections, while the right column should contain the "Pairing Analysis".
+On smaller screens, ensure these sections stack properly.
+Enclose each distinct section (e.g., "Upload Bid Package", "Your Info", "Quick Stats", "Pairing Analysis") within Card components from shadcn/ui.
+Header:
+
+Modernize the header to include the app title ("Delta PBS Optimizer"), navigation links ("Bid Analysis", "History", "Predictions"), and user information ("Seniority: #15860 | NYC A220 FO").
+Use action icons (Refresh, Delete, Settings, User) utilizing lucide-react for all icons.
+Main Content Area (Right Column):
+
+Implement a Tabs component for navigation with tabs labeled "Search & Filter", "Analysis", and "AI Assistant".
+Each tab should have the following components:
+"Search & Filter" Tab:
+Add a search input field with a Search icon.
+Display active filters using Badge components, featuring an X icon for removal.
+Implement Select components for the filter dropdowns ("Credit Range", "Block Time", "TAFB", "Hold Probability").
+Create an empty state for "No Bid Package Ready" with an appropriate icon and message.
+"Analysis" Tab:
+Create an empty state indicating "No Data for Analysis" with a relevant icon and guiding text.
+"AI Assistant" Tab:
+Create an empty state indicating "AI Assistant Not Active" with a relevant icon and guiding text.
+Left Column Sections:
+
+"Upload Bid Package" Card:
+Design a drag-and-drop area with a CloudUpload icon, and provide informative text about supported file types.
+"Your Info" Card:
+Utilize Input components for "Seniority Number" and Select components for "Base" and "Aircraft".
+"Quick Stats" Card:
+Present stats (Total Pairings, Likely to Hold, High Credit, 6-Day Combos) in a two-column layout.
+General Enhancements:
+
+Ensure all interactive elements are styled consistently using shadcn/ui.
+Maintain modern aesthetics and appropriate spacing/typography.
+Organize the code effectively into logical components, integrating the primary component into app/page.tsx.

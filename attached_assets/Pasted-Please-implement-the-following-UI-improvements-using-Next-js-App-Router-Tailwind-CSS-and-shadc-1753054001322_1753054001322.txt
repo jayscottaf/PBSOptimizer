@@ -1,0 +1,69 @@
+Please implement the following UI improvements using **Next.js (App Router), Tailwind CSS, and shadcn/ui components**:
+
+**Overall Layout & Structure:**
+
+- Refactor the main content area to use a responsive grid layout. On larger screens, the left column should contain the "Upload Bid Package", "Your Info", and "Quick Stats" sections, while the right column should house the main "Pairing Analysis" and related content. On smaller screens, these sections should stack appropriately.
+- Ensure all distinct sections (e.g., "Upload Bid Package", "Your Info", "Quick Stats", "Pairing Analysis") are enclosed within `Card` components from shadcn/ui for clear visual separation and hierarchy.
+
+
+**Header:**
+
+- Modernize the header to include the app title ("Delta PBS Optimizer"), navigation links ("Bid Analysis", "History", "Predictions"), and user-related information ("Seniority: #15860 | NYC A220 FO") along with action icons (Refresh, Delete, Settings, User). Use `lucide-react` for all icons.
+
+
+**Main Content Area (Right Column):**
+
+- Implement a `Tabs` component from shadcn/ui for the main content navigation, with tabs for "Search & Filter", "Analysis", and "AI Assistant".
+- **"Search & Filter" Tab:**
+
+- Add a search input field with a `Search` icon inside it.
+- Display active filters (e.g., "High Credit") using `Badge` components, including an `X` icon for removal.
+- Use `Select` components from shadcn/ui for the filter dropdowns ("Credit Range", "Block Time", "TAFB", "Hold Probability").
+- Create a clear empty state for "No Bid Package Ready" with a prominent icon (e.g., `Plane` from `lucide-react`) and descriptive text.
+
+
+
+- **"Analysis" Tab:**
+
+- Create an empty state for this tab, indicating "No Data for Analysis" with a relevant icon (e.g., `BarChart2` from `lucide-react`) and guiding text.
+
+
+
+- **"AI Assistant" Tab:**
+
+- Create an empty state for this tab, indicating "AI Assistant Not Active" with a relevant icon (e.g., `User` from `lucide-react`) and guiding text.
+
+
+
+
+
+**Left Column Sections:**
+
+- **"Upload Bid Package" Card:**
+
+- Design a clear drag-and-drop area with a `CloudUpload` icon.
+- Include informative text about supported file types and processing details, using `Info` and `BarChart2` icons for visual cues.
+
+
+
+- **"Your Info" Card:**
+
+- Use `Input` components for "Seniority Number" and `Select` components for "Base" and "Aircraft".
+
+
+
+- **"Quick Stats" Card:**
+
+- Display the stats (Total Pairings, Likely to Hold, High Credit, 6-Day Combos) in a clean, two-column layout within the card.
+
+
+
+
+
+**General:**
+
+- Ensure all interactive elements (buttons, selects, inputs) are styled consistently using shadcn/ui.
+- Maintain a clean, modern aesthetic with appropriate spacing and typography.
+- Use `lucide-react` for all icons.
+- Organize the code into logical components (e.g., `dashboard-optimizer.tsx` for the main layout, potentially smaller components if needed).
+- Integrate the main component into `app/page.tsx`."
