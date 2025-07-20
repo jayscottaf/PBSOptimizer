@@ -173,9 +173,12 @@ export class DatabaseStorage implements IStorage {
   }): Promise<Pairing[]> {
     const conditions = [];
 
-    if (filters.bidPackageId) {
-      conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
+    // Always require bidPackageId for safety
+    if (!filters.bidPackageId) {
+      throw new Error("Bid package ID is required for pairing search");
     }
+    
+    conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
     if (filters.search) {
       conditions.push(

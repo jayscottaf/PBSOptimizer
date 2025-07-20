@@ -130,7 +130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/pairings/search", async (req, res) => {
     try {
       const { bidPackageId, ...filters } = req.body;
-      const pairings = await storage.searchPairings(bidPackageId, filters);
+      
+      if (!bidPackageId) {
+        return res.status(400).json({ message: "Bid package ID is required", pairings: [] });
+      }
+      
+      const pairings = await storage.searchPairings({ bidPackageId, ...filters });
       // Ensure we always return an array
       const safePairings = Array.isArray(pairings) ? pairings : [];
       res.json(safePairings);
