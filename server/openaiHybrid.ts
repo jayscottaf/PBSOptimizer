@@ -688,8 +688,9 @@ CRITICAL FOR LAYOVER QUERIES:
 IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in the data:
 - Show credit hours like: "28.19 credit hours" (not "28 hours and 19 minutes")
 - Show block hours like: "16.58 block hours" (not "16 hours and 58 minutes")
-- Match the exact decimal format from the bid package data
-- For layover durations, show both the original format and converted hours when helpful
+- For layover durations, show ONLY the original format from the bid package (e.g., "28.53 hours")
+- Do NOT add decimal conversions or explanations in parentheses
+- Match the exact format from the bid package data
 
 Use the backend-processed summaries to provide accurate analysis within token limits.`;
   }
