@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BidPackage } from "@/lib/api";
+import { PairingDisplay } from "./pairing-display";
 
 interface ChatMessage {
   id: string;
@@ -323,6 +324,80 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     }
   };
 
+  const parsePairingsFromMessage = (content: string, messageData?: any) => {
+    const pairings = [];
+    
+    // Extract pairings from message data if available
+    if (messageData?.pairings && Array.isArray(messageData.pairings)) {
+      pairings.push(...messageData.pairings);
+    }
+    
+    if (messageData?.pairing) {
+      pairings.push(messageData.pairing);
+    }
+
+    return pairings;
+  };
+
+  const formatMessageWithPairings = (content: string, messageData?: any) => {
+    const pairings = parsePairingsFromMessage(content, messageData);
+    
+    if (pairings.length === 0) {
+      return <span className="whitespace-pre-wrap text-sm">{content}</span>;
+    }
+
+    // Split content by pairing numbers to insert interactive elements
+    let formattedContent = content;
+    const parts = [];
+    let lastIndex = 0;
+
+    // Find pairing references in the text
+    pairings.forEach((pairing) => {
+      const pairingNumber = pairing.pairingNumber;
+      if (pairingNumber) {
+        const regex = new RegExp(`\\b${pairingNumber}\\b`, 'g');
+        let match;
+        
+        while ((match = regex.exec(formattedContent)) !== null) {
+          // Add text before the pairing
+          if (match.index > lastIndex) {
+            parts.push(
+              <span key={`text-${lastIndex}`}>
+                {formattedContent.substring(lastIndex, match.index)}
+              </span>
+            );
+          }
+          
+          // Add the interactive pairing element
+          parts.push(
+            <PairingDisplay
+              key={`pairing-${match.index}-${pairingNumber}`}
+              pairing={pairing}
+              displayText={pairingNumber}
+            />
+          );
+          
+          lastIndex = match.index + match[0].length;
+        }
+      }
+    });
+
+    // Add remaining text
+    if (lastIndex < formattedContent.length) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {formattedContent.substring(lastIndex)}
+        </span>
+      );
+    }
+
+    return parts.length > 0 ? (
+      <div className="whitespace-pre-wrap text-sm">{parts}</div>
+    ) : (
+      <span className="whitespace-pre-wrap text-sm">{content}</span>
+    );
+  };
+
   return (
     <div className="flex h-[600px]">
       {/* Conversation Sidebar */}
@@ -430,8 +505,11 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
                       <User className="h-4 w-4 mt-0.5 text-white flex-shrink-0" />
                     )}
                     <div className="flex-1">
-                      <div className="whitespace-pre-wrap text-sm">
-                        {message.content}
+                      <div>
+                        {message.type === 'assistant' 
+                          ? formatMessageWithPairings(message.content, message.data)
+                          : <span className="whitespace-pre-wrap text-sm">{message.content}</span>
+                        }
                       </div>
                       <div className={`text-xs mt-1 ${
                         message.type === 'user' ? 'text-blue-200' : 'text-gray-500'
