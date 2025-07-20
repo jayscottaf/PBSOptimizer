@@ -46,7 +46,10 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const loadChatHistory = async () => {
     try {
+      console.log('Loading chat history for session:', sessionId);
       const history = await api.getChatHistory(sessionId);
+      console.log('Chat history loaded:', history.length, 'messages');
+      
       if (history.length === 0) {
         // Add welcome message if no history exists
         const welcomeMessage: ChatMessage = {
@@ -56,13 +59,19 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           timestamp: new Date()
         };
         setMessages([welcomeMessage]);
+        
         // Save welcome message to database
-        await api.saveChatMessage({
-          sessionId,
-          bidPackageId,
-          messageType: 'assistant',
-          content: welcomeMessage.content
-        });
+        try {
+          await api.saveChatMessage({
+            sessionId,
+            bidPackageId,
+            messageType: 'assistant',
+            content: welcomeMessage.content
+          });
+          console.log('Welcome message saved successfully');
+        } catch (saveError) {
+          console.error('Failed to save welcome message:', saveError);
+        }
       } else {
         // Convert database history to chat messages
         const chatMessages: ChatMessage[] = history.map((msg) => ({
@@ -73,6 +82,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           data: msg.messageData
         }));
         setMessages(chatMessages);
+        console.log('Chat messages loaded and set in state');
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
@@ -80,7 +90,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       const welcomeMessage: ChatMessage = {
         id: '1',
         type: 'assistant',
-        content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+        content: 'Chat history temporarily unavailable. Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
         timestamp: new Date()
       };
       setMessages([welcomeMessage]);
@@ -144,8 +154,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         messageType: 'user',
         content: userMessage.content
       });
+      console.log('User message saved successfully');
     } catch (error) {
-      console.error('Failed to save user message:', error);
+      console.error('Failed to save user message:', error, error.message || error);
     }
 
     try {
@@ -170,8 +181,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           content: assistantMessage.content,
           messageData: assistantMessage.data
         });
+        console.log('Assistant message saved successfully');
       } catch (saveError) {
-        console.error('Failed to save assistant message:', saveError);
+        console.error('Failed to save assistant message:', saveError, saveError.message || saveError);
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -191,8 +203,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           messageType: 'assistant',
           content: errorMessage.content
         });
+        console.log('Error message saved successfully');
       } catch (saveError) {
-        console.error('Failed to save error message:', saveError);
+        console.error('Failed to save error message:', saveError, saveError.message || saveError);
       }
     } finally {
       setIsLoading(false);
