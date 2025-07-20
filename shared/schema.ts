@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod.js";
@@ -41,18 +41,7 @@ export const pairings = pgTable("pairings", {
   fullTextBlock: text("full_text_block").notNull(), // Complete pairing text from PDF
   holdProbability: integer("hold_probability").default(0), // Percentage 0-100
   pairingDays: integer("pairing_days").default(1), // Number of days (calculated from flight segment day letters)
-}, (table) => ({
-  // Performance indexes for common queries
-  pairingNumberIdx: index("pairing_number_idx").on(table.pairingNumber),
-  bidPackageIdx: index("bid_package_idx").on(table.bidPackageId),
-  creditHoursIdx: index("credit_hours_idx").on(table.creditHours),
-  blockHoursIdx: index("block_hours_idx").on(table.blockHours),
-  holdProbabilityIdx: index("hold_probability_idx").on(table.holdProbability),
-  pairingDaysIdx: index("pairing_days_idx").on(table.pairingDays),
-  // Composite indexes for complex queries
-  bidPackagePairingIdx: index("bid_package_pairing_idx").on(table.bidPackageId, table.pairingNumber),
-  efficiencyIdx: index("efficiency_idx").on(table.creditHours, table.blockHours),
-}));
+});
 
 export const bidHistory = pgTable("bid_history", {
   id: serial("id").primaryKey(),

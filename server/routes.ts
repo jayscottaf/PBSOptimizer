@@ -36,39 +36,9 @@ const searchFiltersSchema = z.object({
   pairingDays: z.number().optional(),
   pairingDaysMin: z.number().optional(),
   pairingDaysMax: z.number().optional(),
-  page: z.number().min(1).optional(),
-  limit: z.number().min(1).max(100).optional(),
-  light: z.boolean().optional(),
 });
 
-// Performance monitoring middleware
-function performanceMonitoring(req: any, res: any, next: any) {
-  const start = Date.now();
-  const originalJson = res.json;
-  
-  res.json = function(body: any) {
-    const duration = Date.now() - start;
-    
-    // Log slow queries (>1000ms)
-    if (duration > 1000) {
-      console.warn(`🐌 Slow Query Alert: ${req.method} ${req.path} took ${duration}ms`);
-    }
-    
-    // Log database-heavy endpoints
-    if (req.path.includes('/api/pairings') && duration > 500) {
-      console.log(`📊 DB Query: ${req.method} ${req.path} - ${duration}ms`);
-    }
-    
-    return originalJson.call(this, body);
-  };
-  
-  next();
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
-  
-  // Add performance monitoring
-  app.use('/api', performanceMonitoring);
   
   // Seed database endpoint (development only)
   app.post("/api/seed", async (req, res) => {
@@ -156,18 +126,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Search and filter pairings with pagination
+  // Search and filter pairings
   app.post("/api/pairings/search", async (req, res) => {
     try {
       const filters = searchFiltersSchema.parse(req.body);
-      const result = await storage.searchPairings(filters);
-      
-      // Set cache headers for static data
-      if (!filters.search && !filters.creditMin && !filters.creditMax) {
-        res.set('Cache-Control', 'public, max-age=300'); // 5 minutes cache
-      }
-      
-      res.json(result);
+      const pairings = await storage.searchPairings(filters);
+      res.json(pairings);
     } catch (error) {
       console.error("Error searching pairings:", error);
       if (error instanceof z.ZodError) {

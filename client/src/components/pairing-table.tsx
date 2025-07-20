@@ -7,21 +7,10 @@ import type { Pairing } from "@/lib/api";
 
 interface PairingTableProps {
   pairings: Pairing[];
-  onPairingClick?: (pairing: Pairing) => void;
-  loading?: boolean;
+  onPairingClick: (pairingId: number) => void;
 }
 
-// Add default props
-const defaultProps = {
-  pairings: [] as Pairing[],
-  loading: false,
-};
-
-export function PairingTable({ 
-  pairings = [], 
-  onPairingClick, 
-  loading = false 
-}: PairingTableProps) {
+export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
   const getHoldProbabilityColor = (probability: number) => {
     if (probability >= 80) return "text-green-600";
     if (probability >= 50) return "text-yellow-600";
@@ -47,7 +36,7 @@ export function PairingTable({
           </Button>
         </div>
       </div>
-
+      
       <div className="overflow-x-auto min-w-0">
         <table className="w-full min-w-[800px]">
           <thead className="bg-gray-50">
@@ -87,7 +76,7 @@ export function PairingTable({
                 <tr 
                   key={pairing.id}
                   className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => onPairingClick?.(pairing.id)}
+                  onClick={() => onPairingClick(pairing.id)}
                 >
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -135,7 +124,7 @@ export function PairingTable({
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPairingClick?.(pairing.id);
+                        onPairingClick(pairing.id);
                       }}
                     >
                       <Eye className="h-4 w-4" />

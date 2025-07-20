@@ -41,16 +41,6 @@ export interface SearchFilters {
   blockMax?: number;
   tafb?: string;
   holdProbabilityMin?: number;
-  page?: number;
-  limit?: number;
-  light?: boolean;
-}
-
-export interface PaginatedResponse<T> {
-  pairings: T[];
-  total: number;
-  page: number;
-  totalPages: number;
 }
 
 export const api = {
@@ -96,14 +86,8 @@ export const api = {
     return response.json();
   },
 
-  searchPairings: async (filters: SearchFilters): Promise<PaginatedResponse<Pairing>> => {
+  searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
     const response = await apiRequest("POST", "/api/pairings/search", filters);
-    return response.json();
-  },
-
-  // Lightweight search for list views
-  searchPairingsLight: async (filters: SearchFilters): Promise<PaginatedResponse<Partial<Pairing>>> => {
-    const response = await apiRequest("POST", "/api/pairings/search", { ...filters, light: true });
     return response.json();
   },
 
