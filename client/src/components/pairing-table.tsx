@@ -83,11 +83,11 @@ export function PairingTable({
                 </td>
               </tr>
             ) : (
-              pairings?.map((pairing) => (
+              pairings.map((pairing) => (
                 <tr 
                   key={pairing.id}
                   className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => onPairingClick(pairing.id)}
+                  onClick={() => onPairingClick?.(pairing.id)}
                 >
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -135,7 +135,7 @@ export function PairingTable({
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPairingClick(pairing.id);
+                        onPairingClick?.(pairing.id);
                       }}
                     >
                       <Eye className="h-4 w-4" />
