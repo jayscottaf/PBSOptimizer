@@ -324,7 +324,7 @@ export default function Dashboard() {
                             <SelectContent>
                               <SelectItem value="high">High (80%+)</SelectItem>
                               <SelectItem value="medium">Medium (50-80%)</SelectItem>
-                              <SelectItem value="low">Low (<50%)</SelectItem>
+                              <SelectItem value="low">Low (&lt;50%)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
