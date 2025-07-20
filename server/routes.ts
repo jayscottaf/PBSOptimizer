@@ -39,7 +39,7 @@ const searchFiltersSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+
   // Seed database endpoint (development only)
   app.post("/api/seed", async (req, res) => {
     try {
@@ -50,7 +50,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to seed database" });
     }
   });
-  
+
   // Get all bid packages
   app.get("/api/bid-packages", async (req, res) => {
     try {
@@ -70,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { name, month, year, base, aircraft } = req.body;
-      
+
       const bidPackageData = insertBidPackageSchema.parse({
         name,
         month,
@@ -97,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bidPackage,
         message: "Bid package uploaded successfully. Processing has begun.",
       });
-      
+
     } catch (error) {
       console.error("Error uploading bid package:", error);
       if (error instanceof z.ZodError) {
@@ -112,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/pairings", async (req, res) => {
     try {
       const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
-      
+
       if (bidPackageId) {
         const pairings = await storage.getPairings(bidPackageId);
         res.json(pairings);
@@ -126,19 +126,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Search and filter pairings
+  // Pairing search endpoint
   app.post("/api/pairings/search", async (req, res) => {
     try {
-      const filters = searchFiltersSchema.parse(req.body);
-      const pairings = await storage.searchPairings(filters);
-      res.json(pairings);
+      const { bidPackageId, ...filters } = req.body;
+      const pairings = await storage.searchPairings(bidPackageId, filters);
+      // Ensure we always return an array
+      const safePairings = Array.isArray(pairings) ? pairings : [];
+      res.json(safePairings);
     } catch (error) {
       console.error("Error searching pairings:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid search filters", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to search pairings" });
-      }
+      res.status(500).json({ message: "Failed to search pairings", pairings: [] });
     }
   });
 
@@ -147,11 +145,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const pairing = await storage.getPairing(id);
-      
+
       if (!pairing) {
         return res.status(404).json({ message: "Pairing not found" });
       }
-      
+
       res.json(pairing);
     } catch (error) {
       console.error("Error fetching pairing:", error);
@@ -164,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { pairingNumber } = req.params;
       const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
-      
+
       if (!bidPackageId) {
         const bidPackages = await storage.getBidPackages();
         if (bidPackages.length === 0) {
@@ -174,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const recentBidPackage = bidPackages[0];
         const allPairings = await storage.getPairings(recentBidPackage.id);
         const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
-        
+
         if (!pairing) {
           return res.status(404).json({ 
             message: "Pairing not found", 
@@ -184,7 +182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
           });
         }
-        
+
         res.json({
           found: true,
           pairing,
@@ -194,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         const allPairings = await storage.getPairings(bidPackageId);
         const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
-        
+
         if (!pairing) {
           return res.status(404).json({ 
             message: "Pairing not found", 
@@ -204,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
           });
         }
-        
+
         res.json({
           found: true,
           pairing,
@@ -234,10 +232,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/user", async (req, res) => {
     try {
       const { seniorityNumber, base, aircraft } = req.body;
-      
+
       // Check if user exists
       const existingUser = await storage.getUserBySeniority(seniorityNumber);
-      
+
       if (existingUser) {
         res.json(existingUser);
       } else {
@@ -290,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  
+
 
   // Chat history endpoints
   app.get("/api/chat-history/:sessionId", async (req, res) => {
@@ -336,7 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/askAssistant", async (req, res) => {
     try {
       const { question, bidPackageId } = req.body;
-      
+
       if (!question) {
         return res.status(400).json({ message: "Question is required" });
       }
@@ -362,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: question, 
             bidPackageId: finalBidPackageId 
           });
-          
+
           res.json({ 
             reply: result.response, 
             data: result.data,
@@ -371,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (hybridError) {
           console.log("Hybrid service failed, trying legacy analysis:", hybridError);
-          
+
           // If it's a rate limit error, provide a specific message
           if (hybridError.message && hybridError.message.includes('rate_limit_exceeded')) {
             res.json({ 
@@ -396,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               message: question, 
               bidPackageId: finalBidPackageId 
             }, storage);
-            
+
             res.json({ reply: result.response, data: result.data });
             return;
           } catch (legacyError) {
@@ -408,7 +406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Final fallback to basic assistant
       const reply = await openaiAssistant.askPBSAssistant(question);
       res.json({ reply });
-      
+
     } catch (error) {
       console.error("Error asking PBS Assistant:", error);
       res.status(500).json({ message: "Failed to get response from PBS Assistant" });
@@ -419,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/pairings/bulk", async (req, res) => {
     try {
       const { bidPackageId, pairings } = req.body;
-      
+
       const createdPairings = [];
       for (const pairingData of pairings) {
         const pairing = await storage.createPairing({
@@ -428,10 +426,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         createdPairings.push(pairing);
       }
-      
+
       // Update bid package status to completed
       await storage.updateBidPackageStatus(bidPackageId, "completed");
-      
+
       res.json({
         success: true,
         count: createdPairings.length,
@@ -448,11 +446,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bidPackages = await storage.getBidPackages();
       const verification = {};
-      
+
       for (const bidPackage of bidPackages) {
         const pairings = await storage.getPairings(bidPackage.id);
         const stats = await storage.getPairingStatsSummary(bidPackage.id);
-        
+
         verification[bidPackage.id] = {
           bidPackage: {
             id: bidPackage.id,
@@ -487,7 +485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         };
       }
-      
+
       res.json({
         success: true,
         totalBidPackages: bidPackages.length,

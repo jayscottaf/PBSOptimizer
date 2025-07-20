@@ -39,6 +39,17 @@ export class HybridOpenAIService {
     try {
       console.log('Starting hybrid analysis for query:', query.message.substring(0, 100));
 
+      // Get bid package information for proper formatting
+      let bidPackageInfo = null;
+      if (query.bidPackageId) {
+        try {
+          const bidPackages = await this.storage.getBidPackages();
+          bidPackageInfo = bidPackages.find(pkg => pkg.id === query.bidPackageId);
+        } catch (error) {
+          console.log('Could not fetch bid package info:', error);
+        }
+      }
+
       // Check if this is a large dataset request that should skip OpenAI
       if (this.shouldSkipOpenAI(query.message)) {
         console.log('Large dataset request detected, using direct DB fallback');
@@ -64,7 +75,7 @@ export class HybridOpenAIService {
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
-          { role: "system", content: this.getSystemPrompt() },
+          { role: "system", content: this.getSystemPrompt(bidPackageInfo) },
           { role: "user", content: `${query.message}\n\nAvailable Data Summary:\n${dataString}` }
         ],
         tools: this.getAvailableFunctions(),
@@ -686,8 +697,14 @@ export class HybridOpenAIService {
     return hours.toString();
   }
 
-  private getSystemPrompt(): string {
+  private getSystemPrompt(bidPackageInfo?: any): string {
+    const bidPackageDisplay = bidPackageInfo ? 
+      `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package` :
+      'the current bid package';
+
     return `You are a Delta PBS Bid Optimization Assistant. Analyze pilot pairing data and provide specific, actionable insights.
+
+When providing analysis, refer to the bid package as "${bidPackageDisplay}" instead of using generic terms like "bid package #27".
 
 When provided with pairing data:
 - Always show the actual pairing numbers found
