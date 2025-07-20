@@ -161,6 +161,11 @@ export class HybridOpenAIService {
       return await this.handleDurationSpecificQuery(query, 1, message);
     }
 
+    // Handle layover queries
+    if (message.includes('layover') || message.includes('layovers')) {
+      return await this.handleLayoverQuery(query, message);
+    }
+
     // Handle multi-day queries without specific duration
     if (message.includes('multi-day') || message.includes('long trip')) {
       return await this.handleMultiDayQuery(query, message);
@@ -328,6 +333,112 @@ export class HybridOpenAIService {
     };
   }
 
+  private async handleLayoverQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+    const allPairings = await this.storage.getPairings(query.bidPackageId);
+    
+    // Extract city from query (DFW, ATL, etc.)
+    const cityMatch = message.match(/\b([A-Z]{3})\b/);
+    const targetCity = cityMatch ? cityMatch[1] : null;
+    
+    // Extract number of layovers requested (default to 10)
+    const numberMatch = message.match(/(\d+)\s+(?:longest|top)/);
+    const requestedCount = numberMatch ? parseInt(numberMatch[1]) : 10;
+    
+    // Extract minimum duration if specified
+    const durationMatch = message.match(/(?:over|longer than|above)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/);
+    const minDuration = durationMatch ? parseFloat(durationMatch[1]) : 0;
+
+    // Collect all layovers from all pairings
+    const allLayovers: any[] = [];
+    
+    allPairings.forEach(pairing => {
+      if (pairing.layovers && Array.isArray(pairing.layovers)) {
+        pairing.layovers.forEach((layover: any) => {
+          // Filter by city if specified
+          if (targetCity && layover.city !== targetCity) return;
+          
+          // Parse duration (handle both "18.43" and "18:43" formats)
+          const durationStr = layover.duration?.toString() || '0';
+          let durationHours = 0;
+          
+          if (durationStr.includes(':')) {
+            // Handle "18:43" format
+            const [hours, minutes] = durationStr.split(':').map(Number);
+            durationHours = hours + (minutes / 60);
+          } else if (durationStr.includes('.')) {
+            // Handle "18.43" format (PBS format where .43 = 43 minutes)
+            const [hours, minutes] = durationStr.split('.').map(Number);
+            durationHours = hours + (minutes / 60);
+          } else {
+            // Handle whole hours
+            durationHours = parseFloat(durationStr);
+          }
+          
+          // Filter by minimum duration if specified
+          if (durationHours >= minDuration) {
+            allLayovers.push({
+              city: layover.city,
+              hotel: layover.hotel,
+              duration: durationStr,
+              durationHours: durationHours,
+              pairingNumber: pairing.pairingNumber,
+              creditHours: pairing.creditHours,
+              holdProbability: pairing.holdProbability,
+              route: pairing.route
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by duration descending and take requested count
+    const sortedLayovers = allLayovers
+      .sort((a, b) => b.durationHours - a.durationHours)
+      .slice(0, requestedCount);
+
+    // Group by city for summary stats
+    const cityStats = allLayovers.reduce((acc, layover) => {
+      if (!acc[layover.city]) {
+        acc[layover.city] = { count: 0, totalDuration: 0, avgDuration: 0 };
+      }
+      acc[layover.city].count++;
+      acc[layover.city].totalDuration += layover.durationHours;
+      return acc;
+    }, {} as any);
+
+    // Calculate averages
+    Object.keys(cityStats).forEach(city => {
+      cityStats[city].avgDuration = cityStats[city].totalDuration / cityStats[city].count;
+    });
+
+    return {
+      type: 'layover_analysis',
+      targetCity: targetCity,
+      requestedCount: requestedCount,
+      minDuration: minDuration,
+      longestLayovers: sortedLayovers.map(layover => ({
+        city: layover.city,
+        hotel: layover.hotel,
+        duration: layover.duration,
+        durationHours: layover.durationHours.toFixed(2),
+        pairingNumber: layover.pairingNumber,
+        creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
+        holdProbability: layover.holdProbability,
+        route: layover.route
+      })),
+      cityStats: Object.entries(cityStats)
+        .map(([city, stats]: [string, any]) => ({
+          city,
+          count: stats.count,
+          avgDuration: stats.avgDuration.toFixed(2)
+        }))
+        .sort((a, b) => b.count - a.count),
+      totalLayovers: allLayovers.length,
+      totalPairings: allPairings.length,
+      truncated: false
+    };
+  }
+
   private extractEfficiencyThreshold(message: string): number {
     const efficiencyMatch = message.match(/efficiency.*?(\d+\.?\d*)/);
     if (efficiencyMatch) return parseFloat(efficiencyMatch[1]);
@@ -455,6 +566,74 @@ export class HybridOpenAIService {
           },
           truncated: false
         };
+
+      case 'getLayoverAnalysis':
+        const allPairingsForLayover = await this.storage.getPairings(bidPackageId);
+        const targetCity = args.city;
+        const requestedCount = args.count || 10;
+        const minDuration = args.minDuration || 0;
+        
+        // Collect all layovers
+        const allLayovers: any[] = [];
+        
+        allPairingsForLayover.forEach(pairing => {
+          if (pairing.layovers && Array.isArray(pairing.layovers)) {
+            pairing.layovers.forEach((layover: any) => {
+              // Filter by city if specified
+              if (targetCity && layover.city !== targetCity) return;
+              
+              // Parse duration
+              const durationStr = layover.duration?.toString() || '0';
+              let durationHours = 0;
+              
+              if (durationStr.includes(':')) {
+                const [hours, minutes] = durationStr.split(':').map(Number);
+                durationHours = hours + (minutes / 60);
+              } else if (durationStr.includes('.')) {
+                const [hours, minutes] = durationStr.split('.').map(Number);
+                durationHours = hours + (minutes / 60);
+              } else {
+                durationHours = parseFloat(durationStr);
+              }
+              
+              if (durationHours >= minDuration) {
+                allLayovers.push({
+                  city: layover.city,
+                  hotel: layover.hotel,
+                  duration: durationStr,
+                  durationHours: durationHours,
+                  pairingNumber: pairing.pairingNumber,
+                  creditHours: pairing.creditHours,
+                  holdProbability: pairing.holdProbability,
+                  route: pairing.route
+                });
+              }
+            });
+          }
+        });
+
+        const sortedLayovers = allLayovers
+          .sort((a, b) => b.durationHours - a.durationHours)
+          .slice(0, requestedCount);
+
+        return {
+          response: `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}. Showing top ${requestedCount}.`,
+          data: {
+            targetCity,
+            longestLayovers: sortedLayovers.map(layover => ({
+              city: layover.city,
+              hotel: layover.hotel,
+              duration: layover.duration,
+              durationHours: layover.durationHours.toFixed(2),
+              pairingNumber: layover.pairingNumber,
+              creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
+              holdProbability: layover.holdProbability,
+              route: layover.route
+            })),
+            totalLayovers: allLayovers.length
+          },
+          truncated: sortedLayovers.length < allLayovers.length
+        };
       
       default:
         throw new Error(`Unknown function: ${functionName}`);
@@ -495,6 +674,7 @@ export class HybridOpenAIService {
 When provided with pairing data:
 - Always show the actual pairing numbers found
 - Include key metrics like credit hours, block hours, efficiency ratios, and hold probabilities
+- For layover analysis, show the city, hotel, duration, and associated pairing information
 - If no pairings match the criteria, clearly state this
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data
@@ -503,6 +683,7 @@ IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in 
 - Show credit hours like: "28.19 credit hours" (not "28 hours and 19 minutes")
 - Show block hours like: "16.58 block hours" (not "16 hours and 58 minutes")
 - Match the exact decimal format from the bid package data
+- For layover durations, show both the original format and converted hours when helpful
 
 Use the backend-processed summaries to provide accurate analysis within token limits.`;
   }
@@ -547,6 +728,21 @@ Use the backend-processed summaries to provide accurate analysis within token li
             type: "object",
             properties: {
               limit: { type: "number", description: "Max pairings per duration group" }
+            }
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "getLayoverAnalysis",
+          description: "Analyze layovers by city, duration, or find longest layovers",
+          parameters: {
+            type: "object",
+            properties: {
+              city: { type: "string", description: "3-letter airport code (e.g., DFW, ATL)" },
+              count: { type: "number", description: "Number of layovers to return (default 10)" },
+              minDuration: { type: "number", description: "Minimum layover duration in hours" }
             }
           }
         }
