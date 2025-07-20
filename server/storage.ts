@@ -319,10 +319,10 @@ export class DatabaseStorage implements IStorage {
 
     const stats = {
       totalPairings: allPairings.length,
-      avgEfficiency: pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length,
-      topEfficiency: topPairings[0]?.efficiency || 0,
-      avgCredit: pairingsWithEfficiency.reduce((sum, p) => sum + p.creditHours, 0) / pairingsWithEfficiency.length,
-      avgBlock: pairingsWithEfficiency.reduce((sum, p) => sum + p.blockHours, 0) / pairingsWithEfficiency.length
+      avgEfficiency: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length).toFixed(2)),
+      topEfficiency: Number((topPairings[0]?.efficiency || 0).toFixed(2)),
+      avgCredit: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.creditHours, 0) / pairingsWithEfficiency.length).toFixed(2)),
+      avgBlock: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.blockHours, 0) / pairingsWithEfficiency.length).toFixed(2))
     };
 
     return { pairings: topPairings, stats };
