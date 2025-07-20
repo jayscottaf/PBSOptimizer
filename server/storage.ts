@@ -19,7 +19,7 @@ import {
   type InsertChatHistory
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, gte, lte, ilike, desc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, like, gte, lte, or } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -37,7 +37,7 @@ export interface IStorage {
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
-  getPairings(bidPackageId?: number, limit?: number, offset?: number): Promise<Pairing[]>;
+  getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
   searchPairings(filters: {
@@ -52,8 +52,6 @@ export interface IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
-        limit?: number;
-        offset?: number;
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -128,58 +126,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPairing(pairing: InsertPairing): Promise<Pairing> {
-    const [created] = await db.insert(pairings).values(pairing).returning();
-    return created;
+    const [newPairing] = await db
+      .insert(pairings)
+      .values(pairing)
+      .returning();
+    return newPairing;
   }
 
-  async createPairingsBulk(pairingList: InsertPairing[]): Promise<Pairing[]> {
-    if (!pairingList || pairingList.length === 0) {
-      return [];
-    }
-
-    const batchSize = 50; // Process in batches to avoid memory issues
-    const results: Pairing[] = [];
-
-    for (let i = 0; i < pairingList.length; i += batchSize) {
-      const batch = pairingList.slice(i, i + batchSize);
-      const batchResults = await db.insert(pairings).values(batch).returning();
-      results.push(...batchResults);
-    }
-
-    return results;
-  }
-
-  async getPairings(bidPackageId?: number, limit?: number, offset?: number): Promise<Pairing[]> {
-    let query = db.select({
-      id: pairings.id,
-      bidPackageId: pairings.bidPackageId,
-      pairingNumber: pairings.pairingNumber,
-      effectiveDates: pairings.effectiveDates,
-      route: pairings.route,
-      creditHours: pairings.creditHours,
-      blockHours: pairings.blockHours,
-      tafb: pairings.tafb,
-      fdp: pairings.fdp,
-      payHours: pairings.payHours,
-      holdProbability: pairings.holdProbability,
-      pairingDays: pairings.pairingDays,
-      deadheads: pairings.deadheads,
-    }).from(pairings);
-
+  async getPairings(bidPackageId?: number): Promise<Pairing[]> {
     if (bidPackageId) {
-      query = query.where(eq(pairings.bidPackageId, bidPackageId));
+      return await db.select().from(pairings)
+        .where(eq(pairings.bidPackageId, bidPackageId))
+        .orderBy(asc(pairings.pairingNumber));
     }
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    if (offset) {
-      query = query.offset(offset);
-    }
-
-    const result = await query;
-    return result || [];
+    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
   }
 
   async getPairing(id: number): Promise<Pairing | undefined> {
@@ -210,25 +170,7 @@ export class DatabaseStorage implements IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
-        limit?: number;
-        offset?: number;
   }): Promise<Pairing[]> {
-    let query = db.select({
-      id: pairings.id,
-      bidPackageId: pairings.bidPackageId,
-      pairingNumber: pairings.pairingNumber,
-      effectiveDates: pairings.effectiveDates,
-      route: pairings.route,
-      creditHours: pairings.creditHours,
-      blockHours: pairings.blockHours,
-      tafb: pairings.tafb,
-      fdp: pairings.fdp,
-      payHours: pairings.payHours,
-      holdProbability: pairings.holdProbability,
-      pairingDays: pairings.pairingDays,
-      deadheads: pairings.deadheads,
-    }).from(pairings);
-
     const conditions = [];
 
     if (filters.bidPackageId) {
@@ -238,62 +180,45 @@ export class DatabaseStorage implements IStorage {
     if (filters.search) {
       conditions.push(
         or(
-          ilike(pairings.pairingNumber, `%${filters.search}%`),
-          ilike(pairings.route, `%${filters.search}%`)
+          like(pairings.route, `%${filters.search}%`),
+          like(pairings.pairingNumber, `%${filters.search}%`),
+          like(pairings.effectiveDates, `%${filters.search}%`),
+          like(pairings.fullTextBlock, `%${filters.search}%`)
         )
       );
     }
 
-    if (filters.creditMin !== undefined) {
+    if (filters.creditMin) {
       conditions.push(gte(pairings.creditHours, filters.creditMin.toString()));
     }
 
-    if (filters.creditMax !== undefined) {
+    if (filters.creditMax) {
       conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
     }
 
-    if (filters.blockMin !== undefined) {
-      conditions.push(gte(pairings.blockHours, filters.blockMin.toString()));
-    }
-
-    if (filters.blockMax !== undefined) {
-      conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
-    }
-
-    if (filters.tafb) {
-      conditions.push(eq(pairings.tafb, filters.tafb));
-    }
-
-    if (filters.holdProbabilityMin !== undefined) {
+    if (filters.holdProbabilityMin) {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
 
-    if (filters.pairingDays !== undefined) {
+        if (filters.pairingDays) {
       conditions.push(eq(pairings.pairingDays, filters.pairingDays));
     }
 
-    if (filters.pairingDaysMin !== undefined) {
+    if (filters.pairingDaysMin) {
       conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
     }
 
-    if (filters.pairingDaysMax !== undefined) {
+    if (filters.pairingDaysMax) {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      return await db.select().from(pairings)
+        .where(and(...conditions))
+        .orderBy(asc(pairings.pairingNumber));
     }
 
-    if (filters.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters.offset) {
-      query = query.offset(filters.offset);
-    }
-
-    const result = await query;
-    return result || [];
+    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
   }
 
   async createBidHistory(bidHistoryData: InsertBidHistory): Promise<BidHistory> {

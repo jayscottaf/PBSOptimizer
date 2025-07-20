@@ -8,17 +8,9 @@ import type { Pairing } from "@/lib/api";
 interface PairingTableProps {
   pairings: Pairing[];
   onPairingClick: (pairingId: number) => void;
-  pagination?: {
-    total: number;
-    limit: number;
-    offset: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-  onPageChange?: (offset: number) => void;
 }
 
-export function PairingTable({ pairings, onPairingClick, pagination, onPageChange }: PairingTableProps) {
+export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
   const getHoldProbabilityColor = (probability: number) => {
     if (probability >= 80) return "text-green-600";
     if (probability >= 50) return "text-yellow-600";
@@ -31,16 +23,13 @@ export function PairingTable({ pairings, onPairingClick, pagination, onPageChang
     return "bg-red-500";
   };
 
-  // Ensure pairings is always an array
-  const safePairings = Array.isArray(pairings) ? pairings : [];
-
   return (
     <Card>
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
         <div className="flex items-center space-x-4">
           <span className="text-sm text-gray-500">
-            Showing {safePairings.length} pairings
+            Showing {pairings.length} pairings
           </span>
           <Button variant="link" className="text-blue-600 hover:text-blue-700 font-medium">
             Export CSV
@@ -76,14 +65,14 @@ export function PairingTable({ pairings, onPairingClick, pagination, onPageChang
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {safePairings.length === 0 ? (
+            {pairings.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   No pairings found. Upload a bid package to get started.
                 </td>
               </tr>
             ) : (
-              safePairings.map((pairing) => (
+              pairings.map((pairing) => (
                 <tr 
                   key={pairing.id}
                   className="hover:bg-gray-50 cursor-pointer"
@@ -159,53 +148,26 @@ export function PairingTable({ pairings, onPairingClick, pagination, onPageChang
       </div>
 
       {/* Pagination */}
-      {pagination && pairings.length > 0 && (
+      {pairings.length > 0 && (
         <div className="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
-            <Button 
-              variant="outline" 
-              disabled={!pagination.hasPrev}
-              onClick={() => onPageChange && onPageChange(Math.max(0, pagination.offset - pagination.limit))}
-            >
-              Previous
-            </Button>
-            <Button 
-              variant="outline" 
-              disabled={!pagination.hasNext}
-              onClick={() => onPageChange && onPageChange(pagination.offset + pagination.limit)}
-            >
-              Next
-            </Button>
+            <Button variant="outline">Previous</Button>
+            <Button variant="outline">Next</Button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{pagination.offset + 1}</span> to{" "}
-                <span className="font-medium">{Math.min(pagination.offset + pagination.limit, pagination.total)}</span> of{" "}
-                <span className="font-medium">{pagination.total}</span> results
+                Showing <span className="font-medium">1</span> to{" "}
+                <span className="font-medium">{Math.min(20, pairings.length)}</span> of{" "}
+                <span className="font-medium">{pairings.length}</span> results
               </p>
             </div>
             <div className="flex space-x-1">
-              <Button 
-                variant="outline" 
-                size="sm"
-                disabled={!pagination.hasPrev}
-                onClick={() => onPageChange && onPageChange(Math.max(0, pagination.offset - pagination.limit))}
-              >
-                Previous
-              </Button>
-              {/* Current page indicator */}
-              <Button variant="default" size="sm">
-                {Math.floor(pagination.offset / pagination.limit) + 1}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                disabled={!pagination.hasNext}
-                onClick={() => onPageChange && onPageChange(pagination.offset + pagination.limit)}
-              >
-                Next
-              </Button>
+              <Button variant="outline" size="sm">Previous</Button>
+              <Button variant="default" size="sm">1</Button>
+              <Button variant="outline" size="sm">2</Button>
+              <Button variant="outline" size="sm">3</Button>
+              <Button variant="outline" size="sm">Next</Button>
             </div>
           </div>
         </div>

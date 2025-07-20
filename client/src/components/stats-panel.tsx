@@ -1,7 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import type { Pairing, BidPackage } from "@/lib/api";
 
 interface StatsPanelProps {
@@ -10,17 +8,7 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
-  // Fetch ALL pairings for this bid package to get accurate stats
-  const { data: allPairingsData } = useQuery({
-    queryKey: ["allPairings", bidPackage?.id],
-    queryFn: () => bidPackage?.id ? api.getPairings(bidPackage.id, -1) : Promise.resolve({ pairings: [] }),
-    enabled: !!bidPackage?.id
-  });
-
-  const allPairings = allPairingsData?.pairings || [];
-  const displayPairings = allPairings.length > 0 ? allPairings : pairings;
-
-  if (!displayPairings || !Array.isArray(displayPairings)) {
+  if (!pairings || !Array.isArray(pairings)) {
     return (
       <Card>
         <CardHeader>
@@ -33,10 +21,10 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
     );
   }
 
-  const totalPairings = displayPairings.length;
-  const likelyToHold = displayPairings.filter(p => p.holdProbability >= 70).length;
-  const highCredit = displayPairings.filter(p => parseFloat(p.creditHours) >= 5.5).length;
-  const sixDayCombo = displayPairings.filter(p => p.tafb.includes('6d') || p.tafb.includes('7d')).length;
+  const totalPairings = pairings.length;
+  const likelyToHold = pairings.filter(p => p.holdProbability >= 70).length;
+  const highCredit = pairings.filter(p => parseFloat(p.creditHours) >= 5.5).length;
+  const sixDayCombo = pairings.filter(p => p.tafb.includes('6d') || p.tafb.includes('7d')).length;
 
   // Expected total for NYC A220 is typically 500-600 pairings
   const expectedTotal = 534;

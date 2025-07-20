@@ -23,9 +23,7 @@ export default function Dashboard() {
   const [aircraft, setAircraft] = useState("A220");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPairingId, setSelectedPairingId] = useState<number | null>(null);
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [currentOffset, setCurrentOffset] = useState(0);
-  const [pageSize] = useState(50);
+  const [activeFilters, setActiveFilters] = useState<string[]>(["High Credit"]);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
@@ -40,21 +38,16 @@ export default function Dashboard() {
     .sort((a: any, b: any) => b.id - a.id)[0] || 
     (bidPackages as any[]).find((pkg: any) => pkg.status === 'processing');
 
-  const { data: pairingsData, refetch: refetchPairings } = useQuery({
-    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery, currentOffset, pageSize],
+  const { data: pairings = [], refetch: refetchPairings } = useQuery({
+    queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
     queryFn: () => api.searchPairings({ 
       ...searchFilters, 
       search: searchQuery,
-      bidPackageId: latestBidPackage?.id, // Show only current bid package pairings
-      limit: pageSize,
-      offset: currentOffset,
+      bidPackageId: latestBidPackage?.id // Show only current bid package pairings
     }),
     enabled: !!latestBidPackage, // Only run if we have a bid package
     staleTime: 0, // Always fetch fresh data
   });
-
-  // Extract pairings array from response
-  const pairings = pairingsData?.pairings || [];
 
   const handleSearch = () => {
     // Query will auto-refresh due to dependency on searchQuery and searchFilters
@@ -77,10 +70,6 @@ export default function Dashboard() {
   const closePairingModal = () => {
     setSelectedPairingId(null);
   };
-
-    const handlePageChange = (newOffset: number) => {
-        setCurrentOffset(newOffset);
-    };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -347,8 +336,6 @@ export default function Dashboard() {
                   <PairingTable 
                     pairings={pairings} 
                     onPairingClick={handlePairingClick}
-                    pagination={pairingsData?.pagination}
-                    onPageChange={handlePageChange}
                   />
                 )}
               </TabsContent>
@@ -357,8 +344,8 @@ export default function Dashboard() {
               <TabsContent value="analysis" className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <StatsPanel 
-                    pairings={pairings}
-                    bidPackage={latestBidPackage}
+                    totalPairings={pairings.length}
+                    bidPackages={bidPackages as any[]}
                   />
                   <SeniorityChart />
                 </div>

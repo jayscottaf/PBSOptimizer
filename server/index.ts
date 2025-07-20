@@ -21,24 +21,12 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      
-      // Log slow queries for performance monitoring
-      if (duration > 1000) {
-        console.warn(`🐌 SLOW QUERY: ${req.method} ${path} took ${duration}ms`);
-      }
-      
       if (capturedJsonResponse) {
-        // Truncate large responses for logging
-        const responseStr = JSON.stringify(capturedJsonResponse);
-        if (responseStr.length > 200) {
-          logLine += ` :: ${responseStr.slice(0, 200)}...`;
-        } else {
-          logLine += ` :: ${responseStr}`;
-        }
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      if (logLine.length > 150) {
-        logLine = logLine.slice(0, 149) + "…";
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
       }
 
       log(logLine);
