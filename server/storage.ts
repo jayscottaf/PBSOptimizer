@@ -290,11 +290,27 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
+    // Helper function to parse Delta PBS hours format (handles both string and number)
+    const parseHours = (hours: any): number => {
+      if (typeof hours === 'number') return hours;
+      if (typeof hours === 'string') {
+        // Handle Delta PBS format like "5.28" or "21.49"
+        return parseFloat(hours) || 0;
+      }
+      return 0;
+    };
+
     // Calculate efficiency (credit hours / block hours ratio)
-    const pairingsWithEfficiency = allPairings.map(p => ({
-      ...p,
-      efficiency: p.blockHours > 0 ? p.creditHours / p.blockHours : 0
-    }));
+    const pairingsWithEfficiency = allPairings.map(p => {
+      const creditHours = parseHours(p.creditHours);
+      const blockHours = parseHours(p.blockHours);
+      return {
+        ...p,
+        creditHours,
+        blockHours,
+        efficiency: blockHours > 0 ? creditHours / blockHours : 0
+      };
+    });
 
     // Sort by efficiency descending
     const topPairings = pairingsWithEfficiency
@@ -305,8 +321,8 @@ export class DatabaseStorage implements IStorage {
       totalPairings: allPairings.length,
       avgEfficiency: pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length,
       topEfficiency: topPairings[0]?.efficiency || 0,
-      avgCredit: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
-      avgBlock: allPairings.reduce((sum, p) => sum + p.blockHours, 0) / allPairings.length
+      avgCredit: pairingsWithEfficiency.reduce((sum, p) => sum + p.creditHours, 0) / pairingsWithEfficiency.length,
+      avgBlock: pairingsWithEfficiency.reduce((sum, p) => sum + p.blockHours, 0) / pairingsWithEfficiency.length
     };
 
     return { pairings: topPairings, stats };
