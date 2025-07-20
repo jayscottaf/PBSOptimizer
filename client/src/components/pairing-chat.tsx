@@ -246,13 +246,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     }
 
     try {
-      console.log('Sending request to AI assistant:', input.trim());
       const result = await api.analyzePairings(input.trim(), bidPackageId);
-      console.log('AI assistant response received:', result);
-
-      if (!result || !result.response) {
-        throw new Error('Empty response from AI assistant');
-      }
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -262,7 +256,6 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         data: result.data
       };
 
-      console.log('Adding assistant message to chat:', assistantMessage);
       setMessages(prev => [...prev, assistantMessage]);
 
       // Save assistant message to database
@@ -281,21 +274,11 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         console.error('Failed to save assistant message:', saveError, saveError.message || saveError);
       }
     } catch (error) {
-      console.error('Chat error details:', error);
-      let errorContent = 'Sorry, I encountered an error while analyzing your request.';
-      
-      if (error.message && error.message.includes('fetch')) {
-        errorContent = 'Network connection issue. Please check your internet connection and try again.';
-      } else if (error.message && error.message.includes('timeout')) {
-        errorContent = 'Request timed out. The AI assistant might be busy. Please try again in a moment.';
-      } else if (error.message) {
-        errorContent = `Error: ${error.message}. Please try again.`;
-      }
-      
+      console.error('Chat error:', error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: errorContent,
+        content: 'Sorry, I encountered an error while analyzing your request. Please make sure you have uploaded a bid package and try again.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
