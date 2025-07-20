@@ -123,11 +123,11 @@ export class HybridOpenAIService {
     const pairingMatch = message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) || 
                          message.match(/#(\d{4,5})/i) ||
                          (message.match(/\b(\d{4,5})\b/) && (message.includes('pairing') || message.match(/^(?:show\s+me\s+)?(\d{4,5})$/)));
-    
+
     if (pairingMatch) {
       const pairingNumber = pairingMatch[1];
       const pairing = await this.storage.getPairingByNumber(pairingNumber, query.bidPackageId);
-      
+
       if (pairing) {
         return {
           type: 'specific_pairing',
@@ -209,7 +209,7 @@ export class HybridOpenAIService {
 
   private async handleDurationSpecificQuery(query: HybridAnalysisQuery, days: number, message: string): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
-    
+
     // Filter for specific duration pairings
     const durationPairings = allPairings.filter(p => p.pairingDays === days);
 
@@ -273,7 +273,7 @@ export class HybridOpenAIService {
 
   private async handleMultiDayQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
-    
+
     // Filter for multi-day pairings (2+ days)
     const multiDayPairings = allPairings.filter(p => p.pairingDays >= 2);
 
@@ -306,7 +306,7 @@ export class HybridOpenAIService {
 
   private async handleShortTripQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
-    
+
     // Filter for short trips (1-2 days)
     const shortTripPairings = allPairings.filter(p => p.pairingDays <= 2);
 
@@ -335,32 +335,32 @@ export class HybridOpenAIService {
 
   private async handleLayoverQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
-    
+
     // Extract city from query (DFW, ATL, etc.)
     const cityMatch = message.match(/\b([A-Z]{3})\b/);
     const targetCity = cityMatch ? cityMatch[1] : null;
-    
+
     // Extract number of layovers requested (default to 10)
     const numberMatch = message.match(/(\d+)\s+(?:longest|top)/);
     const requestedCount = numberMatch ? parseInt(numberMatch[1]) : 10;
-    
+
     // Extract minimum duration if specified
     const durationMatch = message.match(/(?:over|longer than|above)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/);
     const minDuration = durationMatch ? parseFloat(durationMatch[1]) : 0;
 
     // Collect layovers from all pairings, filtering by city FIRST if specified
     const allLayovers: any[] = [];
-    
+
     allPairings.forEach(pairing => {
       if (pairing.layovers && Array.isArray(pairing.layovers)) {
         pairing.layovers.forEach((layover: any) => {
           // STRICT city filtering - only include layovers in the specified city
           if (targetCity && layover.city !== targetCity) return;
-          
+
           // Parse duration (handle both "18.43" and "18:43" formats)
           const durationStr = layover.duration?.toString() || '0';
           let durationHours = 0;
-          
+
           if (durationStr.includes(':')) {
             // Handle "18:43" format
             const [hours, minutes] = durationStr.split(':').map(Number);
@@ -373,7 +373,7 @@ export class HybridOpenAIService {
             // Handle whole hours
             durationHours = parseFloat(durationStr);
           }
-          
+
           // Filter by minimum duration if specified
           if (durationHours >= minDuration) {
             allLayovers.push({
@@ -442,12 +442,12 @@ export class HybridOpenAIService {
   private extractEfficiencyThreshold(message: string): number {
     const efficiencyMatch = message.match(/efficiency.*?(\d+\.?\d*)/);
     if (efficiencyMatch) return parseFloat(efficiencyMatch[1]);
-    
+
     if (message.includes('credit-to-block') && message.includes('above')) {
       const aboveMatch = message.match(/above\s+(\d+\.?\d*)/);
       if (aboveMatch) return parseFloat(aboveMatch[1]);
     }
-    
+
     return 1.2; // Default threshold
   }
 
@@ -455,11 +455,11 @@ export class HybridOpenAIService {
     // Look for explicit hold probability percentages with proper context
     const holdMatch = message.match(/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i);
     if (holdMatch) return parseInt(holdMatch[1]);
-    
+
     // Fallback to seniority-based defaults
     if (message.includes('senior')) return 70;
     if (message.includes('junior')) return 30;
-    
+
     return 75; // Default threshold
   }
 
@@ -488,16 +488,34 @@ export class HybridOpenAIService {
     switch (functionName) {
       case 'getTopEfficientPairings':
         const efficientResult = await this.storage.getTopEfficientPairings(bidPackageId, args.limit || 20);
+
+        // Generate response based on data type
+        let response = "";
+
+        switch (efficientResult.type) {
+          case 'efficiency_analysis':
+            const topPairings = efficientResult.topPairings.slice(0, 5);
+            response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
+            topPairings.forEach((p, i) => {
+              response += `${i + 1}. **${p.pairingNumber}** - ${p.efficiency} ratio\n`;
+              response += `   • Credit: ${p.creditHours} | Block: ${p.blockHours}\n`;
+              response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}%\n\n`;
+            });
+            response += `**Summary:** Avg efficiency: ${efficientResult.summaryStats.avgEfficiency} | Top: ${efficientResult.summaryStats.topEfficiency}`;
+            break;
+          default:
+            response = "Analysis completed.";
+        }
         return {
-          response: `Top ${args.limit || 20} efficient pairings retrieved.`,
+          response: response,
           data: efficientResult,
           truncated: efficientResult.pairings.length < efficientResult.stats.totalPairings
         };
-      
+
       case 'getPairingsByDuration':
         const allPairings = await this.storage.getPairings(bidPackageId);
         let durationPairings = allPairings.filter(p => p.pairingDays === args.days);
-        
+
         // Apply additional filters if provided
         if (args.minEfficiency) {
           durationPairings = durationPairings.filter(p => {
@@ -507,19 +525,19 @@ export class HybridOpenAIService {
             return efficiency >= args.minEfficiency;
           });
         }
-        
+
         if (args.minHoldProb) {
           durationPairings = durationPairings.filter(p => {
             const holdProb = parseInt(p.holdProbability?.toString() || '0');
             return holdProb >= args.minHoldProb;
           });
         }
-        
+
         // Sort by credit hours descending
         const sortedPairings = durationPairings
           .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
           .slice(0, args.limit || 20);
-        
+
         return {
           response: `Found ${durationPairings.length} ${args.days}-day pairings${args.minEfficiency ? ` with efficiency >= ${args.minEfficiency}` : ''}${args.minHoldProb ? ` and hold probability >= ${args.minHoldProb}%` : ''}.`,
           data: {
@@ -536,7 +554,7 @@ export class HybridOpenAIService {
       case 'getMultiDayAnalysis':
         const allPairingsForMulti = await this.storage.getPairings(bidPackageId);
         const multiDayPairings = allPairingsForMulti.filter(p => p.pairingDays >= 2);
-        
+
         // Group by duration
         const groupedByDuration = multiDayPairings.reduce((acc, p) => {
           const key = p.pairingDays;
@@ -572,20 +590,20 @@ export class HybridOpenAIService {
         const targetCity = args.city;
         const requestedCount = args.count || 10;
         const minDuration = args.minDuration || 0;
-        
+
         // Collect all layovers
         const allLayovers: any[] = [];
-        
+
         allPairingsForLayover.forEach(pairing => {
           if (pairing.layovers && Array.isArray(pairing.layovers)) {
             pairing.layovers.forEach((layover: any) => {
               // Filter by city if specified
               if (targetCity && layover.city !== targetCity) return;
-              
+
               // Parse duration
               const durationStr = layover.duration?.toString() || '0';
               let durationHours = 0;
-              
+
               if (durationStr.includes(':')) {
                 const [hours, minutes] = durationStr.split(':').map(Number);
                 durationHours = hours + (minutes / 60);
@@ -595,7 +613,7 @@ export class HybridOpenAIService {
               } else {
                 durationHours = parseFloat(durationStr);
               }
-              
+
               if (durationHours >= minDuration) {
                 allLayovers.push({
                   city: layover.city,
@@ -634,7 +652,7 @@ export class HybridOpenAIService {
           },
           truncated: sortedLayovers.length < allLayovers.length
         };
-      
+
       default:
         throw new Error(`Unknown function: ${functionName}`);
     }
@@ -656,7 +674,7 @@ export class HybridOpenAIService {
       const [h, m] = hoursStr.split('.');
       return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
     }
-    
+
     // Handle decimal hours format (e.g., 28.33 = 28 hours 20 minutes)
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
