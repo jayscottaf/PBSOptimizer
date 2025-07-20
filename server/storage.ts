@@ -19,7 +19,7 @@ import {
   type InsertChatHistory
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, like, gte, lte, or } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, ilike, avg, sum, count, min, max, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -37,7 +37,7 @@ export interface IStorage {
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
-  getPairings(bidPackageId?: number): Promise<Pairing[]>;
+  getPairings(bidPackageId?: number, selectFields?: Partial<keyof Pairing>[]): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
   searchPairings(filters: {
@@ -52,7 +52,15 @@ export interface IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
-  }): Promise<Pairing[]>;
+    page?: number;
+    limit?: number;
+    light?: boolean;
+  }): Promise<{
+    pairings: Pairing[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>;
 
   // Bid History operations
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
@@ -67,9 +75,40 @@ export interface IStorage {
   saveChatMessage(message: InsertChatHistory): Promise<ChatHistory>;
   getChatHistory(sessionId: string): Promise<ChatHistory[]>;
   clearChatHistory(sessionId: string): Promise<void>;
+
+    // Optimized method for list views (excludes heavy text fields)
+  getPairingsLight(bidPackageId?: number): Promise<Partial<Pairing>[]>;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Simple in-memory cache for frequently accessed data
+  private queryCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  private getCacheKey(filters: any): string {
+    return JSON.stringify(filters);
+  }
+
+  private getFromCache<T>(key: string): T | null {
+    const cached = this.queryCache.get(key);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      return cached.data;
+    }
+    if (cached) {
+      this.queryCache.delete(key); // Remove expired cache
+    }
+    return null;
+  }
+
+  private setCache<T>(key: string, data: T, ttl: number = this.CACHE_TTL): void {
+    // Limit cache size to prevent memory leaks
+    if (this.queryCache.size > 100) {
+      const oldestKey = this.queryCache.keys().next().value;
+      this.queryCache.delete(oldestKey);
+    }
+    this.queryCache.set(key, { data, timestamp: Date.now(), ttl });
+  }
+
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -133,13 +172,36 @@ export class DatabaseStorage implements IStorage {
     return newPairing;
   }
 
-  async getPairings(bidPackageId?: number): Promise<Pairing[]> {
+  async getPairings(bidPackageId?: number, selectFields?: Partial<keyof Pairing>[]): Promise<Pairing[]> {
+    const query = db.select(
+      selectFields ? this.buildSelectObject(selectFields) : undefined
+    ).from(pairings);
+
     if (bidPackageId) {
-      return await db.select().from(pairings)
-        .where(eq(pairings.bidPackageId, bidPackageId))
-        .orderBy(asc(pairings.pairingNumber));
+      return await query.where(eq(pairings.bidPackageId, bidPackageId));
     }
-    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+    return await query;
+  }
+
+  // Helper method to build select object for specific fields
+  private buildSelectObject(fields: Partial<keyof Pairing>[]) {
+    const selectObj: any = {};
+    fields.forEach(field => {
+      if (field in pairings) {
+        selectObj[field] = pairings[field as keyof typeof pairings];
+      }
+    });
+    return selectObj;
+  }
+
+  // Optimized method for list views (excludes heavy text fields)
+  async getPairingsLight(bidPackageId?: number): Promise<Partial<Pairing>[]> {
+    const lightFields = [
+      'id', 'pairingNumber', 'route', 'creditHours', 'blockHours', 
+      'tafb', 'holdProbability', 'pairingDays'
+    ] as (keyof Pairing)[];
+
+    return this.getPairings(bidPackageId, lightFields);
   }
 
   async getPairing(id: number): Promise<Pairing | undefined> {
@@ -170,8 +232,43 @@ export class DatabaseStorage implements IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
-  }): Promise<Pairing[]> {
-    const conditions = [];
+    page?: number;
+    limit?: number;
+    light?: boolean;
+  }): Promise<{
+    pairings: Pairing[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const offset = (page - 1) * limit;
+
+    // Check cache first
+    const cacheKey = this.getCacheKey({ ...filters, page, limit });
+    const cached = this.getFromCache<{ pairings: Pairing[]; total: number; page: number; totalPages: number }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Select only necessary fields for light queries
+    const selectFields = filters.light ? {
+      id: pairings.id,
+      pairingNumber: pairings.pairingNumber,
+      route: pairings.route,
+      creditHours: pairings.creditHours,
+      blockHours: pairings.blockHours,
+      tafb: pairings.tafb,
+      holdProbability: pairings.holdProbability,
+      pairingDays: pairings.pairingDays,
+      bidPackageId: pairings.bidPackageId,
+    } : undefined;
+
+    let query = db.select(selectFields).from(pairings);
+    let countQuery = db.select({ count: sql<number>`count(*)` }).from(pairings);
+
+    const conditions: any[] = [];
 
     if (filters.bidPackageId) {
       conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
@@ -180,10 +277,8 @@ export class DatabaseStorage implements IStorage {
     if (filters.search) {
       conditions.push(
         or(
-          like(pairings.route, `%${filters.search}%`),
-          like(pairings.pairingNumber, `%${filters.search}%`),
-          like(pairings.effectiveDates, `%${filters.search}%`),
-          like(pairings.fullTextBlock, `%${filters.search}%`)
+          ilike(pairings.pairingNumber, `%${filters.search}%`),
+          ilike(pairings.route, `%${filters.search}%`)
         )
       );
     }
@@ -196,11 +291,19 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
     }
 
+    if (filters.blockMin) {
+      conditions.push(gte(pairings.blockHours, filters.blockMin.toString()));
+    }
+
+    if (filters.blockMax) {
+      conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
+    }
+
     if (filters.holdProbabilityMin) {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
 
-        if (filters.pairingDays) {
+    if (filters.pairingDays) {
       conditions.push(eq(pairings.pairingDays, filters.pairingDays));
     }
 
@@ -213,12 +316,30 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-      return await db.select().from(pairings)
-        .where(and(...conditions))
-        .orderBy(asc(pairings.pairingNumber));
+      query = query.where(and(...conditions));
+      countQuery = countQuery.where(and(...conditions));
     }
 
-    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+    // Execute both queries in parallel
+    const [pairingsResult, countResult] = await Promise.all([
+      query.limit(limit).offset(offset).orderBy(desc(pairings.creditHours)),
+      countQuery
+    ]);
+
+    const total = countResult[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    const result = {
+      pairings: pairingsResult as Pairing[],
+      total,
+      page,
+      totalPages
+    };
+
+    // Cache the result
+    this.setCache(cacheKey, result);
+
+    return result;
   }
 
   async createBidHistory(bidHistoryData: InsertBidHistory): Promise<BidHistory> {
