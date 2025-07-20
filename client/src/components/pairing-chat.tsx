@@ -327,7 +327,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
     
-    // Extract pairings from message data if available
+    // Extract pairings from various locations in message data
     if (messageData?.pairings && Array.isArray(messageData.pairings)) {
       pairings.push(...messageData.pairings);
     }
@@ -336,7 +336,31 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       pairings.push(messageData.pairing);
     }
 
-    return pairings;
+    // Extract from topPairings if it's an efficiency analysis
+    if (messageData?.topPairings && Array.isArray(messageData.topPairings)) {
+      pairings.push(...messageData.topPairings);
+    }
+
+    // Extract from data array if present
+    if (messageData?.data && Array.isArray(messageData.data)) {
+      pairings.push(...messageData.data);
+    }
+
+    // Convert any pairing objects to have consistent structure
+    return pairings.map(pairing => ({
+      pairingNumber: pairing.pairingNumber || pairing.pairing_number,
+      route: pairing.route,
+      creditHours: pairing.creditHours || pairing.credit_hours,
+      blockHours: pairing.blockHours || pairing.block_hours,
+      tafb: pairing.tafb,
+      pairingDays: pairing.pairingDays || pairing.pairing_days,
+      holdProbability: pairing.holdProbability || pairing.hold_probability,
+      layovers: pairing.layovers,
+      effectiveDates: pairing.effectiveDates || pairing.effective_dates,
+      payHours: pairing.payHours || pairing.pay_hours,
+      fullText: pairing.fullText || pairing.full_text,
+      fullTextBlock: pairing.fullTextBlock || pairing.full_text_block || pairing.fullText || pairing.full_text
+    }));
   };
 
   const formatMessageWithPairings = (content: string, messageData?: any) => {
@@ -346,47 +370,56 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       return <span className="whitespace-pre-wrap text-sm">{content}</span>;
     }
 
-    // Split content by pairing numbers to insert interactive elements
-    let formattedContent = content;
-    const parts = [];
-    let lastIndex = 0;
-
-    // Find pairing references in the text
-    pairings.forEach((pairing) => {
-      const pairingNumber = pairing.pairingNumber;
-      if (pairingNumber) {
-        const regex = new RegExp(`\\b${pairingNumber}\\b`, 'g');
-        let match;
-        
-        while ((match = regex.exec(formattedContent)) !== null) {
-          // Add text before the pairing
-          if (match.index > lastIndex) {
-            parts.push(
-              <span key={`text-${lastIndex}`}>
-                {formattedContent.substring(lastIndex, match.index)}
-              </span>
-            );
-          }
-          
-          // Add the interactive pairing element
-          parts.push(
-            <PairingDisplay
-              key={`pairing-${match.index}-${pairingNumber}`}
-              pairing={pairing}
-              displayText={pairingNumber}
-            />
-          );
-          
-          lastIndex = match.index + match[0].length;
-        }
+    // Create a map of pairing numbers to pairing objects for quick lookup
+    const pairingMap = new Map();
+    pairings.forEach(pairing => {
+      if (pairing.pairingNumber) {
+        pairingMap.set(pairing.pairingNumber.toString(), pairing);
       }
     });
 
+    // Split content and replace pairing numbers with interactive elements
+    const parts = [];
+    let remainingContent = content;
+    let keyCounter = 0;
+
+    // Find all pairing number patterns in the text
+    const pairingPattern = /\b(\d{4,5})\b/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = pairingPattern.exec(content)) !== null) {
+      const pairingNumber = match[1];
+      const pairing = pairingMap.get(pairingNumber);
+
+      if (pairing) {
+        // Add text before the pairing
+        if (match.index > lastIndex) {
+          parts.push(
+            <span key={`text-${keyCounter++}`}>
+              {content.substring(lastIndex, match.index)}
+            </span>
+          );
+        }
+
+        // Add the interactive pairing element
+        parts.push(
+          <PairingDisplay
+            key={`pairing-${keyCounter++}-${pairingNumber}`}
+            pairing={pairing}
+            displayText={pairingNumber}
+          />
+        );
+
+        lastIndex = match.index + match[0].length;
+      }
+    }
+
     // Add remaining text
-    if (lastIndex < formattedContent.length) {
+    if (lastIndex < content.length) {
       parts.push(
-        <span key={`text-${lastIndex}`}>
-          {formattedContent.substring(lastIndex)}
+        <span key={`text-${keyCounter++}`}>
+          {content.substring(lastIndex)}
         </span>
       );
     }
