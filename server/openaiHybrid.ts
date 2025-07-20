@@ -489,23 +489,23 @@ export class HybridOpenAIService {
       case 'getTopEfficientPairings':
         const efficientResult = await this.storage.getTopEfficientPairings(bidPackageId, args.limit || 20);
 
-        // Generate response based on data type
-        let response = "";
+        // Generate detailed response with actual pairing data
+        const topPairings = efficientResult.pairings.slice(0, 5);
+        let response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
+        
+        topPairings.forEach((p: any, i: number) => {
+          const efficiency = (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2);
+          response += `${i + 1}. **Pairing ${p.pairingNumber}** - ${efficiency} ratio\n`;
+          response += `   • Credit: ${this.formatHoursDeltaPBS(parseFloat(p.creditHours.toString()))} | Block: ${this.formatHoursDeltaPBS(parseFloat(p.blockHours.toString()))}\n`;
+          response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}% | Route: ${p.route?.substring(0, 50)}...\n\n`;
+        });
+        
+        response += `**Summary Stats:**\n`;
+        response += `• Average efficiency: ${efficientResult.stats.avgEfficiency.toFixed(2)}\n`;
+        response += `• Top efficiency: ${efficientResult.stats.topEfficiency.toFixed(2)}\n`;
+        response += `• Average credit: ${this.formatHoursDeltaPBS(parseFloat(efficientResult.stats.avgCredit.toString()))}\n`;
+        response += `• Showing ${topPairings.length} of ${efficientResult.stats.totalPairings} pairings`;
 
-        switch (efficientResult.type) {
-          case 'efficiency_analysis':
-            const topPairings = efficientResult.topPairings.slice(0, 5);
-            response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
-            topPairings.forEach((p, i) => {
-              response += `${i + 1}. **${p.pairingNumber}** - ${p.efficiency} ratio\n`;
-              response += `   • Credit: ${p.creditHours} | Block: ${p.blockHours}\n`;
-              response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}%\n\n`;
-            });
-            response += `**Summary:** Avg efficiency: ${efficientResult.summaryStats.avgEfficiency} | Top: ${efficientResult.summaryStats.topEfficiency}`;
-            break;
-          default:
-            response = "Analysis completed.";
-        }
         return {
           response: response,
           data: efficientResult,
