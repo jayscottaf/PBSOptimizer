@@ -38,7 +38,7 @@ export default function Dashboard() {
     .sort((a: any, b: any) => b.id - a.id)[0] || 
     (bidPackages as any[]).find((pkg: any) => pkg.status === 'processing');
 
-  const { data: pairings = [], refetch: refetchPairings } = useQuery({
+  const { data: pairingsData, refetch: refetchPairings } = useQuery({
     queryKey: ["/api/pairings/search", latestBidPackage?.id, searchFilters, searchQuery],
     queryFn: () => api.searchPairings({ 
       ...searchFilters, 
@@ -48,6 +48,9 @@ export default function Dashboard() {
     enabled: !!latestBidPackage, // Only run if we have a bid package
     staleTime: 0, // Always fetch fresh data
   });
+
+  // Extract pairings array from response
+  const pairings = pairingsData?.pairings || [];
 
   const handleSearch = () => {
     // Query will auto-refresh due to dependency on searchQuery and searchFilters
@@ -344,8 +347,8 @@ export default function Dashboard() {
               <TabsContent value="analysis" className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <StatsPanel 
-                    totalPairings={pairings.length}
-                    bidPackages={bidPackages as any[]}
+                    pairings={pairings}
+                    bidPackage={latestBidPackage}
                   />
                   <SeniorityChart />
                 </div>

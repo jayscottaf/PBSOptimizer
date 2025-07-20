@@ -23,13 +23,16 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
     return "bg-red-500";
   };
 
+  // Ensure pairings is always an array
+  const safePairings = Array.isArray(pairings) ? pairings : [];
+
   return (
     <Card>
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
         <div className="flex items-center space-x-4">
           <span className="text-sm text-gray-500">
-            Showing {pairings.length} pairings
+            Showing {safePairings.length} pairings
           </span>
           <Button variant="link" className="text-blue-600 hover:text-blue-700 font-medium">
             Export CSV
@@ -65,14 +68,14 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {pairings.length === 0 ? (
+            {safePairings.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   No pairings found. Upload a bid package to get started.
                 </td>
               </tr>
             ) : (
-              pairings.map((pairing) => (
+              safePairings.map((pairing) => (
                 <tr 
                   key={pairing.id}
                   className="hover:bg-gray-50 cursor-pointer"
