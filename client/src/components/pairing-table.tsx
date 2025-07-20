@@ -65,7 +65,7 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {pairings.length === 0 ? (
+            {!pairings || !Array.isArray(pairings) || pairings.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   No pairings found. Upload a bid package to get started.
@@ -148,7 +148,7 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
       </div>
 
       {/* Pagination */}
-      {pairings.length > 0 && (
+      {pairings && Array.isArray(pairings) && pairings.length > 0 && (
         <div className="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
             <Button variant="outline">Previous</Button>

@@ -38,7 +38,6 @@ export interface SearchFilters {
   creditMin?: number;
   creditMax?: number;
   blockMin?: number;
-  blockMax?: number;
   tafb?: string;
   holdProbabilityMin?: number;
 }
@@ -81,14 +80,26 @@ export const api = {
 
   // Pairings
   getPairings: async (bidPackageId?: number): Promise<Pairing[]> => {
-    const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
-    const response = await apiRequest("GET", url);
-    return response.json();
+    try {
+      const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
+      const response = await apiRequest("GET", url);
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("Error fetching pairings:", error);
+      return [];
+    }
   },
 
   searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
-    const response = await apiRequest("POST", "/api/pairings/search", filters);
-    return response.json();
+    try {
+      const response = await apiRequest("POST", "/api/pairings/search", filters);
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("Error searching pairings:", error);
+      return [];
+    }
   },
 
   getPairing: async (id: number): Promise<Pairing> => {
