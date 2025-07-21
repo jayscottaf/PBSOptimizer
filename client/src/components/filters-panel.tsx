@@ -13,7 +13,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {
@@ -65,21 +65,6 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
-        <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
-          <SelectTrigger className="text-sm">
-            <SelectValue placeholder="TAFB" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">Any TAFB</SelectItem>
-            <SelectItem value="3d">3 Days</SelectItem>
-            <SelectItem value="4d">4 Days</SelectItem>
-            <SelectItem value="5d+">5+ Days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Trip Length</label>
         <Select onValueChange={(value) => {
           if (value === "any") {
@@ -98,6 +83,21 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
             <SelectItem value="3">3 Days</SelectItem>
             <SelectItem value="4">4 Days</SelectItem>
             <SelectItem value="5">5 Days</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
+        <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
+          <SelectTrigger className="text-sm">
+            <SelectValue placeholder="TAFB" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">Any TAFB</SelectItem>
+            <SelectItem value="3d">3 Days</SelectItem>
+            <SelectItem value="4d">4 Days</SelectItem>
+            <SelectItem value="5d+">5+ Days</SelectItem>
           </SelectContent>
         </Select>
       </div>
