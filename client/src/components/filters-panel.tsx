@@ -38,7 +38,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Block Time</label>
         <Select onValueChange={(value) => {
@@ -63,7 +63,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
         <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
@@ -78,7 +78,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Hold Probability</label>
         <Select onValueChange={(value) => {
@@ -100,6 +100,23 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
             <SelectItem value="high">High (80%+)</SelectItem>
             <SelectItem value="medium">Medium (50-80%)</SelectItem>
             <SelectItem value="low">Low (&lt;50%)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Trip Length</label>
+        <Select onValueChange={(value) => handleFilterChange('pairingDays', value)}>
+          <SelectTrigger className="text-sm">
+            <SelectValue placeholder="Any Length" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">Any Length</SelectItem>
+            <SelectItem value="1">1 Day</SelectItem>
+            <SelectItem value="2">2 Days</SelectItem>
+            <SelectItem value="3">3 Days</SelectItem>
+            <SelectItem value="4">4 Days</SelectItem>
+            <SelectItem value="5">5 Days</SelectItem>
           </SelectContent>
         </Select>
       </div>
