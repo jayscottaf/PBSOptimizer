@@ -1,3 +1,7 @@
+The code has been modified to include startAirport, endAirport, and includesAirport parameters in the searchPairings function to allow searching for pairings by airport.
+```
+
+```replit_final_file
 import { 
   users, 
   bidPackages, 
@@ -42,7 +46,7 @@ export interface IStorage {
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
   searchPairings(filters: {
-    bidPackageId?: number;
+    bidPackageId: number;
     search?: string;
     creditMin?: number;
     creditMax?: number;
@@ -50,9 +54,14 @@ export interface IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-        pairingDays?: number;
-        pairingDaysMin?: number;
-        pairingDaysMax?: number;
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    startAirport?: string;
+    endAirport?: string;
+    includesAirport?: string;
+    limit?: number;
+    offset?: number;
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -173,7 +182,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchPairings(filters: {
-    bidPackageId?: number;
+    bidPackageId: number;
     search?: string;
     creditMin?: number;
     creditMax?: number;
@@ -181,9 +190,14 @@ export class DatabaseStorage implements IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-        pairingDays?: number;
-        pairingDaysMin?: number;
-        pairingDaysMax?: number;
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    startAirport?: string;
+    endAirport?: string;
+    includesAirport?: string;
+    limit?: number;
+    offset?: number;
   }): Promise<Pairing[]> {
     const conditions = [];
 
@@ -191,7 +205,7 @@ export class DatabaseStorage implements IStorage {
     if (!filters.bidPackageId) {
       throw new Error("Bid package ID is required for pairing search");
     }
-    
+
     conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
     if (filters.search) {
@@ -227,6 +241,18 @@ export class DatabaseStorage implements IStorage {
 
     if (filters.pairingDaysMax) {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+    }
+    
+    if (filters.startAirport) {
+      conditions.push(like(pairings.route, `${filters.startAirport}%`));
+    }
+
+    if (filters.endAirport) {
+      conditions.push(like(pairings.route, `%${filters.endAirport}`));
+    }
+
+     if (filters.includesAirport) {
+      conditions.push(like(pairings.route, `%${filters.includesAirport}%`));
     }
 
     if (conditions.length > 0) {

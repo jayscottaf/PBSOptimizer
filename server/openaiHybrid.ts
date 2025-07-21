@@ -503,14 +503,14 @@ export class HybridOpenAIService {
         // Generate detailed response with actual pairing data
         const topPairings = efficientResult.pairings.slice(0, 5);
         let response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
-        
+
         topPairings.forEach((p: any, i: number) => {
           const efficiency = (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2);
           response += `${i + 1}. **Pairing ${p.pairingNumber}** - ${efficiency} ratio\n`;
           response += `   • Credit: ${this.formatHoursDeltaPBS(parseFloat(p.creditHours.toString()))} | Block: ${this.formatHoursDeltaPBS(parseFloat(p.blockHours.toString()))}\n`;
           response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}% | Route: ${p.route?.substring(0, 50)}...\n\n`;
         });
-        
+
         response += `**Summary Stats:**\n`;
         response += `• Average efficiency: ${efficientResult.stats.avgEfficiency.toFixed(2)}\n`;
         response += `• Top efficiency: ${efficientResult.stats.topEfficiency.toFixed(2)}\n`;
@@ -563,106 +563,13 @@ export class HybridOpenAIService {
         };
 
       case 'getMultiDayAnalysis':
-        const allPairingsForMulti = await this.storage.getPairings(bidPackageId);
-        const multiDayPairings = allPairingsForMulti.filter(p => p.pairingDays >= 2);
+        return await this.getMultiDayAnalysis(args.limit || 10);
 
-        // Group by duration
-        const groupedByDuration = multiDayPairings.reduce((acc, p) => {
-          const key = p.pairingDays;
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(p);
-          return acc;
-        }, {} as any);
+      case 'getPairingsByAirport':
+        return await this.getPairingsByAirport(args);
 
-        // Get top pairings from each duration group
-        const analysisResults = Object.entries(groupedByDuration)
-          .map(([duration, pairings]: [string, any]) => ({
-            duration: parseInt(duration),
-            count: pairings.length,
-            avgCredit: pairings.reduce((sum: number, p: any) => sum + parseFloat(p.creditHours.toString()), 0) / pairings.length,
-            topPairings: pairings
-              .sort((a: any, b: any) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
-              .slice(0, args.limit || 5)
-          }))
-          .sort((a, b) => b.count - a.count);
-
-        return {
-          response: `Multi-day analysis complete. Found ${multiDayPairings.length} pairings across ${Object.keys(groupedByDuration).length} duration categories.`,
-          data: {
-            durationBreakdown: analysisResults,
-            totalMultiDay: multiDayPairings.length,
-            totalSearched: allPairingsForMulti.length
-          },
-          truncated: false
-        };
-
-      case 'getLayoverAnalysis':
-        const allPairingsForLayover = await this.storage.getPairings(bidPackageId);
-        const targetCity = args.city;
-        const requestedCount = args.count || 10;
-        const minDuration = args.minDuration || 0;
-
-        // Collect all layovers
-        const allLayovers: any[] = [];
-
-        allPairingsForLayover.forEach(pairing => {
-          if (pairing.layovers && Array.isArray(pairing.layovers)) {
-            pairing.layovers.forEach((layover: any) => {
-              // Filter by city if specified
-              if (targetCity && layover.city !== targetCity) return;
-
-              // Parse duration
-              const durationStr = layover.duration?.toString() || '0';
-              let durationHours = 0;
-
-              if (durationStr.includes(':')) {
-                const [hours, minutes] = durationStr.split(':').map(Number);
-                durationHours = hours + (minutes / 60);
-              } else if (durationStr.includes('.')) {
-                const [hours, minutes] = durationStr.split('.').map(Number);
-                durationHours = hours + (minutes / 60);
-              } else {
-                durationHours = parseFloat(durationStr);
-              }
-
-              if (durationHours >= minDuration) {
-                allLayovers.push({
-                  city: layover.city,
-                  hotel: layover.hotel,
-                  duration: durationStr,
-                  durationHours: durationHours,
-                  pairingNumber: pairing.pairingNumber,
-                  creditHours: pairing.creditHours,
-                  holdProbability: pairing.holdProbability,
-                  route: pairing.route
-                });
-              }
-            });
-          }
-        });
-
-        const sortedLayovers = allLayovers
-          .sort((a, b) => b.durationHours - a.durationHours)
-          .slice(0, requestedCount);
-
-        return {
-          response: `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}. Showing top ${requestedCount}.`,
-          data: {
-            targetCity,
-            longestLayovers: sortedLayovers.map(layover => ({
-              city: layover.city,
-              hotel: layover.hotel,
-              duration: layover.duration,
-              durationHours: layover.durationHours.toFixed(2),
-              pairingNumber: layover.pairingNumber,
-              creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
-              holdProbability: layover.holdProbability,
-              route: layover.route
-            })),
-            totalLayovers: allLayovers.length
-          },
-          truncated: sortedLayovers.length < allLayovers.length
-        };
+      case 'analyzeAirportPairings':
+        return await this.analyzeAirportPairings(args.airport, args.analysisType);
 
       default:
         throw new Error(`Unknown function: ${functionName}`);
@@ -788,7 +695,219 @@ Use the backend-processed summaries to provide accurate analysis within token li
             }
           }
         }
+      },
+            {
+        type: "function",
+        function: {
+          name: "getPairingsByAirport",
+          description: "Get pairings that start, end, or include a specific airport",
+          parameters: {
+            type: "object",
+            properties: {
+              startAirport: { type: "string", description: "3-letter airport code to search for pairings starting from" },
+              endAirport: { type: "string", description: "3-letter airport code to search for pairings ending at" },
+              includesAirport: { type: "string", description: "3-letter airport code to search for pairings including it" },
+              minCreditHours: { type: "number", description: "Minimum credit hours for the pairings" },
+              maxCreditHours: { type: "number", description: "Maximum credit hours for the pairings" },
+              minHoldProb: { type: "number", description: "Minimum hold probability for the pairings" },
+              limit: { type: "number", description: "Maximum number of pairings to return" }
+            },
+            required: []
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          "name": "analyzeAirportPairings",
+          "description": "Analyze pairings based on specific airport and the type of analysis (starts, ends, includes)",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "airport": {
+                "type": "string",
+                "description": "The 3-letter airport code for analysis"
+              },
+              "analysisType": {
+                "type": "string",
+                "enum": ["starts", "ends", "includes", "starts_and_ends"],
+                "description": "The type of analysis to perform: 'starts', 'ends', 'includes', or 'starts_and_ends'"
+              }
+            },
+            "required": ["airport", "analysisType"]
+          }
+        }
       }
     ];
+  }
+
+  private async getMultiDayAnalysis(limit: number = 10) {
+    const allPairings = await this.storage.getPairings(this.bidPackageId);
+    const multiDayPairings = allPairings.filter(p => p.pairingDays >= 2);
+
+    // Group by duration
+    const groupedByDuration = multiDayPairings.reduce((acc, p) => {
+      const key = p.pairingDays;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(p);
+      return acc;
+    }, {} as any);
+
+    // Get top pairings from each duration group
+    const multiDayAnalysis = Object.entries(groupedByDuration)
+      .map(([duration, pairings]: [string, any]) => ({
+        duration: parseInt(duration),
+        count: pairings.length,
+        avgCredit: pairings.reduce((sum: number, p: any) => sum + parseFloat(p.creditHours), 0) / pairings.length,
+        topPairings: pairings
+          .sort((a: any, b: any) => parseFloat(b.creditHours) - parseFloat(a.creditHours))
+          .slice(0, limit)
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const totalPairings = allPairings.length;
+
+    return {
+      multiDayAnalysis,
+      summary: `Analysis of ${totalPairings} multi-day pairings (2+ days) across ${Object.keys(multiDayAnalysis).length} duration categories`
+    };
+  }
+
+  private async getPairingsByAirport(params: {
+    startAirport?: string;
+    endAirport?: string;
+    includesAirport?: string;
+    minCreditHours?: number;
+    maxCreditHours?: number;
+    minHoldProb?: number;
+    limit?: number;
+  }) {
+    const allPairings = await this.storage.getPairings(this.bidPackageId);
+
+    let filteredPairings = allPairings.filter(pairing => {
+      let matches = true;
+
+      if (params.startAirport) {
+        matches = matches && pairing.route?.startsWith(params.startAirport.toUpperCase());
+      }
+
+      if (params.endAirport) {
+        matches = matches && pairing.route?.endsWith(params.endAirport.toUpperCase());
+      }
+
+      if (params.includesAirport) {
+        matches = matches && pairing.route?.includes(params.includesAirport.toUpperCase());
+      }
+
+      if (params.minCreditHours) {
+        matches = matches && parseFloat(pairing.creditHours) >= params.minCreditHours;
+      }
+
+      if (params.maxCreditHours) {
+        matches = matches && parseFloat(pairing.creditHours) <= params.maxCreditHours;
+      }
+
+      if (params.minHoldProb) {
+        matches = matches && (pairing.holdProbability || 0) >= params.minHoldProb;
+      }
+
+      return matches;
+    });
+
+    const limit = params.limit || 20;
+    const pairings = filteredPairings.slice(0, limit);
+
+    return {
+      pairings,
+      totalFound: filteredPairings.length,
+      totalShown: pairings.length,
+      searchCriteria: {
+        startAirport: params.startAirport,
+        endAirport: params.endAirport,
+        includesAirport: params.includesAirport,
+        minCreditHours: params.minCreditHours,
+        maxCreditHours: params.maxCreditHours,
+        minHoldProb: params.minHoldProb
+      }
+    };
+  }
+
+  private async analyzeAirportPairings(airport: string, analysisType: string) {
+    const allPairings = await this.storage.getPairings(this.bidPackageId);
+    const airportCode = airport.toUpperCase();
+
+    let matchingPairings = [];
+    let description = "";
+
+    switch (analysisType) {
+      case 'starts':
+        matchingPairings = allPairings.filter(p => p.route?.startsWith(airportCode));
+        description = `pairings that start at ${airportCode}`;
+        break;
+      case 'ends':
+        matchingPairings = allPairings.filter(p => p.route?.endsWith(airportCode));
+        description = `pairings that end at ${airportCode}`;
+        break;
+      case 'includes':
+        matchingPairings = allPairings.filter(p => p.route?.includes(airportCode));
+        description = `pairings that include ${airportCode} anywhere in the route`;
+        break;
+      case 'starts_and_ends':
+        matchingPairings = allPairings.filter(p => 
+          p.route?.startsWith(airportCode) && p.route?.endsWith(airportCode)
+        );
+        description = `pairings that both start and end at ${airportCode}`;
+        break;
+      default:
+        throw new Error(`Unknown analysis type: ${analysisType}`);
+    }
+
+    // Calculate statistics
+    const totalMatching = matchingPairings.length;
+    const totalPairings = allPairings.length;
+    const percentage = ((totalMatching / totalPairings) * 100).toFixed(1);
+
+    // Group by duration
+    const durationGroups: { [key: number]: any[] } = {};
+    matchingPairings.forEach(pairing => {
+      const days = pairing.pairingDays || 0;
+      if (!durationGroups[days]) durationGroups[days] = [];
+      durationGroups[days].push(pairing);
+    });
+
+    // Calculate averages
+    const avgCredit = matchingPairings.length > 0 
+      ? (matchingPairings.reduce((sum, p) => sum + parseFloat(p.creditHours), 0) / matchingPairings.length).toFixed(1)
+      : 0;
+
+    const avgHoldProb = matchingPairings.length > 0
+      ? (matchingPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / matchingPairings.length).toFixed(1)
+      : 0;
+
+    // Get best pairings (high credit and good hold probability)
+    const goodPairings = matchingPairings
+      .filter(p => parseFloat(p.creditHours) >= 15 && (p.holdProbability || 0) >= 0.6)
+      .sort((a, b) => parseFloat(b.creditHours) - parseFloat(a.creditHours))
+      .slice(0, 10);
+
+    return {
+      airport: airportCode,
+      analysisType,
+      description,
+      totalMatching,
+      totalPairings,
+      percentage: `${percentage}%`,
+      durationBreakdown: Object.keys(durationGroups).map(days => ({
+        days: parseInt(days),
+        count: durationGroups[parseInt(days)].length,
+        percentage: ((durationGroups[parseInt(days)].length / totalMatching) * 100).toFixed(1) + '%'
+      })).sort((a, b) => a.days - b.days),
+      statistics: {
+        avgCreditHours: avgCredit,
+        avgHoldProbability: avgHoldProb + '%'
+      },
+      goodPairings: goodPairings.slice(0, 5), // Show top 5 good pairings
+      summary: `Found ${totalMatching} ${description} out of ${totalPairings} total pairings (${percentage}%)`
+    };
   }
 }
