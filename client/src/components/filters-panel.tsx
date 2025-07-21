@@ -13,7 +13,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {
@@ -28,7 +28,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Any Credit" />
+            <SelectValue placeholder="Credit Range" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Credit</SelectItem>
@@ -53,7 +53,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Any Block" />
+            <SelectValue placeholder="Block Time" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Block</SelectItem>
@@ -68,13 +68,36 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
         <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
         <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Any TAFB" />
+            <SelectValue placeholder="TAFB" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any TAFB</SelectItem>
             <SelectItem value="3d">3 Days</SelectItem>
             <SelectItem value="4d">4 Days</SelectItem>
             <SelectItem value="5d+">5+ Days</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Trip Length</label>
+        <Select onValueChange={(value) => {
+          if (value === "any") {
+            onFiltersChange({ pairingDays: undefined });
+          } else {
+            onFiltersChange({ pairingDays: parseInt(value) });
+          }
+        }}>
+          <SelectTrigger className="text-sm">
+            <SelectValue placeholder="Trip Length" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">Any Length</SelectItem>
+            <SelectItem value="1">1 Day</SelectItem>
+            <SelectItem value="2">2 Days</SelectItem>
+            <SelectItem value="3">3 Days</SelectItem>
+            <SelectItem value="4">4 Days</SelectItem>
+            <SelectItem value="5">5 Days</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -93,30 +116,13 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Any Probability" />
+            <SelectValue placeholder="High (80%+)" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Probability</SelectItem>
             <SelectItem value="high">High (80%+)</SelectItem>
             <SelectItem value="medium">Medium (50-80%)</SelectItem>
             <SelectItem value="low">Low (&lt;50%)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Trip Length</label>
-        <Select onValueChange={(value) => handleFilterChange('pairingDays', value)}>
-          <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Any Length" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">Any Length</SelectItem>
-            <SelectItem value="1">1 Day</SelectItem>
-            <SelectItem value="2">2 Days</SelectItem>
-            <SelectItem value="3">3 Days</SelectItem>
-            <SelectItem value="4">4 Days</SelectItem>
-            <SelectItem value="5">5 Days</SelectItem>
           </SelectContent>
         </Select>
       </div>
