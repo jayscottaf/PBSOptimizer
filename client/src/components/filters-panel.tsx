@@ -13,7 +13,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {
@@ -28,7 +28,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Credit Range" />
+            <SelectValue placeholder="Any Credit" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Credit</SelectItem>
@@ -38,7 +38,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-
+      
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Block Time</label>
         <Select onValueChange={(value) => {
@@ -53,7 +53,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Block Time" />
+            <SelectValue placeholder="Any Block" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Block</SelectItem>
@@ -63,35 +63,12 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Trip Length</label>
-        <Select onValueChange={(value) => {
-          if (value === "any") {
-            onFiltersChange({ pairingDays: undefined });
-          } else {
-            onFiltersChange({ pairingDays: parseInt(value) });
-          }
-        }}>
-          <SelectTrigger className="text-sm">
-            <SelectValue placeholder="Trip Length" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">Any Length</SelectItem>
-            <SelectItem value="1">1 Day</SelectItem>
-            <SelectItem value="2">2 Days</SelectItem>
-            <SelectItem value="3">3 Days</SelectItem>
-            <SelectItem value="4">4 Days</SelectItem>
-            <SelectItem value="5">5 Days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
+      
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
         <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="TAFB" />
+            <SelectValue placeholder="Any TAFB" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any TAFB</SelectItem>
@@ -101,7 +78,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-
+      
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Hold Probability</label>
         <Select onValueChange={(value) => {
@@ -116,7 +93,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           }
         }}>
           <SelectTrigger className="text-sm">
-            <SelectValue placeholder="High (80%+)" />
+            <SelectValue placeholder="Any Probability" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="any">Any Probability</SelectItem>

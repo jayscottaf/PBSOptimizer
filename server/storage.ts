@@ -42,7 +42,7 @@ export interface IStorage {
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
   searchPairings(filters: {
-    bidPackageId: number;
+    bidPackageId?: number;
     search?: string;
     creditMin?: number;
     creditMax?: number;
@@ -50,14 +50,9 @@ export interface IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-    pairingDays?: number;
-    pairingDaysMin?: number;
-    pairingDaysMax?: number;
-    startAirport?: string;
-    endAirport?: string;
-    includesAirport?: string;
-    limit?: number;
-    offset?: number;
+        pairingDays?: number;
+        pairingDaysMin?: number;
+        pairingDaysMax?: number;
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -178,7 +173,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchPairings(filters: {
-    bidPackageId: number;
+    bidPackageId?: number;
     search?: string;
     creditMin?: number;
     creditMax?: number;
@@ -186,14 +181,9 @@ export class DatabaseStorage implements IStorage {
     blockMax?: number;
     tafb?: string;
     holdProbabilityMin?: number;
-    pairingDays?: number;
-    pairingDaysMin?: number;
-    pairingDaysMax?: number;
-    startAirport?: string;
-    endAirport?: string;
-    includesAirport?: string;
-    limit?: number;
-    offset?: number;
+        pairingDays?: number;
+        pairingDaysMin?: number;
+        pairingDaysMax?: number;
   }): Promise<Pairing[]> {
     const conditions = [];
 
@@ -201,7 +191,7 @@ export class DatabaseStorage implements IStorage {
     if (!filters.bidPackageId) {
       throw new Error("Bid package ID is required for pairing search");
     }
-
+    
     conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
     if (filters.search) {
@@ -237,18 +227,6 @@ export class DatabaseStorage implements IStorage {
 
     if (filters.pairingDaysMax) {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
-    }
-    
-    if (filters.startAirport) {
-      conditions.push(like(pairings.route, `${filters.startAirport}%`));
-    }
-
-    if (filters.endAirport) {
-      conditions.push(like(pairings.route, `%${filters.endAirport}`));
-    }
-
-     if (filters.includesAirport) {
-      conditions.push(like(pairings.route, `%${filters.includesAirport}%`));
     }
 
     if (conditions.length > 0) {
@@ -343,35 +321,28 @@ export class DatabaseStorage implements IStorage {
     const pairingsWithEfficiency = allPairings.map(p => {
       const creditHours = parseHours(p.creditHours);
       const blockHours = parseHours(p.blockHours);
-      const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
-      return { pairing: p, efficiency, creditHours, blockHours };
+      return {
+        ...p,
+        creditHours,
+        blockHours,
+        efficiency: blockHours > 0 ? creditHours / blockHours : 0
+      };
     });
 
     // Sort by efficiency descending
     const topPairings = pairingsWithEfficiency
       .sort((a, b) => b.efficiency - a.efficiency)
-      .slice(0, limit)
-      .map(item => item.pairing);
+      .slice(0, limit);
 
     const stats = {
       totalPairings: allPairings.length,
       avgEfficiency: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length).toFixed(2)),
-      topEfficiency: Number((pairingsWithEfficiency[0]?.efficiency || 0).toFixed(2)),
+      topEfficiency: Number((topPairings[0]?.efficiency || 0).toFixed(2)),
       avgCredit: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.creditHours, 0) / pairingsWithEfficiency.length).toFixed(2)),
       avgBlock: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.blockHours, 0) / pairingsWithEfficiency.length).toFixed(2))
     };
 
     return { pairings: topPairings, stats };
-  }
-
-  async getPairingsByDays(bidPackageId: number, days: number): Promise<Pairing[]> {
-    return await db
-      .select()
-      .from(pairings)
-      .where(and(
-        eq(pairings.bidPackageId, bidPackageId),
-        eq(pairings.pairingDays, days)
-      ));
   }
 
   async getTopCreditPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
@@ -387,20 +358,11 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    // Helper function to parse Delta PBS hours format
-    const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
-      if (typeof hours === 'string') {
-        return parseFloat(hours) || 0;
-      }
-      return 0;
-    };
-
     const stats = {
       totalPairings: allPairings.length,
-      maxCredit: parseHours(topPairings[0]?.creditHours) || 0,
-      avgCredit: allPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0) / allPairings.length,
-      minCredit: Math.min(...allPairings.map(p => parseHours(p.creditHours)))
+      maxCredit: topPairings[0]?.creditHours || 0,
+      avgCredit: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
+      minCredit: Math.min(...allPairings.map(p => p.creditHours))
     };
 
     return { pairings: topPairings, stats };
@@ -435,37 +397,28 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    // Helper function to parse Delta PBS hours format
-    const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
-      if (typeof hours === 'string') {
-        return parseFloat(hours) || 0;
-      }
-      return 0;
-    };
-
-    const turnCount = allPairings.filter(p => (p.pairingDays || 0) === 1).length;
-    const multiDayCount = allPairings.filter(p => (p.pairingDays || 0) > 1).length;
-    const deadheadCount = allPairings.filter(p => p.fullTextBlock?.includes('DH')).length;
+    const turnCount = allPairings.filter(p => p.pairingDays === 1).length;
+    const multiDayCount = allPairings.filter(p => p.pairingDays > 1).length;
+    const deadheadCount = allPairings.filter(p => p.fullText?.includes('DH')).length;
 
     return {
       totalPairings: allPairings.length,
-      avgCreditHours: allPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0) / allPairings.length,
-      avgBlockHours: allPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0) / allPairings.length,
-      avgPairingDays: allPairings.reduce((sum, p) => sum + (p.pairingDays || 0), 0) / allPairings.length,
+      avgCreditHours: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
+      avgBlockHours: allPairings.reduce((sum, p) => sum + p.blockHours, 0) / allPairings.length,
+      avgPairingDays: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length,
       avgHoldProbability: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
-      maxCreditHours: Math.max(...allPairings.map(p => parseHours(p.creditHours))),
-      minCreditHours: Math.min(...allPairings.map(p => parseHours(p.creditHours))),
-      maxBlockHours: Math.max(...allPairings.map(p => parseHours(p.blockHours))),
+      maxCreditHours: Math.max(...allPairings.map(p => p.creditHours)),
+      minCreditHours: Math.min(...allPairings.map(p => p.creditHours)),
+      maxBlockHours: Math.max(...allPairings.map(p => p.blockHours)),
       turnCount,
       multiDayCount,
       deadheadCount,
       dayDistribution: {
-        '1day': allPairings.filter(p => (p.pairingDays || 0) === 1).length,
-        '2day': allPairings.filter(p => (p.pairingDays || 0) === 2).length,
-        '3day': allPairings.filter(p => (p.pairingDays || 0) === 3).length,
-        '4day': allPairings.filter(p => (p.pairingDays || 0) === 4).length,
-        '5day+': allPairings.filter(p => (p.pairingDays || 0) >= 5).length,
+        '1day': allPairings.filter(p => p.pairingDays === 1).length,
+        '2day': allPairings.filter(p => p.pairingDays === 2).length,
+        '3day': allPairings.filter(p => p.pairingDays === 3).length,
+        '4day': allPairings.filter(p => p.pairingDays === 4).length,
+        '5day+': allPairings.filter(p => p.pairingDays >= 5).length,
       }
     };
   }
@@ -514,26 +467,17 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    // Helper function to parse Delta PBS hours format
-    const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
-      if (typeof hours === 'string') {
-        return parseFloat(hours) || 0;
-      }
-      return 0;
-    };
-
-    const deadheadPairings = allPairings.filter(p => p.fullTextBlock?.includes('DH'));
-    const nonDeadheadPairings = allPairings.filter(p => !p.fullTextBlock?.includes('DH'));
+    const deadheadPairings = allPairings.filter(p => p.fullText?.includes('DH'));
+    const nonDeadheadPairings = allPairings.filter(p => !p.fullText?.includes('DH'));
 
     return {
       totalPairings: allPairings.length,
       deadheadCount: deadheadPairings.length,
       deadheadPercentage: (deadheadPairings.length / allPairings.length) * 100,
-      avgCreditWithDeadhead: deadheadPairings.length > 0 ? deadheadPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0) / deadheadPairings.length : 0,
-      avgCreditWithoutDeadhead: nonDeadheadPairings.length > 0 ? nonDeadheadPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0) / nonDeadheadPairings.length : 0,
+      avgCreditWithDeadhead: deadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / deadheadPairings.length,
+      avgCreditWithoutDeadhead: nonDeadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / nonDeadheadPairings.length,
       topDeadheadPairings: deadheadPairings
-        .sort((a, b) => parseHours(b.creditHours) - parseHours(a.creditHours))
+        .sort((a, b) => b.creditHours - a.creditHours)
         .slice(0, 10)
         .map(p => ({ pairingNumber: p.pairingNumber, creditHours: p.creditHours, blockHours: p.blockHours }))
     };
@@ -545,23 +489,14 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    // Helper function to parse Delta PBS hours format
-    const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
-      if (typeof hours === 'string') {
-        return parseFloat(hours) || 0;
-      }
-      return 0;
-    };
-
     const durationGroups = allPairings.reduce((acc, p) => {
-      const key = `${p.pairingDays || 0}day`;
+      const key = `${p.pairingDays}day`;
       if (!acc[key]) {
         acc[key] = { count: 0, totalCredit: 0, totalBlock: 0, pairings: [] };
       }
       acc[key].count++;
-      acc[key].totalCredit += parseHours(p.creditHours);
-      acc[key].totalBlock += parseHours(p.blockHours);
+      acc[key].totalCredit += p.creditHours;
+      acc[key].totalBlock += p.blockHours;
       acc[key].pairings.push({
         pairingNumber: p.pairingNumber,
         creditHours: p.creditHours,
@@ -575,14 +510,14 @@ export class DatabaseStorage implements IStorage {
     Object.values(durationGroups).forEach((group: any) => {
       group.avgCredit = group.totalCredit / group.count;
       group.avgBlock = group.totalBlock / group.count;
-      group.pairings = group.pairings.sort((a: any, b: any) => parseHours(b.creditHours) - parseHours(a.creditHours)).slice(0, 10);
+      group.pairings = group.pairings.sort((a: any, b: any) => b.creditHours - a.creditHours).slice(0, 10);
     });
 
     return {
       totalPairings: allPairings.length,
       durationBreakdown: durationGroups,
       mostCommonDuration: Object.entries(durationGroups).sort(([,a]: [string, any], [,b]: [string, any]) => b.count - a.count)[0]?.[0],
-      avgDuration: allPairings.reduce((sum, p) => sum + (p.pairingDays || 0), 0) / allPairings.length
+      avgDuration: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length
     };
   }
 }

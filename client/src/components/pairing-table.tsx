@@ -59,9 +59,6 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 TAFB
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
-                Days
-              </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                 Hold %
               </th>
@@ -73,7 +70,7 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
           <tbody className="bg-white divide-y divide-gray-200">
             {safePairings.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   No pairings found. Upload a bid package to get started.
                 </td>
               </tr>
@@ -110,11 +107,6 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-600">{pairing.tafb}</span>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">
-                      {pairing.pairingDays || 1}
-                    </span>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2 min-w-[100px]">

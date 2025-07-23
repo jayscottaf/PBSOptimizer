@@ -326,12 +326,12 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
-
+    
     // Extract pairings from various locations in message data
     if (messageData?.pairings && Array.isArray(messageData.pairings)) {
       pairings.push(...messageData.pairings);
     }
-
+    
     if (messageData?.pairing) {
       pairings.push(messageData.pairing);
     }
@@ -365,7 +365,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const formatMessageWithPairings = (content: string, messageData?: any) => {
     const pairings = parsePairingsFromMessage(content, messageData);
-
+    
     if (pairings.length === 0) {
       return <span className="whitespace-pre-wrap text-sm">{content}</span>;
     }
@@ -380,48 +380,48 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
     // Split content and replace pairing numbers with interactive elements
     const parts = [];
-    let currentIndex = 0;
+    let remainingContent = content;
+    let keyCounter = 0;
 
-    // Enhanced regex to match pairing numbers in various formats
-    const pairingRegex = /(?:pairing\s+number:\s*|pairing\s+)(\d{4,5})|(\d{4,5})(?=\s*(?:-|$|\n))/gi;
+    // Find all pairing number patterns in the text
+    const pairingPattern = /\b(\d{4,5})\b/g;
+    let lastIndex = 0;
     let match;
 
-    while ((match = pairingRegex.exec(content)) !== null) {
-      const pairingNumber = match[1] || match[2];
+    while ((match = pairingPattern.exec(content)) !== null) {
+      const pairingNumber = match[1];
       const pairing = pairingMap.get(pairingNumber);
 
       if (pairing) {
-        // Add text before the match
-        if (match.index > currentIndex) {
-          parts.push(content.slice(currentIndex, match.index));
+        // Add text before the pairing
+        if (match.index > lastIndex) {
+          parts.push(
+            <span key={`text-${keyCounter++}`}>
+              {content.substring(lastIndex, match.index)}
+            </span>
+          );
         }
 
-        // Find the start and end of just the number part
-        const fullMatch = match[0];
-        const numberStart = match.index + fullMatch.indexOf(pairingNumber);
-        const numberEnd = numberStart + pairingNumber.length;
-
-        // Add text before the number
-        if (numberStart > currentIndex) {
-          parts.push(content.slice(currentIndex, numberStart));
-        }
-
-        // Add the PairingDisplay component
+        // Add the interactive pairing element
         parts.push(
-          <PairingDisplay 
-            key={`pairing-${pairingNumber}-${numberStart}`}
+          <PairingDisplay
+            key={`pairing-${keyCounter++}-${pairingNumber}`}
             pairing={pairing}
             displayText={pairingNumber}
           />
         );
 
-        currentIndex = numberEnd;
+        lastIndex = match.index + match[0].length;
       }
     }
 
-    // Add any remaining content
-    if (currentIndex < content.length) {
-      parts.push(content.slice(currentIndex));
+    // Add remaining text
+    if (lastIndex < content.length) {
+      parts.push(
+        <span key={`text-${keyCounter++}`}>
+          {content.substring(lastIndex)}
+        </span>
+      );
     }
 
     return parts.length > 0 ? (
