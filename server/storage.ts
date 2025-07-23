@@ -364,6 +364,16 @@ export class DatabaseStorage implements IStorage {
     return { pairings: topPairings, stats };
   }
 
+  async getPairingsByDays(bidPackageId: number, days: number): Promise<Pairing[]> {
+    return await db
+      .select()
+      .from(pairings)
+      .where(and(
+        eq(pairings.bidPackageId, bidPackageId),
+        eq(pairings.pairingDays, days)
+      ));
+  }
+
   async getTopCreditPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
     const topPairings = await db
       .select()

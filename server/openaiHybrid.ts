@@ -295,24 +295,24 @@ export class HybridOpenAIService {
 
       // Calculate efficiency for each pairing and sort consistently
       const pairingsWithEfficiency = pairings.map((pairing: any) => {
-        const creditHours = parseFloat(pairing.creditHours) || 0;
-        const blockHours = parseFloat(pairing.blockHours) || 0;
+        const creditHours = parseFloat(pairing.creditHours.toString()) || 0;
+        const blockHours = parseFloat(pairing.blockHours.toString()) || 0;
         const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
 
         return {
-          ...pairing,
-          efficiency: parseFloat(efficiency.toFixed(3)) // Consistent precision
+          pairingNumber: pairing.pairingNumber,
+          creditHours: this.formatHoursDeltaPBS(creditHours),
+          blockHours: this.formatHoursDeltaPBS(blockHours),
+          efficiency: parseFloat(efficiency.toFixed(2)),
+          holdProbability: pairing.holdProbability,
+          pairingDays: pairing.pairingDays,
+          route: pairing.route,
+          layovers: pairing.layovers
         };
       });
 
-      // Sort by efficiency descending, then by pairing number for consistency
-      pairingsWithEfficiency.sort((a, b) => {
-        if (Math.abs(a.efficiency - b.efficiency) < 0.001) {
-          // If efficiencies are very close, sort by pairing number for consistency
-          return a.pairingNumber.localeCompare(b.pairingNumber);
-        }
-        return b.efficiency - a.efficiency;
-      });
+      // Sort by efficiency descending consistently
+      pairingsWithEfficiency.sort((a, b) => b.efficiency - a.efficiency);
 
       // Extract the number of pairings requested (default to 3)
       const topCountMatch = message.match(/top\s+(\d+)/i);
@@ -668,6 +668,25 @@ export class HybridOpenAIService {
 
 When providing analysis, refer to the bid package as "${bidPackageDisplay}" instead of using generic terms like "bid package #27".
 
+CRITICAL FORMATTING REQUIREMENTS:
+- ALWAYS use a structured numbered list format (never paragraph format)
+- ALWAYS sort efficiency results from HIGHEST to LOWEST efficiency
+- When asked for "top X pairings for efficiency", list the MOST efficient ones first
+
+Format efficiency queries like this:
+Here are the top X most efficient Y-day pairings from [bid package name]:
+
+1. Pairing number: XXXX
+   - Route: [route]
+   - Efficiency: X.XX
+   - Credit Hours: XX.XX
+   - Block Hours: XX.XX
+   - Hold Probability: XX%
+   - Layovers: [details]
+
+2. Pairing number: YYYY
+   [etc...]
+
 When provided with pairing data:
 - Always show the actual pairing numbers found
 - Include key metrics like credit hours, block hours, efficiency ratios, and hold probabilities
@@ -676,16 +695,10 @@ When provided with pairing data:
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data
 
-CRITICAL FOR LAYOVER QUERIES:
-- When a specific city is mentioned (e.g., "layovers in DFW"), ONLY show layovers in that exact city
-- If the data is filtered for a specific city, confirm this in your response (e.g., "The longest layovers in DFW are:")
-- Do not mix layovers from different cities when a specific city is requested
-- If no layovers exist in the requested city, clearly state this
-
 IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in the data:
-- Show credit hours like: "28.19 credit hours" (not "28 hours and 19 minutes")
-- Show block hours like: "16.58 block hours" (not "16 hours and 58 minutes")
-- For layover durations, show ONLY the original format from the bid package (e.g., "28.53 hours")
+- Show credit hours like: "21.43" (not "21 hours and 43 minutes")
+- Show block hours like: "14.35" (not "14 hours and 35 minutes")
+- For layover durations, show ONLY the original format from the bid package
 - Do NOT add decimal conversions or explanations in parentheses
 - Match the exact format from the bid package data
 
