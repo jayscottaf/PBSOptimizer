@@ -381,41 +381,63 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     // Split content and replace pairing numbers with interactive elements
     const parts = [];
     let remainingContent = content;
-    let keyCounter = 0;
 
-    // Replace pairing numbers with PairingDisplay components
-    let lastIndex = 0;
-    let match;
-    // Enhanced regex to catch more pairing number patterns
-    const pairingRegex = /(?:pairing\s+(?:number\s+)?|pairing\s+|#)(\d{4,5})|(?:^|\s)(\d{4,5})(?=\s+(?:has|with|is))/gmi;
+    // Enhanced regex patterns to catch various pairing number formats
+    const pairingPatterns = [
+      // "Pairing number: 8161" format
+      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
+      // "Pairing 8161" format  
+      /(?:pairing\s+)(\d{4,5})(?!\d)/gi,
+      // "pairing number 8161" format
+      /(?:pairing\s+number\s+)(\d{4,5})(?!\d)/gi,
+      // Numbered list format: "1. Pairing number: 8161"
+      /(?:\d+\.\s*pairing\s+number\s*:\s*)(\d{4,5})/gi,
+      // Hash format: "#8161"
+      /#(\d{4,5})(?!\d)/gi
+    ];
 
-    while ((match = pairingRegex.exec(remainingContent)) !== null) {
-      const fullMatch = match[0];
-      const pairingNumber = match[1] || match[2]; // Handle both capture groups
-      const pairing = pairingMap.get(pairingNumber);
+    let processedContent = remainingContent;
+    let globalOffset = 0;
 
-      if (pairing) {
-        // Add text before the match
-        if (match.index > lastIndex) {
-          parts.push(remainingContent.slice(lastIndex, match.index));
+    // Process each pattern
+    for (const pattern of pairingPatterns) {
+      pattern.lastIndex = 0; // Reset regex
+      let match;
+
+      while ((match = pattern.exec(processedContent)) !== null) {
+        const pairingNumber = match[1];
+        const pairing = pairingMap.get(pairingNumber);
+
+        if (pairing) {
+          const matchStart = match.index + match[0].indexOf(pairingNumber);
+          const matchEnd = matchStart + pairingNumber.length;
+
+          // Add text before the match
+          if (matchStart > 0) {
+            parts.push(processedContent.slice(0, matchStart));
+          }
+
+          // Add the PairingDisplay component
+          parts.push(
+            <PairingDisplay 
+              key={`pairing-${pairingNumber}-${matchStart}-${globalOffset}`}
+              pairing={pairing}
+              displayText={pairingNumber}
+            />
+          );
+
+          // Update processed content to continue after this match
+          processedContent = processedContent.slice(matchEnd);
+          globalOffset += matchEnd;
+          pattern.lastIndex = 0; // Reset for new content
+          break; // Process one match at a time to avoid index issues
         }
-
-        // Add the PairingDisplay component
-        parts.push(
-          <PairingDisplay 
-            key={`pairing-${pairingNumber}-${match.index}`}
-            pairing={pairing}
-            displayText={pairingNumber}
-          />
-        );
-
-        lastIndex = match.index + fullMatch.length;
       }
     }
 
-    // Add remaining text
-    if (lastIndex < content.length) {
-      parts.push(remainingContent.slice(lastIndex));
+    // Add any remaining content
+    if (processedContent.length > 0) {
+      parts.push(processedContent);
     }
 
     return parts.length > 0 ? (
