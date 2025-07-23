@@ -380,88 +380,48 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
     // Split content and replace pairing numbers with interactive elements
     const parts = [];
-    let remainingContent = content;
+    let currentIndex = 0;
 
-    // Enhanced regex patterns to catch various pairing number formats
-    const pairingPatterns = [
-      // "Pairing Number: 8161" format (capital N)
-      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
-      // "Pairing number: 8161" format (lowercase n)
-      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
-      // "Pairing 8161" format  
-      /(?:pairing\s+)(\d{4,5})(?!\d)/gi,
-      // Numbered list format: "1. Pairing number: 8161" or "1. Pairing Number: 8161"
-      /(?:\d+\.\s*pairing\s+number\s*:\s*)(\d{4,5})/gi,
-      // Hash format: "#8161"
-      /#(\d{4,5})(?!\d)/gi,
-      // Standalone 4-5 digit numbers that could be pairing numbers (more permissive)
-      /\b(\d{4,5})\b/gi
-    ];
+    // Enhanced regex to match pairing numbers in various formats
+    const pairingRegex = /(?:pairing\s+number:\s*|pairing\s+)(\d{4,5})|(\d{4,5})(?=\s*(?:-|$|\n))/gi;
+    let match;
 
-    let processedContent = remainingContent;
-    let globalOffset = 0;
+    while ((match = pairingRegex.exec(content)) !== null) {
+      const pairingNumber = match[1] || match[2];
+      const pairing = pairingMap.get(pairingNumber);
 
-    // Process with more specific patterns that match the actual AI output format
-    const specificPatterns = [
-      // Numbered list with "Pairing" - matches "1. Pairing 8156:" or "2. Pairing 8161:"
-      /(\d+\.\s*Pairing\s+)(\d{4,5})(?:\s*:)/gi,
-      // Direct "Pairing XXXX:" format
-      /(?:^|\s)(Pairing\s+)(\d{4,5})(?:\s*:)/gmi,
-      // Legacy patterns for compatibility
-      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
-      /#(\d{4,5})(?!\d)/gi
-    ];
-
-    const processedRanges = new Set(); // Track processed ranges to avoid duplicates
-
-    for (const pattern of specificPatterns) {
-      pattern.lastIndex = 0; // Reset regex
-      let match;
-
-      while ((match = pattern.exec(processedContent)) !== null) {
-        const pairingNumber = match[match.length - 1]; // Last group is always the pairing number
-        const pairing = pairingMap.get(pairingNumber);
-
-        if (pairing) {
-          const pairingStart = match.index + match[0].indexOf(pairingNumber);
-          const pairingEnd = pairingStart + pairingNumber.length;
-          const rangeKey = `${pairingStart}-${pairingEnd}`;
-
-          // Skip if we've already processed this range
-          if (processedRanges.has(rangeKey)) {
-            continue;
-          }
-          processedRanges.add(rangeKey);
-
-          const matchStart = pairingStart;
-          const matchEnd = matchStart + pairingNumber.length;
-
-          // Add text before the match
-          if (matchStart > 0) {
-            parts.push(processedContent.slice(0, matchStart));
-          }
-
-          // Add the PairingDisplay component
-          parts.push(
-            <PairingDisplay 
-              key={`pairing-${pairingNumber}-${matchStart}-${globalOffset}`}
-              pairing={pairing}
-              displayText={pairingNumber}
-            />
-          );
-
-          // Update processed content to continue after this match
-          processedContent = processedContent.slice(matchEnd);
-          globalOffset += matchEnd;
-          pattern.lastIndex = 0; // Reset for new content
-          break; // Process one match at a time to avoid index issues
+      if (pairing) {
+        // Add text before the match
+        if (match.index > currentIndex) {
+          parts.push(content.slice(currentIndex, match.index));
         }
+
+        // Find the start and end of just the number part
+        const fullMatch = match[0];
+        const numberStart = match.index + fullMatch.indexOf(pairingNumber);
+        const numberEnd = numberStart + pairingNumber.length;
+
+        // Add text before the number
+        if (numberStart > currentIndex) {
+          parts.push(content.slice(currentIndex, numberStart));
+        }
+
+        // Add the PairingDisplay component
+        parts.push(
+          <PairingDisplay 
+            key={`pairing-${pairingNumber}-${numberStart}`}
+            pairing={pairing}
+            displayText={pairingNumber}
+          />
+        );
+
+        currentIndex = numberEnd;
       }
     }
 
     // Add any remaining content
-    if (processedContent.length > 0) {
-      parts.push(processedContent);
+    if (currentIndex < content.length) {
+      parts.push(content.slice(currentIndex));
     }
 
     return parts.length > 0 ? (

@@ -69,7 +69,7 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
           )}
           {pairing.layovers && Array.isArray(pairing.layovers) && pairing.layovers.length > 0 && (
             <div className="text-sm">
-              <span className="text-gray-600">Layovers:</span> {pairing.layovers.map(layover => {
+              <span className="text-gray-600">Layovers:</span> {pairing.layovers.map((layover, index) => {
                 if (typeof layover === 'object' && layover !== null) {
                   const city = layover.city || '';
                   const duration = layover.duration || '';
@@ -77,14 +77,15 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
 
                   let displayText = city;
                   if (duration) {
-                    displayText += ` (${duration}h)`;
+                    displayText += ` (${duration})`;
                   }
                   if (hotel && hotel !== city) {
                     displayText += ` - ${hotel}`;
                   }
                   return displayText;
+                } else {
+                  return String(layover);
                 }
-                return String(layover);
               }).join(', ')}
             </div>
           )}
@@ -145,9 +146,28 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
         <div>
           <div className="font-medium mb-2">Layovers:</div>
           <div className="flex flex-wrap gap-2">
-            {pairing.layovers.map((layover, index) => (
-              <Badge key={index} variant="outline">{String(layover)}</Badge>
-            ))}
+            {pairing.layovers.map((layover, index) => {
+              let displayText = '';
+              if (typeof layover === 'object' && layover !== null) {
+                const city = layover.city || '';
+                const duration = layover.duration || '';
+                const hotel = layover.hotel || '';
+                
+                displayText = city;
+                if (duration) {
+                  displayText += ` (${duration})`;
+                }
+                if (hotel && hotel !== city) {
+                  displayText += ` - ${hotel}`;
+                }
+              } else {
+                displayText = String(layover);
+              }
+              
+              return (
+                <Badge key={index} variant="outline">{displayText}</Badge>
+              );
+            })}
           </div>
         </div>
       )}

@@ -299,15 +299,34 @@ export class HybridOpenAIService {
         const blockHours = parseFloat(pairing.blockHours.toString()) || 0;
         const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
 
+        // Format layovers properly
+        let formattedLayovers = [];
+        if (pairing.layovers && Array.isArray(pairing.layovers)) {
+          formattedLayovers = pairing.layovers.map((layover: any) => {
+            if (typeof layover === 'object' && layover !== null) {
+              return {
+                city: layover.city || '',
+                hotel: layover.hotel || '',
+                duration: layover.duration || ''
+              };
+            }
+            return { city: String(layover), hotel: '', duration: '' };
+          });
+        }
+
         return {
           pairingNumber: pairing.pairingNumber,
-          creditHours: this.formatHoursDeltaPBS(creditHours),
-          blockHours: this.formatHoursDeltaPBS(blockHours),
+          creditHours: pairing.creditHours, // Keep original format
+          blockHours: pairing.blockHours, // Keep original format
           efficiency: parseFloat(efficiency.toFixed(2)),
           holdProbability: pairing.holdProbability,
           pairingDays: pairing.pairingDays,
           route: pairing.route,
-          layovers: pairing.layovers
+          layovers: formattedLayovers,
+          tafb: pairing.tafb,
+          effectiveDates: pairing.effectiveDates,
+          fullText: pairing.fullText,
+          fullTextBlock: pairing.fullTextBlock
         };
       });
 
