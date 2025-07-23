@@ -1,0 +1,61 @@
+show top 3 3 day pairings for efficiency
+05:54 AM
+Here are the top 3 efficient 3-day pairings from the NYC A220 August 2025 Bid Package:
+
+1. Pairing number: 8161
+   - Route: LGA-BOS-BNA-BOS-CVG-BOS-CHS-LGA
+   - Efficiency: 1.49
+   - Credit Hours: 21:43
+   - Block Hours: 14:35
+   - Hold Probability: 50%
+   - Layovers: BNA (DRURY PLAZA, 31.24 hours), BOS (THE DAGNY BOSTON, 17.37 hours)
+
+2. Pairing number: 8156
+   - Route: LGA-BOS-BNA-MSP-CMH-CLE-LGA-ORD-LGA
+   - Efficiency: 1.42
+   - Credit Hours: 22:17
+   - Block Hours: 15:58
+   - Hold Probability: 40%
+   - Layovers: BNA (DRURY PLAZA, 15.56 hours), CMH (THE WESTIN GREAT S, 18.55 hours), CLE (ALOFT CLEVELAND APT, 10.59 hours)
+
+3. Pairing number: 7753
+   - Route: JFK-MSP-CMH-CLE-LGA-ORD-MSP-JFK
+   - Efficiency: 1.30
+   - Credit Hours: 22:41
+   - Block Hours: 17:22
+   - Hold Probability: 50%
+   - Layovers: CMH (THE WESTIN GREAT S, 17.02 hours), CLE (DRURY PLAZA DOWNTOWN, 14.09 hours), ORD (PALMER HOUSE, 16.00 hours)
+
+Please note that these pairings have a high efficiency ratio, which means they offer a higher credit and block hours ratio. The higher the efficiency ratio, the more you get paid relative to the amount of time you actually fly. It's also crucial to consider the hold probabilities when making your bid.
+05:55 AM
+show top 3 3 day pairings for efficiency
+06:00 AM
+Based on the analysis of the NYC A220 August 2025 Bid Package, here are the top 3 most efficient 3-day pairings:
+
+1. Pairing Number: 8156
+   - Route: LGA-BOS-BNA-MSP-CMH-CLE-LGA-ORD-LGA
+   - Credit Hours: 22:17
+   - Block Hours: 15:58
+   - Efficiency: 1.42
+   - Hold Probability: 40%
+   - Layovers: BNA (15.56 hours at DRURY PLAZA), CMH (18.55 hours at THE WESTIN GREAT S), CLE (10.59 hours at ALOFT CLEVELAND APT)
+
+2. Pairing Number: 7753
+   - Route: JFK-MSP-CMH-CLE-LGA-ORD-MSP-JFK
+   - Credit Hours: 22:41
+   - Block Hours: 17:22
+   - Efficiency: 1.30
+   - Hold Probability: 50%
+   - Layovers: CMH (17.02 hours at THE WESTIN GREAT S), CLE (14.09 hours at DRURY PLAZA DOWNTOWN), ORD (16.00 hours at PALMER HOUSE)
+
+3. Pairing Number: 8085
+   - Route: LGA-ORD-MSP-IAH-MSP-CMH-CLE-LGA-ORD-LGA
+   - Credit Hours: 23:11
+   - Block Hours: 18:33
+   - Efficiency: 1.26
+   - Hold Probability: 40%
+   - Layovers: IAH (16.47 hours at HILTON AMERICAS), CMH (17.03 hours at THE WESTIN GREAT S), CLE (11.00 hours at ALOFT CLEVELAND APT)
+
+Practical Bidding Advice:
+Given the high efficiency ratios, these pairings offer a good balance of credit hours to block hours. However, the hold probability indicates that they may be in high demand. If these pairings align with your preferences for layover locations and durations, consider bidding for them early to increase your chances of success.
+06:01 AM
