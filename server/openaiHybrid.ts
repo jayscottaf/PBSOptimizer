@@ -326,7 +326,7 @@ export class HybridOpenAIService {
           tafb: pairing.tafb,
           effectiveDates: pairing.effectiveDates,
           fullText: pairing.fullText,
-          fullTextBlock: pairing.fullTextBlock
+          fullTextBlock: pairing.fullTextBlock || pairing.fullText
         };
       });
 
@@ -341,7 +341,7 @@ export class HybridOpenAIService {
 
       return {
         type: `efficiency_${days}day_analysis`,
-        pairings: topPairings,
+        topPairings: topPairings, // Use topPairings to match the parsing logic
         totalCount: pairings.length,
         requestedCount: topCount,
         truncated: false
@@ -618,15 +618,21 @@ export class HybridOpenAIService {
           });
         }
 
-        // Sort by credit hours descending
+        // Sort by efficiency descending (credit/block ratio)
         const sortedPairings = durationPairings
-          .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+          .map(p => ({
+            ...p,
+            efficiency: parseFloat(p.blockHours.toString()) > 0 ? 
+              parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString()) : 0,
+            fullTextBlock: p.fullTextBlock || p.fullText
+          }))
+          .sort((a, b) => b.efficiency - a.efficiency)
           .slice(0, args.limit || 20);
 
         return {
           response: `Found ${durationPairings.length} ${args.days}-day pairings${args.minEfficiency ? ` with efficiency >= ${args.minEfficiency}` : ''}${args.minHoldProb ? ` and hold probability >= ${args.minHoldProb}%` : ''}.`,
           data: {
-            pairings: sortedPairings,
+            topPairings: sortedPairings, // Use topPairings for consistency
             stats: {
               totalFound: durationPairings.length,
               totalSearched: allPairings.length,
@@ -691,8 +697,10 @@ CRITICAL FORMATTING REQUIREMENTS:
 - ALWAYS use a structured numbered list format (never paragraph format)
 - ALWAYS sort efficiency results from HIGHEST to LOWEST efficiency
 - When asked for "top X pairings for efficiency", list the MOST efficient ones first
+- NEVER duplicate numbering - use sequential numbers (1, 2, 3, etc.)
+- ALWAYS include the pairing number for each entry
 
-Format efficiency queries like this:
+Format efficiency queries EXACTLY like this:
 Here are the top X most efficient Y-day pairings from [bid package name]:
 
 1. Pairing number: XXXX
@@ -704,7 +712,21 @@ Here are the top X most efficient Y-day pairings from [bid package name]:
    - Layovers: [details]
 
 2. Pairing number: YYYY
+   - Route: [route]
+   - Efficiency: X.XX
+   - Credit Hours: XX.XX
+   - Block Hours: XX.XX
+   - Hold Probability: XX%
+   - Layovers: [details]
+
+3. Pairing number: ZZZZ
    [etc...]
+
+FORMATTING RULES:
+- Each entry MUST have a unique sequential number
+- Each entry MUST include "Pairing number: XXXX"
+- NO duplicate numbers allowed
+- NO missing pairing numbers
 
 When provided with pairing data:
 - Always show the actual pairing numbers found
