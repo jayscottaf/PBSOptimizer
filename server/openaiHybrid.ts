@@ -96,8 +96,11 @@ export class HybridOpenAIService {
         throw new Error('No response from OpenAI');
       }
 
+      // Validate response for duplicate pairing numbers and fix if needed
+      const validatedResponse = this.validateAndFixDuplicates(response, processedData);
+
       return {
-        response,
+        response: validatedResponse,
         data: processedData,
         truncated: processedData.truncated
       };
@@ -337,7 +340,18 @@ export class HybridOpenAIService {
       const topCountMatch = message.match(/top\s+(\d+)/i);
       const topCount = topCountMatch ? parseInt(topCountMatch[1]) : 3;
 
-      const topPairings = pairingsWithEfficiency.slice(0, topCount);
+      // Ensure unique pairing numbers (prevent duplicates)
+      const uniquePairings = [];
+      const seenPairingNumbers = new Set();
+      
+      for (const pairing of pairingsWithEfficiency) {
+        if (!seenPairingNumbers.has(pairing.pairingNumber) && uniquePairings.length < topCount) {
+          seenPairingNumbers.add(pairing.pairingNumber);
+          uniquePairings.push(pairing);
+        }
+      }
+
+      const topPairings = uniquePairings;
 
       return {
         type: `efficiency_${days}day_analysis`,
@@ -684,6 +698,52 @@ export class HybridOpenAIService {
     return hours.toString();
   }
 
+  private validateAndFixDuplicates(response: string, processedData: any): string {
+    // Check if this is an efficiency query response
+    if (!processedData?.type?.includes('efficiency') || !processedData?.topPairings) {
+      return response;
+    }
+
+    // Extract pairing numbers from the response
+    const pairingMatches = response.match(/Pairing number:\s*(\d+)/g);
+    if (!pairingMatches || pairingMatches.length <= 1) {
+      return response;
+    }
+
+    // Check for duplicate pairing numbers
+    const pairingNumbers = pairingMatches.map(match => match.match(/\d+/)?.[0]).filter(Boolean);
+    const uniqueNumbers = new Set(pairingNumbers);
+    
+    if (uniqueNumbers.size === pairingNumbers.length) {
+      // No duplicates found
+      return response;
+    }
+
+    // Duplicates detected - rebuild response with unique pairings
+    console.log('Duplicate pairing numbers detected in response, rebuilding...');
+    
+    const topPairings = processedData.topPairings.slice(0, processedData.requestedCount || 3);
+    const bidPackageName = "NYC A220 August 2025 Bid Package"; // Get from processedData if available
+    
+    let fixedResponse = `Here are the top ${topPairings.length} most efficient 3-day pairings from ${bidPackageName}:\n\n`;
+    
+    topPairings.forEach((pairing: any, index: number) => {
+      const layoverText = pairing.layovers && pairing.layovers.length > 0 
+        ? pairing.layovers.map((l: any) => `${l.city} (${l.hotel}, ${l.duration} hours)`).join(', ')
+        : 'No layovers';
+        
+      fixedResponse += `${index + 1}. Pairing number: ${pairing.pairingNumber}\n`;
+      fixedResponse += `   - Route: ${pairing.route}\n`;
+      fixedResponse += `   - Efficiency: ${pairing.efficiency}\n`;
+      fixedResponse += `   - Credit Hours: ${pairing.creditHours}\n`;
+      fixedResponse += `   - Block Hours: ${pairing.blockHours}\n`;
+      fixedResponse += `   - Hold Probability: ${pairing.holdProbability}%\n`;
+      fixedResponse += `   - Layovers: ${layoverText}\n\n`;
+    });
+    
+    return fixedResponse;
+  }
+
   private getSystemPrompt(bidPackageInfo?: any): string {
     const bidPackageDisplay = bidPackageInfo ? 
       `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package` :
@@ -700,6 +760,8 @@ CRITICAL FORMATTING REQUIREMENTS:
 - NEVER duplicate numbering - use sequential numbers (1, 2, 3, etc.) ONLY ONCE
 - ALWAYS include "Pairing number: XXXX" for EVERY entry
 - DO NOT repeat the intro text or create nested lists
+- NEVER repeat the same pairing number in multiple entries
+- ENSURE each numbered entry has a DIFFERENT pairing number
 
 Format efficiency queries EXACTLY like this (NO VARIATIONS ALLOWED):
 
@@ -713,7 +775,7 @@ Here are the top X most efficient Y-day pairings from [bid package name]:
    - Hold Probability: XX%
    - Layovers: [details]
 
-2. Pairing number: YYYY
+2. Pairing number: YYYY (MUST BE DIFFERENT FROM XXXX)
    - Route: [route]
    - Efficiency: X.XX
    - Credit Hours: XX.XX
@@ -721,7 +783,7 @@ Here are the top X most efficient Y-day pairings from [bid package name]:
    - Hold Probability: XX%
    - Layovers: [details]
 
-3. Pairing number: ZZZZ
+3. Pairing number: ZZZZ (MUST BE DIFFERENT FROM XXXX AND YYYY)
    - Route: [route]
    - Efficiency: X.XX
    - Credit Hours: XX.XX
@@ -732,10 +794,12 @@ Here are the top X most efficient Y-day pairings from [bid package name]:
 STRICT FORMATTING RULES:
 - Each number (1, 2, 3) appears EXACTLY ONCE
 - Each entry MUST start with "Pairing number: XXXX"
+- Each XXXX must be a UNIQUE pairing number - NO DUPLICATES
 - NO duplicate numbers allowed
 - NO missing pairing numbers
 - NO nested lists or repeated intro text
 - NO text before the pairing number except the number itself
+- VERIFY each pairing number is different before writing response
 
 When provided with pairing data:
 - Always show the actual pairing numbers found

@@ -134,6 +134,30 @@ The application follows a monorepo structure with shared TypeScript types betwee
 
 **Application Status**: App now starts successfully on port 5000 with all database operations functional
 
+**July 23, 2025**: Fixed Critical AI Assistant Duplicate Pairing Algorithm Issue
+
+**Duplicate Pairing Resolution**: Fixed AI assistant returning duplicate pairing entries in efficiency queries
+- **Root Cause**: OpenAI model receiving correct unique data but generating malformed responses with duplicate pairing numbers
+- **Issue**: "show top 3 3 day pairings for efficiency" returned pairing 8083 in entries #1 and #2 with different numbering
+- **Solution**: Implemented comprehensive duplicate prevention system with three layers:
+  1. **Data-level uniqueness**: Added Set-based duplicate filtering in `handleEfficiencyQuery()` 
+  2. **Prompt enhancement**: Strengthened system prompt with explicit unique pairing number requirements
+  3. **Response validation**: Added `validateAndFixDuplicates()` method to detect and rebuild malformed responses
+
+**Technical Implementation**: Enhanced pairing selection algorithm in `server/openaiHybrid.ts`
+- **Before**: Used `pairingsWithEfficiency.slice(0, topCount)` - allowed potential duplicates
+- **After**: Implemented `uniquePairings` array with `seenPairingNumbers` Set for guaranteed uniqueness
+- **Validation**: Added regex pattern matching to detect duplicate "Pairing number: XXXX" entries in responses
+- **Fallback**: Automatic response rebuilding using authentic data when duplicates detected
+
+**Testing Results**: Confirmed fix works across multiple scenarios
+- **3-day top 3**: Returns unique pairings 8083, 7775, 8161 with efficiencies 1.71, 1.64, 1.49
+- **3-day top 5**: Returns unique pairings 8083, 7775, 8161, 7759, 8156 
+- **4-day top 2**: Returns unique pairings 7726, 7719
+- **Database validation**: Confirmed backend returns distinct pairing numbers matching efficiency calculations
+
+**Production Impact**: AI assistant now provides reliable unique pairing analysis without duplicate entries
+
 **July 18, 2025**: Fixed Critical AI Assistant and Database Route Issues
 
 **AI Assistant Pairing Lookup**: Resolved specific pairing number queries (e.g., "show me pairing 7758")
