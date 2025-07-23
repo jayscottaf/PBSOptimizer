@@ -71,16 +71,27 @@ export class HybridOpenAIService {
         return await this.handleWithSummaryOnly(query);
       }
 
+      // Add explicit array index instruction for efficiency queries
+      let userPrompt = `${query.message}\n\nAvailable Data Summary:\n${dataString}`;
+      
+      if (processedData.type?.includes('efficiency') && processedData.topPairings) {
+        userPrompt += `\n\nCRITICAL: Use topPairings array indexes in sequence:
+- Entry 1: Use topPairings[0] with pairing number ${processedData.topPairings[0]?.pairingNumber}
+- Entry 2: Use topPairings[1] with pairing number ${processedData.topPairings[1]?.pairingNumber}
+- Entry 3: Use topPairings[2] with pairing number ${processedData.topPairings[2]?.pairingNumber}
+DO NOT repeat any pairing number. Each numbered entry must use a different array index.`;
+      }
+
       // Call OpenAI with tool_calls (replaces deprecated function_call)
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
           { role: "system", content: this.getSystemPrompt(bidPackageInfo) },
-          { role: "user", content: `${query.message}\n\nAvailable Data Summary:\n${dataString}` }
+          { role: "user", content: userPrompt }
         ],
         tools: this.getAvailableFunctions(),
         max_tokens: 1000,
-        temperature: 0.7
+        temperature: 0.1 // Lower temperature for more consistent formatting
       });
 
       const response = completion.choices[0]?.message?.content;
@@ -340,25 +351,48 @@ export class HybridOpenAIService {
       const topCountMatch = message.match(/top\s+(\d+)/i);
       const topCount = topCountMatch ? parseInt(topCountMatch[1]) : 3;
 
-      // Ensure unique pairing numbers (prevent duplicates)
+      // STRICT unique pairing selection with verification
       const uniquePairings = [];
       const seenPairingNumbers = new Set();
+      const seenRoutes = new Set();
 
       for (const pairing of pairingsWithEfficiency) {
-        if (!seenPairingNumbers.has(pairing.pairingNumber) && uniquePairings.length < topCount) {
+        // Check for both pairing number AND route uniqueness to prevent any duplicates
+        const pairingKey = `${pairing.pairingNumber}-${pairing.route}`;
+        
+        if (!seenPairingNumbers.has(pairing.pairingNumber) && 
+            !seenRoutes.has(pairing.route) && 
+            uniquePairings.length < topCount) {
           seenPairingNumbers.add(pairing.pairingNumber);
+          seenRoutes.add(pairing.route);
           uniquePairings.push(pairing);
         }
       }
 
-      const topPairings = uniquePairings;
+      // Additional verification - ensure no duplicates in final result
+      const finalVerification = new Set();
+      const verifiedPairings = uniquePairings.filter(p => {
+        if (finalVerification.has(p.pairingNumber)) {
+          console.warn(`Duplicate pairing detected and removed: ${p.pairingNumber}`);
+          return false;
+        }
+        finalVerification.add(p.pairingNumber);
+        return true;
+      });
+
+      console.log(`Efficiency query result: ${verifiedPairings.length} unique pairings selected`);
+      verifiedPairings.forEach((p, i) => {
+        console.log(`  ${i + 1}. Pairing ${p.pairingNumber} - Efficiency: ${p.efficiency}`);
+      });
 
       return {
         type: `efficiency_${days}day_analysis`,
-        topPairings: topPairings, // Use topPairings to match the parsing logic
+        topPairings: verifiedPairings,
         totalCount: pairings.length,
         requestedCount: topCount,
-        truncated: false
+        truncated: false,
+        // Add template for strict formatting
+        formatTemplate: 'numbered_list_with_unique_pairings'
       };
     } catch (error) {
       console.error(`Error in handleEfficiencyQuery:`, error);
@@ -801,74 +835,55 @@ export class HybridOpenAIService {
       `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package` :
       'the current bid package';
 
-    return `You are a Delta PBS Bid Optimization Assistant. Analyze pilot pairing data and provide specific, actionable insights.
+    return `You are a Delta PBS Bid Optimization Assistant. You must generate responses using ONLY the provided data structure without deviation.
 
-When providing analysis, refer to the bid package as "${bidPackageDisplay}" instead of using generic terms like "bid package #27".
+MANDATORY RESPONSE FORMAT for efficiency queries:
+When you receive efficiency_Xday_analysis data with topPairings array, you MUST format the response as follows:
 
-CRITICAL FORMATTING REQUIREMENTS:
-- ALWAYS use a structured numbered list format (never paragraph format)
-- ALWAYS sort efficiency results from HIGHEST to LOWEST efficiency
-- When asked for "top X pairings for efficiency", list the MOST efficient ones first
-- NEVER duplicate numbering - use sequential numbers (1, 2, 3, etc.) ONLY ONCE
-- ALWAYS include "Pairing number: XXXX" for EVERY entry
-- DO NOT repeat the intro text or create nested lists
-- NEVER repeat the same pairing number in multiple entries
-- ENSURE each numbered entry has a DIFFERENT pairing number
+"Here are the top [count] most efficient [X]-day pairings from ${bidPackageDisplay}:
 
-Format efficiency queries EXACTLY like this (NO VARIATIONS ALLOWED):
+[NUMBER]. Pairing number: [PAIRING_NUMBER_FROM_DATA]
+- Route: [ROUTE_FROM_DATA]
+- Efficiency: [EFFICIENCY_FROM_DATA]
+- Credit Hours: [CREDIT_HOURS_FROM_DATA]
+- Block Hours: [BLOCK_HOURS_FROM_DATA]
+- Hold Probability: [HOLD_PROBABILITY_FROM_DATA]%
+- Layovers: [FORMATTED_LAYOVERS_FROM_DATA]
 
-Here are the top X most efficient Y-day pairings from [bid package name]:
+[NEXT_SEQUENTIAL_NUMBER]. Pairing number: [DIFFERENT_PAIRING_NUMBER]
+- Route: [DIFFERENT_ROUTE]
+- Efficiency: [DIFFERENT_EFFICIENCY]
+- Credit Hours: [DIFFERENT_CREDIT_HOURS]
+- Block Hours: [DIFFERENT_BLOCK_HOURS]
+- Hold Probability: [DIFFERENT_HOLD_PROBABILITY]%
+- Layovers: [DIFFERENT_LAYOVERS]"
 
-1. Pairing number: XXXX
-   - Route: [route]
-   - Efficiency: X.XX
-   - Credit Hours: XX.XX
-   - Block Hours: XX.XX
-   - Hold Probability: XX%
-   - Layovers: [details]
+CRITICAL RULES:
+1. Use ONLY data from the topPairings array provided
+2. Process topPairings[0], topPairings[1], topPairings[2] etc. in order
+3. NEVER duplicate pairing numbers - each entry uses different array index
+4. NEVER skip array indexes or repeat them
+5. NEVER create content not present in the data
+6. NEVER duplicate numbering (1, 2, 3 - each number used ONCE only)
+7. If topPairings has 3 items, create exactly 3 numbered entries
 
-2. Pairing number: YYYY (MUST BE DIFFERENT FROM XXXX)
-   - Route: [route]
-   - Efficiency: X.XX
-   - Credit Hours: XX.XX
-   - Block Hours: XX.XX
-   - Hold Probability: XX%
-   - Layovers: [details]
+DATA EXTRACTION RULES:
+- pairing.pairingNumber → "Pairing number: [value]"
+- pairing.route → "Route: [value]" 
+- pairing.efficiency → "Efficiency: [value]"
+- pairing.creditHours → "Credit Hours: [value]"
+- pairing.blockHours → "Block Hours: [value]"
+- pairing.holdProbability → "Hold Probability: [value]%"
+- pairing.layovers → format as "City (Hotel, Duration)"
 
-3. Pairing number: ZZZZ (MUST BE DIFFERENT FROM XXXX AND YYYY)
-   - Route: [route]
-   - Efficiency: X.XX
-   - Credit Hours: XX.XX
-   - Block Hours: XX.XX
-   - Hold Probability: XX%
-   - Layovers: [details]
+VERIFICATION REQUIREMENT:
+Before outputting response, verify:
+- Each numbered entry uses different topPairings array index
+- No pairing number appears twice
+- Sequential numbering (1, 2, 3) with no gaps or repeats
+- All data comes directly from provided topPairings array
 
-STRICT FORMATTING RULES:
-- Each number (1, 2, 3) appears EXACTLY ONCE
-- Each entry MUST start with "Pairing number: XXXX"
-- Each XXXX must be a UNIQUE pairing number - NO DUPLICATES
-- NO duplicate numbers allowed
-- NO missing pairing numbers
-- NO nested lists or repeated intro text
-- NO text before the pairing number except the number itself
-- VERIFY each pairing number is different before writing response
-
-When provided with pairing data:
-- Always show the actual pairing numbers found
-- Include key metrics like credit hours, block hours, efficiency ratios, and hold probabilities
-- For layover analysis, show the city, hotel, duration, and associated pairing information
-- If no pairings match the criteria, clearly state this
-- For 4-day pairing requests, focus on the 4-day pairings specifically
-- Provide practical bidding advice based on the data
-
-IMPORTANT: When displaying hours, use the exact Delta PBS format as provided in the data:
-- Show credit hours like: "21.43" (not "21 hours and 43 minutes")
-- Show block hours like: "14.35" (not "14 hours and 35 minutes")
-- For layover durations, show ONLY the original format from the bid package
-- Do NOT add decimal conversions or explanations in parentheses
-- Match the exact format from the bid package data
-
-Use the backend-processed summaries to provide accurate analysis within token limits.`;
+For non-efficiency queries, respond naturally while maintaining accuracy.`;
   }
 
   private getAvailableFunctions(): any[] {
