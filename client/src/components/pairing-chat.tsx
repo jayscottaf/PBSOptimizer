@@ -326,12 +326,12 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
-    
+
     // Extract pairings from various locations in message data
     if (messageData?.pairings && Array.isArray(messageData.pairings)) {
       pairings.push(...messageData.pairings);
     }
-    
+
     if (messageData?.pairing) {
       pairings.push(messageData.pairing);
     }
@@ -365,7 +365,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const formatMessageWithPairings = (content: string, messageData?: any) => {
     const pairings = parsePairingsFromMessage(content, messageData);
-    
+
     if (pairings.length === 0) {
       return <span className="whitespace-pre-wrap text-sm">{content}</span>;
     }
@@ -383,45 +383,39 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     let remainingContent = content;
     let keyCounter = 0;
 
-    // Find all pairing number patterns in the text
-    const pairingPattern = /\b(\d{4,5})\b/g;
+    // Replace pairing numbers with PairingDisplay components
     let lastIndex = 0;
     let match;
+    // Enhanced regex to catch more pairing number patterns
+    const pairingRegex = /(?:pairing\s+(?:number\s+)?|pairing\s+|#)(\d{4,5})|(?:^|\s)(\d{4,5})(?=\s+(?:has|with|is))/gmi;
 
-    while ((match = pairingPattern.exec(content)) !== null) {
-      const pairingNumber = match[1];
+    while ((match = pairingRegex.exec(remainingContent)) !== null) {
+      const fullMatch = match[0];
+      const pairingNumber = match[1] || match[2]; // Handle both capture groups
       const pairing = pairingMap.get(pairingNumber);
 
       if (pairing) {
-        // Add text before the pairing
+        // Add text before the match
         if (match.index > lastIndex) {
-          parts.push(
-            <span key={`text-${keyCounter++}`}>
-              {content.substring(lastIndex, match.index)}
-            </span>
-          );
+          parts.push(remainingContent.slice(lastIndex, match.index));
         }
 
-        // Add the interactive pairing element
+        // Add the PairingDisplay component
         parts.push(
-          <PairingDisplay
-            key={`pairing-${keyCounter++}-${pairingNumber}`}
+          <PairingDisplay 
+            key={`pairing-${pairingNumber}-${match.index}`}
             pairing={pairing}
             displayText={pairingNumber}
           />
         );
 
-        lastIndex = match.index + match[0].length;
+        lastIndex = match.index + fullMatch.length;
       }
     }
 
     // Add remaining text
     if (lastIndex < content.length) {
-      parts.push(
-        <span key={`text-${keyCounter++}`}>
-          {content.substring(lastIndex)}
-        </span>
-      );
+      parts.push(remainingContent.slice(lastIndex));
     }
 
     return parts.length > 0 ? (
