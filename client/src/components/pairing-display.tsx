@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -13,7 +12,7 @@ interface PairingInfo {
   tafb?: string;
   pairingDays?: string;
   holdProbability?: number;
-  layovers?: string[];
+  layovers?: any[];
   effectiveDates?: string;
   payHours?: string;
   fullText?: string;
@@ -68,6 +67,27 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
               <Badge variant="secondary" className="ml-1">{pairing.holdProbability}%</Badge>
             </div>
           )}
+          {pairing.layovers && Array.isArray(pairing.layovers) && pairing.layovers.length > 0 && (
+            <div className="text-sm">
+              <span className="text-gray-600">Layovers:</span> {pairing.layovers.map(layover => {
+                if (typeof layover === 'object' && layover !== null) {
+                  const city = layover.city || '';
+                  const duration = layover.duration || '';
+                  const hotel = layover.hotel || '';
+
+                  let displayText = city;
+                  if (duration) {
+                    displayText += ` (${duration}h)`;
+                  }
+                  if (hotel && hotel !== city) {
+                    displayText += ` - ${hotel}`;
+                  }
+                  return displayText;
+                }
+                return String(layover);
+              }).join(', ')}
+            </div>
+          )}
         </>
       )}
       <div className="text-xs text-blue-600 mt-2">
@@ -109,7 +129,7 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
           )}
         </div>
       </div>
-      
+
       {pairing.route && (
         <div>
           <div className="font-medium mb-2">Route:</div>
