@@ -401,33 +401,39 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     let processedContent = remainingContent;
     let globalOffset = 0;
 
-    // Process each pattern, prioritizing more specific patterns first
-    const prioritizedPatterns = [
-      // More specific patterns first
-      /(?:\d+\.\s*pairing\s+number\s*:\s*)(\d{4,5})/gi,
+    // Process with more specific patterns that match the actual AI output format
+    const specificPatterns = [
+      // Numbered list with "Pairing" - matches "1. Pairing 8156:" or "2. Pairing 8161:"
+      /(\d+\.\s*Pairing\s+)(\d{4,5})(?:\s*:)/gi,
+      // Direct "Pairing XXXX:" format
+      /(?:^|\s)(Pairing\s+)(\d{4,5})(?:\s*:)/gmi,
+      // Legacy patterns for compatibility
       /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
-      /(?:pairing\s+)(\d{4,5})(?!\d)/gi,
-      /#(\d{4,5})(?!\d)/gi,
-      // More permissive pattern last, but with context filtering
-      /\b(\d{4,5})\b/gi
+      /#(\d{4,5})(?!\d)/gi
     ];
 
-    for (const pattern of prioritizedPatterns) {
+    const processedRanges = new Set(); // Track processed ranges to avoid duplicates
+
+    for (const pattern of specificPatterns) {
       pattern.lastIndex = 0; // Reset regex
       let match;
 
       while ((match = pattern.exec(processedContent)) !== null) {
-        const pairingNumber = match[1];
+        const pairingNumber = match[match.length - 1]; // Last group is always the pairing number
         const pairing = pairingMap.get(pairingNumber);
 
-        // For the permissive pattern, add additional context checks
-        if (pattern.source === '\\b(\\d{4,5})\\b' && !pairing) {
-          // Skip numbers that don't have pairing data
-          continue;
-        }
-
         if (pairing) {
-          const matchStart = match.index + match[0].indexOf(pairingNumber);
+          const pairingStart = match.index + match[0].indexOf(pairingNumber);
+          const pairingEnd = pairingStart + pairingNumber.length;
+          const rangeKey = `${pairingStart}-${pairingEnd}`;
+
+          // Skip if we've already processed this range
+          if (processedRanges.has(rangeKey)) {
+            continue;
+          }
+          processedRanges.add(rangeKey);
+
+          const matchStart = pairingStart;
           const matchEnd = matchStart + pairingNumber.length;
 
           // Add text before the match

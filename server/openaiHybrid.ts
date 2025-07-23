@@ -125,7 +125,12 @@ export class HybridOpenAIService {
     const durationMatch = message.match(/(\d+)[-\s]?day/);
     const requestedDays = durationMatch ? parseInt(durationMatch[1]) : null;
 
-    // Handle specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
+    // Check for efficiency queries with specific days first
+    if (requestedDays && (message.includes('efficient') || message.includes('efficiency'))) {
+      return await this.handleEfficiencyQuery(query, requestedDays, message);
+    }
+
+    // Check for specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
     if (requestedDays) {
       return await this.handleDurationSpecificQuery(query, requestedDays, message);
     }
