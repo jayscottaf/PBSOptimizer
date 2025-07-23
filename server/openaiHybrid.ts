@@ -282,6 +282,56 @@ export class HybridOpenAIService {
     };
   }
 
+  private async handleEfficiencyQuery(query: HybridAnalysisQuery, days: number, message: string): Promise<any> {
+    console.log(`Processing efficiency query for ${days}-day pairings:`, message);
+
+    try {
+      const pairings = await this.storage.getPairingsByDays(query.bidPackageId!, days);
+
+      // Calculate efficiency for each pairing and sort consistently
+      const pairingsWithEfficiency = pairings.map((pairing: any) => {
+        const creditHours = parseFloat(pairing.creditHours) || 0;
+        const blockHours = parseFloat(pairing.blockHours) || 0;
+        const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+
+        return {
+          ...pairing,
+          efficiency: parseFloat(efficiency.toFixed(3)) // Consistent precision
+        };
+      });
+
+      // Sort by efficiency descending, then by pairing number for consistency
+      pairingsWithEfficiency.sort((a, b) => {
+        if (Math.abs(a.efficiency - b.efficiency) < 0.001) {
+          // If efficiencies are very close, sort by pairing number for consistency
+          return a.pairingNumber.localeCompare(b.pairingNumber);
+        }
+        return b.efficiency - a.efficiency;
+      });
+
+      // Extract the number of pairings requested (default to 3)
+      const topCountMatch = message.match(/top\s+(\d+)/i);
+      const topCount = topCountMatch ? parseInt(topCountMatch[1]) : 3;
+
+      const topPairings = pairingsWithEfficiency.slice(0, topCount);
+
+      return {
+        type: `efficiency_${days}day_analysis`,
+        pairings: topPairings,
+        totalCount: pairings.length,
+        requestedCount: topCount,
+        truncated: false
+      };
+    } catch (error) {
+      console.error(`Error in handleEfficiencyQuery:`, error);
+      return {
+        type: 'error',
+        message: `Error processing ${days}-day efficiency query: ${error.message}`,
+        truncated: false
+      };
+    }
+  }
+
   private async handleMultiDayQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
 

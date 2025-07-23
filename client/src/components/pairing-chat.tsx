@@ -384,29 +384,47 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
     // Enhanced regex patterns to catch various pairing number formats
     const pairingPatterns = [
-      // "Pairing number: 8161" format
+      // "Pairing Number: 8161" format (capital N)
+      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
+      // "Pairing number: 8161" format (lowercase n)
       /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
       // "Pairing 8161" format  
       /(?:pairing\s+)(\d{4,5})(?!\d)/gi,
-      // "pairing number 8161" format
-      /(?:pairing\s+number\s+)(\d{4,5})(?!\d)/gi,
-      // Numbered list format: "1. Pairing number: 8161"
+      // Numbered list format: "1. Pairing number: 8161" or "1. Pairing Number: 8161"
       /(?:\d+\.\s*pairing\s+number\s*:\s*)(\d{4,5})/gi,
       // Hash format: "#8161"
-      /#(\d{4,5})(?!\d)/gi
+      /#(\d{4,5})(?!\d)/gi,
+      // Standalone 4-5 digit numbers that could be pairing numbers (more permissive)
+      /\b(\d{4,5})\b/gi
     ];
 
     let processedContent = remainingContent;
     let globalOffset = 0;
 
-    // Process each pattern
-    for (const pattern of pairingPatterns) {
+    // Process each pattern, prioritizing more specific patterns first
+    const prioritizedPatterns = [
+      // More specific patterns first
+      /(?:\d+\.\s*pairing\s+number\s*:\s*)(\d{4,5})/gi,
+      /(?:pairing\s+number\s*:\s*)(\d{4,5})/gi,
+      /(?:pairing\s+)(\d{4,5})(?!\d)/gi,
+      /#(\d{4,5})(?!\d)/gi,
+      // More permissive pattern last, but with context filtering
+      /\b(\d{4,5})\b/gi
+    ];
+
+    for (const pattern of prioritizedPatterns) {
       pattern.lastIndex = 0; // Reset regex
       let match;
 
       while ((match = pattern.exec(processedContent)) !== null) {
         const pairingNumber = match[1];
         const pairing = pairingMap.get(pairingNumber);
+
+        // For the permissive pattern, add additional context checks
+        if (pattern.source === '\\b(\\d{4,5})\\b' && !pairing) {
+          // Skip numbers that don't have pairing data
+          continue;
+        }
 
         if (pairing) {
           const matchStart = match.index + match[0].indexOf(pairingNumber);
