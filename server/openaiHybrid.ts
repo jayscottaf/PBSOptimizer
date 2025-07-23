@@ -343,7 +343,7 @@ export class HybridOpenAIService {
       // Ensure unique pairing numbers (prevent duplicates)
       const uniquePairings = [];
       const seenPairingNumbers = new Set();
-      
+
       for (const pairing of pairingsWithEfficiency) {
         if (!seenPairingNumbers.has(pairing.pairingNumber) && uniquePairings.length < topCount) {
           seenPairingNumbers.add(pairing.pairingNumber);
@@ -713,7 +713,7 @@ export class HybridOpenAIService {
     // Check for duplicate pairing numbers
     const pairingNumbers = pairingMatches.map(match => match.match(/\d+/)?.[0]).filter(Boolean);
     const uniqueNumbers = new Set(pairingNumbers);
-    
+
     if (uniqueNumbers.size === pairingNumbers.length) {
       // No duplicates found
       return response;
@@ -721,17 +721,17 @@ export class HybridOpenAIService {
 
     // Duplicates detected - rebuild response with unique pairings
     console.log('Duplicate pairing numbers detected in response, rebuilding...');
-    
+
     const topPairings = processedData.topPairings.slice(0, processedData.requestedCount || 3);
     const bidPackageName = "NYC A220 August 2025 Bid Package"; // Get from processedData if available
-    
+
     let fixedResponse = `Here are the top ${topPairings.length} most efficient 3-day pairings from ${bidPackageName}:\n\n`;
-    
+
     topPairings.forEach((pairing: any, index: number) => {
       const layoverText = pairing.layovers && pairing.layovers.length > 0 
         ? pairing.layovers.map((l: any) => `${l.city} (${l.hotel}, ${l.duration} hours)`).join(', ')
         : 'No layovers';
-        
+
       fixedResponse += `${index + 1}. Pairing number: ${pairing.pairingNumber}\n`;
       fixedResponse += `   - Route: ${pairing.route}\n`;
       fixedResponse += `   - Efficiency: ${pairing.efficiency}\n`;
@@ -740,8 +740,60 @@ export class HybridOpenAIService {
       fixedResponse += `   - Hold Probability: ${pairing.holdProbability}%\n`;
       fixedResponse += `   - Layovers: ${layoverText}\n\n`;
     });
-    
+
     return fixedResponse;
+  }
+
+  private containsDuplicates(responseText: string): boolean {
+    // Enhanced duplicate detection - check for both explicit pairing numbers and duplicate content
+  const duplicatePattern = /(\d+\.\s*Pairing number:\s*(\d+))/g;
+  const pairingNumbers = new Set();
+  let match;
+
+  // Check for duplicate pairing numbers
+  while ((match = duplicatePattern.exec(responseText)) !== null) {
+    const pairingNumber = match[2];
+    if (pairingNumbers.has(pairingNumber)) {
+      console.log(`Duplicate pairing number detected: ${pairingNumber}`);
+      return true;
+    }
+    pairingNumbers.add(pairingNumber);
+  }
+
+  // Check for duplicate route patterns (same route appearing multiple times)
+  const routePattern = /Route:\s*([A-Z-]+)/g;
+  const routes = new Set();
+  let routeMatch;
+
+  while ((routeMatch = routePattern.exec(responseText)) !== null) {
+    const route = routeMatch[1];
+    if (routes.has(route)) {
+      console.log(`Duplicate route detected: ${route}`);
+      return true;
+    }
+    routes.add(route);
+  }
+
+  // Check for missing pairing numbers in numbered entries
+  const entryPattern = /(\d+)\.\s*(?:Pairing number:\s*(\d+)|Route:|Efficiency:)/g;
+  const entriesWithoutPairingNumbers = [];
+  let entryMatch;
+
+  while ((entryMatch = entryPattern.exec(responseText)) !== null) {
+    const entryNumber = entryMatch[1];
+    const pairingNumber = entryMatch[2];
+
+    if (!pairingNumber && entryMatch[0].includes('Route:')) {
+      entriesWithoutPairingNumbers.push(entryNumber);
+    }
+  }
+
+  if (entriesWithoutPairingNumbers.length > 0) {
+    console.log(`Entries missing pairing numbers: ${entriesWithoutPairingNumbers.join(', ')}`);
+    return true;
+  }
+
+  return false;
   }
 
   private getSystemPrompt(bidPackageInfo?: any): string {
