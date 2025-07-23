@@ -697,10 +697,12 @@ CRITICAL FORMATTING REQUIREMENTS:
 - ALWAYS use a structured numbered list format (never paragraph format)
 - ALWAYS sort efficiency results from HIGHEST to LOWEST efficiency
 - When asked for "top X pairings for efficiency", list the MOST efficient ones first
-- NEVER duplicate numbering - use sequential numbers (1, 2, 3, etc.)
-- ALWAYS include the pairing number for each entry
+- NEVER duplicate numbering - use sequential numbers (1, 2, 3, etc.) ONLY ONCE
+- ALWAYS include "Pairing number: XXXX" for EVERY entry
+- DO NOT repeat the intro text or create nested lists
 
-Format efficiency queries EXACTLY like this:
+Format efficiency queries EXACTLY like this (NO VARIATIONS ALLOWED):
+
 Here are the top X most efficient Y-day pairings from [bid package name]:
 
 1. Pairing number: XXXX
@@ -720,13 +722,20 @@ Here are the top X most efficient Y-day pairings from [bid package name]:
    - Layovers: [details]
 
 3. Pairing number: ZZZZ
-   [etc...]
+   - Route: [route]
+   - Efficiency: X.XX
+   - Credit Hours: XX.XX
+   - Block Hours: XX.XX
+   - Hold Probability: XX%
+   - Layovers: [details]
 
-FORMATTING RULES:
-- Each entry MUST have a unique sequential number
-- Each entry MUST include "Pairing number: XXXX"
+STRICT FORMATTING RULES:
+- Each number (1, 2, 3) appears EXACTLY ONCE
+- Each entry MUST start with "Pairing number: XXXX"
 - NO duplicate numbers allowed
 - NO missing pairing numbers
+- NO nested lists or repeated intro text
+- NO text before the pairing number except the number itself
 
 When provided with pairing data:
 - Always show the actual pairing numbers found
