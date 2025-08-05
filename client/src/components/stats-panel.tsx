@@ -35,7 +35,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
     const sixDayCount = pairings.filter(p => (p.pairingDays || 0) >= 6).length;
 
     const totalCredit = pairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
-    const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockTime), 0);
+    const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
 
     return {
       totalPairings: pairings.length,
@@ -43,7 +43,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
       highCredit: highCreditCount,
       sixDayCombos: sixDayCount,
       avgCreditHours: pairings.length > 0 ? totalCredit / pairings.length : 0,
-      avgBlockTime: pairings.length > 0 ? totalBlock / pairings.length : 0,
+      avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
     };
   }, [pairings]);
 
@@ -95,10 +95,12 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
             <div className="text-2xl font-bold text-purple-600">{stats.highCredit}</div>
             <div className="text-sm text-gray-600">High Credit</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
-            <div className="text-sm text-gray-600">6-Day Combos</div>
-          </div>
+          {stats.sixDayCombos > 0 && (
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
+              <div className="text-sm text-gray-600">6-Day Combos</div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-200">
@@ -108,7 +110,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
               <div className="text-gray-600">Avg Credit</div>
             </div>
             <div className="text-center">
-              <div className="font-medium text-gray-900">{stats.avgBlockTime.toFixed(1)}</div>
+              <div className="font-medium text-gray-900">{stats.avgBlockHours.toFixed(1)}</div>
               <div className="text-gray-600">Avg Block</div>
             </div>
           </div>
