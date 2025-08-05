@@ -361,8 +361,20 @@ export class HybridOpenAIService {
 
     // Collect layovers from all pairings, filtering by city FIRST if specified
     const allLayovers: any[] = [];
+    let debugInfo: any[] = [];
 
     allPairings.forEach(pairing => {
+      // Debug: Check for specific pairing 8053
+      if (pairing.pairingNumber === "8053") {
+        debugInfo.push({
+          pairingNumber: pairing.pairingNumber,
+          hasLayovers: !!pairing.layovers,
+          layoversArray: pairing.layovers,
+          isArray: Array.isArray(pairing.layovers),
+          layoverCount: pairing.layovers ? pairing.layovers.length : 0
+        });
+      }
+
       if (pairing.layovers && Array.isArray(pairing.layovers)) {
         pairing.layovers.forEach((layover: any) => {
           // STRICT city filtering - only include layovers in the specified city
@@ -394,7 +406,7 @@ export class HybridOpenAIService {
               durationHours: durationHours,
               pairingNumber: pairing.pairingNumber,
               creditHours: pairing.creditHours,
-              holdProbability: layover.holdProbability,
+              holdProbability: pairing.holdProbability,
               route: pairing.route
             });
           }
@@ -434,6 +446,11 @@ export class HybridOpenAIService {
       responseText += ` No layovers found matching your criteria.`;
     }
 
+    // Add debug info if pairing 8053 was found
+    if (debugInfo.length > 0) {
+      console.log('Debug info for pairing 8053:', debugInfo);
+    }
+
     return {
       response: responseText,
       data: {
@@ -448,7 +465,8 @@ export class HybridOpenAIService {
           holdProbability: layover.holdProbability,
           route: layover.route
         })),
-        totalLayovers: allLayovers.length
+        totalLayovers: allLayovers.length,
+        debugInfo: debugInfo // Include debug info for troubleshooting
       },
       truncated: sortedLayovers.length < allLayovers.length
     };
