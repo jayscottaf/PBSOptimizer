@@ -131,7 +131,7 @@ export class HybridOpenAIService {
     }
 
     // Check for specific pairing number requests (only very explicit pairing requests)
-    const pairingMatch = message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) || 
+    const pairingMatch = message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) ||
                          message.match(/#(\d{4,5})/i) ||
                          (message.match(/\b(\d{4,5})\b/) && (message.includes('pairing') || message.match(/^(?:show\s+me\s+)?(\d{4,5})$/)));
 
@@ -394,7 +394,7 @@ export class HybridOpenAIService {
               durationHours: durationHours,
               pairingNumber: pairing.pairingNumber,
               creditHours: pairing.creditHours,
-              holdProbability: pairing.holdProbability,
+              holdProbability: layover.holdProbability,
               route: pairing.route
             });
           }
@@ -422,31 +422,35 @@ export class HybridOpenAIService {
       cityStats[city].avgDuration = cityStats[city].totalDuration / cityStats[city].count;
     });
 
+    // Format the response with actual layover details
+    let responseText = `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}.`;
+
+    if (sortedLayovers.length > 0) {
+      responseText += `\n\nLayover Details:\n`;
+      sortedLayovers.forEach((layover, index) => {
+        responseText += `${index + 1}. Pairing ${layover.pairingNumber}: ${layover.city} layover (${layover.duration} hours)${layover.hotel ? ` at ${layover.hotel}` : ''}\n`;
+      });
+    } else {
+      responseText += ` No layovers found matching your criteria.`;
+    }
+
     return {
-      type: 'layover_analysis',
-      targetCity: targetCity,
-      requestedCount: requestedCount,
-      minDuration: minDuration,
-      longestLayovers: sortedLayovers.map(layover => ({
-        city: layover.city,
-        hotel: layover.hotel,
-        duration: layover.duration,
-        durationHours: layover.durationHours.toFixed(2),
-        pairingNumber: layover.pairingNumber,
-        creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
-        holdProbability: layover.holdProbability,
-        route: layover.route
-      })),
-      cityStats: Object.entries(cityStats)
-        .map(([city, stats]: [string, any]) => ({
-          city,
-          count: stats.count,
-          avgDuration: stats.avgDuration.toFixed(2)
-        }))
-        .sort((a, b) => b.count - a.count),
-      totalLayovers: allLayovers.length,
-      totalPairings: allPairings.length,
-      truncated: false
+      response: responseText,
+      data: {
+        targetCity,
+        longestLayovers: sortedLayovers.map(layover => ({
+          city: layover.city,
+          hotel: layover.hotel,
+          duration: layover.duration,
+          durationHours: layover.durationHours.toFixed(2),
+          pairingNumber: layover.pairingNumber,
+          creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
+          holdProbability: layover.holdProbability,
+          route: layover.route
+        })),
+        totalLayovers: allLayovers.length
+      },
+      truncated: sortedLayovers.length < allLayovers.length
     };
   }
 
@@ -503,14 +507,14 @@ export class HybridOpenAIService {
         // Generate detailed response with actual pairing data
         const topPairings = efficientResult.pairings.slice(0, 5);
         let response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
-        
+
         topPairings.forEach((p: any, i: number) => {
           const efficiency = (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2);
           response += `${i + 1}. **Pairing ${p.pairingNumber}** - ${efficiency} ratio\n`;
           response += `   • Credit: ${this.formatHoursDeltaPBS(parseFloat(p.creditHours.toString()))} | Block: ${this.formatHoursDeltaPBS(parseFloat(p.blockHours.toString()))}\n`;
           response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}% | Route: ${p.route?.substring(0, 50)}...\n\n`;
         });
-        
+
         response += `**Summary Stats:**\n`;
         response += `• Average efficiency: ${efficientResult.stats.avgEfficiency.toFixed(2)}\n`;
         response += `• Top efficiency: ${efficientResult.stats.topEfficiency.toFixed(2)}\n`;
@@ -645,8 +649,35 @@ export class HybridOpenAIService {
           .sort((a, b) => b.durationHours - a.durationHours)
           .slice(0, requestedCount);
 
+        // Group by city for summary stats
+        const cityStats = allLayovers.reduce((acc, layover) => {
+          if (!acc[layover.city]) {
+            acc[layover.city] = { count: 0, totalDuration: 0, avgDuration: 0 };
+          }
+          acc[layover.city].count++;
+          acc[layover.city].totalDuration += layover.durationHours;
+          return acc;
+        }, {} as any);
+
+        // Calculate averages
+        Object.keys(cityStats).forEach(city => {
+          cityStats[city].avgDuration = cityStats[city].totalDuration / cityStats[city].count;
+        });
+
+        // Format the response with actual layover details
+        let responseText = `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}.`;
+
+        if (sortedLayovers.length > 0) {
+          responseText += `\n\nLayover Details:\n`;
+          sortedLayovers.forEach((layover, index) => {
+            responseText += `${index + 1}. Pairing ${layover.pairingNumber}: ${layover.city} layover (${layover.duration} hours)${layover.hotel ? ` at ${layover.hotel}` : ''}\n`;
+          });
+        } else {
+          responseText += ` No layovers found matching your criteria.`;
+        }
+
         return {
-          response: `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}. Showing top ${requestedCount}.`,
+          response: responseText,
           data: {
             targetCity,
             longestLayovers: sortedLayovers.map(layover => ({
@@ -698,7 +729,7 @@ export class HybridOpenAIService {
   }
 
   private getSystemPrompt(bidPackageInfo?: any): string {
-    const bidPackageDisplay = bidPackageInfo ? 
+    const bidPackageDisplay = bidPackageInfo ?
       `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package` :
       'the current bid package';
 
