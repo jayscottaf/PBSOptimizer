@@ -4,13 +4,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Eye, Bookmark, Star } from "lucide-react";
 import type { Pairing } from "@/lib/api";
+import { useState } from "react";
 
 interface PairingTableProps {
   pairings: Pairing[];
-  onPairingClick: (pairingId: number) => void;
+  onPairingClick?: (pairing: Pairing) => void;
 }
 
 export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
+  const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
+
+  const handlePairingClick = (pairing: Pairing) => {
+    if (onPairingClick) {
+      onPairingClick(pairing);
+    } else {
+      setSelectedPairing(pairing);
+    }
+  };
+
   const getHoldProbabilityColor = (probability: number) => {
     if (probability >= 80) return "text-green-600";
     if (probability >= 50) return "text-yellow-600";
@@ -76,10 +87,10 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
               </tr>
             ) : (
               safePairings.map((pairing) => (
-                <tr 
+                <tr
                   key={pairing.id}
                   className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => onPairingClick(pairing.id)}
+                  onClick={() => handlePairingClick(pairing)}
                 >
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -111,7 +122,7 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2 min-w-[100px]">
                       <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[50px]">
-                        <div 
+                        <div
                           className={`h-2 rounded-full ${getProgressColor(pairing.holdProbability)}`}
                           style={{ width: `${pairing.holdProbability}%` }}
                         />
@@ -122,18 +133,18 @@ export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPairingClick(pairing.id);
+                        handlePairingClick(pairing);
                       }}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();

@@ -23,6 +23,7 @@ import { StatsPanel } from "@/components/stats-panel";
 import { PairingTable } from "@/components/pairing-table";
 import { PairingChat } from "@/components/pairing-chat";
 import { FiltersPanel } from "@/components/filters-panel";
+import { PairingModal } from "@/components/pairing-modal";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -45,6 +46,7 @@ export default function Dashboard() {
   const [seniorityNumber, setSeniorityNumber] = useState("15860");
   const [base, setBase] = useState("NYC");
   const [aircraft, setAircraft] = useState("A220");
+  const [selectedPairing, setSelectedPairing] = useState<any>(null);
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
@@ -375,7 +377,10 @@ export default function Dashboard() {
                               {latestBidPackage.month} {latestBidPackage.year} - {pairings.length} pairings
                             </span>
                           </div>
-                          <PairingTable pairings={pairings} />
+                          <PairingTable 
+                            pairings={pairings} 
+                            onPairingClick={(pairing) => setSelectedPairing(pairing)}
+                          />
                         </div>
                       </>
                     ) : (
@@ -421,6 +426,14 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Pairing Modal */}
+      {selectedPairing && (
+        <PairingModal 
+          pairingId={selectedPairing.id} 
+          onClose={() => setSelectedPairing(null)} 
+        />
+      )}
     </div>
   );
 }

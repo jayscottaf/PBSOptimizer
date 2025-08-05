@@ -478,9 +478,17 @@ export class PDFParser {
     // Generate route from flight segments
     const route = this.parseRoute(flightSegments);
 
-    // If no effective dates found, use a default
+    // If no effective dates found, try to infer from bid package or use current month
     if (!effectiveDates) {
-      effectiveDates = "AUG01-AUG31";
+      // Try to extract from any line containing month abbreviations
+      const monthPattern = /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}(?:-\w+)?\b/i;
+      const monthMatch = block.match(monthPattern);
+      if (monthMatch) {
+        effectiveDates = monthMatch[0];
+      } else {
+        // Default to September if no dates found (current bid package)
+        effectiveDates = "SEP01-SEP30";
+      }
     }
 
     // Calculate pairing days from unique day letters in flight segments
