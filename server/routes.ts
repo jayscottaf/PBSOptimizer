@@ -32,6 +32,8 @@ const searchFiltersSchema = z.object({
   blockMin: z.number().optional(),
   blockMax: z.number().optional(),
   tafb: z.string().optional(),
+  tafbMin: z.number().optional(),
+  tafbMax: z.number().optional(),
   holdProbabilityMin: z.number().optional(),
   pairingDays: z.number().optional(),
   pairingDaysMin: z.number().optional(),

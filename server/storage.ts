@@ -49,6 +49,8 @@ export interface IStorage {
     blockMin?: number;
     blockMax?: number;
     tafb?: string;
+    tafbMin?: number;
+    tafbMax?: number;
     holdProbabilityMin?: number;
         pairingDays?: number;
         pairingDaysMin?: number;
@@ -180,6 +182,8 @@ export class DatabaseStorage implements IStorage {
     blockMin?: number;
     blockMax?: number;
     tafb?: string;
+    tafbMin?: number;
+    tafbMax?: number;
     holdProbabilityMin?: number;
         pairingDays?: number;
         pairingDaysMin?: number;
@@ -191,7 +195,7 @@ export class DatabaseStorage implements IStorage {
     if (!filters.bidPackageId) {
       throw new Error("Bid package ID is required for pairing search");
     }
-    
+
     conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
     if (filters.search) {
@@ -227,6 +231,14 @@ export class DatabaseStorage implements IStorage {
 
     if (filters.pairingDaysMax) {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+    }
+
+    // TAFB filter (decimal hours format)
+    if (filters.tafbMin !== undefined) {
+      conditions.push(gte(pairings.tafb, filters.tafbMin.toString()));
+    }
+    if (filters.tafbMax !== undefined) {
+      conditions.push(lte(pairings.tafb, filters.tafbMax.toString()));
     }
 
     if (conditions.length > 0) {
