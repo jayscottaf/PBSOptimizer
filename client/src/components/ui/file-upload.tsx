@@ -67,7 +67,10 @@ export function FileUpload({ onUpload }: FileUploadProps) {
         description: "Bid package uploaded and processing has begun.",
       });
       
-      onUpload(file);
+      // Wait a moment for processing to begin, then trigger refresh
+      setTimeout(() => {
+        onUpload(file);
+      }, 1000);
     } catch (error) {
       console.error("Upload error:", error);
       toast({

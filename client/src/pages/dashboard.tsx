@@ -150,6 +150,44 @@ export default function Dashboard() {
                       onUpload={(file) => {
                         console.log("File uploaded:", file);
                         refetchBidPackages();
+                        
+                        // Poll for completion and refresh data
+                        const pollForCompletion = async () => {
+                          let attempts = 0;
+                          const maxAttempts = 30; // 30 seconds max
+                          
+                          const checkStatus = async () => {
+                            attempts++;
+                            try {
+                              const packages = await api.getBidPackages();
+                              const latestPackage = packages[0];
+                              
+                              if (latestPackage?.status === 'completed') {
+                                // Refresh all data when processing is complete
+                                refetchBidPackages();
+                                if (selectedBidPackage?.id !== latestPackage.id) {
+                                  setSelectedBidPackage(latestPackage);
+                                }
+                                return true;
+                              } else if (latestPackage?.status === 'failed') {
+                                console.error('Bid package processing failed');
+                                return true;
+                              } else if (attempts < maxAttempts) {
+                                setTimeout(checkStatus, 1000);
+                              }
+                            } catch (error) {
+                              console.error('Error checking status:', error);
+                              if (attempts < maxAttempts) {
+                                setTimeout(checkStatus, 1000);
+                              }
+                            }
+                            return false;
+                          };
+                          
+                          checkStatus();
+                        };
+                        
+                        pollForCompletion();
                       }}
                     />
                   </div>
