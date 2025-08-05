@@ -189,14 +189,16 @@ export class DatabaseStorage implements IStorage {
         pairingDaysMin?: number;
         pairingDaysMax?: number;
   }): Promise<Pairing[]> {
-    const conditions = [];
+    try {
+      const conditions = [];
 
-    // Always require bidPackageId for safety
-    if (!filters.bidPackageId) {
-      throw new Error("Bid package ID is required for pairing search");
-    }
+      // Always require bidPackageId for safety
+      if (!filters.bidPackageId) {
+        console.error("Bid package ID is required for pairing search");
+        return [];
+      }
 
-    conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
+      conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
     if (filters.search) {
       conditions.push(
@@ -250,12 +252,16 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-      return await db.select().from(pairings)
-        .where(and(...conditions))
-        .orderBy(asc(pairings.pairingNumber));
-    }
+        return await db.select().from(pairings)
+          .where(and(...conditions))
+          .orderBy(asc(pairings.pairingNumber));
+      }
 
-    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+      return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+    } catch (error) {
+      console.error("Error in searchPairings:", error);
+      return [];
+    }
   }
 
   async createBidHistory(bidHistoryData: InsertBidHistory): Promise<BidHistory> {

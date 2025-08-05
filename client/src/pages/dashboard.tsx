@@ -44,9 +44,22 @@ interface SearchFilters {
 export default function Dashboard() {
   const [filters, setFilters] = useState<SearchFilters>({});
   const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
-  const [seniorityNumber, setSeniorityNumber] = useState("15860");
-  const [base, setBase] = useState("NYC");
-  const [aircraft, setAircraft] = useState("A220");
+  const [seniorityNumber, setSeniorityNumber] = useState(() => {
+    return localStorage.getItem('seniorityNumber') || "15860";
+  });
+  const [base, setBase] = useState(() => {
+    return localStorage.getItem('base') || "NYC";
+  });
+  const [aircraft, setAircraft] = useState(() => {
+    return localStorage.getItem('aircraft') || "A220";
+  });
+
+  // Save user info to localStorage when it changes
+  React.useEffect(() => {
+    localStorage.setItem('seniorityNumber', seniorityNumber);
+    localStorage.setItem('base', base);
+    localStorage.setItem('aircraft', aircraft);
+  }, [seniorityNumber, base, aircraft]);
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");

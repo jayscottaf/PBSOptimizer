@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { Pairing, BidPackage } from "@/lib/api";
 import React, { useMemo } from 'react';
+import { BarChart2 } from "lucide-react";
+
 
 interface StatsPanelProps {
   pairings: Pairing[];
@@ -17,7 +19,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
         highCredit: 0,
         sixDayCombos: 0,
         avgCreditHours: 0,
-        avgBlockTime: 0,
+        avgBlockHours: 0,
       };
     }
 
