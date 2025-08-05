@@ -352,39 +352,75 @@ export default function Dashboard() {
 
                         {/* Filter Controls */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <Select onValueChange={(value) => addFilter('creditMin', 'Credit Min', value)}>
+                          <Select onValueChange={(value) => addFilter('creditMin', 'Credit Min', parseFloat(value))}>
                             <SelectTrigger>
                               <SelectValue placeholder="Credit Min" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                              <SelectItem value="4.0">4:00</SelectItem>
+                              <SelectItem value="4.5">4:30</SelectItem>
+                              <SelectItem value="5.0">5:00</SelectItem>
+                              <SelectItem value="5.5">5:30</SelectItem>
+                              <SelectItem value="6.0">6:00</SelectItem>
+                              <SelectItem value="6.5">6:30</SelectItem>
+                              <SelectItem value="7.0">7:00</SelectItem>
+                              <SelectItem value="7.5">7:30</SelectItem>
+                              <SelectItem value="8.0">8:00</SelectItem>
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('creditMax', 'Credit Max', value)}>
+                          <Select onValueChange={(value) => addFilter('creditMax', 'Credit Max', parseFloat(value))}>
                             <SelectTrigger>
                               <SelectValue placeholder="Credit Max" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                              <SelectItem value="4.0">4:00</SelectItem>
+                              <SelectItem value="4.5">4:30</SelectItem>
+                              <SelectItem value="5.0">5:00</SelectItem>
+                              <SelectItem value="5.5">5:30</SelectItem>
+                              <SelectItem value="6.0">6:00</SelectItem>
+                              <SelectItem value="6.5">6:30</SelectItem>
+                              <SelectItem value="7.0">7:00</SelectItem>
+                              <SelectItem value="7.5">7:30</SelectItem>
+                              <SelectItem value="8.0">8:00</SelectItem>
+                              <SelectItem value="9.0">9:00</SelectItem>
+                              <SelectItem value="10.0">10:00</SelectItem>
                             </SelectContent>
                           </Select>
                           
-                          <Select onValueChange={(value) => addFilter('blockMin', 'Block Min', value)}>
+                          <Select onValueChange={(value) => addFilter('blockMin', 'Block Min', parseFloat(value))}>
                             <SelectTrigger>
                               <SelectValue placeholder="Block Min" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                              <SelectItem value="3.0">3:00</SelectItem>
+                              <SelectItem value="3.5">3:30</SelectItem>
+                              <SelectItem value="4.0">4:00</SelectItem>
+                              <SelectItem value="4.5">4:30</SelectItem>
+                              <SelectItem value="5.0">5:00</SelectItem>
+                              <SelectItem value="5.5">5:30</SelectItem>
+                              <SelectItem value="6.0">6:00</SelectItem>
+                              <SelectItem value="6.5">6:30</SelectItem>
+                              <SelectItem value="7.0">7:00</SelectItem>
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('blockMax', 'Block Max', value)}>
+                          <Select onValueChange={(value) => addFilter('blockMax', 'Block Max', parseFloat(value))}>
                             <SelectTrigger>
                               <SelectValue placeholder="Block Max" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                              <SelectItem value="3.0">3:00</SelectItem>
+                              <SelectItem value="3.5">3:30</SelectItem>
+                              <SelectItem value="4.0">4:00</SelectItem>
+                              <SelectItem value="4.5">4:30</SelectItem>
+                              <SelectItem value="5.0">5:00</SelectItem>
+                              <SelectItem value="5.5">5:30</SelectItem>
+                              <SelectItem value="6.0">6:00</SelectItem>
+                              <SelectItem value="6.5">6:30</SelectItem>
+                              <SelectItem value="7.0">7:00</SelectItem>
+                              <SelectItem value="8.0">8:00</SelectItem>
+                              <SelectItem value="9.0">9:00</SelectItem>
                             </SelectContent>
                           </Select>
 
