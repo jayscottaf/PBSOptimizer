@@ -33,6 +33,8 @@ interface SearchFilters {
   blockMin?: number;
   blockMax?: number;
   tafb?: string;
+  tafbMin?: number;
+  tafbMax?: number;
   holdProbabilityMin?: number;
   pairingDays?: number;
   pairingDaysMin?: number;
@@ -386,15 +388,28 @@ export default function Dashboard() {
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('tafb', 'TAFB', value)}>
+                          <Select onValueChange={(value) => {
+                            if (value === "short") {
+                              addFilter('tafbMax', 'TAFB < 50hrs', 50);
+                            } else if (value === "medium") {
+                              addFilter('tafbMin', 'TAFB 50-80hrs', 50);
+                              addFilter('tafbMax', 'TAFB 50-80hrs', 80);
+                            } else if (value === "long") {
+                              addFilter('tafbMin', 'TAFB > 80hrs', 80);
+                            } else {
+                              // Clear TAFB filters
+                              removeFilter('tafbMin');
+                              removeFilter('tafbMax');
+                            }
+                          }}>
                             <SelectTrigger>
                               <SelectValue placeholder="TAFB" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="1">1 Day</SelectItem>
-                              <SelectItem value="2">2 Days</SelectItem>
-                              <SelectItem value="3">3 Days</SelectItem>
-                              <SelectItem value="4">4+ Days</SelectItem>
+                              <SelectItem value="any">Any TAFB</SelectItem>
+                              <SelectItem value="short">Short (&lt; 50hrs)</SelectItem>
+                              <SelectItem value="medium">Medium (50-80hrs)</SelectItem>
+                              <SelectItem value="long">Long (&gt; 80hrs)</SelectItem>
                             </SelectContent>
                           </Select>
 
