@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,15 +46,25 @@ export default function Dashboard() {
   const [base, setBase] = useState("NYC");
   const [aircraft, setAircraft] = useState("A220");
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
     queryFn: api.getBidPackages,
   });
 
-  const latestBidPackage = (bidPackages as any[]).find((pkg: any) => pkg.status === "completed");
-  
-  const { data: pairings = [] } = useQuery({
+  // Find the latest completed bid package
+  const latestBidPackage = React.useMemo(() => {
+    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
+      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+        return pkg;
+      }
+      return latest;
+    }, null);
+  }, [bidPackages]);
+
+  const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
     queryKey: ["pairings", latestBidPackage?.id, filters],
     queryFn: () => api.searchPairings({
       bidPackageId: latestBidPackage?.id,
@@ -74,12 +83,25 @@ export default function Dashboard() {
   };
 
   const addFilter = (key: string, label: string, value: any) => {
-    if (value) {
+    if (value !== undefined && value !== null && value !== '') {
       setActiveFilters(prev => [
         ...prev.filter(f => f.key !== key),
         { key, label, value }
       ]);
       setFilters(prev => ({ ...prev, [key]: value }));
+    }
+  };
+
+  const handlePairingClick = (pairing: any) => {
+    setSelectedPairing(pairing);
+  };
+
+  const handleSort = (column: string) => {
+    if (column === sortColumn) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
     }
   };
 
@@ -135,10 +157,10 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
+
           {/* Left Column */}
           <div className="lg:col-span-1 space-y-6">
-            
+
             {/* Upload Bid Package Card */}
             <Card>
               <CardHeader>
@@ -152,23 +174,28 @@ export default function Dashboard() {
                       onUpload={(file) => {
                         console.log("File uploaded:", file);
                         refetchBidPackages();
-                        
+
                         // Poll for completion and refresh data
                         const pollForCompletion = async () => {
                           let attempts = 0;
                           const maxAttempts = 30; // 30 seconds max
-                          
+
                           const checkStatus = async () => {
                             attempts++;
                             try {
                               const packages = await api.getBidPackages();
-                              const latestPackage = packages[0];
-                              
+                              const latestPackage = packages.reduce((latest: any, pkg: any) => {
+                                if (pkg.status === 'completed' && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+                                  return pkg;
+                                }
+                                return latest;
+                              }, null);
+
                               if (latestPackage?.status === 'completed') {
                                 // Refresh all data when processing is complete
                                 refetchBidPackages();
-                                if (selectedBidPackage?.id !== latestPackage.id) {
-                                  setSelectedBidPackage(latestPackage);
+                                if (selectedPairing?.id !== latestPackage.id) {
+                                  setSelectedPairing(latestPackage); // Assuming we want to set the latest completed package
                                 }
                                 return true;
                               } else if (latestPackage?.status === 'failed') {
@@ -185,10 +212,10 @@ export default function Dashboard() {
                             }
                             return false;
                           };
-                          
+
                           checkStatus();
                         };
-                        
+
                         pollForCompletion();
                       }}
                     />
@@ -323,25 +350,39 @@ export default function Dashboard() {
 
                         {/* Filter Controls */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <Select onValueChange={(value) => addFilter('creditRange', 'Credit Range', value)}>
+                          <Select onValueChange={(value) => addFilter('creditMin', 'Credit Min', value)}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Credit Range" />
+                              <SelectValue placeholder="Credit Min" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="low">Low (0-15)</SelectItem>
-                              <SelectItem value="medium">Medium (16-25)</SelectItem>
-                              <SelectItem value="high">High (26+)</SelectItem>
+                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('blockTime', 'Block Time', value)}>
+                          <Select onValueChange={(value) => addFilter('creditMax', 'Credit Max', value)}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Block Time" />
+                              <SelectValue placeholder="Credit Max" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="short">Short (0-15h)</SelectItem>
-                              <SelectItem value="medium">Medium (16-20h)</SelectItem>
-                              <SelectItem value="long">Long (21h+)</SelectItem>
+                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          
+                          <Select onValueChange={(value) => addFilter('blockMin', 'Block Min', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Block Min" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+
+                          <Select onValueChange={(value) => addFilter('blockMax', 'Block Max', value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Block Max" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[...Array(20).keys()].map(i => <SelectItem key={i} value={(i + 1).toString()}>{i + 1}</SelectItem>)}
                             </SelectContent>
                           </Select>
 
@@ -350,21 +391,23 @@ export default function Dashboard() {
                               <SelectValue placeholder="TAFB" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="1-day">1 Day</SelectItem>
-                              <SelectItem value="2-day">2 Days</SelectItem>
-                              <SelectItem value="3-day">3 Days</SelectItem>
-                              <SelectItem value="4-day">4+ Days</SelectItem>
+                              <SelectItem value="1">1 Day</SelectItem>
+                              <SelectItem value="2">2 Days</SelectItem>
+                              <SelectItem value="3">3 Days</SelectItem>
+                              <SelectItem value="4">4+ Days</SelectItem>
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('holdProbability', 'Hold Probability', value)}>
+                          <Select onValueChange={(value) => addFilter('holdProbabilityMin', 'Hold Prob Min', value)}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Hold Probability" />
+                              <SelectValue placeholder="Hold Prob Min" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="high">High (80%+)</SelectItem>
-                              <SelectItem value="medium">Medium (50-80%)</SelectItem>
-                              <SelectItem value="low">Low (&lt;50%)</SelectItem>
+                              <SelectItem value="0.5">50%</SelectItem>
+                              <SelectItem value="0.6">60%</SelectItem>
+                              <SelectItem value="0.7">70%</SelectItem>
+                              <SelectItem value="0.8">80%</SelectItem>
+                              <SelectItem value="0.9">90%</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -378,8 +421,11 @@ export default function Dashboard() {
                             </span>
                           </div>
                           <PairingTable 
-                            pairings={pairings} 
-                            onPairingClick={(pairing) => setSelectedPairing(pairing)}
+                            pairings={pairings || []} 
+                            onSort={handleSort}
+                            sortColumn={sortColumn}
+                            sortDirection={sortDirection}
+                            onPairingClick={handlePairingClick}
                           />
                         </div>
                       </>
