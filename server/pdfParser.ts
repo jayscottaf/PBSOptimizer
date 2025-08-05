@@ -485,14 +485,26 @@ export class PDFParser {
 
     // Calculate pairing days from unique day letters in flight segments
     const uniqueDays = [...new Set(flightSegments.map(seg => seg.date))].sort();
-    const pairingDays = uniqueDays.length;
+    let pairingDays = uniqueDays.length;
 
-    // Additional validation: complex routes with many segments likely indicate longer pairings
+    // Enhanced validation: check for day patterns in the full text block
+    // Some pairings might have days mentioned that don't have flight segments
+    const dayPatternMatches = block.match(/^([A-E])\s/gm);
+    if (dayPatternMatches) {
+      const textDays = [...new Set(dayPatternMatches.map(match => match.trim().charAt(0)))];
+      const textDayCount = textDays.length;
+      
+      // Use the higher count between flight segments and text patterns
+      if (textDayCount > pairingDays) {
+        pairingDays = textDayCount;
+      }
+    }
+
+    // Additional validation for complex routes
     if (pairingDays <= 2 && flightSegments.length >= 6) {
-      // Check for patterns that indicate 4+ day pairings
       const routeSegments = route.split('-').length;
       if (routeSegments >= 7) {
-        pairingDays = 4; // Default to 4 days for complex routes
+        pairingDays = Math.max(pairingDays, 4);
       }
     }
 
