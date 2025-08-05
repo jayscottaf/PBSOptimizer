@@ -8,10 +8,13 @@ import { useState } from "react";
 
 interface PairingTableProps {
   pairings: Pairing[];
+  onSort: (column: string, direction: "asc" | "desc") => void;
+  sortColumn: string;
+  sortDirection: "asc" | "desc";
   onPairingClick?: (pairing: Pairing) => void;
 }
 
-export function PairingTable({ pairings, onPairingClick }: PairingTableProps) {
+export function PairingTable({ pairings, onSort, sortColumn, sortDirection, onPairingClick }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
 
   const handlePairingClick = (pairing: Pairing) => {
