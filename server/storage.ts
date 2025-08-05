@@ -217,6 +217,14 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
     }
 
+    if (filters.blockMin) {
+      conditions.push(gte(pairings.blockHours, filters.blockMin.toString()));
+    }
+
+    if (filters.blockMax) {
+      conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
+    }
+
     if (filters.holdProbabilityMin) {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
