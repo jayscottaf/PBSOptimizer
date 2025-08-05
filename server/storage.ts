@@ -209,19 +209,19 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    if (filters.creditMin) {
+    if (filters.creditMin !== undefined) {
       conditions.push(gte(pairings.creditHours, filters.creditMin.toString()));
     }
 
-    if (filters.creditMax) {
+    if (filters.creditMax !== undefined) {
       conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
     }
 
-    if (filters.blockMin) {
+    if (filters.blockMin !== undefined) {
       conditions.push(gte(pairings.blockHours, filters.blockMin.toString()));
     }
 
-    if (filters.blockMax) {
+    if (filters.blockMax !== undefined) {
       conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
     }
 
