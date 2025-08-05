@@ -419,7 +419,12 @@ export class DatabaseStorage implements IStorage {
 
     const turnCount = allPairings.filter(p => p.pairingDays === 1).length;
     const multiDayCount = allPairings.filter(p => p.pairingDays > 1).length;
-    const deadheadCount = allPairings.filter(p => p.fullText?.includes('DH')).length;
+    const deadheadCount = allPairings.filter(p => 
+      p.fullText?.includes('DH') || 
+      p.fullTextBlock?.includes('DH') || 
+      (p.flightSegments && Array.isArray(p.flightSegments) && 
+       p.flightSegments.some((seg: any) => seg.isDeadhead === true))
+    ).length;
 
     return {
       totalPairings: allPairings.length,
@@ -487,8 +492,18 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    const deadheadPairings = allPairings.filter(p => p.fullText?.includes('DH'));
-    const nonDeadheadPairings = allPairings.filter(p => !p.fullText?.includes('DH'));
+    const deadheadPairings = allPairings.filter(p => 
+      p.fullText?.includes('DH') || 
+      p.fullTextBlock?.includes('DH') || 
+      (p.flightSegments && Array.isArray(p.flightSegments) && 
+       p.flightSegments.some((seg: any) => seg.isDeadhead === true))
+    );
+    const nonDeadheadPairings = allPairings.filter(p => 
+      !(p.fullText?.includes('DH') || 
+        p.fullTextBlock?.includes('DH') || 
+        (p.flightSegments && Array.isArray(p.flightSegments) && 
+         p.flightSegments.some((seg: any) => seg.isDeadhead === true)))
+    );
 
     return {
       totalPairings: allPairings.length,
