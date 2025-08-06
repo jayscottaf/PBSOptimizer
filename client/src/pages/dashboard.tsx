@@ -82,11 +82,12 @@ export default function Dashboard() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
-  // Card order state
+  // Card order state - only stats card now
   const [cardOrder, setCardOrder] = useState(() => {
     const saved = localStorage.getItem('cardOrder');
-    return saved ? JSON.parse(saved) : ['info', 'stats'];
+    return saved ? JSON.parse(saved) : ['stats'];
   });
 
   // Save card order to localStorage
@@ -315,7 +316,7 @@ export default function Dashboard() {
                 <Button variant="ghost" size="sm">
                   <Settings className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" onClick={() => setShowProfileModal(true)}>
                   <User className="h-4 w-4" />
                 </Button>
               </div>
@@ -359,57 +360,6 @@ export default function Dashboard() {
                               {...provided.draggableProps}
                               className={`${snapshot.isDragging ? 'z-50' : ''}`}
                             >
-                              {cardId === 'info' && (
-                                <Card className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}>
-                                  <CardHeader className="pb-3 sm:pb-6">
-                                    <div className="flex items-center justify-between">
-                                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Your Info</CardTitle>
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                                        <GripVertical className="h-4 w-4 text-gray-400" />
-                                      </div>
-                                    </div>
-                                  </CardHeader>
-                                  <CardContent className="space-y-3 sm:space-y-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
-                                      <Input
-                                        value={seniorityNumber}
-                                        onChange={(e) => setSeniorityNumber(e.target.value)}
-                                        placeholder="Enter seniority number"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
-                                      <Select value={base} onValueChange={setBase}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select base" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="NYC">NYC</SelectItem>
-                                          <SelectItem value="ATL">ATL</SelectItem>
-                                          <SelectItem value="DFW">DFW</SelectItem>
-                                          <SelectItem value="LAX">LAX</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
-                                      <Select value={aircraft} onValueChange={setAircraft}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select aircraft" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="A220">A220</SelectItem>
-                                          <SelectItem value="A320">A320</SelectItem>
-                                          <SelectItem value="A350">A350</SelectItem>
-                                          <SelectItem value="B737">B737</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              )}
-
                               {cardId === 'stats' && (
                                 <Card className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}>
                                   <CardHeader className="pb-3 sm:pb-6">
@@ -840,6 +790,61 @@ export default function Dashboard() {
             <div className="text-xs text-gray-500 flex items-center">
               <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
               Supports NYC A220 bid packages (PDF or TXT format)
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Modal */}
+      <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Your Profile</DialogTitle>
+            <DialogDescription>
+              Update your pilot information and preferences
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
+              <Input
+                value={seniorityNumber}
+                onChange={(e) => setSeniorityNumber(e.target.value)}
+                placeholder="Enter seniority number"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
+              <Select value={base} onValueChange={setBase}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select base" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NYC">NYC</SelectItem>
+                  <SelectItem value="ATL">ATL</SelectItem>
+                  <SelectItem value="DFW">DFW</SelectItem>
+                  <SelectItem value="LAX">LAX</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
+              <Select value={aircraft} onValueChange={setAircraft}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select aircraft" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="A220">A220</SelectItem>
+                  <SelectItem value="A320">A320</SelectItem>
+                  <SelectItem value="A350">A350</SelectItem>
+                  <SelectItem value="B737">B737</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end pt-4">
+              <Button onClick={() => setShowProfileModal(false)}>
+                Save Changes
+              </Button>
             </div>
           </div>
         </DialogContent>
