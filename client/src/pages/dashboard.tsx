@@ -728,6 +728,7 @@ export default function Dashboard() {
           onClose={() => setSelectedPairing(null)} 
         />
       )}
+      </div>
     </div>
   );
 }
