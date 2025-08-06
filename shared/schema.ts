@@ -70,6 +70,16 @@ export const chatHistory = pgTable("chat_history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const userCalendarEvents = pgTable("user_calendar_events", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  pairingId: integer("pairing_id").references(() => pairings.id).notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const bidPackagesRelations = relations(bidPackages, ({ many }) => ({
   pairings: many(pairings),
@@ -81,10 +91,12 @@ export const pairingsRelations = relations(pairings, ({ one, many }) => ({
     references: [bidPackages.id],
   }),
   favorites: many(userFavorites),
+  calendarEvents: many(userCalendarEvents),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
   favorites: many(userFavorites),
+  calendarEvents: many(userCalendarEvents),
 }));
 
 export const userFavoritesRelations = relations(userFavorites, ({ one }) => ({
@@ -94,6 +106,17 @@ export const userFavoritesRelations = relations(userFavorites, ({ one }) => ({
   }),
   pairing: one(pairings, {
     fields: [userFavorites.pairingId],
+    references: [pairings.id],
+  }),
+}));
+
+export const userCalendarEventsRelations = relations(userCalendarEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [userCalendarEvents.userId],
+    references: [users.id],
+  }),
+  pairing: one(pairings, {
+    fields: [userCalendarEvents.pairingId],
     references: [pairings.id],
   }),
 }));
@@ -122,6 +145,22 @@ export const insertUserFavoriteSchema = createInsertSchema(userFavorites).omit({
   id: true,
   createdAt: true,
 });
+
+export const insertUserCalendarEventSchema = createInsertSchema(userCalendarEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type Pairing = typeof pairings.$inferSelect;
+export type UserFavorite = typeof userFavorites.$inferSelect;
+export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
+export type UserCalendarEvent = typeof userCalendarEvents.$inferSelect;
+export type InsertUserCalendarEvent = z.infer<typeof insertUserCalendarEventSchema>;
+export type BidPackage = typeof bidPackages.$inferSelect;
+export type ChatMessage = typeof chatHistory.$inferSelect;
 
 // Types
 export type User = typeof users.$inferSelect;
