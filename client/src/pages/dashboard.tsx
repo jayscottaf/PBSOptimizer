@@ -16,7 +16,8 @@ import {
   Trash2, 
   Settings,
   Info,
-  Star
+  Star,
+  Calendar
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -24,6 +25,7 @@ import { PairingTable } from "@/components/pairing-table";
 import { PairingChat } from "@/components/pairing-chat";
 import { FiltersPanel } from "@/components/filters-panel";
 import { PairingModal } from "@/components/pairing-modal";
+import { CalendarView } from "@/components/calendar-view";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -89,37 +91,40 @@ export default function Dashboard() {
     enabled: !!latestBidPackage,
   });
 
+  // Query for user data
+  const { data: currentUser } = useQuery({
+    queryKey: ["user", seniorityNumber, base, aircraft],
+    queryFn: async () => {
+      return await api.createOrUpdateUser({
+        seniorityNumber: parseInt(seniorityNumber),
+        base,
+        aircraft
+      });
+    },
+    enabled: !!seniorityNumber,
+  });
+
   // Query for user's favorites
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
-    queryKey: ["favorites", seniorityNumber],
+    queryKey: ["favorites", currentUser?.id],
     queryFn: async () => {
+      if (!currentUser) return [];
       try {
-        // Create or get user first
-        const user = await api.createOrUpdateUser({
-          seniorityNumber: parseInt(seniorityNumber),
-          base,
-          aircraft
-        });
-        return await api.getFavorites(user.id);
+        return await api.getFavorites(currentUser.id);
       } catch (error) {
         console.error('Error fetching favorites:', error);
         return [];
       }
     },
-    enabled: !!seniorityNumber,
+    enabled: !!currentUser,
   });
 
   const handleDeleteFavorite = async (pairingId: number) => {
     try {
-      // Get or create user
-      const user = await api.createOrUpdateUser({
-        seniorityNumber: parseInt(seniorityNumber),
-        base,
-        aircraft
-      });
+      if (!currentUser) return;
       
       // Remove from favorites
-      await api.removeFavorite(user.id, pairingId);
+      await api.removeFavorite(currentUser.id, pairingId);
       
       // Refresh favorites list
       refetchFavorites();
@@ -442,6 +447,12 @@ export default function Dashboard() {
                         Favorites
                       </TabsTrigger>
                       <TabsTrigger 
+                        value="calendar"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                      >
+                        Calendar
+                      </TabsTrigger>
+                      <TabsTrigger 
                         value="assistant"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
                       >
@@ -698,6 +709,21 @@ export default function Dashboard() {
                         </div>
                       )}
                     </div>
+                  </TabsContent>
+
+                  {/* Calendar Tab */}
+                  <TabsContent value="calendar" className="p-3 sm:p-6">
+                    {currentUser ? (
+                      <CalendarView userId={currentUser.id} />
+                    ) : (
+                      <div className="text-center py-8">
+                        <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
+                        <p className="mt-2 text-sm text-gray-500">
+                          Setting up your calendar view...
+                        </p>
+                      </div>
+                    )}
                   </TabsContent>
 
                   {/* AI Assistant Tab */}

@@ -3,9 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X, Heart } from "lucide-react";
+import { X, Heart, Calendar } from "lucide-react";
 import { api } from "@/lib/api";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 interface PairingModalProps {
   pairingId: number;
@@ -15,6 +17,7 @@ interface PairingModalProps {
 export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [isAddedToCalendar, setIsAddedToCalendar] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: pairing, isLoading } = useQuery({
@@ -28,6 +31,37 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     queryKey: ["/api/history", pairing?.pairingNumber],
     queryFn: () => pairing ? api.getBidHistory(pairing.pairingNumber) : Promise.resolve([]),
     enabled: !!pairing,
+  });
+
+  // Add to calendar mutation
+  const addToCalendarMutation = useMutation({
+    mutationFn: async ({ userId, pairingId, startDate, endDate }: {
+      userId: number;
+      pairingId: number;
+      startDate: Date;
+      endDate: Date;
+    }) => {
+      const response = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          pairingId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to add to calendar');
+      return response.json();
+    },
+    onSuccess: () => {
+      setIsAddedToCalendar(true);
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      toast({ title: 'Success', description: 'Pairing added to calendar' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to add pairing to calendar', variant: 'destructive' });
+    },
   });
 
   if (isLoading || !pairing) {
@@ -160,6 +194,55 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
         <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
           <Button variant="outline">Export Details</Button>
+          <Button 
+            variant="outline" 
+            disabled={addToCalendarMutation.isPending}
+            onClick={async () => {
+              try {
+                const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
+                const base = localStorage.getItem('base') || "NYC";
+                const aircraft = localStorage.getItem('aircraft') || "A220";
+
+                // Create or update user first
+                const user = await api.createOrUpdateUser({
+                  seniorityNumber: parseInt(seniorityNumber),
+                  base,
+                  aircraft
+                });
+
+                // Calculate dates from pairing effective dates
+                const effectiveDateStr = pairing.effectiveDates;
+                const currentYear = new Date().getFullYear();
+                
+                // Parse effective dates (format like "01SEP-30SEP")
+                const dateMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
+                if (dateMatch) {
+                  const [, startDay, startMonth, endDay, endMonth] = dateMatch;
+                  
+                  const monthMap: { [key: string]: number } = {
+                    'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+                    'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+                  };
+                  
+                  const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                  const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                  
+                  addToCalendarMutation.mutate({
+                    userId: user.id,
+                    pairingId,
+                    startDate,
+                    endDate
+                  });
+                }
+              } catch (error) {
+                console.error('Error adding to calendar:', error);
+                toast({ title: 'Error', description: 'Failed to add pairing to calendar', variant: 'destructive' });
+              }
+            }}
+          >
+            <Calendar className={`h-4 w-4 mr-2 ${isAddedToCalendar ? 'text-green-500' : ''}`} />
+            {addToCalendarMutation.isPending ? 'Adding...' : isAddedToCalendar ? 'Added to Calendar' : 'Add to Calendar'}
+          </Button>
           <Button 
             variant="outline" 
             disabled={isAddingFavorite}

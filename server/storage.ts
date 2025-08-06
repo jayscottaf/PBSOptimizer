@@ -5,6 +5,7 @@ import {
   bidHistory, 
   userFavorites,
   chatHistory,
+  userCalendarEvents,
   type User, 
   type InsertUser,
   type BidPackage,
@@ -15,8 +16,9 @@ import {
   type InsertBidHistory,
   type UserFavorite,
   type InsertUserFavorite,
-  type ChatHistory,
-  type InsertChatHistory
+  type ChatMessage,
+  type UserCalendarEvent,
+  type InsertUserCalendarEvent
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, like, gte, lte, or } from "drizzle-orm";
@@ -68,9 +70,15 @@ export interface IStorage {
   getUserFavorites(userId: number): Promise<Pairing[]>;
 
   // Chat history
-  saveChatMessage(message: InsertChatHistory): Promise<ChatHistory>;
-  getChatHistory(sessionId: string): Promise<ChatHistory[]>;
+  saveChatMessage(message: InsertChatHistory): Promise<ChatMessage>;
+  getChatHistory(sessionId: string): Promise<ChatMessage[]>;
   clearChatHistory(sessionId: string): Promise<void>;
+
+  // Calendar events
+  addUserCalendarEvent(event: InsertUserCalendarEvent): Promise<UserCalendarEvent>;
+  removeUserCalendarEvent(userId: number, pairingId: number): Promise<void>;
+  getUserCalendarEvents(userId: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  getUserCalendarEventsForMonth(userId: number, month: number, year: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -587,6 +595,62 @@ export class DatabaseStorage implements IStorage {
       mostCommonDuration: Object.entries(durationGroups).sort(([,a]: [string, any], [,b]: [string, any]) => b.count - a.count)[0]?.[0],
       avgDuration: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length
     };
+  }
+
+  // Calendar event methods
+  async addUserCalendarEvent(event: InsertUserCalendarEvent): Promise<UserCalendarEvent> {
+    const [newEvent] = await db
+      .insert(userCalendarEvents)
+      .values(event)
+      .returning();
+    return newEvent;
+  }
+
+  async removeUserCalendarEvent(userId: number, pairingId: number): Promise<void> {
+    await db.delete(userCalendarEvents)
+      .where(
+        and(
+          eq(userCalendarEvents.userId, userId),
+          eq(userCalendarEvents.pairingId, pairingId)
+        )
+      );
+  }
+
+  async getUserCalendarEvents(userId: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+    const result = await db
+      .select({
+        calendarEvent: userCalendarEvents,
+        pairing: pairings,
+      })
+      .from(userCalendarEvents)
+      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      .where(eq(userCalendarEvents.userId, userId))
+      .orderBy(asc(userCalendarEvents.startDate));
+
+    return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
+  }
+
+  async getUserCalendarEventsForMonth(userId: number, month: number, year: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+    const startDate = new Date(year, month - 1, 1); // month is 1-based, Date constructor expects 0-based
+    const endDate = new Date(year, month, 0, 23, 59, 59); // Last day of month
+
+    const result = await db
+      .select({
+        calendarEvent: userCalendarEvents,
+        pairing: pairings,
+      })
+      .from(userCalendarEvents)
+      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      .where(
+        and(
+          eq(userCalendarEvents.userId, userId),
+          gte(userCalendarEvents.startDate, startDate),
+          lte(userCalendarEvents.endDate, endDate)
+        )
+      )
+      .orderBy(asc(userCalendarEvents.startDate));
+
+    return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
   }
 }
 

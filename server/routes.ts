@@ -304,7 +304,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Calendar event endpoints
+  app.post("/api/calendar", async (req, res) => {
+    try {
+      const { userId, pairingId, startDate, endDate, notes } = req.body;
+      const event = await storage.addUserCalendarEvent({ 
+        userId, 
+        pairingId, 
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        notes 
+      });
+      res.json(event);
+    } catch (error) {
+      console.error("Error adding calendar event:", error);
+      res.status(500).json({ message: "Failed to add calendar event" });
+    }
+  });
 
+  // Remove pairing from calendar
+  app.delete("/api/calendar", async (req, res) => {
+    try {
+      const { userId, pairingId } = req.body;
+      await storage.removeUserCalendarEvent(userId, pairingId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing calendar event:", error);
+      res.status(500).json({ message: "Failed to remove calendar event" });
+    }
+  });
+
+  // Get user calendar events
+  app.get("/api/calendar/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const events = await storage.getUserCalendarEvents(userId);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching calendar events:", error);
+      res.status(500).json({ message: "Failed to fetch calendar events" });
+    }
+  });
+
+  // Get user calendar events for specific month
+  app.get("/api/calendar/:userId/:month/:year", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const month = parseInt(req.params.month);
+      const year = parseInt(req.params.year);
+      const events = await storage.getUserCalendarEventsForMonth(userId, month, year);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching calendar events for month:", error);
+      res.status(500).json({ message: "Failed to fetch calendar events for month" });
+    }
+  });
 
   // Chat history endpoints
   app.get("/api/chat-history/:sessionId", async (req, res) => {
