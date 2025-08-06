@@ -346,6 +346,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user calendar events for specific month/year
+  app.get("/api/calendar/:userId/:month/:year", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const month = parseInt(req.params.month);
+      const year = parseInt(req.params.year);
+      
+      // Get events for the entire month
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0); // Last day of the month
+      
+      const events = await storage.getUserCalendarEventsInRange(userId, startDate, endDate);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching calendar events for month:", error);
+      res.status(500).json({ message: "Failed to fetch calendar events" });
+    }
+  });
+
   // Get user calendar events for specific month
   app.get("/api/calendar/:userId/:month/:year", async (req, res) => {
     try {

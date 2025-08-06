@@ -43,7 +43,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     }) => {
       return api.addToCalendar(userId, pairingId, startDate, endDate);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Calendar mutation success:', data);
       setIsAddedToCalendar(true);
       // Invalidate all calendar queries to refresh the view
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
