@@ -338,8 +338,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/calendar/:userId", async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
-      const events = await storage.getUserCalendarEvents(userId);
-      res.json(events);
+      const { startDate, endDate } = req.query;
+      
+      if (startDate && endDate) {
+        // Use date range query
+        const events = await storage.getUserCalendarEventsInRange(
+          userId, 
+          new Date(startDate as string), 
+          new Date(endDate as string)
+        );
+        res.json(events);
+      } else {
+        // Default query for all events
+        const events = await storage.getUserCalendarEvents(userId);
+        res.json(events);
+      }
     } catch (error) {
       console.error("Error fetching calendar events:", error);
       res.status(500).json({ message: "Failed to fetch calendar events" });
