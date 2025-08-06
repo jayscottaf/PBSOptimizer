@@ -256,35 +256,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   pairingId: pairingId,
                   startDate,
                   endDate
-                }););
-
-                // Calculate dates from pairing effective dates
-                const effectiveDateStr = pairing.effectiveDates;
-                const currentYear = new Date().getFullYear();
-                
-                // Parse effective dates (format like "01SEP-30SEP")
-                const dateMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
-                if (!dateMatch) {
-                  toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
-                  return;
-                }
-
-                const [, startDay, startMonth, endDay, endMonth] = dateMatch;
-                
-                const monthMap: { [key: string]: number } = {
-                  'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
-                  'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
-                };
-
-                if (monthMap[startMonth] === undefined || monthMap[endMonth] === undefined) {
-                  toast({ title: 'Error', description: 'Invalid month in pairing dates', variant: 'destructive' });
-                  return;
-                }
-                
-                const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
-                
-                console.log('Parsed dates:', { startDate, endDate });
+                });
 
                 addToCalendarMutation.mutate({
                   userId: user.id,
