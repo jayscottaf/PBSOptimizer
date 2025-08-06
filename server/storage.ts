@@ -685,8 +685,9 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(userCalendarEvents.userId, userId),
-          gte(userCalendarEvents.startDate, startDate),
-          lte(userCalendarEvents.endDate, endDate)
+          // Event overlaps with range if: event_start <= range_end AND event_end >= range_start
+          lte(userCalendarEvents.startDate, endDate),
+          gte(userCalendarEvents.endDate, startDate)
         )
       )
       .orderBy(asc(userCalendarEvents.startDate));

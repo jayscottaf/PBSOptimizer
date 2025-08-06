@@ -39,11 +39,15 @@ export function CalendarView({ userId }: CalendarViewProps) {
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  // Fetch calendar events for current month
+  // Fetch calendar events for current month - using a wider range to catch carryover pairings
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
     queryKey: ['calendar', userId, currentDate.getMonth() + 1, currentDate.getFullYear()],
     queryFn: async () => {
-      const response = await fetch(`/api/calendar/${userId}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}`);
+      // Get events for a wider range to ensure we catch all carryover pairings
+      const startOfCalendarView = calendarStart;
+      const endOfCalendarView = calendarEnd;
+      
+      const response = await fetch(`/api/calendar/${userId}?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`);
       if (!response.ok) throw new Error('Failed to fetch calendar events');
       return response.json();
     },
