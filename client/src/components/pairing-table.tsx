@@ -64,109 +64,109 @@ export function PairingTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto min-w-0">
-        <table className="w-full min-w-[800px]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[800px] sm:min-w-[900px] lg:min-w-[1000px]">
           <thead className="bg-gray-50">
             <tr>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('pairingNumber', sortColumn === 'pairingNumber' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Pairing #</span>
+                  <span className="truncate">Pairing #</span>
                   {sortColumn === 'pairingNumber' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] sm:min-w-[150px]">
                 Route
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('creditHours', sortColumn === 'creditHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Credit</span>
+                  <span className="truncate">Credit</span>
                   {sortColumn === 'creditHours' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('blockHours', sortColumn === 'blockHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Block</span>
+                  <span className="truncate">Block</span>
                   {sortColumn === 'blockHours' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('tafb', sortColumn === 'tafb' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>TAFB</span>
+                  <span className="truncate">TAFB</span>
                   {sortColumn === 'tafb' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('pairingDays', sortColumn === 'pairingDays' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Days</span>
+                  <span className="truncate">Days</span>
                   {sortColumn === 'pairingDays' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('creditBlockRatio', sortColumn === 'creditBlockRatio' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>C/B Ratio</span>
+                  <span className="truncate">C/B Ratio</span>
                   {sortColumn === 'creditBlockRatio' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('holdProbability', sortColumn === 'holdProbability' && sortDirection === 'asc' ? 'desc' : 'asc')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Hold %</span>
+                  <span className="truncate">Hold %</span>
                   {sortColumn === 'holdProbability' && (
-                    <span className="text-blue-600">
+                    <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
                     Actions
                   </th>
                   {showDeleteButton && (
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
                       Remove
                     </th>
                   )}
@@ -186,46 +186,46 @@ export function PairingTable({
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => handlePairingClick(pairing)}
                 >
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <span className="font-mono font-medium text-gray-900 text-sm">
+                      <span className="font-mono font-medium text-gray-900 text-xs sm:text-sm">
                         {pairing.pairingNumber}
                       </span>
                       {pairing.holdProbability >= 80 && (
-                        <Star className="text-yellow-400 ml-2 h-4 w-4 flex-shrink-0" />
+                        <Star className="text-yellow-400 ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 truncate max-w-[140px]" title={pairing.route}>{pairing.route}</div>
-                    <div className="text-xs text-gray-500 truncate max-w-[140px]" title={pairing.effectiveDates}>{pairing.effectiveDates}</div>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <div className="text-xs sm:text-sm text-gray-900 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.route}>{pairing.route}</div>
+                    <div className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.effectiveDates}>{pairing.effectiveDates}</div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="font-mono text-sm font-medium text-gray-900">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="font-mono text-xs sm:text-sm font-medium text-gray-900">
                       {pairing.creditHours}
                     </span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="font-mono text-sm text-gray-600">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="font-mono text-xs sm:text-sm text-gray-600">
                       {pairing.blockHours}
                     </span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-600">{pairing.tafb}</span>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="text-xs sm:text-sm text-gray-600">{pairing.tafb}</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">{pairing.pairingDays}</span>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="text-xs sm:text-sm font-medium text-gray-900">{pairing.pairingDays}</span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="font-mono text-sm font-medium text-blue-600">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="font-mono text-xs sm:text-sm font-medium text-blue-600">
                       {(parseFloat(pairing.creditHours.toString()) / parseFloat(pairing.blockHours.toString())).toFixed(2)}
                     </span>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2 min-w-[100px]">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[50px]">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
+                      <div className="flex-1 bg-gray-200 rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
                         <div
-                          className={`h-2 rounded-full ${getProgressColor(pairing.holdProbability)}`}
+                          className={`h-1.5 sm:h-2 rounded-full ${getProgressColor(pairing.holdProbability)}`}
                           style={{ width: `${pairing.holdProbability}%` }}
                         />
                       </div>
@@ -234,33 +234,38 @@ export function PairingTable({
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePairingClick(pairing);
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Handle favorite toggle
-                      }}
-                    >
-                      <Bookmark className="h-4 w-4" />
-                    </Button>
-                  </td>
-                  {showDeleteButton && (
-                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-1">
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePairingClick(pairing);
+                        }}
+                      >
+                        <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Handle favorite toggle
+                        }}
+                      >
+                        <Bookmark className="h-3 w-3 sm:h-4 sm:w-4" />
+                      </Button>
+                    </div>
+                  </td>
+                  {showDeleteButton && (
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onDeleteFavorite) {
@@ -268,7 +273,7 @@ export function PairingTable({
                           }
                         }}
                       >
-                        <X className="h-4 w-4 text-red-500" />
+                        <X className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
                       </Button>
                     </td>
                   )}
