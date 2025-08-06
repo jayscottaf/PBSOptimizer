@@ -281,7 +281,7 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full">
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
 
             {/* Left Column - Stacked on mobile, sidebar on desktop */}
