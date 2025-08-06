@@ -119,12 +119,53 @@ export const api = {
 
   // Favorites
   addFavorite: async (userId: number, pairingId: number) => {
-    const response = await apiRequest("POST", "/api/favorites", { userId, pairingId });
+    const response = await fetch('/api/favorites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, pairingId }),
+    });
+    if (!response.ok) throw new Error('Failed to add favorite');
     return response.json();
   },
 
   removeFavorite: async (userId: number, pairingId: number) => {
-    const response = await apiRequest("DELETE", "/api/favorites", { userId, pairingId });
+    const response = await fetch('/api/favorites', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, pairingId }),
+    });
+    if (!response.ok) throw new Error('Failed to remove favorite');
+    return response.json();
+  },
+
+  addToCalendar: async (userId: number, pairingId: number, startDate: Date, endDate: Date) => {
+    const response = await fetch('/api/calendar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        pairingId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to add to calendar: ${errorText}`);
+    }
+    return response.json();
+  },
+
+  removeFromCalendar: async (userId: number, pairingId: number) => {
+    const response = await fetch('/api/calendar', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, pairingId }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to remove from calendar: ${errorText}`);
+    }
     return response.json();
   },
 
@@ -142,7 +183,7 @@ export const api = {
   // AI Chat Analysis
   async analyzePairings(question: string, bidPackageId?: number) {
     // Include bidPackageId in the question context if provided
-    const contextualQuestion = bidPackageId 
+    const contextualQuestion = bidPackageId
       ? `Analyzing bid package #${bidPackageId}: ${question}`
       : question;
 
@@ -159,9 +200,9 @@ export const api = {
     }
 
     const result = await response.json();
-    return { 
-      response: result.reply, 
-      data: result.data || null 
+    return {
+      response: result.reply,
+      data: result.data || null
     };
   },
 
