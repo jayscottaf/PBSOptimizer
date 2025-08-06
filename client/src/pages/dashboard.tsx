@@ -15,7 +15,8 @@ import {
   RefreshCw, 
   Trash2, 
   Settings,
-  Info
+  Info,
+  Star
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -86,6 +87,26 @@ export default function Dashboard() {
       ...filters
     }),
     enabled: !!latestBidPackage,
+  });
+
+  // Query for user's favorites
+  const { data: favorites = [], refetch: refetchFavorites } = useQuery({
+    queryKey: ["favorites", seniorityNumber],
+    queryFn: async () => {
+      try {
+        // Create or get user first
+        const user = await api.createOrUpdateUser({
+          seniorityNumber: parseInt(seniorityNumber),
+          base,
+          aircraft
+        });
+        return await api.getFavorites(user.id);
+      } catch (error) {
+        console.error('Error fetching favorites:', error);
+        return [];
+      }
+    },
+    enabled: !!seniorityNumber,
   });
 
   const removeFilter = (keyToRemove: string) => {
@@ -395,6 +416,12 @@ export default function Dashboard() {
                         Analysis
                       </TabsTrigger>
                       <TabsTrigger 
+                        value="favorites"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                      >
+                        Favorites
+                      </TabsTrigger>
+                      <TabsTrigger 
                         value="assistant"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
                       >
@@ -618,6 +645,36 @@ export default function Dashboard() {
                       <p className="mt-2 text-sm text-gray-500">
                         Advanced analytics and visualizations will appear here once you have pairing data.
                       </p>
+                    </div>
+                  </TabsContent>
+
+                  {/* Favorites Tab */}
+                  <TabsContent value="favorites" className="p-6 space-y-6">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Your Favorite Pairings</h3>
+                        <span className="text-sm text-gray-500">
+                          {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {favorites.length > 0 ? (
+                        <PairingTable 
+                          pairings={favorites} 
+                          onSort={handleSort}
+                          sortColumn={sortColumn || ''}
+                          sortDirection={sortDirection}
+                          onPairingClick={handlePairingClick}
+                        />
+                      ) : (
+                        <div className="text-center py-12">
+                          <Star className="mx-auto h-24 w-24 text-gray-300" />
+                          <h3 className="mt-4 text-lg font-medium text-gray-900">No Favorites Yet</h3>
+                          <p className="mt-2 text-sm text-gray-500">
+                            Click the "Add to Favorites" button on any pairing to save it here.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </TabsContent>
 

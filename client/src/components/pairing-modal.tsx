@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, Heart } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface PairingModalProps {
@@ -54,7 +54,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             Detailed view of pairing {pairing.pairingNumber} with flight segments, layovers, and bid history.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pairing Overview */}
@@ -155,7 +155,34 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
         <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
           <Button variant="outline">Export Details</Button>
-          <Button className="bg-blue-600 hover:bg-blue-700">Add to Favorites</Button>
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              try {
+                const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
+                const base = localStorage.getItem('base') || "NYC";
+                const aircraft = localStorage.getItem('aircraft') || "A220";
+
+                // Create or update user first
+                const user = await api.createOrUpdateUser({
+                  seniorityNumber: parseInt(seniorityNumber),
+                  base,
+                  aircraft
+                });
+
+                // Add to favorites
+                await api.addFavorite(user.id, pairingId);
+
+                // Show success feedback
+                console.log('Added to favorites successfully');
+              } catch (error) {
+                console.error('Error adding to favorites:', error);
+              }
+            }}
+          >
+            <Heart className="h-4 w-4 mr-2" />
+            Add to Favorites
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
