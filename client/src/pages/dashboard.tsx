@@ -364,19 +364,21 @@ export default function Dashboard() {
             <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
               <Card className="h-fit">
                 <CardContent className="p-4 sm:p-6 relative">
-                  {/* Collapse button positioned in top-right corner */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="absolute top-2 right-2 z-10"
-                  >
-                    {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                  </Button>
+                  {/* Collapse button positioned inside card border */}
+                  <div className="flex justify-end mb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                      className="h-6 w-6 p-1"
+                    >
+                      {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                    </Button>
+                  </div>
 
                   {sidebarCollapsed ? (
                     // Collapsed view - show essential numbers only
-                    <div className="space-y-4 pt-8">
+                    <div className="space-y-4">
                       <div className="text-center">
                         <div className="text-lg font-bold text-blue-600">{quickStats.totalPairings}</div>
                         <div className="text-xs text-gray-600">Total</div>
@@ -392,7 +394,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     // Expanded view - show full stats panel
-                    <div className="space-y-6 pt-8">
+                    <div className="space-y-6">
                       <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
                       
                       {/* Additional Tools Section */}
