@@ -217,9 +217,31 @@ export function PairingTable({
                     <span className="text-xs sm:text-sm font-medium text-gray-900">{pairing.pairingDays}</span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm font-medium text-blue-600">
-                      {(parseFloat(pairing.creditHours.toString()) / parseFloat(pairing.blockHours.toString())).toFixed(2)}
-                    </span>
+                    {(() => {
+                      const ratio = parseFloat(pairing.creditHours.toString()) / parseFloat(pairing.blockHours.toString());
+                      let colorClass = '';
+                      let bgClass = '';
+                      
+                      if (ratio >= 1.3) {
+                        colorClass = 'text-green-700';
+                        bgClass = 'bg-green-100';
+                      } else if (ratio >= 1.2) {
+                        colorClass = 'text-yellow-700';
+                        bgClass = 'bg-yellow-100';
+                      } else if (ratio >= 1.1) {
+                        colorClass = 'text-orange-700';
+                        bgClass = 'bg-orange-100';
+                      } else {
+                        colorClass = 'text-red-700';
+                        bgClass = 'bg-red-100';
+                      }
+                      
+                      return (
+                        <span className={`font-mono text-xs sm:text-sm font-medium px-2 py-1 rounded ${colorClass} ${bgClass}`}>
+                          {ratio.toFixed(2)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">

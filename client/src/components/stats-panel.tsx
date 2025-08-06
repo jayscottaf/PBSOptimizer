@@ -20,6 +20,12 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
         sixDayCombos: 0,
         avgCreditHours: 0,
         avgBlockHours: 0,
+        ratioBreakdown: {
+          excellent: 0,
+          good: 0,
+          average: 0,
+          poor: 0
+        }
       };
     }
 
@@ -39,6 +45,24 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
     const totalCredit = pairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
     const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
 
+    // Calculate credit-to-block ratio breakdown
+    const ratioBreakdown = pairings.reduce((acc, pairing) => {
+      const credit = parseHours(pairing.creditHours);
+      const block = parseHours(pairing.blockHours);
+      const ratio = block > 0 ? credit / block : 0;
+
+      if (ratio >= 1.3) {
+        acc.excellent++;
+      } else if (ratio >= 1.2) {
+        acc.good++;
+      } else if (ratio >= 1.1) {
+        acc.average++;
+      } else {
+        acc.poor++;
+      }
+      return acc;
+    }, { excellent: 0, good: 0, average: 0, poor: 0 });
+
     return {
       totalPairings: pairings.length,
       likelyToHold: likelyToHoldCount,
@@ -46,6 +70,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
       sixDayCombos: sixDayCount,
       avgCreditHours: pairings.length > 0 ? totalCredit / pairings.length : 0,
       avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
+      ratioBreakdown
     };
   }, [pairings]);
 
@@ -117,6 +142,54 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
             </div>
           </div>
         </div>
+
+        {/* Credit/Block Ratio Breakdown */}
+        {stats.totalPairings > 0 && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+              <BarChart2 className="h-4 w-4 mr-2" />
+              Credit/Block Ratio Quality
+            </h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Excellent (≥1.3)</span>
+                </div>
+                <div className="text-sm font-medium text-green-700">
+                  {stats.ratioBreakdown.excellent} ({((stats.ratioBreakdown.excellent / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Good (1.2-1.29)</span>
+                </div>
+                <div className="text-sm font-medium text-yellow-700">
+                  {stats.ratioBreakdown.good} ({((stats.ratioBreakdown.good / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Average (1.1-1.19)</span>
+                </div>
+                <div className="text-sm font-medium text-orange-700">
+                  {stats.ratioBreakdown.average} ({((stats.ratioBreakdown.average / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Poor (<1.1)</span>
+                </div>
+                <div className="text-sm font-medium text-red-700">
+                  {stats.ratioBreakdown.poor} ({((stats.ratioBreakdown.poor / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
