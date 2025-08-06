@@ -653,6 +653,7 @@ export class DatabaseStorage implements IStorage {
     const startDate = new Date(year, month - 1, 1); // month is 1-based, Date constructor expects 0-based
     const endDate = new Date(year, month, 0, 23, 59, 59); // Last day of month
 
+    // Get events that have ANY overlap with the requested month (including carryover pairings)
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
@@ -663,8 +664,9 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(userCalendarEvents.userId, userId),
-          gte(userCalendarEvents.startDate, startDate),
-          lte(userCalendarEvents.endDate, endDate)
+          // Event overlaps with month if: event_start <= month_end AND event_end >= month_start
+          lte(userCalendarEvents.startDate, endDate),
+          gte(userCalendarEvents.endDate, startDate)
         )
       )
       .orderBy(asc(userCalendarEvents.startDate));
