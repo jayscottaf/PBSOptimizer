@@ -79,6 +79,7 @@ export interface IStorage {
   removeUserCalendarEvent(userId: number, pairingId: number): Promise<void>;
   getUserCalendarEvents(userId: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
   getUserCalendarEventsForMonth(userId: number, month: number, year: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  getUserCalendarEventsInRange(userId: number, startDate: Date, endDate: Date): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -654,6 +655,26 @@ export class DatabaseStorage implements IStorage {
     const startDate = new Date(year, month - 1, 1); // month is 1-based, Date constructor expects 0-based
     const endDate = new Date(year, month, 0, 23, 59, 59); // Last day of month
 
+    const result = await db
+      .select({
+        calendarEvent: userCalendarEvents,
+        pairing: pairings,
+      })
+      .from(userCalendarEvents)
+      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      .where(
+        and(
+          eq(userCalendarEvents.userId, userId),
+          gte(userCalendarEvents.startDate, startDate),
+          lte(userCalendarEvents.endDate, endDate)
+        )
+      )
+      .orderBy(asc(userCalendarEvents.startDate));
+
+    return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
+  }
+
+  async getUserCalendarEventsInRange(userId: number, startDate: Date, endDate: Date): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
