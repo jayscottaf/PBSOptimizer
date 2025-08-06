@@ -103,7 +103,7 @@ export class DatabaseStorage implements IStorage {
   async createOrUpdateUser(userData: { seniorityNumber: number; base: string; aircraft: string }): Promise<User> {
     // Check if user already exists
     const existingUser = await this.getUserBySeniority(userData.seniorityNumber);
-    
+
     if (existingUser) {
       // Update existing user
       const [updatedUser] = await db
@@ -598,12 +598,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Calendar event methods
-  async addUserCalendarEvent(event: InsertUserCalendarEvent): Promise<UserCalendarEvent> {
-    const [newEvent] = await db
+  async addUserCalendarEvent(data: { userId: number; pairingId: number; startDate: Date; endDate: Date; notes?: string }): Promise<UserCalendarEvent> {
+    // Check if this exact pairing and date combination already exists
+    const existing = await db
+      .select()
+      .from(userCalendarEvents)
+      .where(
+        and(
+          eq(userCalendarEvents.userId, data.userId),
+          eq(userCalendarEvents.pairingId, data.pairingId),
+          eq(userCalendarEvents.startDate, data.startDate),
+          eq(userCalendarEvents.endDate, data.endDate)
+        )
+      );
+
+    if (existing.length > 0) {
+      console.log('Calendar event already exists, returning existing:', existing[0]);
+      return existing[0];
+    }
+
+    const [result] = await db
       .insert(userCalendarEvents)
-      .values(event)
+      .values(data)
       .returning();
-    return newEvent;
+
+    console.log('Added new calendar event:', result);
+    return result;
   }
 
   async removeUserCalendarEvent(userId: number, pairingId: number): Promise<void> {
