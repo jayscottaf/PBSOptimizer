@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Eye, Bookmark, Star } from "lucide-react";
+import { Eye, Bookmark, Star, X } from "lucide-react";
 import type { Pairing } from "@/lib/api";
 import { useState } from "react";
 
@@ -12,9 +12,19 @@ interface PairingTableProps {
   sortColumn: string;
   sortDirection: "asc" | "desc";
   onPairingClick?: (pairing: Pairing) => void;
+  showDeleteButton?: boolean;
+  onDeleteFavorite?: (pairingId: number) => void;
 }
 
-export function PairingTable({ pairings, onSort, sortColumn, sortDirection, onPairingClick }: PairingTableProps) {
+export function PairingTable({ 
+  pairings, 
+  onSort, 
+  sortColumn, 
+  sortDirection, 
+  onPairingClick, 
+  showDeleteButton = false, 
+  onDeleteFavorite 
+}: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
 
   const handlePairingClick = (pairing: Pairing) => {
@@ -153,14 +163,19 @@ export function PairingTable({ pairings, onSort, sortColumn, sortDirection, onPa
                 </div>
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                Actions
-              </th>
+                    Actions
+                  </th>
+                  {showDeleteButton && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                      Remove
+                    </th>
+                  )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {safePairings.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={showDeleteButton ? 10 : 9} className="px-6 py-8 text-center text-gray-500">
                   No pairings found. Upload a bid package to get started.
                 </td>
               </tr>
@@ -241,6 +256,22 @@ export function PairingTable({ pairings, onSort, sortColumn, sortDirection, onPa
                       <Bookmark className="h-4 w-4" />
                     </Button>
                   </td>
+                  {showDeleteButton && (
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onDeleteFavorite) {
+                            onDeleteFavorite(pairing.id);
+                          }
+                        }}
+                      >
+                        <X className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
