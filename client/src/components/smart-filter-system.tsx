@@ -36,22 +36,22 @@ const filterOptions: FilterOption[] = [
     key: "creditHours",
     label: "Credit Hours",
     dataOptions: [
-      { value: 4.0, label: "4:00-5:00", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 5.0 } },
-      { value: 5.0, label: "5:00-6:00", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 6.0 } },
-      { value: 6.0, label: "6:00-7:00", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 7.0 } },
-      { value: 7.0, label: "7:00-8:00", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 8.0 } },
-      { value: 8.0, label: "8:00+", filterKey: "creditMin" },
+      { value: 4.0, label: "Light (4:00-8:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 8.0 } },
+      { value: 8.0, label: "Moderate (8:00-15:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 15.0 } },
+      { value: 15.0, label: "Heavy (15:00-25:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 25.0 } },
+      { value: 25.0, label: "Max Credit (25:00+)", filterKey: "creditMin" },
+      { value: 0.0, label: "Turns Only (≤8:00)", filterKey: "creditMax", additionalFilter: { key: "creditMax", value: 8.0 } },
     ]
   },
   {
     key: "blockHours",
     label: "Block Hours",
     dataOptions: [
-      { value: 3.0, label: "3:00-4:00", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 4.0 } },
-      { value: 4.0, label: "4:00-5:00", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 5.0 } },
-      { value: 5.0, label: "5:00-6:00", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 6.0 } },
-      { value: 6.0, label: "6:00-7:00", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 7.0 } },
-      { value: 7.0, label: "7:00+", filterKey: "blockMin" },
+      { value: 3.0, label: "Short (3:00-6:00)", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 6.0 } },
+      { value: 6.0, label: "Medium (6:00-12:00)", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 12.0 } },
+      { value: 12.0, label: "Long (12:00-20:00)", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 20.0 } },
+      { value: 20.0, label: "Extended (20:00+)", filterKey: "blockMin" },
+      { value: 0.0, label: "Quick Turns (≤6:00)", filterKey: "blockMax", additionalFilter: { key: "blockMax", value: 6.0 } },
     ]
   },
   {
@@ -198,9 +198,9 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => onFilterApply("creditMin", 6.0, "High Credit")}
+          onClick={() => onFilterApply("creditMin", 15.0, "High Credit")}
         >
-          High Credit (6:00+)
+          High Credit (15:00+)
         </Button>
         <Button 
           variant="outline" 
