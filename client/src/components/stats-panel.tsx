@@ -181,7 +181,7 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600">Poor (<1.1)</span>
+                  <span className="text-xs text-gray-600">Poor (&lt;1.1)</span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
                   {stats.ratioBreakdown.poor} ({((stats.ratioBreakdown.poor / stats.totalPairings) * 100).toFixed(0)}%)
