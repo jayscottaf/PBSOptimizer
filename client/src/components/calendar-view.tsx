@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, differenceInDays, addDays, isBefore, isAfter } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 
@@ -34,7 +34,9 @@ export function CalendarView({ userId }: CalendarViewProps) {
   
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   // Fetch calendar events for current month
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
@@ -66,11 +68,61 @@ export function CalendarView({ userId }: CalendarViewProps) {
     },
   });
 
-  const getEventsForDay = (date: Date): CalendarEvent[] => {
+  // Extract destination codes from route for display
+  const getDestinationFromRoute = (route: string): string => {
+    const airports = route.split('-');
+    // Find the furthest destination (not the home base)
+    const destinations = airports.filter(airport => airport !== 'JFK' && airport !== 'NYC');
+    return destinations.length > 0 ? destinations[0] : airports[1] || '';
+  };
+
+  // Check for FAA crew rest violations
+  const checkCrewRestViolations = (events: CalendarEvent[]): CalendarEvent[] => {
+    const sortedEvents = events.sort((a, b) => 
+      new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    );
+    
+    const violatingEvents: CalendarEvent[] = [];
+    
+    for (let i = 0; i < sortedEvents.length - 1; i++) {
+      const currentEnd = new Date(sortedEvents[i].endDate);
+      const nextStart = new Date(sortedEvents[i + 1].startDate);
+      
+      // Calculate hours between trips
+      const hoursBetween = (nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60);
+      
+      // FAA requires minimum 10 hours rest between duty periods
+      if (hoursBetween < 10) {
+        violatingEvents.push(sortedEvents[i], sortedEvents[i + 1]);
+      }
+    }
+    
+    return violatingEvents;
+  };
+
+  const crewRestViolations = checkCrewRestViolations(events);
+  
+  const getEventSpan = (event: CalendarEvent, startDay: Date): { span: number; isStart: boolean } => {
+    const eventStart = new Date(event.startDate);
+    const eventEnd = new Date(event.endDate);
+    const weekStart = startOfWeek(startDay, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(startDay, { weekStartsOn: 0 });
+    
+    const displayStart = isBefore(eventStart, weekStart) ? weekStart : eventStart;
+    const displayEnd = isAfter(eventEnd, weekEnd) ? weekEnd : eventEnd;
+    
+    const span = differenceInDays(displayEnd, displayStart) + 1;
+    const isStart = isSameDay(eventStart, displayStart) || isSameDay(eventStart, startDay);
+    
+    return { span, isStart };
+  };
+
+  const getEventsForWeek = (weekStartDay: Date): CalendarEvent[] => {
+    const weekEndDay = endOfWeek(weekStartDay, { weekStartsOn: 0 });
     return events.filter(event => {
       const eventStart = new Date(event.startDate);
       const eventEnd = new Date(event.endDate);
-      return date >= eventStart && date <= eventEnd;
+      return !(isAfter(eventStart, weekEndDay) || isBefore(eventEnd, weekStartDay));
     });
   };
 
@@ -82,108 +134,184 @@ export function CalendarView({ userId }: CalendarViewProps) {
     setCurrentDate(prev => direction === 'next' ? addMonths(prev, 1) : subMonths(prev, 1));
   };
 
+  // Calculate weeks for the calendar
+  const weeks = [];
+  for (let i = 0; i < calendarDays.length; i += 7) {
+    weeks.push(calendarDays.slice(i, i + 7));
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Bid Calendar - {format(currentDate, 'MMMM yyyy')}</CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+    <div className="space-y-4">
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="text-2xl font-bold text-center min-w-[200px]">
+            {format(currentDate, 'MMMM yyyy')}
+          </h2>
+          <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        {crewRestViolations.length > 0 && (
+          <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-2 rounded">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">{crewRestViolations.length} FAA Rest Violations</span>
           </div>
-        ) : (
-          <div className="grid grid-cols-7 gap-1">
-            {/* Day headers */}
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : (
+        <div className="bg-white border rounded-lg overflow-hidden">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 bg-gray-50 border-b">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 border-b">
+              <div key={day} className="p-3 text-center font-semibold text-gray-700 border-r last:border-r-0">
                 {day}
               </div>
             ))}
-            
-            {/* Calendar days */}
-            {calendarDays.map(day => {
-              const dayEvents = getEventsForDay(day);
-              const isCurrentMonth = isSameMonth(day, currentDate);
-              const isToday = isSameDay(day, new Date());
-              
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`min-h-[100px] p-1 border border-gray-100 ${
-                    !isCurrentMonth ? 'bg-gray-50 text-gray-400' : 'bg-white'
-                  } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
-                >
-                  <div className={`text-sm mb-1 ${isToday ? 'font-bold text-blue-600' : ''}`}>
-                    {format(day, 'd')}
-                  </div>
-                  
-                  {dayEvents.map(event => (
-                    <div
-                      key={event.id}
-                      className="mb-1 p-1 bg-blue-100 rounded text-xs hover:bg-blue-200 group relative"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">
-                            {event.pairing.pairingNumber}
-                          </div>
-                          <div className="text-gray-600 truncate">
-                            {event.pairing.creditHours}cr
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 h-5 w-5 p-0 hover:bg-red-100"
-                          onClick={() => handleRemoveFromCalendar(event.pairingId)}
-                          disabled={removeFromCalendarMutation.isPending}
-                        >
-                          <Trash2 className="h-3 w-3 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
           </div>
-        )}
-        
-        {events.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-medium mb-3">Calendar Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-blue-50 p-3 rounded">
-                <div className="font-medium">Total Pairings</div>
-                <div className="text-2xl font-bold text-blue-600">{events.length}</div>
-              </div>
-              <div className="bg-green-50 p-3 rounded">
-                <div className="font-medium">Total Credit Hours</div>
-                <div className="text-2xl font-bold text-green-600">
-                  {events.reduce((sum, event) => sum + parseFloat(event.pairing.creditHours), 0).toFixed(2)}
+          
+          {/* Calendar weeks */}
+          {weeks.map((week, weekIndex) => {
+            const weekEvents = getEventsForWeek(week[0]);
+            
+            return (
+              <div key={weekIndex} className="relative border-b last:border-b-0">
+                {/* Day numbers and basic layout */}
+                <div className="grid grid-cols-7 min-h-[120px]">
+                  {week.map((day, dayIndex) => {
+                    const isCurrentMonth = isSameMonth(day, currentDate);
+                    const isToday = isSameDay(day, new Date());
+                    
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={`p-2 border-r last:border-r-0 relative ${
+                          !isCurrentMonth ? 'bg-gray-50 text-gray-400' : 'bg-white'
+                        }`}
+                      >
+                        <div className={`text-lg font-semibold ${
+                          isToday ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center' : 
+                          isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                        }`}>
+                          {format(day, 'd')}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Pairing bars overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {weekEvents.map((event, eventIndex) => {
+                    const eventStart = new Date(event.startDate);
+                    const eventEnd = new Date(event.endDate);
+                    
+                    // Find which day in the week this event starts
+                    let startDayIndex = -1;
+                    for (let i = 0; i < week.length; i++) {
+                      if (isSameDay(week[i], eventStart) || 
+                          (isBefore(eventStart, week[i]) && i === 0)) {
+                        startDayIndex = i;
+                        break;
+                      }
+                    }
+                    
+                    if (startDayIndex === -1) return null;
+                    
+                    const { span } = getEventSpan(event, week[startDayIndex]);
+                    const isViolation = crewRestViolations.some(v => v.id === event.id);
+                    const destination = getDestinationFromRoute(event.pairing.route);
+                    
+                    const topOffset = 40 + (eventIndex * 30); // Stack events vertically
+                    const leftOffset = (startDayIndex * (100 / 7)) + 0.5; // Percentage based positioning
+                    const width = (span * (100 / 7)) - 1; // Span across days
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className={`absolute pointer-events-auto group cursor-pointer ${
+                          isViolation ? 'bg-red-500' : 'bg-blue-600'
+                        }`}
+                        style={{
+                          left: `${leftOffset}%`,
+                          width: `${width}%`,
+                          top: `${topOffset}px`,
+                          height: '24px',
+                        }}
+                        onClick={() => handleRemoveFromCalendar(event.pairingId)}
+                      >
+                        <div className="flex items-center justify-between h-full px-2 text-white text-sm font-bold">
+                          <span className="truncate">
+                            {event.pairing.pairingNumber}
+                          </span>
+                          <span className="text-xs font-normal ml-1 truncate">
+                            {destination}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 h-4 w-4 p-0 hover:bg-red-100 ml-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveFromCalendar(event.pairingId);
+                            }}
+                            disabled={removeFromCalendarMutation.isPending}
+                          >
+                            <Trash2 className="h-3 w-3 text-white" />
+                          </Button>
+                        </div>
+                        
+                        {/* Tooltip on hover */}
+                        <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          {event.pairing.pairingNumber}: {event.pairing.creditHours} credit hrs
+                          {isViolation && (
+                            <div className="text-red-300">⚠️ FAA Rest Violation</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }).filter(Boolean)}
                 </div>
               </div>
-              <div className="bg-purple-50 p-3 rounded">
-                <div className="font-medium">Total Block Hours</div>
-                <div className="text-2xl font-bold text-purple-600">
-                  {events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0).toFixed(2)}
-                </div>
-              </div>
+            );
+          })}
+        </div>
+      )}
+      
+      {events.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="text-sm font-medium text-blue-700">Total Pairings</div>
+            <div className="text-2xl font-bold text-blue-900">{events.length}</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="text-sm font-medium text-green-700">Total Credit Hours</div>
+            <div className="text-2xl font-bold text-green-900">
+              {events.reduce((sum, event) => sum + parseFloat(event.pairing.creditHours), 0).toFixed(2)}
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="text-sm font-medium text-purple-700">Total Block Hours</div>
+            <div className="text-2xl font-bold text-purple-900">
+              {events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0).toFixed(2)}
+            </div>
+          </div>
+          {crewRestViolations.length > 0 && (
+            <div className="bg-red-50 p-4 rounded-lg">
+              <div className="text-sm font-medium text-red-700">FAA Rest Violations</div>
+              <div className="text-2xl font-bold text-red-900">{crewRestViolations.length}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
