@@ -109,6 +109,25 @@ export default function Dashboard() {
     enabled: !!seniorityNumber,
   });
 
+  const handleDeleteFavorite = async (pairingId: number) => {
+    try {
+      // Get or create user
+      const user = await api.createOrUpdateUser({
+        seniorityNumber: parseInt(seniorityNumber),
+        base,
+        aircraft
+      });
+      
+      // Remove from favorites
+      await api.removeFavorite(user.id, pairingId);
+      
+      // Refresh favorites list
+      refetchFavorites();
+    } catch (error) {
+      console.error('Error removing favorite:', error);
+    }
+  };
+
   const removeFilter = (keyToRemove: string) => {
     setActiveFilters(prev => prev.filter(f => f.key !== keyToRemove));
     setFilters(prev => {
@@ -665,6 +684,8 @@ export default function Dashboard() {
                           sortColumn={sortColumn || ''}
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
+                          showDeleteButton={true}
+                          onDeleteFavorite={handleDeleteFavorite}
                         />
                       ) : (
                         <div className="text-center py-12">

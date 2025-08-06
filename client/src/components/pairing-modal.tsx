@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { X, Heart } from "lucide-react";
 import { api } from "@/lib/api";
+import { useState } from "react";
 
 interface PairingModalProps {
   pairingId: number;
@@ -12,6 +13,10 @@ interface PairingModalProps {
 }
 
 export function PairingModal({ pairingId, onClose }: PairingModalProps) {
+  const [isAddingFavorite, setIsAddingFavorite] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const queryClient = useQueryClient();
+
   const { data: pairing, isLoading } = useQuery({
     queryKey: ["/api/pairings", pairingId],
     queryFn: () => api.getPairing(pairingId),
@@ -157,8 +162,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           <Button variant="outline">Export Details</Button>
           <Button 
             variant="outline" 
+            disabled={isAddingFavorite}
             onClick={async () => {
               try {
+                setIsAddingFavorite(true);
                 const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
                 const base = localStorage.getItem('base') || "NYC";
                 const aircraft = localStorage.getItem('aircraft') || "A220";
@@ -173,15 +180,26 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 // Add to favorites
                 await api.addFavorite(user.id, pairingId);
 
+                // Update state for visual feedback
+                setIsFavorited(true);
+
+                // Invalidate favorites query to refresh the favorites tab
+                queryClient.invalidateQueries({
+                  queryKey: ["favorites", seniorityNumber]
+                });
+
                 // Show success feedback
                 console.log('Added to favorites successfully');
               } catch (error) {
                 console.error('Error adding to favorites:', error);
+                setIsFavorited(false);
+              } finally {
+                setIsAddingFavorite(false);
               }
             }}
           >
-            <Heart className="h-4 w-4 mr-2" />
-            Add to Favorites
+            <Heart className={`h-4 w-4 mr-2 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+            {isAddingFavorite ? 'Adding...' : isFavorited ? 'Added to Favorites' : 'Add to Favorites'}
           </Button>
         </div>
       </DialogContent>
