@@ -70,7 +70,7 @@ export function PairingTable({
             <tr>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('pairingNumber', sortColumn === 'pairingNumber' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('pairingNumber', sortColumn === 'pairingNumber' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Pairing #</span>
@@ -86,7 +86,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('creditHours', sortColumn === 'creditHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('creditHours', sortColumn === 'creditHours' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Credit</span>
@@ -99,7 +99,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('blockHours', sortColumn === 'blockHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('blockHours', sortColumn === 'blockHours' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Block</span>
@@ -112,7 +112,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('tafb', sortColumn === 'tafb' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('tafb', sortColumn === 'tafb' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">TAFB</span>
@@ -125,7 +125,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('pairingDays', sortColumn === 'pairingDays' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('pairingDays', sortColumn === 'pairingDays' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Days</span>
@@ -138,7 +138,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('creditBlockRatio', sortColumn === 'creditBlockRatio' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('creditBlockRatio', sortColumn === 'creditBlockRatio' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">C/B Ratio</span>
@@ -151,7 +151,7 @@ export function PairingTable({
               </th>
               <th 
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
-                onClick={() => onSort('holdProbability', sortColumn === 'holdProbability' && sortDirection === 'asc' ? 'desc' : 'asc')}
+                onClick={() => onSort('holdProbability', sortColumn === 'holdProbability' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Hold %</span>
