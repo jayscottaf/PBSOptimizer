@@ -151,6 +151,14 @@ export default function Dashboard() {
             valA = parseInt(a.pairingDays?.toString() || '1', 10);
             valB = parseInt(b.pairingDays?.toString() || '1', 10);
             break;
+          case 'creditBlockRatio':
+            const creditA = parseFloat(a.creditHours?.toString() || '0');
+            const blockA = parseFloat(a.blockHours?.toString() || '1');
+            const creditB = parseFloat(b.creditHours?.toString() || '0');
+            const blockB = parseFloat(b.blockHours?.toString() || '1');
+            valA = creditA / blockA;
+            valB = creditB / blockB;
+            break;
           case 'holdProbability':
             valA = parseInt(a.holdProbability?.toString() || '0', 10);
             valB = parseInt(b.holdProbability?.toString() || '0', 10);
