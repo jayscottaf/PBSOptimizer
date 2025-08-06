@@ -701,6 +701,7 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
+        </div>
       </div>
 
       {/* Pairing Modal */}
