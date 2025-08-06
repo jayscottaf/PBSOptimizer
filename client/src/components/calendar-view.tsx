@@ -315,6 +315,44 @@ export function CalendarView({ userId }: CalendarViewProps) {
             <div className="text-2xl font-bold text-purple-900">
               {events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0).toFixed(2)}
             </div>
+            {(() => {
+              const totalCredit = events.reduce((sum, event) => sum + parseFloat(event.pairing.creditHours), 0);
+              const totalBlock = events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0);
+              const ratio = totalBlock > 0 ? totalCredit / totalBlock : 0;
+              
+              // Calculate quartile based on efficiency ratio (credit/block)
+              // Higher ratios are better (more credit per block hour)
+              let color = '';
+              let bgColor = '';
+              let quartileText = '';
+              
+              if (ratio >= 1.3) { // Top 25% - Excellent
+                color = 'text-green-800';
+                bgColor = 'bg-green-100';
+                quartileText = 'Top 10%';
+              } else if (ratio >= 1.2) { // 25-50% - Good
+                color = 'text-yellow-700';
+                bgColor = 'bg-yellow-100';
+                quartileText = 'Top 25%';
+              } else if (ratio >= 1.1) { // 50-75% - Below Average
+                color = 'text-orange-700';
+                bgColor = 'bg-orange-100';
+                quartileText = 'Top 50%';
+              } else { // Bottom 25% - Poor
+                color = 'text-red-800';
+                bgColor = 'bg-red-100';
+                quartileText = 'Below Average';
+              }
+              
+              return (
+                <div className={`mt-2 p-2 rounded ${bgColor}`}>
+                  <div className="text-xs font-medium text-gray-600">Credit/Block Ratio</div>
+                  <div className={`text-lg font-bold ${color}`}>
+                    {ratio.toFixed(2)} ({quartileText})
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           {crewRestViolations.length > 0 && (
             <div className="bg-red-50 p-4 rounded-lg">
