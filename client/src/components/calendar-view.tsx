@@ -29,7 +29,8 @@ type CalendarViewProps = {
 };
 
 export function CalendarView({ userId }: CalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 2025 (month is 0-indexed)
+  // Set to August 2025 to show the bid period starting from August 31st
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 7, 31)); // August 31, 2025 (month is 0-indexed)
   const queryClient = useQueryClient();
   
   const monthStart = startOfMonth(currentDate);
@@ -150,9 +151,14 @@ export function CalendarView({ userId }: CalendarViewProps) {
           <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h2 className="text-2xl font-bold text-center min-w-[200px]">
-            {format(currentDate, 'MMMM yyyy')}
-          </h2>
+          <div className="text-center min-w-[200px]">
+            <h2 className="text-2xl font-bold">
+              {format(currentDate, 'MMMM yyyy')}
+            </h2>
+            <p className="text-sm text-gray-600">
+              Bid Period: Aug 31 - Sep 30, 2025
+            </p>
+          </div>
           <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
             <ChevronRight className="h-4 w-4" />
           </Button>
