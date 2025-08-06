@@ -212,7 +212,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                 console.log('User created/updated:', user);
 
-                // Parse effective dates (format can be "01SEP-30SEP" or "SEP10")
+                // Parse effective dates - can be formats like "SEP10", "31AUG,03SEP", "01SEP-30SEP"
                 const effectiveDateStr = pairing.effectiveDates;
                 const currentYear = new Date().getFullYear();
 
@@ -223,62 +223,107 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
                 };
 
-                let startDate: Date;
-                let endDate: Date;
-
-                // Try to match "01SEP-30SEP" format first
-                const rangeMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
-                if (rangeMatch) {
-                  const [, startDay, startMonth, endDay, endMonth] = rangeMatch;
-                  console.log('Range date match parts:', { startDay, startMonth, endDay, endMonth });
-                  
-                  if (!(startMonth in monthMap) || !(endMonth in monthMap)) {
-                    console.error('Invalid month format:', { startMonth, endMonth });
-                    toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
-                    return;
-                  }
-                  
-                  startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                  endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
-                } else {
-                  // Try to match "SEP10" or similar format
-                  const monthOnlyMatch = effectiveDateStr.match(/([A-Z]{3})(\d{2})?/);
-                  if (monthOnlyMatch) {
-                    const [, month, day] = monthOnlyMatch;
-                    console.log('Month-only date match parts:', { month, day });
+                // Function to parse a single date like "SEP10" or "31AUG"
+                const parseSingleDate = (dateStr: string) => {
+                  const match = dateStr.match(/(\d{1,2})([A-Z]{3})|([A-Z]{3})(\d{1,2})/);
+                  if (match) {
+                    const [, dayFirst, monthFirst, monthSecond, daySecond] = match;
+                    const day = dayFirst || daySecond;
+                    const month = monthFirst || monthSecond;
                     
-                    if (!(month in monthMap)) {
-                      console.error('Invalid month format:', month);
-                      toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
+                    if (month in monthMap && day) {
+                      return new Date(currentYear, monthMap[month], parseInt(day));
+                    }
+                  }
+                  return null;
+                };
+
+                let possibleStartDates: Date[] = [];
+
+                // Check for multiple dates separated by comma
+                if (effectiveDateStr.includes(',')) {
+                  const dates = effectiveDateStr.split(',').map(d => d.trim());
+                  for (const dateStr of dates) {
+                    const parsed = parseSingleDate(dateStr);
+                    if (parsed) {
+                      possibleStartDates.push(parsed);
+                    }
+                  }
+                } else {
+                  // Check for date range format "01SEP-30SEP"
+                  const rangeMatch = effectiveDateStr.match(/(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/);
+                  if (rangeMatch) {
+                    const [, startDay, startMonth, endDay, endMonth] = rangeMatch;
+                    
+                    if (startMonth in monthMap && endMonth in monthMap) {
+                      const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                      const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                      
+                      console.log('Range dates:', { startDate, endDate });
+                      
+                      addToCalendarMutation.mutate({
+                        userId: user.id,
+                        pairingId: pairingId,
+                        startDate,
+                        endDate
+                      });
                       return;
                     }
-                    
-                    // For month-only format, use the first and last day of the month
-                    const monthIndex = monthMap[month];
-                    startDate = new Date(currentYear, monthIndex, 1);
-                    endDate = new Date(currentYear, monthIndex + 1, 0); // Last day of the month
                   } else {
-                    console.error('Could not parse date format:', effectiveDateStr);
-                    toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
-                    return;
+                    // Single date format
+                    const parsed = parseSingleDate(effectiveDateStr);
+                    if (parsed) {
+                      possibleStartDates.push(parsed);
+                    }
                   }
                 }
-                
-                console.log('Parsed dates:', { startDate, endDate });
 
-                // Validate dates
-                if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-                  console.error('Invalid dates created:', { startDate, endDate });
-                  toast({ title: 'Error', description: 'Could not create valid dates from pairing', variant: 'destructive' });
+                if (possibleStartDates.length === 0) {
+                  toast({ title: 'Error', description: 'Could not parse any valid dates from pairing', variant: 'destructive' });
                   return;
                 }
 
-                console.log('About to call mutation with:', {
-                  userId: user.id,
-                  pairingId: pairingId,
-                  startDate,
-                  endDate
-                });
+                // If multiple start dates, ask user to choose
+                if (possibleStartDates.length > 1) {
+                  const dateOptions = possibleStartDates.map(date => 
+                    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  ).join(' or ');
+                  
+                  const choice = confirm(`This pairing has multiple start dates: ${dateOptions}. Click OK to add all dates, or Cancel to add only the first date.`);
+                  
+                  if (choice) {
+                    // Add all dates
+                    for (const startDate of possibleStartDates) {
+                      const pairingDays = pairing.pairingDays || 4;
+                      const endDate = new Date(startDate);
+                      endDate.setDate(endDate.getDate() + pairingDays - 1);
+                      
+                      console.log('Adding date range:', { startDate, endDate, days: pairingDays });
+                      
+                      try {
+                        await api.addToCalendar(user.id, pairingId, startDate, endDate);
+                      } catch (error) {
+                        console.error('Error adding one of the date ranges:', error);
+                      }
+                    }
+                    
+                    toast({ title: 'Success', description: `Added ${possibleStartDates.length} date ranges to calendar!` });
+                    setIsAddedToCalendar(true);
+                    queryClient.invalidateQueries({ queryKey: ['calendar'] });
+                    return;
+                  } else {
+                    // Use only the first date
+                    possibleStartDates = [possibleStartDates[0]];
+                  }
+                }
+
+                // Single start date
+                const startDate = possibleStartDates[0];
+                const pairingDays = pairing.pairingDays || 4;
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + pairingDays - 1);
+
+                console.log('Adding single date range:', { startDate, endDate, days: pairingDays });
 
                 addToCalendarMutation.mutate({
                   userId: user.id,
