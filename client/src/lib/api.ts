@@ -139,6 +139,13 @@ export const api = {
   },
 
   addToCalendar: async (userId: number, pairingId: number, startDate: Date, endDate: Date) => {
+    console.log('API: Adding to calendar with params:', {
+      userId,
+      pairingId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+
     const response = await fetch('/api/calendar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -149,11 +156,18 @@ export const api = {
         endDate: endDate.toISOString()
       }),
     });
+    
+    console.log('API: Response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to add to calendar: ${errorText}`);
+      console.error('API: Error response:', errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
-    return response.json();
+    
+    const result = await response.json();
+    console.log('API: Success response:', result);
+    return result;
   },
 
   removeFromCalendar: async (userId: number, pairingId: number) => {
