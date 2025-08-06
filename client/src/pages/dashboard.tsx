@@ -364,10 +364,7 @@ export default function Dashboard() {
             <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
               <Card className="h-fit">
                 <CardHeader className="pb-3 sm:pb-6">
-                  <div className="flex items-center justify-between">
-                    {!sidebarCollapsed && (
-                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
-                    )}
+                  <div className="flex items-center justify-end">
                     <Button
                       variant="ghost"
                       size="sm"
