@@ -41,26 +41,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
       startDate: Date;
       endDate: Date;
     }) => {
-      const response = await fetch('/api/calendar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          pairingId,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        }),
-      });
-      if (!response.ok) throw new Error('Failed to add to calendar');
-      return response.json();
+      return api.addToCalendar(userId, pairingId, startDate, endDate);
     },
     onSuccess: () => {
       setIsAddedToCalendar(true);
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
-      toast({ title: 'Success', description: 'Pairing added to calendar' });
+      toast({ title: 'Success', description: 'Pairing added to calendar successfully!' });
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to add pairing to calendar', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Calendar mutation error:', error);
+      toast({ title: 'Error', description: error.message || 'Failed to add pairing to calendar', variant: 'destructive' });
     },
   });
 
@@ -199,9 +189,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             disabled={addToCalendarMutation.isPending}
             onClick={async () => {
               try {
+                if (!pairing) {
+                  toast({ title: 'Error', description: 'No pairing data available', variant: 'destructive' });
+                  return;
+                }
+
                 const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
                 const base = localStorage.getItem('base') || "NYC";
                 const aircraft = localStorage.getItem('aircraft') || "A220";
+
+                console.log('Adding to calendar - pairing:', pairing.pairingNumber, 'effective dates:', pairing.effectiveDates);
 
                 // Create or update user first
                 const user = await api.createOrUpdateUser({
@@ -210,33 +207,46 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   aircraft
                 });
 
+                console.log('User created/updated:', user);
+
                 // Calculate dates from pairing effective dates
                 const effectiveDateStr = pairing.effectiveDates;
                 const currentYear = new Date().getFullYear();
                 
                 // Parse effective dates (format like "01SEP-30SEP")
                 const dateMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
-                if (dateMatch) {
-                  const [, startDay, startMonth, endDay, endMonth] = dateMatch;
-                  
-                  const monthMap: { [key: string]: number } = {
-                    'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
-                    'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
-                  };
-                  
-                  const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                  const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
-                  
-                  addToCalendarMutation.mutate({
-                    userId: user.id,
-                    pairingId,
-                    startDate,
-                    endDate
-                  });
+                if (!dateMatch) {
+                  toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
+                  return;
                 }
+
+                const [, startDay, startMonth, endDay, endMonth] = dateMatch;
+                
+                const monthMap: { [key: string]: number } = {
+                  'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+                  'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+                };
+
+                if (monthMap[startMonth] === undefined || monthMap[endMonth] === undefined) {
+                  toast({ title: 'Error', description: 'Invalid month in pairing dates', variant: 'destructive' });
+                  return;
+                }
+                
+                const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                
+                console.log('Parsed dates:', { startDate, endDate });
+
+                addToCalendarMutation.mutate({
+                  userId: user.id,
+                  pairingId: pairingId,
+                  startDate,
+                  endDate
+                });
+
               } catch (error) {
                 console.error('Error adding to calendar:', error);
-                toast({ title: 'Error', description: 'Failed to add pairing to calendar', variant: 'destructive' });
+                toast({ title: 'Error', description: `Failed to add pairing to calendar: ${error.message}`, variant: 'destructive' });
               }
             }}
           >
