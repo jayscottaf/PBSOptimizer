@@ -58,23 +58,73 @@ export function PairingTable({ pairings, onSort, sortColumn, sortDirection, onPa
         <table className="w-full min-w-[800px]">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                Pairing #
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] cursor-pointer hover:bg-gray-100"
+                onClick={() => onSort('pairingNumber', sortColumn === 'pairingNumber' && sortDirection === 'asc' ? 'desc' : 'asc')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Pairing #</span>
+                  {sortColumn === 'pairingNumber' && (
+                    <span className="text-blue-600">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                 Route
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
-                Credit
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] cursor-pointer hover:bg-gray-100"
+                onClick={() => onSort('creditHours', sortColumn === 'creditHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Credit</span>
+                  {sortColumn === 'creditHours' && (
+                    <span className="text-blue-600">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
-                Block
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] cursor-pointer hover:bg-gray-100"
+                onClick={() => onSort('blockHours', sortColumn === 'blockHours' && sortDirection === 'asc' ? 'desc' : 'asc')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Block</span>
+                  {sortColumn === 'blockHours' && (
+                    <span className="text-blue-600">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                TAFB
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] cursor-pointer hover:bg-gray-100"
+                onClick={() => onSort('tafb', sortColumn === 'tafb' && sortDirection === 'asc' ? 'desc' : 'asc')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>TAFB</span>
+                  {sortColumn === 'tafb' && (
+                    <span className="text-blue-600">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
-                Hold %
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] cursor-pointer hover:bg-gray-100"
+                onClick={() => onSort('holdProbability', sortColumn === 'holdProbability' && sortDirection === 'asc' ? 'desc' : 'asc')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Hold %</span>
+                  {sortColumn === 'holdProbability' && (
+                    <span className="text-blue-600">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 Actions
