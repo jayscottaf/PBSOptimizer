@@ -35,6 +35,7 @@ export const pairings = pgTable("pairings", {
   payHours: text("pay_hours"), // Time format like "12:43"
   sitEdpPay: decimal("sit_edp_pay", { precision: 4, scale: 2 }),
   carveouts: text("carveouts"),
+  checkInTime: text("check_in_time"), // Time format like "10.35"
   deadheads: integer("deadheads").default(0),
   layovers: jsonb("layovers"), // Array of layover details
   flightSegments: jsonb("flight_segments").notNull(), // Array of flight segment details
