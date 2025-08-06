@@ -242,10 +242,24 @@ export class HybridOpenAIService {
         return checkInDecimal >= afterTime;
       });
 
+      const stats = {
+        totalPairings: allPairings.length,
+        totalWithCheckInData: allPairings.filter(p => p.checkInTime).length,
+        matchingCheckInCriteria: filteredPairings.length,
+        afterTime: afterTime,
+        avgCreditHours: filteredPairings.length > 0 ? 
+          (filteredPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / filteredPairings.length).toFixed(2) : null,
+        avgBlockHours: filteredPairings.length > 0 ? 
+          (filteredPairings.reduce((sum, p) => sum + parseFloat(p.blockHours.toString()), 0) / filteredPairings.length).toFixed(2) : null,
+        avgHoldProbability: filteredPairings.length > 0 ?
+          (filteredPairings.reduce((sum, p) => sum + p.holdProbability, 0) / filteredPairings.length).toFixed(1) : null
+      };
+
       return {
         type: 'checkin_time_analysis',
         afterTime: afterTime,
-        matchingPairings: filteredPairings.map(p => ({
+        stats: stats,
+        matchingPairings: filteredPairings.slice(0, 20).map(p => ({
           pairingNumber: p.pairingNumber,
           checkInTime: p.checkInTime,
           creditHours: p.creditHours.toString(),
