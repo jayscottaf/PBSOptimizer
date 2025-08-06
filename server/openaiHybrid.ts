@@ -154,7 +154,8 @@ export class HybridOpenAIService {
             effectiveDates: pairing.effectiveDates,
             flightSegments: pairing.flightSegments,
             layovers: pairing.layovers,
-            fullTextBlock: pairing.fullText
+            fullTextBlock: pairing.fullText,
+            checkInTime: pairing.checkInTime // Added checkInTime
           },
           truncated: false
         };
@@ -273,7 +274,8 @@ export class HybridOpenAIService {
         pairingDays: p.pairingDays,
         route: p.route,
         tafb: p.tafb,
-        layovers: p.layovers
+        layovers: p.layovers,
+        checkInTime: p.checkInTime // Added checkInTime
       })),
       filterCriteria,
       totalMatching: filteredPairings.length,
@@ -473,16 +475,68 @@ export class HybridOpenAIService {
   }
 
   private extractEfficiencyThreshold(message: string): number {
-    const efficiencyMatch = message.match(/efficiency.*?(\d+\.?\d*)/);
-    if (efficiencyMatch) return parseFloat(efficiencyMatch[1]);
+    // Look for efficiency thresholds in the message
+    const thresholdMatch = message.match(/(\d+(?:\.\d+)?)\s*%?\s*efficiency/i);
+    if (thresholdMatch) {
+      return parseFloat(thresholdMatch[1]) / 100;
+    }
+    return 1.0; // Default minimum efficiency of 100%
+  }
 
-    if (message.includes('credit-to-block') && message.includes('above')) {
-      const aboveMatch = message.match(/above\s+(\d+\.?\d*)/);
-      if (aboveMatch) return parseFloat(aboveMatch[1]);
+  private analyzeCheckInTimes(pairings: any[], message: string) {
+    console.log('Analyzing check-in times');
+
+    // Filter pairings with check-in times
+    const pairingsWithCheckIn = pairings.filter(p => p.checkInTime);
+
+    if (pairingsWithCheckIn.length === 0) {
+      return {
+        type: 'check_in_analysis',
+        message: 'No check-in time data available in the current bid package.',
+        count: 0
+      };
     }
 
-    return 1.2; // Default threshold
+    // Parse time threshold from message (e.g., "after 10:59 am")
+    const timeMatch = message.match(/(?:after|before)\s+(\d{1,2})[:.:](\d{2})/i);
+    let targetHour = null;
+    let targetMinute = null;
+    let isAfter = true;
+
+    if (timeMatch) {
+      targetHour = parseInt(timeMatch[1]);
+      targetMinute = parseInt(timeMatch[2]);
+      isAfter = message.toLowerCase().includes('after');
+    }
+
+    let filteredPairings = pairingsWithCheckIn;
+
+    if (targetHour !== null && targetMinute !== null) {
+      filteredPairings = pairingsWithCheckIn.filter(p => {
+        const checkIn = p.checkInTime;
+        const [hours, minutes] = checkIn.split(/[.:]/).map(s => parseInt(s));
+        const checkInMinutes = hours * 60 + minutes;
+        const targetMinutes = targetHour * 60 + targetMinute;
+
+        return isAfter ? checkInMinutes > targetMinutes : checkInMinutes < targetMinutes;
+      });
+    }
+
+    return {
+      type: 'check_in_analysis',
+      count: filteredPairings.length,
+      totalWithCheckIn: pairingsWithCheckIn.length,
+      criteria: timeMatch ? `${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}` : 'all',
+      pairings: filteredPairings.slice(0, 10).map(p => ({
+        pairingNumber: p.pairingNumber,
+        checkInTime: p.checkInTime,
+        route: p.route,
+        creditHours: p.creditHours,
+        pairingDays: p.pairingDays
+      }))
+    };
   }
+
 
   private extractHoldProbabilityThreshold(message: string): number {
     // Look for explicit hold probability percentages with proper context
@@ -494,6 +548,26 @@ export class HybridOpenAIService {
     if (message.includes('junior')) return 30;
 
     return 75; // Default threshold
+  }
+
+  private async handleGeneralQuestion(query: HybridAnalysisQuery, message: string): Promise<any> {
+    console.log('Handling general question:', message);
+
+    const allPairings = await this.storage.getPairings(query.bidPackageId);
+    console.log(`Retrieved ${allPairings.length} pairings for analysis`);
+
+    // Process different types of general questions
+    if (message.includes('check-in') || message.includes('checkin')) {
+      return this.analyzeCheckInTimes(allPairings, message);
+    }
+
+    // Default response if no specific handler matches
+    const result = await this.storage.getPairingStatsSummary(query.bidPackageId);
+    return {
+      type: 'general_stats',
+      summary: result,
+      truncated: false
+    };
   }
 
   private async handleLargeDatasetRequest(query: HybridAnalysisQuery): Promise<HybridAnalysisResponse> {

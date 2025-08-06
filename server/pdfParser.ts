@@ -41,6 +41,7 @@ interface ParsedPairing {
   fullTextBlock: string;
   holdProbability: number;
   pairingDays: number;
+  checkInTime?: string;
 }
 
 export class PDFParser {
@@ -178,6 +179,7 @@ export class PDFParser {
     let carveouts = "";
     let deadheads = 0;
     let effectiveDates = "";
+    let checkInTime = "";
     let currentDay = "A"; // Track current day for continuation flights
 
     // Extract effective dates from the block
@@ -454,6 +456,12 @@ export class PDFParser {
         });
       }
 
+      // Check-in time pattern: "CHECK-IN AT 10.35"
+      const checkInMatch = line.match(/CHECK-IN AT\s+([\d:.]+)/i);
+      if (checkInMatch) {
+        checkInTime = checkInMatch[1];
+      }
+
       // Look for the actual total credit and block hours line - updated format
       const totalCreditMatch = line.match(/TOTAL CREDIT\s+(\d{1,2}\.\d{2})TL\s+(\d{1,2}\.\d{2})BL/);
       if (totalCreditMatch) {
@@ -501,7 +509,7 @@ export class PDFParser {
     if (dayPatternMatches) {
       const textDays = [...new Set(dayPatternMatches.map(match => match.trim().charAt(0)))];
       const textDayCount = textDays.length;
-      
+
       // Use the higher count between flight segments and text patterns
       if (textDayCount > pairingDays) {
         pairingDays = textDayCount;
@@ -532,7 +540,8 @@ export class PDFParser {
       flightSegments,
       fullTextBlock: block,
       holdProbability: 0, // Will be calculated
-      pairingDays
+      pairingDays,
+      checkInTime: checkInTime || undefined
     };
 
     // Calculate hold probability
@@ -644,7 +653,8 @@ export class PDFParser {
             flightSegments: pairing.flightSegments,
             fullTextBlock: pairing.fullTextBlock,
             holdProbability: pairing.holdProbability,
-            pairingDays: pairing.pairingDays
+            pairingDays: pairing.pairingDays,
+            checkInTime: pairing.checkInTime
           };
 
           await storage.createPairing(pairingData);
