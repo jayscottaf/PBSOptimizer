@@ -120,6 +120,62 @@ export default function Dashboard() {
     }
   };
 
+  // Sorting logic
+  const sortedPairings = React.useMemo(() => {
+    if (!pairings || pairings.length === 0) {
+      return [];
+    }
+
+    let sorted = [...pairings];
+
+    if (sortColumn) {
+      sorted.sort((a, b) => {
+        let valA: any, valB: any;
+
+        switch (sortColumn) {
+          case 'credit':
+            valA = a.credit;
+            valB = b.credit;
+            break;
+          case 'block':
+            valA = a.block;
+            valB = b.block;
+            break;
+          case 'tafb':
+            valA = a.tafb;
+            valB = b.tafb;
+            break;
+          case 'holdProbability':
+            valA = a.holdProbability;
+            valB = b.holdProbability;
+            break;
+          case 'pairingNumber':
+            valA = parseInt(a.pairingNumber, 10);
+            valB = parseInt(b.pairingNumber, 10);
+            break;
+          default:
+            valA = a[sortColumn];
+            valB = b[sortColumn];
+        }
+
+        if (valA === undefined || valA === null) return sortDirection === "asc" ? 1 : -1;
+        if (valB === undefined || valB === null) return sortDirection === "asc" ? -1 : 1;
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+          return sortDirection === "asc" ? valA - valB : valB - valA;
+        } else {
+          // Fallback for mixed or other types
+          return sortDirection === "asc" ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+        }
+      });
+    }
+
+    return sorted;
+  }, [pairings, sortColumn, sortDirection]);
+
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Modern Header */}
@@ -300,7 +356,7 @@ export default function Dashboard() {
                 <CardTitle className="text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
               </CardHeader>
               <CardContent>
-                <StatsPanel pairings={pairings} />
+                <StatsPanel pairings={sortedPairings || []} />
               </CardContent>
             </Card>
           </div>
@@ -413,7 +469,7 @@ export default function Dashboard() {
                               <SelectItem value="12.0">12:00</SelectItem>
                             </SelectContent>
                           </Select>
-                          
+
                           <Select onValueChange={(value) => {
                             if (value === 'clear') {
                               removeFilter('blockMin');
@@ -466,11 +522,13 @@ export default function Dashboard() {
                           <Select onValueChange={(value) => {
                             if (value === "short") {
                               addFilter('tafbMax', 'TAFB < 50hrs', 50);
+                              removeFilter('tafbMin');
                             } else if (value === "medium") {
                               addFilter('tafbMin', 'TAFB 50-80hrs', 50);
                               addFilter('tafbMax', 'TAFB 50-80hrs', 80);
                             } else if (value === "long") {
                               addFilter('tafbMin', 'TAFB > 80hrs', 80);
+                              removeFilter('tafbMax');
                             } else {
                               // Clear TAFB filters
                               removeFilter('tafbMin');
@@ -488,11 +546,18 @@ export default function Dashboard() {
                             </SelectContent>
                           </Select>
 
-                          <Select onValueChange={(value) => addFilter('holdProbabilityMin', 'Hold Prob Min', value)}>
+                          <Select onValueChange={(value) => {
+                            if (value === 'clear') {
+                              removeFilter('holdProbabilityMin');
+                            } else {
+                              addFilter('holdProbabilityMin', 'Hold Prob Min', parseFloat(value));
+                            }
+                          }}>
                             <SelectTrigger>
                               <SelectValue placeholder="Hold Prob Min" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="clear">Any</SelectItem>
                               <SelectItem value="0.5">50%</SelectItem>
                               <SelectItem value="0.6">60%</SelectItem>
                               <SelectItem value="0.7">70%</SelectItem>
@@ -507,13 +572,13 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
                             <span className="text-sm text-gray-500">
-                              {latestBidPackage.month} {latestBidPackage.year} - {pairings.length} pairings
+                              {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
                             </span>
                           </div>
                           <PairingTable 
-                            pairings={pairings || []} 
+                            pairings={sortedPairings || []} 
                             onSort={handleSort}
-                            sortColumn={sortColumn}
+                            sortColumn={sortColumn || ''}
                             sortDirection={sortDirection}
                             onPairingClick={handlePairingClick}
                           />
