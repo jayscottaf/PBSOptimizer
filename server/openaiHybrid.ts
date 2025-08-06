@@ -122,9 +122,15 @@ export class HybridOpenAIService {
     const message = query.message.toLowerCase();
 
     // Handle check-in time queries FIRST before other patterns
-    if (message.includes('check-in') || message.includes('checkin')) {
-      console.log('Check-in query detected, calling handleGeneralQuestion');
-      return await this.handleGeneralQuestion(query, message);
+    const checkInMatch = message.match(/check.?in\s+(?:after|>=|>\s*)?(\d{1,2})[:.;](\d{2})/i) ||
+                        message.match(/after\s+(\d{1,2})[:.;](\d{2})/i);
+    
+    if (checkInMatch && (message.includes('pairing') || message.includes('how many'))) {
+      const hours = checkInMatch[1];
+      const minutes = checkInMatch[2];
+      const timeDecimal = parseFloat(`${hours}.${minutes}`);
+      
+      return await this.handleCheckInTimeQuery(query, timeDecimal, message);
     }
 
     // Extract pairing duration from the message FIRST (1-day, 2-day, etc.)
@@ -223,6 +229,43 @@ export class HybridOpenAIService {
       summary: result,
       truncated: false
     };
+  }
+
+  private async handleCheckInTimeQuery(query: HybridAnalysisQuery, afterTime: number, message: string): Promise<any> {
+    try {
+      const allPairings = await this.storage.getPairings(query.bidPackageId);
+      
+      // Filter pairings with check-in times after the specified time
+      const filteredPairings = allPairings.filter(p => {
+        if (!p.checkInTime) return false;
+        const checkInDecimal = parseFloat(p.checkInTime.toString());
+        return checkInDecimal >= afterTime;
+      });
+
+      return {
+        type: 'checkin_time_analysis',
+        afterTime: afterTime,
+        matchingPairings: filteredPairings.map(p => ({
+          pairingNumber: p.pairingNumber,
+          checkInTime: p.checkInTime,
+          creditHours: p.creditHours.toString(),
+          blockHours: p.blockHours.toString(),
+          pairingDays: p.pairingDays,
+          holdProbability: p.holdProbability,
+          route: p.route
+        })),
+        totalMatching: filteredPairings.length,
+        totalSearched: allPairings.length,
+        truncated: false
+      };
+    } catch (error) {
+      console.error('Error in handleCheckInTimeQuery:', error);
+      return {
+        type: 'error',
+        message: `Error processing check-in time query: ${error.message}`,
+        truncated: false
+      };
+    }
   }
 
   private async handleDurationSpecificQuery(query: HybridAnalysisQuery, days: number, message: string): Promise<any> {
