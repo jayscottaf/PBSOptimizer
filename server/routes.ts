@@ -139,15 +139,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/pairings/search", async (req, res) => {
     try {
       const { bidPackageId, ...filters } = req.body;
-      
+
       if (!bidPackageId) {
         console.log("No bid package ID provided in search request");
         return res.status(400).json({ message: "Bid package ID is required", pairings: [] });
       }
-      
+
       console.log(`Searching pairings for bid package ${bidPackageId} with filters:`, filters);
       const pairings = await storage.searchPairings({ bidPackageId, ...filters });
-      
+
       // Ensure we always return an array
       const safePairings = Array.isArray(pairings) ? pairings : [];
       console.log(`Found ${safePairings.length} pairings`);
@@ -247,26 +247,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create/update user
-  app.post("/api/user", async (req, res) => {
+  app.post('/api/user', async (req, res) => {
     try {
       const { seniorityNumber, base, aircraft } = req.body;
 
-      // Check if user exists
-      const existingUser = await storage.getUserBySeniority(seniorityNumber);
-
-      if (existingUser) {
-        res.json(existingUser);
-      } else {
-        const newUser = await storage.createUser({
-          seniorityNumber,
-          base,
-          aircraft,
-        });
-        res.json(newUser);
+      if (!seniorityNumber || !base || !aircraft) {
+        return res.status(400).json({ error: 'Missing required fields' });
       }
+
+      const user = await storage.createOrUpdateUser({
+        seniorityNumber: parseInt(seniorityNumber),
+        base,
+        aircraft
+      });
+
+      res.json(user);
     } catch (error) {
-      console.error("Error creating/updating user:", error);
-      res.status(500).json({ message: "Failed to create/update user" });
+      console.error('Error creating/updating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
