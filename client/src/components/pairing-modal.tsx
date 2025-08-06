@@ -304,7 +304,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                       console.log('Adding date range:', { startDate, endDate, days: pairingDays });
                       
                       try {
-                        await api.addToCalendar(user.id, pairingId, startDate, endDate);
+                        await api.addToCalendar(user.id, pairing.id, startDate, endDate);
                       } catch (error) {
                         console.error('Error adding one of the date ranges:', error);
                       }
@@ -331,7 +331,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                 addToCalendarMutation.mutate({
                   userId: user.id,
-                  pairingId: pairingId,
+                  pairingId: pairing.id,
                   startDate,
                   endDate
                 });
