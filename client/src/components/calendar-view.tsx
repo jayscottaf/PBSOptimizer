@@ -29,8 +29,8 @@ type CalendarViewProps = {
 };
 
 export function CalendarView({ userId }: CalendarViewProps) {
-  // Set to August 2025 to show the bid period starting from August 31st
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 7, 31)); // August 31, 2025 (month is 0-indexed)
+  // Set to September 2025 for the bid month (even though bid period starts Aug 31)
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 1, 2025 (month is 0-indexed)
   const queryClient = useQueryClient();
   
   const monthStart = startOfMonth(currentDate);
