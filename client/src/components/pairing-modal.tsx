@@ -189,7 +189,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             disabled={addToCalendarMutation.isPending}
             onClick={async () => {
               try {
+                console.log('Add to Calendar button clicked');
+                
                 if (!pairing) {
+                  console.error('No pairing data available');
                   toast({ title: 'Error', description: 'No pairing data available', variant: 'destructive' });
                   return;
                 }
@@ -208,6 +211,52 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 });
 
                 console.log('User created/updated:', user);
+
+                // Parse effective dates (format like "01SEP-30SEP")
+                const effectiveDateStr = pairing.effectiveDates;
+                const currentYear = new Date().getFullYear();
+
+                console.log('Parsing date string:', effectiveDateStr);
+
+                const dateMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
+                if (!dateMatch) {
+                  console.error('Could not parse date format:', effectiveDateStr);
+                  toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
+                  return;
+                }
+
+                const [, startDay, startMonth, endDay, endMonth] = dateMatch;
+                console.log('Date match parts:', { startDay, startMonth, endDay, endMonth });
+                
+                const monthMap: { [key: string]: number } = {
+                  'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+                  'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+                };
+                
+                if (!(startMonth in monthMap) || !(endMonth in monthMap)) {
+                  console.error('Invalid month format:', { startMonth, endMonth });
+                  toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
+                  return;
+                }
+                
+                const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                
+                console.log('Parsed dates:', { startDate, endDate });
+
+                // Validate dates
+                if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                  console.error('Invalid dates created:', { startDate, endDate });
+                  toast({ title: 'Error', description: 'Could not create valid dates from pairing', variant: 'destructive' });
+                  return;
+                }
+
+                console.log('About to call mutation with:', {
+                  userId: user.id,
+                  pairingId: pairingId,
+                  startDate,
+                  endDate
+                }););
 
                 // Calculate dates from pairing effective dates
                 const effectiveDateStr = pairing.effectiveDates;
@@ -246,7 +295,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
               } catch (error) {
                 console.error('Error adding to calendar:', error);
-                toast({ title: 'Error', description: `Failed to add pairing to calendar: ${error.message}`, variant: 'destructive' });
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                toast({ title: 'Error', description: `Failed to add pairing to calendar: ${errorMessage}`, variant: 'destructive' });
               }
             }}
           >
