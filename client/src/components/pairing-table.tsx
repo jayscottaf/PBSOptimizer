@@ -180,9 +180,9 @@ export function PairingTable({
                 </td>
               </tr>
             ) : (
-              safePairings.map((pairing) => (
+              safePairings.map((pairing, index) => (
                 <tr
-                  key={pairing.id}
+                  key={`${pairing.id}-${index}`}
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => handlePairingClick(pairing)}
                 >
