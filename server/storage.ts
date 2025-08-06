@@ -600,16 +600,14 @@ export class DatabaseStorage implements IStorage {
 
   // Calendar event methods
   async addUserCalendarEvent(data: { userId: number; pairingId: number; startDate: Date; endDate: Date; notes?: string }): Promise<UserCalendarEvent> {
-    // Check if this exact pairing and date combination already exists
+    // Check if this user already has a calendar event for this pairing
     const existing = await db
       .select()
       .from(userCalendarEvents)
       .where(
         and(
           eq(userCalendarEvents.userId, data.userId),
-          eq(userCalendarEvents.pairingId, data.pairingId),
-          eq(userCalendarEvents.startDate, data.startDate),
-          eq(userCalendarEvents.endDate, data.endDate)
+          eq(userCalendarEvents.pairingId, data.pairingId)
         )
       );
 
