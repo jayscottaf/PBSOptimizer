@@ -83,10 +83,9 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Statistics</CardTitle>
+        <CardTitle>Quick Stats</CardTitle>
       </CardHeader>
       <CardContent className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
         {isProcessing && (
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-gray-500">
