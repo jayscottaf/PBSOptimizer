@@ -213,8 +213,8 @@ export default function Dashboard() {
             valB = parseInt(b.pairingNumber, 10);
             break;
           default:
-            valA = a[sortColumn];
-            valB = b[sortColumn];
+            valA = (a as any)[sortColumn];
+            valB = (b as any)[sortColumn];
         }
 
         if (valA === undefined || valA === null) return sortDirection === "asc" ? 1 : -1;
