@@ -212,35 +212,57 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                 console.log('User created/updated:', user);
 
-                // Parse effective dates (format like "01SEP-30SEP")
+                // Parse effective dates (format can be "01SEP-30SEP" or "SEP10")
                 const effectiveDateStr = pairing.effectiveDates;
                 const currentYear = new Date().getFullYear();
 
                 console.log('Parsing date string:', effectiveDateStr);
 
-                const dateMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
-                if (!dateMatch) {
-                  console.error('Could not parse date format:', effectiveDateStr);
-                  toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
-                  return;
-                }
-
-                const [, startDay, startMonth, endDay, endMonth] = dateMatch;
-                console.log('Date match parts:', { startDay, startMonth, endDay, endMonth });
-                
                 const monthMap: { [key: string]: number } = {
                   'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
                   'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
                 };
-                
-                if (!(startMonth in monthMap) || !(endMonth in monthMap)) {
-                  console.error('Invalid month format:', { startMonth, endMonth });
-                  toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
-                  return;
+
+                let startDate: Date;
+                let endDate: Date;
+
+                // Try to match "01SEP-30SEP" format first
+                const rangeMatch = effectiveDateStr.match(/(\d{2})([A-Z]{3})-(\d{2})([A-Z]{3})/);
+                if (rangeMatch) {
+                  const [, startDay, startMonth, endDay, endMonth] = rangeMatch;
+                  console.log('Range date match parts:', { startDay, startMonth, endDay, endMonth });
+                  
+                  if (!(startMonth in monthMap) || !(endMonth in monthMap)) {
+                    console.error('Invalid month format:', { startMonth, endMonth });
+                    toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
+                    return;
+                  }
+                  
+                  startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                  endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                } else {
+                  // Try to match "SEP10" or similar format
+                  const monthOnlyMatch = effectiveDateStr.match(/([A-Z]{3})(\d{2})?/);
+                  if (monthOnlyMatch) {
+                    const [, month, day] = monthOnlyMatch;
+                    console.log('Month-only date match parts:', { month, day });
+                    
+                    if (!(month in monthMap)) {
+                      console.error('Invalid month format:', month);
+                      toast({ title: 'Error', description: 'Invalid month format in pairing', variant: 'destructive' });
+                      return;
+                    }
+                    
+                    // For month-only format, use the first and last day of the month
+                    const monthIndex = monthMap[month];
+                    startDate = new Date(currentYear, monthIndex, 1);
+                    endDate = new Date(currentYear, monthIndex + 1, 0); // Last day of the month
+                  } else {
+                    console.error('Could not parse date format:', effectiveDateStr);
+                    toast({ title: 'Error', description: 'Invalid date format in pairing', variant: 'destructive' });
+                    return;
+                  }
                 }
-                
-                const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
                 
                 console.log('Parsed dates:', { startDate, endDate });
 
