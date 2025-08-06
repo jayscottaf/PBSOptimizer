@@ -17,7 +17,8 @@ import {
   Settings,
   Info,
   Star,
-  Calendar
+  Calendar,
+  GripVertical
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -29,6 +30,7 @@ import { CalendarView } from "@/components/calendar-view";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 
 interface SearchFilters {
   search?: string;
@@ -80,6 +82,17 @@ export default function Dashboard() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showUploadModal, setShowUploadModal] = useState(false);
+  
+  // Card order state
+  const [cardOrder, setCardOrder] = useState(() => {
+    const saved = localStorage.getItem('cardOrder');
+    return saved ? JSON.parse(saved) : ['info', 'stats'];
+  });
+
+  // Save card order to localStorage
+  React.useEffect(() => {
+    localStorage.setItem('cardOrder', JSON.stringify(cardOrder));
+  }, [cardOrder]);
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
@@ -251,6 +264,16 @@ export default function Dashboard() {
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
 
+  const handleDragEnd = (result: any) => {
+    if (!result.destination) return;
+
+    const items = Array.from(cardOrder);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setCardOrder(items);
+  };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -319,63 +342,99 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
 
             {/* Left Column - Stacked on mobile, sidebar on desktop */}
-            <div className="xl:col-span-1 space-y-4 sm:space-y-6">
+            <div className="xl:col-span-1">
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="sidebar-cards">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-4 sm:space-y-6"
+                    >
+                      {cardOrder.map((cardId, index) => (
+                        <Draggable key={cardId} draggableId={cardId} index={index}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={`${snapshot.isDragging ? 'z-50' : ''}`}
+                            >
+                              {cardId === 'info' && (
+                                <Card className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}>
+                                  <CardHeader className="pb-3 sm:pb-6">
+                                    <div className="flex items-center justify-between">
+                                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Your Info</CardTitle>
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                                        <GripVertical className="h-4 w-4 text-gray-400" />
+                                      </div>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent className="space-y-3 sm:space-y-4">
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
+                                      <Input
+                                        value={seniorityNumber}
+                                        onChange={(e) => setSeniorityNumber(e.target.value)}
+                                        placeholder="Enter seniority number"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
+                                      <Select value={base} onValueChange={setBase}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select base" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="NYC">NYC</SelectItem>
+                                          <SelectItem value="ATL">ATL</SelectItem>
+                                          <SelectItem value="DFW">DFW</SelectItem>
+                                          <SelectItem value="LAX">LAX</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
+                                      <Select value={aircraft} onValueChange={setAircraft}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select aircraft" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="A220">A220</SelectItem>
+                                          <SelectItem value="A320">A320</SelectItem>
+                                          <SelectItem value="A350">A350</SelectItem>
+                                          <SelectItem value="B737">B737</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
 
-            {/* Your Info Card */}
-            <Card>
-              <CardHeader className="pb-3 sm:pb-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Your Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
-                  <Input
-                    value={seniorityNumber}
-                    onChange={(e) => setSeniorityNumber(e.target.value)}
-                    placeholder="Enter seniority number"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
-                  <Select value={base} onValueChange={setBase}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select base" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NYC">NYC</SelectItem>
-                      <SelectItem value="ATL">ATL</SelectItem>
-                      <SelectItem value="DFW">DFW</SelectItem>
-                      <SelectItem value="LAX">LAX</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
-                  <Select value={aircraft} onValueChange={setAircraft}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select aircraft" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A220">A220</SelectItem>
-                      <SelectItem value="A320">A320</SelectItem>
-                      <SelectItem value="A350">A350</SelectItem>
-                      <SelectItem value="B737">B737</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats Card */}
-            <Card>
-              <CardHeader className="pb-3 sm:pb-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <StatsPanel pairings={sortedPairings || []} />
-              </CardContent>
-            </Card>
-          </div>
+                              {cardId === 'stats' && (
+                                <Card className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}>
+                                  <CardHeader className="pb-3 sm:pb-6">
+                                    <div className="flex items-center justify-between">
+                                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                                        <GripVertical className="h-4 w-4 text-gray-400" />
+                                      </div>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <StatsPanel pairings={sortedPairings || []} />
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            </div>
 
           {/* Right Column - Main Content */}
           <div className="xl:col-span-3">
