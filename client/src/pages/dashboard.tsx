@@ -31,6 +31,7 @@ import { PairingChat } from "@/components/pairing-chat";
 import { FiltersPanel } from "@/components/filters-panel";
 import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
+import { SmartFilterSystem } from "@/components/smart-filter-system";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -503,221 +504,15 @@ export default function Dashboard() {
                             </div>
                           )}
 
-                          {/* Core Filter Controls - Most Important First */}
-                          <div className="space-y-4">
-                            {/* Primary Filters Row */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                              {/* Credit Hours Range */}
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Credit Hours</label>
-                                <div className="flex gap-2">
-                                  <Select onValueChange={(value) => {
-                                    if (value === 'clear') {
-                                      removeFilter('creditMin');
-                                    } else {
-                                      addFilter('creditMin', 'Min Credit', parseFloat(value));
-                                    }
-                                  }}>
-                                    <SelectTrigger className="text-sm">
-                                      <SelectValue placeholder="Min" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="clear">Any</SelectItem>
-                                      <SelectItem value="4.0">4:00</SelectItem>
-                                      <SelectItem value="5.0">5:00</SelectItem>
-                                      <SelectItem value="6.0">6:00</SelectItem>
-                                      <SelectItem value="7.0">7:00</SelectItem>
-                                      <SelectItem value="8.0">8:00</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <Select onValueChange={(value) => {
-                                    if (value === 'clear') {
-                                      removeFilter('creditMax');
-                                    } else {
-                                      addFilter('creditMax', 'Max Credit', parseFloat(value));
-                                    }
-                                  }}>
-                                    <SelectTrigger className="text-sm">
-                                      <SelectValue placeholder="Max" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="clear">Any</SelectItem>
-                                      <SelectItem value="5.0">5:00</SelectItem>
-                                      <SelectItem value="6.0">6:00</SelectItem>
-                                      <SelectItem value="7.0">7:00</SelectItem>
-                                      <SelectItem value="8.0">8:00</SelectItem>
-                                      <SelectItem value="10.0">10:00</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              {/* Hold Probability */}
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Hold Probability</label>
-                                <Select onValueChange={(value) => {
-                                  if (value === 'any') {
-                                    removeFilter('holdProbabilityMin');
-                                  } else {
-                                    const probValue = parseInt(value) / 100;
-                                    addFilter('holdProbabilityMin', `Hold ≥${value}%`, probValue);
-                                  }
-                                }}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Any Probability" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="any">Any</SelectItem>
-                                    <SelectItem value="90">Senior (≥90%)</SelectItem>
-                                    <SelectItem value="70">Good (≥70%)</SelectItem>
-                                    <SelectItem value="50">Fair (≥50%)</SelectItem>
-                                    <SelectItem value="25">Long Shot (≥25%)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              {/* Trip Length */}
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Trip Length</label>
-                                <Select onValueChange={(value) => {
-                                  if (value === 'any') {
-                                    removeFilter('pairingDays');
-                                    removeFilter('pairingDaysMin');
-                                    removeFilter('pairingDaysMax');
-                                  } else if (value === 'turns') {
-                                    addFilter('pairingDays', 'Turns Only', 1);
-                                  } else if (value === 'multi') {
-                                    addFilter('pairingDaysMin', 'Multi-Day', 2);
-                                    removeFilter('pairingDaysMax');
-                                  } else if (value === '2day') {
-                                    addFilter('pairingDays', '2-Day', 2);
-                                  } else if (value === '3day') {
-                                    addFilter('pairingDays', '3-Day', 3);
-                                  } else if (value === '4day+') {
-                                    addFilter('pairingDaysMin', '4+ Days', 4);
-                                    removeFilter('pairingDaysMax');
-                                  }
-                                }}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Any Length" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="any">Any Length</SelectItem>
-                                    <SelectItem value="turns">Turns Only (1-day)</SelectItem>
-                                    <SelectItem value="2day">2-Day Trips</SelectItem>
-                                    <SelectItem value="3day">3-Day Trips</SelectItem>
-                                    <SelectItem value="4day+">4+ Day Trips</SelectItem>
-                                    <SelectItem value="multi">All Multi-Day</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              {/* TAFB */}
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Time Away</label>
-                                <Select onValueChange={(value) => {
-                                  if (value === "any") {
-                                    removeFilter('tafbMin');
-                                    removeFilter('tafbMax');
-                                  } else if (value === "short") {
-                                    addFilter('tafbMax', 'Short TAFB', 48);
-                                    removeFilter('tafbMin');
-                                  } else if (value === "medium") {
-                                    addFilter('tafbMin', 'Med TAFB', 48);
-                                    addFilter('tafbMax', 'Med TAFB', 96);
-                                  } else if (value === "long") {
-                                    addFilter('tafbMin', 'Long TAFB', 96);
-                                    removeFilter('tafbMax');
-                                  }
-                                }}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Any TAFB" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="any">Any TAFB</SelectItem>
-                                    <SelectItem value="short">Short (&lt; 48hrs)</SelectItem>
-                                    <SelectItem value="medium">Medium (48-96hrs)</SelectItem>
-                                    <SelectItem value="long">Long (&gt; 96hrs)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-
-                            {/* Advanced Filters - Collapsible */}
-                            <Collapsible>
-                              <CollapsibleTrigger asChild>
-                                <Button variant="ghost" className="flex items-center gap-2 text-sm">
-                                  <ChevronRight className="h-4 w-4" />
-                                  Advanced Filters
-                                </Button>
-                              </CollapsibleTrigger>
-                              <CollapsibleContent className="space-y-3 mt-3">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                  {/* Credit/Block Ratio */}
-                                  <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Efficiency (C/B Ratio)</label>
-                                    <Select onValueChange={(value) => {
-                                      // This would need custom logic to filter by ratio
-                                      console.log('Efficiency filter:', value);
-                                    }}>
-                                      <SelectTrigger className="text-sm">
-                                        <SelectValue placeholder="Any Ratio" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="any">Any Ratio</SelectItem>
-                                        <SelectItem value="1.3">Excellent (≥1.30)</SelectItem>
-                                        <SelectItem value="1.2">Good (≥1.20)</SelectItem>
-                                        <SelectItem value="1.1">Average (≥1.10)</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-
-                                  {/* Block Hours Range */}
-                                  <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Block Hours</label>
-                                    <div className="flex gap-2">
-                                      <Select onValueChange={(value) => {
-                                        if (value === 'clear') {
-                                          removeFilter('blockMin');
-                                        } else {
-                                          addFilter('blockMin', 'Min Block', parseFloat(value));
-                                        }
-                                      }}>
-                                        <SelectTrigger className="text-sm">
-                                          <SelectValue placeholder="Min" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="clear">Any</SelectItem>
-                                          <SelectItem value="3.0">3:00</SelectItem>
-                                          <SelectItem value="4.0">4:00</SelectItem>
-                                          <SelectItem value="5.0">5:00</SelectItem>
-                                          <SelectItem value="6.0">6:00</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Select onValueChange={(value) => {
-                                        if (value === 'clear') {
-                                          removeFilter('blockMax');
-                                        } else {
-                                          addFilter('blockMax', 'Max Block', parseFloat(value));
-                                        }
-                                      }}>
-                                        <SelectTrigger className="text-sm">
-                                          <SelectValue placeholder="Max" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="clear">Any</SelectItem>
-                                          <SelectItem value="5.0">5:00</SelectItem>
-                                          <SelectItem value="6.0">6:00</SelectItem>
-                                          <SelectItem value="7.0">7:00</SelectItem>
-                                          <SelectItem value="8.0">8:00</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          </div>
+                          {/* Smart Filter System */}
+                          <SmartFilterSystem 
+                            onFilterApply={(filterKey, filterValue, displayLabel) => {
+                              addFilter(filterKey, displayLabel, filterValue);
+                            }}
+                            onFilterClear={(filterKey) => {
+                              removeFilter(filterKey);
+                            }}
+                          />
 
                           {/* Results */}
                           <div>
