@@ -45,7 +45,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     },
     onSuccess: () => {
       setIsAddedToCalendar(true);
+      // Invalidate all calendar queries to refresh the view
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.refetchQueries({ queryKey: ['calendar'] });
       toast({ title: 'Success', description: 'Pairing added to calendar successfully!' });
     },
     onError: (error: any) => {
@@ -310,6 +312,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                     toast({ title: 'Success', description: `Added ${possibleStartDates.length} date ranges to calendar!` });
                     setIsAddedToCalendar(true);
                     queryClient.invalidateQueries({ queryKey: ['calendar'] });
+                    queryClient.refetchQueries({ queryKey: ['calendar'] });
                     return;
                   } else {
                     // Use only the first date
