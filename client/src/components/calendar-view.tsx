@@ -29,7 +29,7 @@ type CalendarViewProps = {
 };
 
 export function CalendarView({ userId }: CalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 2025 (month is 0-indexed)
   const queryClient = useQueryClient();
   
   const monthStart = startOfMonth(currentDate);
@@ -46,6 +46,8 @@ export function CalendarView({ userId }: CalendarViewProps) {
       if (!response.ok) throw new Error('Failed to fetch calendar events');
       return response.json();
     },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true,
   });
 
   // Remove from calendar mutation
