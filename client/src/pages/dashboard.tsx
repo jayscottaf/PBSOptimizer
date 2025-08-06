@@ -28,6 +28,7 @@ import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 interface SearchFilters {
   search?: string;
@@ -42,6 +43,18 @@ interface SearchFilters {
   pairingDays?: number;
   pairingDaysMin?: number;
   pairingDaysMax?: number;
+}
+
+// Placeholder for Pairing type if not defined elsewhere
+interface Pairing {
+  id: number;
+  pairingNumber: string;
+  creditHours: string;
+  blockHours: string;
+  tafb: string;
+  holdProbability: string;
+  pairingDays: string;
+  // ... other properties
 }
 
 export default function Dashboard() {
@@ -66,6 +79,7 @@ export default function Dashboard() {
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
@@ -122,10 +136,10 @@ export default function Dashboard() {
   const handleDeleteFavorite = async (pairingId: number) => {
     try {
       if (!currentUser) return;
-      
+
       // Remove from favorites
       await api.removeFavorite(currentUser.id, pairingId);
-      
+
       // Refresh favorites list
       refetchFavorites();
     } catch (error) {
@@ -234,13 +248,16 @@ export default function Dashboard() {
     return sorted;
   }, [pairings, sortColumn, sortDirection]);
 
+  // Mocking selectedBidPackageId for the polling logic in the modal
+  const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Modern Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14 sm:h-16">
+          <div className="flex items-center justify-between h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-6 flex-1 min-w-0">
               <div className="flex items-center space-x-2 min-w-0">
                 <Plane className="text-blue-600 h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
@@ -279,6 +296,18 @@ export default function Dashboard() {
                   <User className="h-4 w-4" />
                 </Button>
               </div>
+              {/* Upload Bid Package Button */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUploadModal(true)}
+                  className="flex items-center gap-2"
+                >
+                  <CloudUpload className="h-4 w-4" />
+                  Upload Bid Package
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -291,79 +320,6 @@ export default function Dashboard() {
 
             {/* Left Column - Stacked on mobile, sidebar on desktop */}
             <div className="xl:col-span-1 space-y-4 sm:space-y-6">
-
-            {/* Upload Bid Package Card */}
-            <Card>
-              <CardHeader className="pb-3 sm:pb-6">
-                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Upload Bid Package</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center hover:border-gray-400 transition-colors">
-                  <CloudUpload className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-400" />
-                  <div className="mt-2 sm:mt-4">
-                    <FileUpload 
-                      onUpload={(file) => {
-                        console.log("File uploaded:", file);
-                        refetchBidPackages();
-
-                        // Poll for completion and refresh data
-                        const pollForCompletion = async () => {
-                          let attempts = 0;
-                          const maxAttempts = 30; // 30 seconds max
-
-                          const checkStatus = async () => {
-                            attempts++;
-                            try {
-                              const packages = await api.getBidPackages();
-                              const latestPackage = packages.reduce((latest: any, pkg: any) => {
-                                if (pkg.status === 'completed' && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
-                                  return pkg;
-                                }
-                                return latest;
-                              }, null);
-
-                              if (latestPackage?.status === 'completed') {
-                                // Refresh all data when processing is complete
-                                refetchBidPackages();
-                                if (selectedPairing?.id !== latestPackage.id) {
-                                  setSelectedPairing(latestPackage); // Assuming we want to set the latest completed package
-                                }
-                                return true;
-                              } else if (latestPackage?.status === 'failed') {
-                                console.error('Bid package processing failed');
-                                return true;
-                              } else if (attempts < maxAttempts) {
-                                setTimeout(checkStatus, 1000);
-                              }
-                            } catch (error) {
-                              console.error('Error checking status:', error);
-                              if (attempts < maxAttempts) {
-                                setTimeout(checkStatus, 1000);
-                              }
-                            }
-                            return false;
-                          };
-
-                          checkStatus();
-                        };
-
-                        pollForCompletion();
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Info className="h-3 w-3" />
-                    <span>Supports NYC A220 bid packages (PDF or TXT format)</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <BarChart2 className="h-3 w-3" />
-                    <span>Processing extracts all pairing data for search</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Your Info Card */}
             <Card>
@@ -688,7 +644,7 @@ export default function Dashboard() {
                           {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
                         </span>
                       </div>
-                      
+
                       {favorites.length > 0 ? (
                         <PairingTable 
                           pairings={favorites} 
@@ -754,7 +710,80 @@ export default function Dashboard() {
           onClose={() => setSelectedPairing(null)} 
         />
       )}
-      </div>
+
+      {/* Upload Bid Package Modal */}
+      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Bid Package</DialogTitle>
+            <DialogDescription>
+              Upload your PBS bid package to analyze pairings
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+              <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
+              <div className="mt-4">
+                <FileUpload 
+                  onUpload={(file) => {
+                    console.log("File uploaded:", file);
+                    setShowUploadModal(false);
+                    refetchBidPackages();
+
+                    // Poll for completion and refresh data
+                    const pollForCompletion = async () => {
+                      let attempts = 0;
+                      const maxAttempts = 30; // 30 seconds max
+
+                      const checkStatus = async () => {
+                        attempts++;
+                        try {
+                          const packages = await api.getBidPackages();
+                          const latestPackage = packages.reduce((latest: any, pkg: any) => {
+                            if (pkg.status === 'completed' && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+                              return pkg;
+                            }
+                            return latest;
+                          }, null);
+
+                          if (latestPackage) {
+                            console.log("Bid package processing completed, refreshing data...");
+                            // Refresh all data
+                            refetchBidPackages();
+                            if (latestPackage.id !== selectedBidPackageId) {
+                              setSelectedBidPackageId(latestPackage.id);
+                            }
+                            return; // Exit polling
+                          }
+
+                          if (attempts < maxAttempts) {
+                            setTimeout(checkStatus, 1000); // Check again in 1 second
+                          } else {
+                            console.log("Polling timeout reached");
+                          }
+                        } catch (error) {
+                          console.error("Error checking bid package status:", error);
+                          if (attempts < maxAttempts) {
+                            setTimeout(checkStatus, 1000);
+                          }
+                        }
+                      };
+
+                      checkStatus();
+                    };
+
+                    pollForCompletion();
+                  }}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 flex items-center">
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+              Supports NYC A220 bid packages (PDF or TXT format)
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
