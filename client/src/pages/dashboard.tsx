@@ -234,14 +234,14 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Modern Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-2">
-                <Plane className="text-blue-600 h-6 w-6" />
-                <h1 className="text-xl font-bold text-gray-900">Delta PBS Optimizer</h1>
+        <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex items-center space-x-2 sm:space-x-6 flex-1 min-w-0">
+              <div className="flex items-center space-x-2 min-w-0">
+                <Plane className="text-blue-600 h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Delta PBS Optimizer</h1>
               </div>
-              <nav className="hidden md:flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+              <nav className="hidden lg:flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
                 <Button variant="secondary" size="sm" className="bg-white text-gray-900 shadow-sm">
                   Bid Analysis
                 </Button>
@@ -253,18 +253,18 @@ export default function Dashboard() {
                 </Button>
               </nav>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-600">
-                <span>Seniority:</span>
+            <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
+              <div className="hidden md:flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
+                <span className="hidden lg:inline">Seniority:</span>
                 <span className="font-mono font-medium text-blue-600">#{seniorityNumber}</span>
-                <span className="text-gray-400">|</span>
-                <span className="font-medium">{base} {aircraft} FO</span>
+                <span className="text-gray-400 hidden lg:inline">|</span>
+                <span className="font-medium hidden lg:inline">{base} {aircraft} FO</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm">
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <Button variant="ghost" size="sm" className="hidden sm:flex">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="hidden sm:flex">
                   <Trash2 className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm">
@@ -280,21 +280,22 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
 
-          {/* Left Column */}
-          <div className="lg:col-span-1 space-y-6">
+            {/* Left Column - Stacked on mobile, sidebar on desktop */}
+            <div className="xl:col-span-1 space-y-4 sm:space-y-6">
 
             {/* Upload Bid Package Card */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-900">Upload Bid Package</CardTitle>
+              <CardHeader className="pb-3 sm:pb-6">
+                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Upload Bid Package</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                  <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="mt-4">
+              <CardContent className="space-y-3 sm:space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center hover:border-gray-400 transition-colors">
+                  <CloudUpload className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-400" />
+                  <div className="mt-2 sm:mt-4">
                     <FileUpload 
                       onUpload={(file) => {
                         console.log("File uploaded:", file);
@@ -361,10 +362,10 @@ export default function Dashboard() {
 
             {/* Your Info Card */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-900">Your Info</CardTitle>
+              <CardHeader className="pb-3 sm:pb-6">
+                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Your Info</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
                   <Input
@@ -406,8 +407,8 @@ export default function Dashboard() {
 
             {/* Quick Stats Card */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
+              <CardHeader className="pb-3 sm:pb-6">
+                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
               </CardHeader>
               <CardContent>
                 <StatsPanel pairings={sortedPairings || []} />
@@ -416,33 +417,33 @@ export default function Dashboard() {
           </div>
 
           {/* Right Column - Main Content */}
-          <div className="lg:col-span-3">
+          <div className="xl:col-span-3">
             <Card>
               <CardContent className="p-0">
                 <Tabs defaultValue="search" className="w-full">
                   <div className="border-b">
-                    <TabsList className="h-12 w-full justify-start rounded-none bg-transparent p-0">
+                    <TabsList className="h-10 sm:h-12 w-full justify-start rounded-none bg-transparent p-0 overflow-x-auto">
                       <TabsTrigger 
                         value="search" 
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
                       >
                         Search & Filter
                       </TabsTrigger>
                       <TabsTrigger 
                         value="analysis"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
                       >
                         Analysis
                       </TabsTrigger>
                       <TabsTrigger 
                         value="favorites"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
                       >
                         Favorites
                       </TabsTrigger>
                       <TabsTrigger 
                         value="assistant"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
                       >
                         AI Assistant
                       </TabsTrigger>
@@ -450,7 +451,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Search & Filter Tab */}
-                  <TabsContent value="search" className="p-6 space-y-6">
+                  <TabsContent value="search" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                     {latestBidPackage ? (
                       <>
                         {/* Search Bar */}
@@ -480,7 +481,7 @@ export default function Dashboard() {
                         )}
 
                         {/* Filter Controls */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                           <Select onValueChange={(value) => {
                             if (value === 'clear') {
                               removeFilter('creditMin');
@@ -657,18 +658,18 @@ export default function Dashboard() {
                   </TabsContent>
 
                   {/* Analysis Tab */}
-                  <TabsContent value="analysis" className="p-6">
-                    <div className="text-center py-12">
-                      <BarChart2 className="mx-auto h-24 w-24 text-gray-300" />
-                      <h3 className="mt-4 text-lg font-medium text-gray-900">No Data for Analysis</h3>
-                      <p className="mt-2 text-sm text-gray-500">
+                  <TabsContent value="analysis" className="p-3 sm:p-6">
+                    <div className="text-center py-8 sm:py-12">
+                      <BarChart2 className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                      <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Data for Analysis</h3>
+                      <p className="mt-2 text-sm text-gray-500 px-4">
                         Advanced analytics and visualizations will appear here once you have pairing data.
                       </p>
                     </div>
                   </TabsContent>
 
                   {/* Favorites Tab */}
-                  <TabsContent value="favorites" className="p-6 space-y-6">
+                  <TabsContent value="favorites" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold text-gray-900">Your Favorite Pairings</h3>
@@ -688,10 +689,10 @@ export default function Dashboard() {
                           onDeleteFavorite={handleDeleteFavorite}
                         />
                       ) : (
-                        <div className="text-center py-12">
-                          <Star className="mx-auto h-24 w-24 text-gray-300" />
-                          <h3 className="mt-4 text-lg font-medium text-gray-900">No Favorites Yet</h3>
-                          <p className="mt-2 text-sm text-gray-500">
+                        <div className="text-center py-8 sm:py-12">
+                          <Star className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                          <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Favorites Yet</h3>
+                          <p className="mt-2 text-sm text-gray-500 px-4">
                             Click the "Add to Favorites" button on any pairing to save it here.
                           </p>
                         </div>
@@ -700,14 +701,14 @@ export default function Dashboard() {
                   </TabsContent>
 
                   {/* AI Assistant Tab */}
-                  <TabsContent value="assistant" className="p-6">
+                  <TabsContent value="assistant" className="p-3 sm:p-6">
                     {latestBidPackage ? (
                       <PairingChat bidPackageId={latestBidPackage.id} />
                     ) : (
-                      <div className="text-center py-12">
-                        <User className="mx-auto h-24 w-24 text-gray-300" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
-                        <p className="mt-2 text-sm text-gray-500">
+                      <div className="text-center py-8 sm:py-12">
+                        <User className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                        <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
+                        <p className="mt-2 text-sm text-gray-500 px-4">
                           Upload a bid package to start chatting with your AI assistant about pairing analysis.
                         </p>
                       </div>
