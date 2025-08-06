@@ -26,6 +26,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createOrUpdateUser(userData: { seniorityNumber: number; base: string; aircraft: string }): Promise<User>;
   getUserBySeniority(seniorityNumber: number): Promise<User | undefined>;
 
   // Bid Package operations
@@ -89,6 +90,32 @@ export class DatabaseStorage implements IStorage {
       .values(insertUser)
       .returning();
     return user;
+  }
+
+  async createOrUpdateUser(userData: { seniorityNumber: number; base: string; aircraft: string }): Promise<User> {
+    // Check if user already exists
+    const existingUser = await this.getUserBySeniority(userData.seniorityNumber);
+    
+    if (existingUser) {
+      // Update existing user
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          base: userData.base,
+          aircraft: userData.aircraft,
+          updatedAt: new Date()
+        })
+        .where(eq(users.seniorityNumber, userData.seniorityNumber))
+        .returning();
+      return updatedUser;
+    } else {
+      // Create new user
+      return await this.createUser({
+        seniorityNumber: userData.seniorityNumber,
+        base: userData.base,
+        aircraft: userData.aircraft
+      });
+    }
   }
 
   async getUserBySeniority(seniorityNumber: number): Promise<User | undefined> {
