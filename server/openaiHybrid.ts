@@ -121,6 +121,12 @@ export class HybridOpenAIService {
   private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
     const message = query.message.toLowerCase();
 
+    // Handle check-in time queries FIRST before other patterns
+    if (message.includes('check-in') || message.includes('checkin')) {
+      console.log('Check-in query detected, calling handleGeneralQuestion');
+      return await this.handleGeneralQuestion(query, message);
+    }
+
     // Extract pairing duration from the message FIRST (1-day, 2-day, etc.)
     const durationMatch = message.match(/(\d+)[-\s]?day/);
     const requestedDays = durationMatch ? parseInt(durationMatch[1]) : null;
@@ -484,16 +490,19 @@ export class HybridOpenAIService {
   }
 
   private analyzeCheckInTimes(pairings: any[], message: string) {
-    console.log('Analyzing check-in times');
+    console.log('Analyzing check-in times for', pairings.length, 'pairings');
 
     // Filter pairings with check-in times
-    const pairingsWithCheckIn = pairings.filter(p => p.checkInTime);
+    const pairingsWithCheckIn = pairings.filter(p => p.checkInTime && p.checkInTime.trim() !== '');
+    console.log(`Found ${pairingsWithCheckIn.length} pairings with check-in times`);
 
     if (pairingsWithCheckIn.length === 0) {
       return {
         type: 'check_in_analysis',
-        message: 'No check-in time data available in the current bid package.',
-        count: 0
+        response: 'No check-in time data available in the current bid package.',
+        count: 0,
+        totalWithCheckIn: 0,
+        totalSearched: pairings.length
       };
     }
 
@@ -507,32 +516,49 @@ export class HybridOpenAIService {
       targetHour = parseInt(timeMatch[1]);
       targetMinute = parseInt(timeMatch[2]);
       isAfter = message.toLowerCase().includes('after');
+      console.log(`Looking for pairings ${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
     }
 
     let filteredPairings = pairingsWithCheckIn;
 
     if (targetHour !== null && targetMinute !== null) {
       filteredPairings = pairingsWithCheckIn.filter(p => {
-        const checkIn = p.checkInTime;
-        const [hours, minutes] = checkIn.split(/[.:]/).map(s => parseInt(s));
+        const checkIn = p.checkInTime.toString();
+        // Handle both "10.35" and "10:35" formats
+        const parts = checkIn.split(/[.:]/).map(s => parseInt(s.trim()));
+        if (parts.length < 2) return false;
+        
+        const hours = parts[0];
+        const minutes = parts[1];
         const checkInMinutes = hours * 60 + minutes;
         const targetMinutes = targetHour * 60 + targetMinute;
 
+        console.log(`Pairing ${p.pairingNumber}: ${checkIn} (${checkInMinutes} min) vs target (${targetMinutes} min)`);
         return isAfter ? checkInMinutes > targetMinutes : checkInMinutes < targetMinutes;
       });
+      
+      console.log(`Filtered to ${filteredPairings.length} pairings matching time criteria`);
     }
+
+    const responseText = targetHour !== null && targetMinute !== null 
+      ? `Found ${filteredPairings.length} pairings that check in ${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')} out of ${pairingsWithCheckIn.length} pairings with check-in times.`
+      : `Found ${pairingsWithCheckIn.length} pairings with check-in time data.`;
 
     return {
       type: 'check_in_analysis',
+      response: responseText,
       count: filteredPairings.length,
       totalWithCheckIn: pairingsWithCheckIn.length,
+      totalSearched: pairings.length,
       criteria: timeMatch ? `${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}` : 'all',
-      pairings: filteredPairings.slice(0, 10).map(p => ({
+      pairings: filteredPairings.slice(0, 20).map(p => ({
         pairingNumber: p.pairingNumber,
         checkInTime: p.checkInTime,
-        route: p.route,
-        creditHours: p.creditHours,
-        pairingDays: p.pairingDays
+        route: p.route?.substring(0, 80) || '',
+        creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
+        blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
+        pairingDays: p.pairingDays,
+        holdProbability: p.holdProbability
       }))
     };
   }
@@ -833,6 +859,7 @@ When provided with pairing data:
 - Always show the actual pairing numbers found
 - Include key metrics like credit hours, block hours, efficiency ratios, and hold probabilities
 - For layover analysis, show the city, hotel, duration, and associated pairing information
+- For check-in time queries, show the exact count and list matching pairings with their check-in times
 - If no pairings match the criteria, clearly state this
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data

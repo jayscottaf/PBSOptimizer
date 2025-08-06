@@ -133,21 +133,27 @@ export default function Dashboard() {
         let valA: any, valB: any;
 
         switch (sortColumn) {
+          case 'creditHours':
           case 'credit':
-            valA = a.credit;
-            valB = b.credit;
+            valA = parseFloat(a.creditHours?.toString() || '0');
+            valB = parseFloat(b.creditHours?.toString() || '0');
             break;
+          case 'blockHours':
           case 'block':
-            valA = a.block;
-            valB = b.block;
+            valA = parseFloat(a.blockHours?.toString() || '0');
+            valB = parseFloat(b.blockHours?.toString() || '0');
             break;
           case 'tafb':
-            valA = a.tafb;
-            valB = b.tafb;
+            valA = parseFloat(a.tafb?.toString() || '0');
+            valB = parseFloat(b.tafb?.toString() || '0');
+            break;
+          case 'pairingDays':
+            valA = parseInt(a.pairingDays?.toString() || '1', 10);
+            valB = parseInt(b.pairingDays?.toString() || '1', 10);
             break;
           case 'holdProbability':
-            valA = a.holdProbability;
-            valB = b.holdProbability;
+            valA = parseInt(a.holdProbability?.toString() || '0', 10);
+            valB = parseInt(b.holdProbability?.toString() || '0', 10);
             break;
           case 'pairingNumber':
             valA = parseInt(a.pairingNumber, 10);
