@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,10 @@ import {
   Info,
   Star,
   Calendar,
-  GripVertical
+  ChevronLeft,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -30,7 +34,7 @@ import { CalendarView } from "@/components/calendar-view";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface SearchFilters {
   search?: string;
@@ -78,22 +82,23 @@ export default function Dashboard() {
     localStorage.setItem('base', base);
     localStorage.setItem('aircraft', aircraft);
   }, [seniorityNumber, base, aircraft]);
+
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   
-  // Card order state - only stats card now
-  const [cardOrder, setCardOrder] = useState(() => {
-    const saved = localStorage.getItem('cardOrder');
-    return saved ? JSON.parse(saved) : ['stats'];
+  // Sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
   });
 
-  // Save card order to localStorage
+  // Save sidebar state to localStorage
   React.useEffect(() => {
-    localStorage.setItem('cardOrder', JSON.stringify(cardOrder));
-  }, [cardOrder]);
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
@@ -265,16 +270,29 @@ export default function Dashboard() {
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
+  // Calculate quick stats for collapsed view
+  const quickStats = React.useMemo(() => {
+    if (!sortedPairings || sortedPairings.length === 0) {
+      return { totalPairings: 0, likelyToHold: 0, highCredit: 0 };
+    }
 
-    const items = Array.from(cardOrder);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    const parseHours = (hours: any): number => {
+      if (typeof hours === 'number') return hours;
+      if (typeof hours === 'string') {
+        return parseFloat(hours) || 0;
+      }
+      return 0;
+    };
 
-    setCardOrder(items);
-  };
+    const highCreditCount = sortedPairings.filter(p => parseHours(p.creditHours) >= 18).length;
+    const likelyToHoldCount = sortedPairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
 
+    return {
+      totalPairings: sortedPairings.length,
+      likelyToHold: likelyToHoldCount,
+      highCredit: highCreditCount
+    };
+  }, [sortedPairings]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -340,376 +358,399 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="w-full">
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+          <div className="flex gap-4 sm:gap-6 lg:gap-8">
 
-            {/* Left Column - Stacked on mobile, sidebar on desktop */}
-            <div className="xl:col-span-1">
-              <DragDropContext onDragEnd={handleDragEnd}>
-                <Droppable droppableId="sidebar-cards">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-4 sm:space-y-6"
+            {/* Collapsible Sidebar */}
+            <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
+              <Card className="h-fit">
+                <CardHeader className="pb-3 sm:pb-6">
+                  <div className="flex items-center justify-between">
+                    {!sidebarCollapsed && (
+                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                      className="ml-auto"
                     >
-                      {cardOrder.map((cardId, index) => (
-                        <Draggable key={cardId} draggableId={cardId} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={`${snapshot.isDragging ? 'z-50' : ''}`}
-                            >
-                              {cardId === 'stats' && (
-                                <Card className={`${snapshot.isDragging ? 'shadow-lg' : ''}`}>
-                                  <CardHeader className="pb-3 sm:pb-6">
-                                    <div className="flex items-center justify-between">
-                                      <CardTitle className="text-base sm:text-lg font-semibold text-gray-900">Quick Stats</CardTitle>
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                                        <GripVertical className="h-4 w-4 text-gray-400" />
-                                      </div>
-                                    </div>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <StatsPanel pairings={sortedPairings || []} />
-                                  </CardContent>
-                                </Card>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                      {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {sidebarCollapsed ? (
+                    // Collapsed view - show essential numbers only
+                    <div className="space-y-4">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600">{quickStats.totalPairings}</div>
+                        <div className="text-xs text-gray-600">Total</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-green-600">{quickStats.likelyToHold}</div>
+                        <div className="text-xs text-gray-600">Hold</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-purple-600">{quickStats.highCredit}</div>
+                        <div className="text-xs text-gray-600">HC</div>
+                      </div>
+                    </div>
+                  ) : (
+                    // Expanded view - show full stats panel
+                    <div className="space-y-6">
+                      <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+                      
+                      {/* Additional Tools Section */}
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                          <Settings className="h-4 w-4 mr-2" />
+                          Quick Actions
+                        </h4>
+                        <div className="space-y-2">
+                          <Button variant="outline" size="sm" className="w-full justify-start">
+                            <BarChart2 className="h-4 w-4 mr-2" />
+                            View Analytics
+                          </Button>
+                          <Button variant="outline" size="sm" className="w-full justify-start">
+                            <Star className="h-4 w-4 mr-2" />
+                            Manage Favorites
+                          </Button>
+                          <Button variant="outline" size="sm" className="w-full justify-start">
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Calendar View
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </Droppable>
-              </DragDropContext>
+                </CardContent>
+              </Card>
             </div>
 
-          {/* Right Column - Main Content */}
-          <div className="xl:col-span-3">
-            <Card>
-              <CardContent className="p-0">
-                <Tabs defaultValue="search" className="w-full">
-                  <div className="border-b">
-                    <TabsList className="h-10 sm:h-12 w-full justify-start rounded-none bg-transparent p-0 overflow-x-auto">
-                      <TabsTrigger 
-                        value="search" 
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                      >
-                        Search & Filter
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="analysis"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                      >
-                        Analysis
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="favorites"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                      >
-                        Favorites
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="calendar"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                      >
-                        Calendar
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="assistant"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                      >
-                        AI Assistant
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
+            {/* Main Content */}
+            <div className="flex-1 min-w-0">
+              <Card>
+                <CardContent className="p-0">
+                  <Tabs defaultValue="search" className="w-full">
+                    <div className="border-b">
+                      <TabsList className="h-10 sm:h-12 w-full justify-start rounded-none bg-transparent p-0 overflow-x-auto">
+                        <TabsTrigger 
+                          value="search" 
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                        >
+                          Search & Filter
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="analysis"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                        >
+                          Analysis
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="favorites"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                        >
+                          Favorites
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="calendar"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                        >
+                          Calendar
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="assistant"
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
+                        >
+                          AI Assistant
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
 
-                  {/* Search & Filter Tab */}
-                  <TabsContent value="search" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-                    {latestBidPackage ? (
-                      <>
-                        {/* Search Bar */}
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                          <Input
-                            placeholder="Search pairings..."
-                            className="pl-10"
-                            value={filters.search || ''}
-                            onChange={(e) => addFilter('search', 'Search', e.target.value)}
-                          />
+                    {/* Search & Filter Tab */}
+                    <TabsContent value="search" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                      {latestBidPackage ? (
+                        <>
+                          {/* Search Bar */}
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                            <Input
+                              placeholder="Search pairings..."
+                              className="pl-10"
+                              value={filters.search || ''}
+                              onChange={(e) => addFilter('search', 'Search', e.target.value)}
+                            />
+                          </div>
+
+                          {/* Active Filters */}
+                          {activeFilters.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {activeFilters.map((filter) => (
+                                <Badge key={filter.key} variant="secondary" className="flex items-center gap-1">
+                                  {filter.label}: {filter.value}
+                                  <X 
+                                    className="h-3 w-3 cursor-pointer" 
+                                    onClick={() => removeFilter(filter.key)}
+                                  />
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Filter Controls */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                            <Select onValueChange={(value) => {
+                              if (value === 'clear') {
+                                removeFilter('creditMin');
+                              } else {
+                                addFilter('creditMin', 'Credit Min', parseFloat(value));
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Credit Min" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="clear">Any</SelectItem>
+                                <SelectItem value="4.0">4:00</SelectItem>
+                                <SelectItem value="4.5">4:30</SelectItem>
+                                <SelectItem value="5.0">5:00</SelectItem>
+                                <SelectItem value="5.5">5:30</SelectItem>
+                                <SelectItem value="6.0">6:00</SelectItem>
+                                <SelectItem value="6.5">6:30</SelectItem>
+                                <SelectItem value="7.0">7:00</SelectItem>
+                                <SelectItem value="7.5">7:30</SelectItem>
+                                <SelectItem value="8.0">8:00</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select onValueChange={(value) => {
+                              if (value === 'clear') {
+                                removeFilter('creditMax');
+                              } else {
+                                addFilter('creditMax', 'Credit Max', parseFloat(value));
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Credit Max" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="clear">Any</SelectItem>
+                                <SelectItem value="5.0">5:00</SelectItem>
+                                <SelectItem value="5.5">5:30</SelectItem>
+                                <SelectItem value="6.0">6:00</SelectItem>
+                                <SelectItem value="6.5">6:30</SelectItem>
+                                <SelectItem value="7.0">7:00</SelectItem>
+                                <SelectItem value="7.5">7:30</SelectItem>
+                                <SelectItem value="8.0">8:00</SelectItem>
+                                <SelectItem value="9.0">9:00</SelectItem>
+                                <SelectItem value="10.0">10:00</SelectItem>
+                                <SelectItem value="12.0">12:00</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select onValueChange={(value) => {
+                              if (value === 'clear') {
+                                removeFilter('blockMin');
+                              } else {
+                                addFilter('blockMin', 'Block Min', parseFloat(value));
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Block Min" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="clear">Any</SelectItem>
+                                <SelectItem value="3.0">3:00</SelectItem>
+                                <SelectItem value="3.5">3:30</SelectItem>
+                                <SelectItem value="4.0">4:00</SelectItem>
+                                <SelectItem value="4.5">4:30</SelectItem>
+                                <SelectItem value="5.0">5:00</SelectItem>
+                                <SelectItem value="5.5">5:30</SelectItem>
+                                <SelectItem value="6.0">6:00</SelectItem>
+                                <SelectItem value="6.5">6:30</SelectItem>
+                                <SelectItem value="7.0">7:00</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select onValueChange={(value) => {
+                              if (value === 'clear') {
+                                removeFilter('blockMax');
+                              } else {
+                                addFilter('blockMax', 'Block Max', parseFloat(value));
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Block Max" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="clear">Any</SelectItem>
+                                <SelectItem value="4.0">4:00</SelectItem>
+                                <SelectItem value="4.5">4:30</SelectItem>
+                                <SelectItem value="5.0">5:00</SelectItem>
+                                <SelectItem value="5.5">5:30</SelectItem>
+                                <SelectItem value="6.0">6:00</SelectItem>
+                                <SelectItem value="6.5">6:30</SelectItem>
+                                <SelectItem value="7.0">7:00</SelectItem>
+                                <SelectItem value="8.0">8:00</SelectItem>
+                                <SelectItem value="9.0">9:00</SelectItem>
+                                <SelectItem value="10.0">10:00</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select onValueChange={(value) => {
+                              if (value === "short") {
+                                addFilter('tafbMax', 'TAFB < 50hrs', 50);
+                                removeFilter('tafbMin');
+                              } else if (value === "medium") {
+                                addFilter('tafbMin', 'TAFB 50-80hrs', 50);
+                                addFilter('tafbMax', 'TAFB 50-80hrs', 80);
+                              } else if (value === "long") {
+                                addFilter('tafbMin', 'TAFB > 80hrs', 80);
+                                removeFilter('tafbMax');
+                              } else {
+                                // Clear TAFB filters
+                                removeFilter('tafbMin');
+                                removeFilter('tafbMax');
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="TAFB" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="any">Any TAFB</SelectItem>
+                                <SelectItem value="short">Short (&lt; 50hrs)</SelectItem>
+                                <SelectItem value="medium">Medium (50-80hrs)</SelectItem>
+                                <SelectItem value="long">Long (&gt; 80hrs)</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select onValueChange={(value) => {
+                              if (value === 'clear') {
+                                removeFilter('holdProbabilityMin');
+                              } else {
+                                addFilter('holdProbabilityMin', 'Hold Prob Min', parseFloat(value));
+                              }
+                            }}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Hold Prob Min" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="clear">Any</SelectItem>
+                                <SelectItem value="0.5">50%</SelectItem>
+                                <SelectItem value="0.6">60%</SelectItem>
+                                <SelectItem value="0.7">70%</SelectItem>
+                                <SelectItem value="0.8">80%</SelectItem>
+                                <SelectItem value="0.9">90%</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Results */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
+                              <span className="text-sm text-gray-500">
+                                {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
+                              </span>
+                            </div>
+                            <PairingTable 
+                              pairings={sortedPairings || []} 
+                              onSort={handleSort}
+                              sortColumn={sortColumn || ''}
+                              sortDirection={sortDirection}
+                              onPairingClick={handlePairingClick}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        // Empty State for No Bid Package
+                        <div className="text-center py-12">
+                          <Plane className="mx-auto h-24 w-24 text-gray-300" />
+                          <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package Ready</h3>
+                          <p className="mt-2 text-sm text-gray-500">
+                            Upload a bid package to start analyzing pairings and planning your bids.
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    {/* Analysis Tab */}
+                    <TabsContent value="analysis" className="p-3 sm:p-6">
+                      <div className="text-center py-8 sm:py-12">
+                        <BarChart2 className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                        <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Data for Analysis</h3>
+                        <p className="mt-2 text-sm text-gray-500 px-4">
+                          Advanced analytics and visualizations will appear here once you have pairing data.
+                        </p>
+                      </div>
+                    </TabsContent>
+
+                    {/* Favorites Tab */}
+                    <TabsContent value="favorites" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900">Your Favorite Pairings</h3>
+                          <span className="text-sm text-gray-500">
+                            {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
+                          </span>
                         </div>
 
-                        {/* Active Filters */}
-                        {activeFilters.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {activeFilters.map((filter) => (
-                              <Badge key={filter.key} variant="secondary" className="flex items-center gap-1">
-                                {filter.label}: {filter.value}
-                                <X 
-                                  className="h-3 w-3 cursor-pointer" 
-                                  onClick={() => removeFilter(filter.key)}
-                                />
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Filter Controls */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                          <Select onValueChange={(value) => {
-                            if (value === 'clear') {
-                              removeFilter('creditMin');
-                            } else {
-                              addFilter('creditMin', 'Credit Min', parseFloat(value));
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Credit Min" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="clear">Any</SelectItem>
-                              <SelectItem value="4.0">4:00</SelectItem>
-                              <SelectItem value="4.5">4:30</SelectItem>
-                              <SelectItem value="5.0">5:00</SelectItem>
-                              <SelectItem value="5.5">5:30</SelectItem>
-                              <SelectItem value="6.0">6:00</SelectItem>
-                              <SelectItem value="6.5">6:30</SelectItem>
-                              <SelectItem value="7.0">7:00</SelectItem>
-                              <SelectItem value="7.5">7:30</SelectItem>
-                              <SelectItem value="8.0">8:00</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Select onValueChange={(value) => {
-                            if (value === 'clear') {
-                              removeFilter('creditMax');
-                            } else {
-                              addFilter('creditMax', 'Credit Max', parseFloat(value));
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Credit Max" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="clear">Any</SelectItem>
-                              <SelectItem value="5.0">5:00</SelectItem>
-                              <SelectItem value="5.5">5:30</SelectItem>
-                              <SelectItem value="6.0">6:00</SelectItem>
-                              <SelectItem value="6.5">6:30</SelectItem>
-                              <SelectItem value="7.0">7:00</SelectItem>
-                              <SelectItem value="7.5">7:30</SelectItem>
-                              <SelectItem value="8.0">8:00</SelectItem>
-                              <SelectItem value="9.0">9:00</SelectItem>
-                              <SelectItem value="10.0">10:00</SelectItem>
-                              <SelectItem value="12.0">12:00</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Select onValueChange={(value) => {
-                            if (value === 'clear') {
-                              removeFilter('blockMin');
-                            } else {
-                              addFilter('blockMin', 'Block Min', parseFloat(value));
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Block Min" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="clear">Any</SelectItem>
-                              <SelectItem value="3.0">3:00</SelectItem>
-                              <SelectItem value="3.5">3:30</SelectItem>
-                              <SelectItem value="4.0">4:00</SelectItem>
-                              <SelectItem value="4.5">4:30</SelectItem>
-                              <SelectItem value="5.0">5:00</SelectItem>
-                              <SelectItem value="5.5">5:30</SelectItem>
-                              <SelectItem value="6.0">6:00</SelectItem>
-                              <SelectItem value="6.5">6:30</SelectItem>
-                              <SelectItem value="7.0">7:00</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Select onValueChange={(value) => {
-                            if (value === 'clear') {
-                              removeFilter('blockMax');
-                            } else {
-                              addFilter('blockMax', 'Block Max', parseFloat(value));
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Block Max" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="clear">Any</SelectItem>
-                              <SelectItem value="4.0">4:00</SelectItem>
-                              <SelectItem value="4.5">4:30</SelectItem>
-                              <SelectItem value="5.0">5:00</SelectItem>
-                              <SelectItem value="5.5">5:30</SelectItem>
-                              <SelectItem value="6.0">6:00</SelectItem>
-                              <SelectItem value="6.5">6:30</SelectItem>
-                              <SelectItem value="7.0">7:00</SelectItem>
-                              <SelectItem value="8.0">8:00</SelectItem>
-                              <SelectItem value="9.0">9:00</SelectItem>
-                              <SelectItem value="10.0">10:00</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Select onValueChange={(value) => {
-                            if (value === "short") {
-                              addFilter('tafbMax', 'TAFB < 50hrs', 50);
-                              removeFilter('tafbMin');
-                            } else if (value === "medium") {
-                              addFilter('tafbMin', 'TAFB 50-80hrs', 50);
-                              addFilter('tafbMax', 'TAFB 50-80hrs', 80);
-                            } else if (value === "long") {
-                              addFilter('tafbMin', 'TAFB > 80hrs', 80);
-                              removeFilter('tafbMax');
-                            } else {
-                              // Clear TAFB filters
-                              removeFilter('tafbMin');
-                              removeFilter('tafbMax');
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="TAFB" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="any">Any TAFB</SelectItem>
-                              <SelectItem value="short">Short (&lt; 50hrs)</SelectItem>
-                              <SelectItem value="medium">Medium (50-80hrs)</SelectItem>
-                              <SelectItem value="long">Long (&gt; 80hrs)</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Select onValueChange={(value) => {
-                            if (value === 'clear') {
-                              removeFilter('holdProbabilityMin');
-                            } else {
-                              addFilter('holdProbabilityMin', 'Hold Prob Min', parseFloat(value));
-                            }
-                          }}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Hold Prob Min" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="clear">Any</SelectItem>
-                              <SelectItem value="0.5">50%</SelectItem>
-                              <SelectItem value="0.6">60%</SelectItem>
-                              <SelectItem value="0.7">70%</SelectItem>
-                              <SelectItem value="0.8">80%</SelectItem>
-                              <SelectItem value="0.9">90%</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Results */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
-                            <span className="text-sm text-gray-500">
-                              {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
-                            </span>
-                          </div>
+                        {favorites.length > 0 ? (
                           <PairingTable 
-                            pairings={sortedPairings || []} 
+                            pairings={favorites} 
                             onSort={handleSort}
                             sortColumn={sortColumn || ''}
                             sortDirection={sortDirection}
                             onPairingClick={handlePairingClick}
+                            showDeleteButton={true}
+                            onDeleteFavorite={handleDeleteFavorite}
                           />
-                        </div>
-                      </>
-                    ) : (
-                      // Empty State for No Bid Package
-                      <div className="text-center py-12">
-                        <Plane className="mx-auto h-24 w-24 text-gray-300" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package Ready</h3>
-                        <p className="mt-2 text-sm text-gray-500">
-                          Upload a bid package to start analyzing pairings and planning your bids.
-                        </p>
+                        ) : (
+                          <div className="text-center py-8 sm:py-12">
+                            <Star className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                            <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Favorites Yet</h3>
+                            <p className="mt-2 text-sm text-gray-500 px-4">
+                              Click the "Add to Favorites" button on any pairing to save it here.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </TabsContent>
+                    </TabsContent>
 
-                  {/* Analysis Tab */}
-                  <TabsContent value="analysis" className="p-3 sm:p-6">
-                    <div className="text-center py-8 sm:py-12">
-                      <BarChart2 className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                      <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Data for Analysis</h3>
-                      <p className="mt-2 text-sm text-gray-500 px-4">
-                        Advanced analytics and visualizations will appear here once you have pairing data.
-                      </p>
-                    </div>
-                  </TabsContent>
-
-                  {/* Favorites Tab */}
-                  <TabsContent value="favorites" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">Your Favorite Pairings</h3>
-                        <span className="text-sm text-gray-500">
-                          {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-
-                      {favorites.length > 0 ? (
-                        <PairingTable 
-                          pairings={favorites} 
-                          onSort={handleSort}
-                          sortColumn={sortColumn || ''}
-                          sortDirection={sortDirection}
-                          onPairingClick={handlePairingClick}
-                          showDeleteButton={true}
-                          onDeleteFavorite={handleDeleteFavorite}
-                        />
+                    {/* Calendar Tab */}
+                    <TabsContent value="calendar" className="p-3 sm:p-6">
+                      {currentUser ? (
+                        <CalendarView userId={currentUser.id} />
                       ) : (
-                        <div className="text-center py-8 sm:py-12">
-                          <Star className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                          <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Favorites Yet</h3>
-                          <p className="mt-2 text-sm text-gray-500 px-4">
-                            Click the "Add to Favorites" button on any pairing to save it here.
+                        <div className="text-center py-8">
+                          <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+                          <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
+                          <p className="mt-2 text-sm text-gray-500">
+                            Setting up your calendar view...
                           </p>
                         </div>
                       )}
-                    </div>
-                  </TabsContent>
+                    </TabsContent>
 
-                  {/* Calendar Tab */}
-                  <TabsContent value="calendar" className="p-3 sm:p-6">
-                    {currentUser ? (
-                      <CalendarView userId={currentUser.id} />
-                    ) : (
-                      <div className="text-center py-8">
-                        <Calendar className="mx-auto h-16 w-16 text-gray-300" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
-                        <p className="mt-2 text-sm text-gray-500">
-                          Setting up your calendar view...
-                        </p>
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  {/* AI Assistant Tab */}
-                  <TabsContent value="assistant" className="p-3 sm:p-6">
-                    {latestBidPackage ? (
-                      <PairingChat bidPackageId={latestBidPackage.id} />
-                    ) : (
-                      <div className="text-center py-8 sm:py-12">
-                        <User className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                        <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
-                        <p className="mt-2 text-sm text-gray-500 px-4">
-                          Upload a bid package to start chatting with your AI assistant about pairing analysis.
-                        </p>
-                      </div>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+                    {/* AI Assistant Tab */}
+                    <TabsContent value="assistant" className="p-3 sm:p-6">
+                      {latestBidPackage ? (
+                        <PairingChat bidPackageId={latestBidPackage.id} />
+                      ) : (
+                        <div className="text-center py-8 sm:py-12">
+                          <User className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
+                          <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
+                          <p className="mt-2 text-sm text-gray-500 px-4">
+                            Upload a bid package to start chatting with your AI assistant about pairing analysis.
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
         </div>
       </div>
 
