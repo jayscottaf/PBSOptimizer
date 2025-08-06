@@ -154,17 +154,6 @@ export const insertUserCalendarEventSchema = createInsertSchema(userCalendarEven
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type Pairing = typeof pairings.$inferSelect;
-export type UserFavorite = typeof userFavorites.$inferSelect;
-export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
-export type UserCalendarEvent = typeof userCalendarEvents.$inferSelect;
-export type InsertUserCalendarEvent = z.infer<typeof insertUserCalendarEventSchema>;
-export type BidPackage = typeof bidPackages.$inferSelect;
-export type ChatMessage = typeof chatHistory.$inferSelect;
-
-// Types
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
 export type BidPackage = typeof bidPackages.$inferSelect;
 export type InsertBidPackage = z.infer<typeof insertBidPackageSchema>;
 export type Pairing = typeof pairings.$inferSelect;
@@ -173,6 +162,8 @@ export type BidHistory = typeof bidHistory.$inferSelect;
 export type InsertBidHistory = z.infer<typeof insertBidHistorySchema>;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
-
+export type UserCalendarEvent = typeof userCalendarEvents.$inferSelect;
+export type InsertUserCalendarEvent = z.infer<typeof insertUserCalendarEventSchema>;
+export type ChatMessage = typeof chatHistory.$inferSelect;
 export type ChatHistory = typeof chatHistory.$inferSelect;
 export type InsertChatHistory = typeof chatHistory.$inferInsert;
