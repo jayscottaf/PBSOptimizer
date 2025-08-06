@@ -364,17 +364,15 @@ export default function Dashboard() {
             <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
               <Card className="h-fit">
                 <CardContent className="p-4 sm:p-6 relative">
-                  {/* Collapse button positioned inside card border */}
-                  <div className="flex justify-end mb-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                      className="h-6 w-6 p-1"
-                    >
-                      {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                    </Button>
-                  </div>
+                  {/* Collapse button positioned at top-right corner */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="absolute top-2 right-2 h-6 w-6 p-1 z-10"
+                  >
+                    {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                  </Button>
 
                   {sidebarCollapsed ? (
                     // Collapsed view - show essential numbers only
