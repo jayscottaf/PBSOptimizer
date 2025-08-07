@@ -377,7 +377,7 @@ export function PairingTable({
                             <Calendar className="h-4 w-4" />
                           </Button>
                         )}
-                        {showDeleteButton && onDeleteFavorite && (
+                        {showDeleteButton && onDeleteFavorite && !showAddToCalendar && (
                           <Button
                             variant="ghost"
                             size="sm"
