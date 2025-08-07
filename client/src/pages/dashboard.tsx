@@ -22,8 +22,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  Bot,
-  Star
+  Bot
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
