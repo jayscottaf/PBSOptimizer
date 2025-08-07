@@ -541,9 +541,6 @@ export default function Dashboard() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    size="sm"</old_str>
-                  <Button 
-                    variant="outline" 
                     size="sm"
                     onClick={() => setShowAIAssistant(true)}
                     className="flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md"
@@ -743,9 +740,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
-            </TabsContent></old_str>
-
-
+            </TabsContent>
           </Tabs>
         </div>
       </div>
