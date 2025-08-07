@@ -15,8 +15,10 @@ interface FilterOption {
 }
 
 interface SmartFilterSystemProps {
-  onFilterApply: (filterKey: string, filterValue: any, displayLabel: string) => void;
-  onFilterClear: (filterKey: string) => void;
+  pairings: any[];
+  onFiltersChange: (filters: SearchFilters) => void;
+  activeFilters: Array<{key: string, label: string, value: any}>;
+  onClearFilters: () => void;
 }
 
 const filterOptions: FilterOption[] = [
@@ -95,7 +97,26 @@ const filterOptions: FilterOption[] = [
   }
 ];
 
-export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterSystemProps) {
+export function SmartFilterSystem({ 
+  pairings, 
+  onFiltersChange, 
+  activeFilters, 
+  onClearFilters 
+}: SmartFilterSystemProps) {
+
+  // Helper functions to handle filter changes
+  const onFilterApply = (filterKey: string, filterValue: any, displayLabel: string) => {
+    const newFilters: any = {};
+    newFilters[filterKey] = filterValue;
+    onFiltersChange(newFilters);
+  };
+
+  const onFilterClear = (filterKey: string) => {
+    const newFilters: any = {};
+    newFilters[filterKey] = undefined;
+    onFiltersChange(newFilters);
+  };
+
   const [selectedFunction, setSelectedFunction] = useState<string>("");
   const [selectedData, setSelectedData] = useState<string>("");
 
