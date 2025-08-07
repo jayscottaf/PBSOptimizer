@@ -324,12 +324,32 @@ export default function Dashboard() {
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    // Process the new filters to handle range objects
+    const processedFilters: SearchFilters = {};
+    
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (key === 'creditRange' && typeof value === 'object' && value !== null) {
+        // Flatten credit range object
+        const rangeObj = value as any;
+        if (rangeObj.creditMin !== undefined) processedFilters.creditMin = rangeObj.creditMin;
+        if (rangeObj.creditMax !== undefined) processedFilters.creditMax = rangeObj.creditMax;
+      } else if (key === 'blockRange' && typeof value === 'object' && value !== null) {
+        // Flatten block range object
+        const rangeObj = value as any;
+        if (rangeObj.blockMin !== undefined) processedFilters.blockMin = rangeObj.blockMin;
+        if (rangeObj.blockMax !== undefined) processedFilters.blockMax = rangeObj.blockMax;
+      } else {
+        // Regular filter
+        processedFilters[key as keyof SearchFilters] = value;
+      }
+    });
+    
+    setFilters(prev => ({ ...prev, ...processedFilters }));
     
     // Update activeFilters to reflect the new filters
     const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
     
-    Object.entries(newFilters).forEach(([key, value]) => {
+    Object.entries(processedFilters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         let label = '';
         
