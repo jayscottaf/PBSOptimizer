@@ -77,23 +77,23 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto w-[95vw] sm:w-full">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl">
             Pairing Details - {pairing.pairingNumber}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm">
             Detailed view of pairing {pairing.pairingNumber} with flight segments, layovers, and bid history.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Pairing Overview */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900">Overview</h4>
+            <div className="space-y-2 sm:space-y-4">
+              <h4 className="font-semibold text-gray-900 text-sm sm:text-base">Overview</h4>
               <Card>
-                <CardContent className="p-4 bg-gray-50 font-mono text-sm space-y-1">
+                <CardContent className="p-3 sm:p-4 bg-gray-50 font-mono text-xs sm:text-sm space-y-1">
                   <div><span className="text-gray-600">Pairing:</span> {pairing.pairingNumber}</div>
                   <div><span className="text-gray-600">Effective:</span> {pairing.effectiveDates}</div>
                   {pairing.payHours && <div><span className="text-gray-600">Total Pay:</span> {pairing.payHours}</div>}
@@ -108,9 +108,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             </div>
 
             {/* Flight Segments */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900">Flight Segments</h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 sm:space-y-4">
+              <h4 className="font-semibold text-gray-900 text-sm sm:text-base">Flight Segments</h4>
+              <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
                 {flightSegments.length > 0 ? (
                   (() => {
                     // Group flights by day letter (A, B, C, etc.)
@@ -126,12 +126,12 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                     return sortedDays.map((dayLetter, dayIndex) => (
                       <Card key={dayLetter}>
-                        <CardContent className="p-3 bg-blue-50 border border-blue-200 font-mono text-sm">
-                          <div className="font-medium text-blue-900 mb-2">
+                        <CardContent className="p-2 sm:p-3 bg-blue-50 border border-blue-200 font-mono text-xs sm:text-sm">
+                          <div className="font-medium text-blue-900 mb-2 text-xs sm:text-sm">
                             Day {dayIndex + 1} - {dayLetter}
                           </div>
                           {groupedByDay[dayLetter].map((segment: any, segIndex: number) => (
-                            <div key={segIndex} className="text-blue-800 mb-1">
+                            <div key={segIndex} className="text-blue-800 mb-1 text-xs sm:text-sm break-all sm:break-normal">
                               {segment.flightNumber} {segment.departure} {segment.departureTime} {segment.arrival} {segment.arrivalTime} ({segment.blockTime})
                               {segment.isDeadhead && <span className="text-orange-600 ml-2">[DH]</span>}
                             </div>
@@ -148,11 +148,11 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           </div>
 
           {/* Full Text Block */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-gray-900">Full Pairing Text</h4>
+          <div className="space-y-2 sm:space-y-4">
+            <h4 className="font-semibold text-gray-900 text-sm sm:text-base">Full Pairing Text</h4>
             <Card>
-              <CardContent className="p-4">
-                <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-4 rounded border overflow-x-auto">
+              <CardContent className="p-2 sm:p-4">
+                <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
                   {pairing.fullTextBlock || 'No full text block available'}
                 </pre>
               </CardContent>
@@ -160,10 +160,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           </div>
 
           {/* Historical Awards */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-gray-900">Historical Awards</h4>
+          <div className="space-y-2 sm:space-y-4">
+            <h4 className="font-semibold text-gray-900 text-sm sm:text-base">Historical Awards</h4>
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-2 sm:p-4">
                 {bidHistory.length > 0 ? (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="text-sm text-yellow-800">
@@ -185,10 +185,12 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           </div>
         </div>
 
-        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-          <Button variant="outline">Export Details</Button>
+        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">Export Details</Button>
           <Button 
             variant="outline" 
+            size="sm"
+            className="w-full sm:w-auto"
             disabled={addToCalendarMutation.isPending}
             onClick={async () => {
               try {
@@ -348,6 +350,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           </Button>
           <Button 
             variant="outline" 
+            size="sm"
+            className="w-full sm:w-auto"
             disabled={isAddingFavorite}
             onClick={async () => {
               try {
