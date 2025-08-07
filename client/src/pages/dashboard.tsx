@@ -36,6 +36,7 @@ import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ProfileModal } from "@/components/profile-modal";
+import { useUploadBidPackage } from "@/hooks/useUploadBidPackage"; // Assuming this hook exists
 
 interface SearchFilters {
   search?: string;
@@ -68,6 +69,9 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<SearchFilters>({});
   const [debouncedFilters, setDebouncedFilters] = useState<SearchFilters>({});
   const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [showFilters, setShowFilters] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Debounce filters to prevent excessive API calls
   useEffect(() => {
@@ -108,13 +112,25 @@ export default function Dashboard() {
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
-    return saved ? JSON.parse(saved) : false;
+    return saved ? JSON.JSON.parse(saved) : false;
   });
 
   // Save sidebar state to localStorage
   React.useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage({
+    onUploadProgress: setUploadProgress,
+    onSuccess: (data) => {
+      refetchBidPackages();
+      // Optionally, trigger a refetch of pairings or other relevant data
+    },
+  });
+
+  const handleFileUpload = (file: File) => {
+    uploadMutation({ file });
+  };
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
@@ -134,6 +150,8 @@ export default function Dashboard() {
     }, null);
   }, [bidPackages]);
 
+  const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
+
   // Track when seniority percentage changes and trigger loading state
   React.useEffect(() => {
     if (seniorityPercentile && latestBidPackage) {
@@ -147,13 +165,13 @@ export default function Dashboard() {
   }, [seniorityPercentile, latestBidPackage]);
 
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
-    queryKey: ["pairings", latestBidPackage?.id, debouncedFilters, seniorityPercentile],
+    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile],
     queryFn: () => api.searchPairings({
-      bidPackageId: latestBidPackage?.id,
+      bidPackageId: bidPackageId,
       seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
       ...debouncedFilters
     }),
-    enabled: !!latestBidPackage,
+    enabled: !!bidPackageId,
     staleTime: 2 * 60 * 1000, // Keep pairing data fresh for 2 minutes
     refetchOnMount: false,
   });
@@ -297,6 +315,13 @@ export default function Dashboard() {
     }
   };
 
+  const handleFiltersChange = (newFilters: SearchFilters) => {
+    setFilters(newFilters);
+    // Update activeFilters based on newFilters if needed for display
+    // This part might need more specific logic depending on how activeFilters is managed
+  };
+
+
   // Sorting logic
   const sortedPairings = React.useMemo(() => {
     if (!pairings || pairings.length === 0) {
@@ -394,355 +419,322 @@ export default function Dashboard() {
   }, [sortedPairings]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Modern Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center space-x-2 sm:space-x-6 flex-1 min-w-0">
-              <div className="flex items-center space-x-2 min-w-0">
-                <Plane className="text-blue-600 h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Delta PBS Optimizer</h1>
-              </div>
-              <nav className="hidden lg:flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-                <Button variant="secondary" size="sm" className="bg-white text-gray-900 shadow-sm">
-                  Bid Analysis
-                </Button>
-                <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                  History
-                </Button>
-                <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                  Predictions
-                </Button>
-              </nav>
-            </div>
-            <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
-              <div className="hidden md:flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
-                <span className="hidden lg:inline">Seniority:</span>
-                <span className="font-mono font-medium text-blue-600">#{seniorityNumber}</span>
-                {seniorityPercentile && (
-                  <span className="font-mono font-medium text-purple-600">({seniorityPercentile}%)</span>
-                )}
-                {isUpdatingSeniority && (
-                  <span className="flex items-center text-orange-600 text-xs">
-                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                    Updating...
-                  </span>
-                )}
-                <span className="text-gray-400 hidden lg:inline">|</span>
-                <span className="font-medium hidden lg:inline">{base} {aircraft} FO</span>
-              </div>
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Button variant="ghost" size="sm" className="hidden sm:flex">
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="hidden sm:flex">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm">
-                  <Settings className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowProfileModal(true)}>
-                  <User className="h-4 w-4" />
-                </Button>
-              </div>
-              {/* Upload Bid Package Button */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUploadModal(true)}
-                  className="flex items-center gap-2"
-                >
-                  <CloudUpload className="h-4 w-4" />
-                  Upload Bid Package
-                </Button>
-              </div>
-            </div>
-          </div>
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Left Sidebar - Hidden on mobile */}
+      <div className={`hidden lg:flex bg-white border-r transition-all duration-300 ${
+        sidebarCollapsed ? 'w-16' : 'w-80'
+      } flex-shrink-0 flex-col`}>
+        {/* Toggle button */}
+        <div className="p-4 border-b flex justify-end">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
         </div>
-      </header>
+
+        <div className="p-4 flex-1 overflow-y-auto">
+          {!bidPackageId ? (
+            sidebarCollapsed ? (
+              <div className="text-center">
+                <CloudUpload className="mx-auto h-8 w-8 text-gray-300" />
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <CloudUpload className="mx-auto h-12 w-12 text-gray-300" />
+                <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package</h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  Upload a PDF bid package to get started with analyzing pairings.
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="space-y-6">
+              {sidebarCollapsed ? (
+                // Collapsed view - show essential numbers only
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-600">{quickStats.totalPairings}</div>
+                    <div className="text-xs text-gray-600">Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600">{quickStats.likelyToHold}</div>
+                    <div className="text-xs text-gray-600">Hold</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-purple-600">{quickStats.highCredit}</div>
+                    <div className="text-xs text-gray-600">HC</div>
+                  </div>
+                </div>
+              ) : (
+                // Expanded view - show full stats panel
+                <div className="space-y-6">
+                  <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-gray-900">Smart Filters</h3>
+                      <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <SmartFilterSystem
+                      pairings={sortedPairings || []}
+                      onFiltersChange={handleFiltersChange}
+                      activeFilters={activeFilters}
+                      onClearFilters={() => setActiveFilters([])}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Main Content */}
-      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        <div className="w-full">
-          <div className="flex gap-4 sm:gap-6 lg:gap-8">
-
-            {/* Collapsible Sidebar */}
-            <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
-              <Card className="h-fit">
-                <CardContent className="p-4 sm:p-6 relative">
-                  {/* Collapse button positioned at top-right corner */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="absolute top-2 right-2 h-6 w-6 p-1 z-10"
-                  >
-                    {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                  </Button>
-
-                  {sidebarCollapsed ? (
-                    // Collapsed view - show essential numbers only
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-blue-600">{quickStats.totalPairings}</div>
-                        <div className="text-xs text-gray-600">Total</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-green-600">{quickStats.likelyToHold}</div>
-                        <div className="text-xs text-gray-600">Hold</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-lg font-bold text-purple-600">{quickStats.highCredit}</div>
-                        <div className="text-xs text-gray-600">HC</div>
-                      </div>
-                    </div>
-                  ) : (
-                    // Expanded view - show full stats panel
-                    <div className="space-y-6">
-                      <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
-
-                      {/* Additional Tools Section */}
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
-                          <Settings className="h-4 w-4 mr-2" />
-                          Quick Actions
-                        </h4>
-                        <div className="space-y-2">
-                          <Button variant="outline" size="sm" className="w-full justify-start">
-                            <BarChart2 className="h-4 w-4 mr-2" />
-                            View Analytics
-                          </Button>
-                          <Button variant="outline" size="sm" className="w-full justify-start">
-                            <Star className="h-4 w-4 mr-2" />
-                            Manage Favorites
-                          </Button>
-                          <Button variant="outline" size="sm" className="w-full justify-start">
-                            <Calendar className="h-4 w-4 mr-2" />
-                            Calendar View
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
+      <div className="flex-1 overflow-hidden">
+        <div className="p-3 sm:p-6 h-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Plane className="h-6 w-6 text-blue-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">PBS Bid Optimizer</h1>
+                  </div>
+                  {currentUser && (
+                    <Badge variant="outline" className="text-xs">
+                      Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentage}%)
+                    </Badge>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+                <TabsList className="grid w-full grid-cols-3 sm:w-auto">
+                  <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                  <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                  <TabsTrigger value="profile">Profile</TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Mobile Stats Panel - Only show on mobile and when we have bid package data */}
+              {bidPackageId && (
+                <div className="lg:hidden">
+                  <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+                </div>
+              )}
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 min-w-0">
-              <Card>
-                <CardContent className="p-0">
-                  <Tabs defaultValue="search" className="w-full">
-                    <div className="border-b">
-                      <TabsList className="h-10 sm:h-12 w-full justify-start rounded-none bg-transparent p-0 overflow-x-auto">
-                        <TabsTrigger 
-                          value="search" 
-                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                        >
-                          Search & Filter
-                        </TabsTrigger>
-                        <TabsTrigger 
-                          value="analysis"
-                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                        >
-                          Analysis
-                        </TabsTrigger>
-                        <TabsTrigger 
-                          value="favorites"
-                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                        >
-                          Favorites
-                        </TabsTrigger>
-                        <TabsTrigger 
-                          value="calendar"
-                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                        >
-                          Calendar
-                        </TabsTrigger>
-                        <TabsTrigger 
-                          value="assistant"
-                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent text-xs sm:text-sm whitespace-nowrap px-2 sm:px-4"
-                        >
-                          AI Assistant
-                        </TabsTrigger>
-                      </TabsList>
-                    </div>
-
-                    {/* Search & Filter Tab */}
-                    <TabsContent value="search" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-                      {latestBidPackage ? (
-                        <>
-                          {/* Search Bar */}
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                            <Input
-                              placeholder="Search routes, pairing numbers..."
-                              className="pl-10"
-                              value={filters.search || ''}
-                              onChange={(e) => addFilter('search', 'Search', e.target.value)}
-                            />
-                          </div>
-
-                          {/* Active Filters */}
-                          {activeFilters.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {activeFilters.map((filter) => (
-                                <Badge key={filter.key} variant="secondary" className="flex items-center gap-1">
-                                  {filter.label}
-                                  <X 
-                                    className="h-3 w-3 cursor-pointer" 
-                                    onClick={() => removeFilter(filter.key)}
-                                  />
-                                </Badge>
-                              ))}
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => {
-                                  setActiveFilters([]);
-                                  setFilters({});
-                                }}
-                                className="text-xs h-6"
-                              >
-                                Clear All
-                              </Button>
-                            </div>
-                          )}
-
-                          {/* Smart Filter System */}
-                          <SmartFilterSystem 
-                            onFilterApply={(filterKey, filterValue, displayLabel) => {
-                              addFilter(filterKey, displayLabel, filterValue);
-                            }}
-                            onFilterClear={(filterKey) => {
-                              removeFilter(filterKey);
-                            }}
-                          />
-
-                          {/* Results */}
-                          <div className="relative">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
-                              <div className="flex items-center space-x-2">
-                                {isUpdatingSeniority && (
-                                  <span className="flex items-center text-orange-600 text-sm">
-                                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                                    Recalculating hold probabilities...
-                                  </span>
-                                )}
-                                <span className="text-sm text-gray-500">
-                                  {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
-                                </span>
-                              </div>
-                            </div>
-                            {isUpdatingSeniority && (
-                              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                                <div className="flex items-center space-x-2 text-orange-600">
-                                  <RefreshCw className="h-6 w-6 animate-spin" />
-                                  <span className="text-lg font-medium">Updating hold probabilities...</span>
-                                </div>
-                              </div>
-                            )}
-                            <PairingTable 
-                              pairings={sortedPairings || []} 
-                              onSort={handleSort}
-                              sortColumn={sortColumn || ''}
-                              sortDirection={sortDirection}
-                              onPairingClick={handlePairingClick}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        // Empty State for No Bid Package
-                        <div className="text-center py-12">
-                          <Plane className="mx-auto h-24 w-24 text-gray-300" />
-                          <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package Ready</h3>
-                          <p className="mt-2 text-sm text-gray-500">
-                            Upload a bid package to start analyzing pairings and planning your bids.
-                          </p>
+            <TabsContent value="dashboard" className="flex-1 overflow-hidden">
+              <div className="space-y-6 h-full">
+                {/* Upload Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CloudUpload className="h-5 w-5" />
+                      Upload Bid Package PDF
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FileUpload
+                      accept={{
+                        'application/pdf': ['.pdf'],
+                      }}
+                      onUpload={handleFileUpload}
+                      maxFileSize={50 * 1024 * 1024} // 50MB
+                      disabled={uploadMutation.isPending}
+                    />
+                    {uploadMutation.isPending && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <span>Uploading and processing PDF...</span>
+                          <span>{Math.round(uploadProgress)}%</span>
                         </div>
-                      )}
-                    </TabsContent>
-
-                    {/* Analysis Tab */}
-                    <TabsContent value="analysis" className="p-3 sm:p-6">
-                      <div className="text-center py-8 sm:py-12">
-                        <BarChart2 className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                        <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Data for Analysis</h3>
-                        <p className="mt-2 text-sm text-gray-500 px-4">
-                          Advanced analytics and visualizations will appear here once you have pairing data.
-                        </p>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
                       </div>
-                    </TabsContent>
+                    )}
+                  </CardContent>
+                </Card>
 
-                    {/* Favorites Tab */}
-                    <TabsContent value="favorites" className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold text-gray-900">Your Favorite Pairings</h3>
-                          <span className="text-sm text-gray-500">
-                            {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
+                {/* Mobile Filters - Only show on mobile when we have data */}
+                {bidPackageId && (
+                  <div className="lg:hidden">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            Smart Filters
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
+                            {showFilters ? 'Hide' : 'Show'}
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      {showFilters && (
+                        <CardContent>
+                          <SmartFilterSystem
+                            pairings={sortedPairings || []}
+                            onFiltersChange={handleFiltersChange}
+                            activeFilters={activeFilters}
+                            onClearFilters={() => setActiveFilters([])}
+                          />
+                        </CardContent>
+                      )}
+                    </Card>
+                  </div>
+                )}
+
+                {/* Desktop Filters - Only show on desktop */}
+                {!sidebarCollapsed && bidPackageId && (
+                  <Card className="hidden lg:block">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="h-5 w-5" />
+                        Smart Filters
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <SmartFilterSystem
+                        pairings={sortedPairings || []}
+                        onFiltersChange={handleFiltersChange}
+                        activeFilters={activeFilters}
+                        onClearFilters={() => setActiveFilters([])}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pairing Results Section */}
+                {bidPackageId && (
+                  <Card className="h-full flex flex-col">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-lg font-medium flex items-center gap-2">
+                        <Search className="h-5 w-5 text-muted-foreground" />
+                        Pairing Results
+                      </CardTitle>
+                      <div className="flex items-center space-x-2">
+                        {isUpdatingSeniority && (
+                          <span className="flex items-center text-orange-600 text-sm">
+                            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                            Updating...
                           </span>
-                        </div>
-
-                        {favorites.length > 0 ? (
-                          <PairingTable 
-                            pairings={favorites} 
-                            onSort={handleSort}
-                            sortColumn={sortColumn || ''}
-                            sortDirection={sortDirection}
-                            onPairingClick={handlePairingClick}
-                            showDeleteButton={true}
-                            onDeleteFavorite={handleDeleteFavorite}
-                          />
-                        ) : (
-                          <div className="text-center py-8 sm:py-12">
-                            <Star className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                            <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">No Favorites Yet</h3>
-                            <p className="mt-2 text-sm text-gray-500 px-4">
-                              Click the "Add to Favorites" button on any pairing to save it here.
-                            </p>
-                          </div>
                         )}
+                        <span className="text-sm text-gray-500">
+                          {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
+                        </span>
                       </div>
-                    </TabsContent>
-
-                    {/* Calendar Tab */}
-                    <TabsContent value="calendar" className="p-3 sm:p-6">
-                      {currentUser ? (
-                        <CalendarView userId={currentUser.id} />
-                      ) : (
-                        <div className="text-center py-8">
-                          <Calendar className="mx-auto h-16 w-16 text-gray-300" />
-                          <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
-                          <p className="mt-2 text-sm text-gray-500">
-                            Setting up your calendar view...
-                          </p>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-auto p-0">
+                      {isUpdatingSeniority && (
+                        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                          <div className="flex items-center space-x-2 text-orange-600">
+                            <RefreshCw className="h-6 w-6 animate-spin" />
+                            <span className="text-lg font-medium">Updating hold probabilities...</span>
+                          </div>
                         </div>
                       )}
-                    </TabsContent>
+                      <PairingTable 
+                        pairings={sortedPairings || []} 
+                        onSort={handleSort}
+                        sortColumn={sortColumn || ''}
+                        sortDirection={sortDirection}
+                        onPairingClick={handlePairingClick}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
 
-                    {/* AI Assistant Tab */}
-                    <TabsContent value="assistant" className="p-3 sm:p-6">
-                      {latestBidPackage ? (
-                        <PairingChat bidPackageId={latestBidPackage.id} />
-                      ) : (
-                        <div className="text-center py-8 sm:py-12">
-                          <User className="mx-auto h-16 w-16 sm:h-24 sm:w-24 text-gray-300" />
-                          <h3 className="mt-4 text-base sm:text-lg font-medium text-gray-900">AI Assistant Not Active</h3>
-                          <p className="mt-2 text-sm text-gray-500 px-4">
-                            Upload a bid package to start chatting with your AI assistant about pairing analysis.
-                          </p>
-                        </div>
-                      )}
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+            {/* Calendar Tab */}
+            <TabsContent value="calendar" className="flex-1 overflow-auto">
+              {currentUser ? (
+                <CalendarView userId={currentUser.id} />
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Setting up your calendar view...
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Profile Tab */}
+            <TabsContent value="profile" className="flex-1 overflow-auto">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="h-5 w-5" />
+                      Profile Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
+                        <Input
+                          value={seniorityNumber}
+                          onChange={(e) => setSeniorityNumber(e.target.value)}
+                          placeholder="Enter seniority number"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1 block">Category Seniority %</label>
+                        <Input
+                          value={seniorityPercentile}
+                          onChange={(e) => setSeniorityPercentile(e.target.value)}
+                          placeholder="Enter seniority percentile"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
+                        <Select value={base} onValueChange={setBase}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select base" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NYC">NYC</SelectItem>
+                            <SelectItem value="ATL">ATL</SelectItem>
+                            <SelectItem value="DFW">DFW</SelectItem>
+                            <SelectItem value="LAX">LAX</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
+                        <Select value={aircraft} onValueChange={setAircraft}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select aircraft" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A220">A220</SelectItem>
+                            <SelectItem value="A320">A320</SelectItem>
+                            <SelectItem value="A350">A350</SelectItem>
+                            <SelectItem value="B737">B737</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-6">
+                      <Button onClick={() => setShowProfileModal(true)}>
+                        Update Profile
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
@@ -828,7 +820,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Modal */}
+      {/* Profile Modal (moved inside the Profile tab content for better UX) */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
