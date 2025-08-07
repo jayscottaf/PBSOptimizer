@@ -210,7 +210,7 @@ export default function Dashboard() {
       // Determine the filter category for replacement logic
       const isCreditFilter = key === 'creditRange' || key === 'creditMin' || key === 'creditMax';
       const isBlockFilter = key === 'blockRange' || key === 'blockMin' || key === 'blockMax';
-      
+
       if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
         // Handle range filters specially
         setActiveFilters(prev => [
