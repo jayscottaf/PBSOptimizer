@@ -520,18 +520,11 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-2 sm:w-auto">
+                  <TabsList className="grid grid-cols-3 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                    <TabsTrigger value="favorites">Favorites</TabsTrigger>
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setActiveTab("favorites")}
-                    className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
-                  >
-                    <Star className="h-4 w-4" />
-                  </Button>
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -682,7 +675,43 @@ export default function Dashboard() {
               </div>
             </TabsContent>
 
-            
+            {/* Favorites Tab */}
+            <TabsContent value="favorites" className="flex-1 overflow-hidden">
+              <Card className="h-full flex flex-col">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2">
+                    <Star className="h-5 w-5 text-yellow-600" />
+                    Your Favorites
+                  </CardTitle>
+                  <span className="text-sm text-gray-500">
+                    {favorites.length} favorite pairings
+                  </span>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-auto p-0">
+                  {favorites && favorites.length > 0 ? (
+                    <PairingTable 
+                      pairings={favorites} 
+                      onSort={handleSort}
+                      sortColumn={sortColumn || ''}
+                      sortDirection={sortDirection}
+                      onPairingClick={handlePairingClick}
+                      showDeleteButton={true}
+                      onDeleteFavorite={handleDeleteFavorite}
+                      showAddToCalendar={true}
+                      currentUser={currentUser}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <Star className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium mb-2">No favorites yet</p>
+                        <p className="text-sm">Start adding pairings to your favorites to see them here</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
