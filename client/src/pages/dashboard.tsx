@@ -111,7 +111,7 @@ export default function Dashboard() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -516,8 +516,9 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-2 sm:w-auto">
+                  <TabsList className="grid grid-cols-3 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                    <TabsTrigger value="favorites">Favorites</TabsTrigger>
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
                   <Button 
@@ -529,15 +530,7 @@ export default function Dashboard() {
                   >
                     <Bot className="h-4 w-4 text-green-600 hover:text-green-700" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowFavoritesModal(true)}
-                    className="flex items-center justify-center w-9 h-9 hover:bg-yellow-50 hover:border-yellow-300 transition-all duration-200 hover:scale-105 hover:shadow-md"
-                    title="View Favorites"
-                  >
-                    <Star className="h-4 w-4 text-yellow-600 hover:text-yellow-700" />
-                  </Button>
+                  
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -678,6 +671,44 @@ export default function Dashboard() {
               </div>
             </TabsContent>
 
+            {/* Favorites Tab */}
+            <TabsContent value="favorites" className="flex-1 overflow-hidden">
+              <Card className="h-full flex flex-col">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2">
+                    <Star className="h-5 w-5 text-yellow-600" />
+                    Your Favorites
+                  </CardTitle>
+                  <span className="text-sm text-gray-500">
+                    {favorites.length} favorite pairings
+                  </span>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-auto p-0">
+                  {favorites && favorites.length > 0 ? (
+                    <PairingTable 
+                      pairings={favorites} 
+                      onSort={handleSort}
+                      sortColumn={sortColumn || ''}
+                      sortDirection={sortDirection}
+                      onPairingClick={handlePairingClick}
+                      showDeleteButton={true}
+                      onDeleteFavorite={handleDeleteFavorite}
+                      showAddToCalendar={true}
+                      currentUser={currentUser}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <Star className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium mb-2">No favorites yet</p>
+                        <p className="text-sm">Start adding pairings to your favorites to see them here</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
               {currentUser ? (
@@ -810,43 +841,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Favorites Modal */}
-      <Dialog open={showFavoritesModal} onOpenChange={setShowFavoritesModal}>
-        <DialogContent className="max-w-5xl h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-600" />
-              Your Favorites
-            </DialogTitle>
-            <DialogDescription>
-              View and manage your favorite pairings
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            {favorites && favorites.length > 0 ? (
-              <div className="h-full">
-                <PairingTable 
-                  pairings={favorites} 
-                  onSort={handleSort}
-                  sortColumn={sortColumn || ''}
-                  sortDirection={sortDirection}
-                  onPairingClick={handlePairingClick}
-                  showDeleteButton={true}
-                  onDeleteFavorite={handleDeleteFavorite}
-                />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <div className="text-center">
-                  <Star className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg font-medium mb-2">No favorites yet</p>
-                  <p className="text-sm">Start adding pairings to your favorites to see them here</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      
 
       {/* Profile Modal (moved inside the Profile tab content for better UX) */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
