@@ -89,28 +89,6 @@ export default function Dashboard() {
     localStorage.setItem('aircraft', aircraft);
   }, [seniorityNumber, seniorityPercentile, base, aircraft]);
 
-  // Find the latest completed bid package
-  const latestBidPackage = React.useMemo(() => {
-    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
-      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
-        return pkg;
-      }
-      return latest;
-    }, null);
-  }, [bidPackages]);
-
-  // Track when seniority percentage changes and trigger loading state
-  React.useEffect(() => {
-    if (seniorityPercentile && latestBidPackage) {
-      setIsUpdatingSeniority(true);
-      const timer = setTimeout(() => {
-        setIsUpdatingSeniority(false);
-      }, 20000); // Reset after 20 seconds max
-
-      return () => clearTimeout(timer);
-    }
-  }, [seniorityPercentile, latestBidPackage]);
-
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -133,17 +111,36 @@ export default function Dashboard() {
     queryFn: api.getBidPackages,
   });
 
+  // Find the latest completed bid package
+  const latestBidPackage = React.useMemo(() => {
+    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
+      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+        return pkg;
+      }
+      return latest;
+    }, null);
+  }, [bidPackages]);
+
+  // Track when seniority percentage changes and trigger loading state
+  React.useEffect(() => {
+    if (seniorityPercentile && latestBidPackage) {
+      setIsUpdatingSeniority(true);
+      const timer = setTimeout(() => {
+        setIsUpdatingSeniority(false);
+      }, 20000); // Reset after 20 seconds max
+
+      return () => clearTimeout(timer);
+    }
+  }, [seniorityPercentile, latestBidPackage]);
+
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
     queryKey: ["pairings", latestBidPackage?.id, filters, seniorityPercentile],
     queryFn: () => api.searchPairings({
       bidPackageId: latestBidPackage?.id,
-      seniorityPercentile: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
+      seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
       ...filters
     }),
     enabled: !!latestBidPackage,
-    onSuccess: () => {
-      setIsUpdatingSeniority(false);
-    },
   });
 
   // Query for user data
