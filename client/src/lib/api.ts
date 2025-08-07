@@ -39,9 +39,16 @@ export interface SearchFilters {
   creditMin?: number;
   creditMax?: number;
   blockMin?: number;
+  blockMax?: number;
   tafb?: string;
+  tafbMin?: number;
+  tafbMax?: number;
   holdProbabilityMin?: number;
-  seniorityPercentage?: number; // Added seniorityPercentage
+  pairingDays?: number;
+  pairingDaysMin?: number;
+  pairingDaysMax?: number;
+  efficiency?: number;
+  seniorityPercentage?: number;
 }
 
 const API_BASE = ""; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
@@ -97,19 +104,21 @@ export const api = {
 
   searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
     try {
-      const params = new URLSearchParams();
+      console.log('API searchPairings called with filters:', filters);
 
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          params.append(key, String(value));
-        }
+      const response = await fetch('/api/pairings/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(filters),
       });
 
-      const response = await fetch(`/api/pairings?${params}`);
       if (!response.ok) {
         throw new Error('Failed to search pairings');
       }
       const data = await response.json();
+      console.log('API searchPairings response:', data.length, 'pairings');
       return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error("Error searching pairings:", error);
