@@ -113,6 +113,7 @@ export default function Dashboard() {
 
   // Find the latest completed bid package
   const latestBidPackage = React.useMemo(() => {
+    if (!bidPackages || bidPackages.length === 0) return null;
     return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
       if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
         return pkg;
