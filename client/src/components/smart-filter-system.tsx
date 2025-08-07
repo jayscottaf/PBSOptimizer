@@ -39,7 +39,7 @@ const filterOptions: FilterOption[] = [
       { value: 8.0, label: "Moderate (8:00-15:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 15.0 } },
       { value: 15.0, label: "Heavy (15:00-25:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 25.0 } },
       { value: 25.0, label: "Max Credit (25:00+)", filterKey: "creditMin" },
-      { value: 0.0, label: "Turns Only (≤8:00)", filterKey: "creditMax", additionalFilter: { key: "creditMax", value: 8.0 } },
+      { value: 0.0, label: "Turns Only (≤8:00)", filterKey: "creditMax" },
     ]
   },
   {
@@ -50,7 +50,7 @@ const filterOptions: FilterOption[] = [
       { value: 6.0, label: "Medium (6:00-12:00)", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 12.0 } },
       { value: 12.0, label: "Long (12:00-20:00)", filterKey: "blockMin", additionalFilter: { key: "blockMax", value: 20.0 } },
       { value: 20.0, label: "Extended (20:00+)", filterKey: "blockMin" },
-      { value: 0.0, label: "Quick Turns (≤6:00)", filterKey: "blockMax", additionalFilter: { key: "blockMax", value: 6.0 } },
+      { value: 0.0, label: "Quick Turns (≤6:00)", filterKey: "blockMax" },
     ]
   },
   {
@@ -104,17 +104,22 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
 
     if (!functionOption || !dataOption) return;
 
-    // Apply main filter
-    const filterKey = dataOption.filterKey || functionOption.key;
-    onFilterApply(filterKey, dataOption.value, `${functionOption.label}: ${dataOption.label}`);
-
-    // Apply additional filter if present (for ranges)
+    // Handle range filters (like credit hours and block hours) specially
     if (dataOption.additionalFilter) {
-      onFilterApply(
-        dataOption.additionalFilter.key, 
-        dataOption.additionalFilter.value, 
-        `${functionOption.label}: ${dataOption.label}`
-      );
+      // For range filters, create a combined filter object
+      const rangeFilter = {
+        [dataOption.filterKey || functionOption.key]: dataOption.value,
+        [dataOption.additionalFilter.key]: dataOption.additionalFilter.value
+      };
+      // Determine the range filter key based on the function
+      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' : 
+                      functionOption.key === 'blockHours' ? 'blockRange' : 
+                      functionOption.key + 'Range';
+      onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
+    } else {
+      // Apply single filter
+      const filterKey = dataOption.filterKey || functionOption.key;
+      onFilterApply(filterKey, dataOption.value, `${functionOption.label}: ${dataOption.label}`);
     }
 
     // Reset selections
