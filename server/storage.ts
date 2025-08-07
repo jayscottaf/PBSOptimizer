@@ -445,6 +445,66 @@ export class DatabaseStorage implements IStorage {
     return { pairings: topPairings, stats };
   }
 
+  async getBidPackageStats(bidPackageId: number): Promise<{
+    totalPairings: number;
+    creditBlockRatios: {
+      min: number;
+      max: number;
+      average: number;
+    };
+    creditHours: {
+      min: number;
+      max: number;
+      average: number;
+    };
+    blockHours: {
+      min: number;
+      max: number;
+      average: number;
+    };
+  }> {
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+
+    if (allPairings.length === 0) {
+      return {
+        totalPairings: 0,
+        creditBlockRatios: { min: 1.0, max: 1.0, average: 1.0 },
+        creditHours: { min: 0, max: 0, average: 0 },
+        blockHours: { min: 0, max: 0, average: 0 }
+      };
+    }
+
+    // Calculate C/B ratios for all pairings
+    const ratios = allPairings
+      .filter(p => p.blockHours > 0) // Avoid division by zero
+      .map(p => p.creditHours / p.blockHours);
+
+    const creditHours = allPairings.map(p => p.creditHours);
+    const blockHours = allPairings.map(p => p.blockHours);
+
+    return {
+      totalPairings: allPairings.length,
+      creditBlockRatios: {
+        min: Math.min(...ratios),
+        max: Math.max(...ratios),
+        average: ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length
+      },
+      creditHours: {
+        min: Math.min(...creditHours),
+        max: Math.max(...creditHours),
+        average: creditHours.reduce((sum, hours) => sum + hours, 0) / creditHours.length
+      },
+      blockHours: {
+        min: Math.min(...blockHours),
+        max: Math.max(...blockHours),
+        average: blockHours.reduce((sum, hours) => sum + hours, 0) / blockHours.length
+      }
+    };
+  }
+
   async getTopHoldProbabilityPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
     const topPairings = await db
       .select()

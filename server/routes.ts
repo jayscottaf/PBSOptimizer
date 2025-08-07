@@ -100,11 +100,23 @@ export async function registerRoutes(app: Express) {
   // Get all bid packages
   app.get("/api/bid-packages", async (req, res) => {
     try {
-      const bidPackages = await storage.getBidPackages();
-      res.json(bidPackages);
+      const packages = await storage.getBidPackages();
+      res.json(packages);
     } catch (error) {
-      console.error("Error fetching bid packages:", error);
-      res.status(500).json({ message: "Failed to fetch bid packages" });
+      console.error('Error fetching bid packages:', error);
+      res.status(500).json({ error: 'Failed to fetch bid packages' });
+    }
+  });
+
+  // Get bid package statistics (C/B ratio ranges, etc.)
+  app.get('/api/bid-packages/:id/stats', async (req, res) => {
+    try {
+      const bidPackageId = parseInt(req.params.id);
+      const stats = await storage.getBidPackageStats(bidPackageId);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching bid package stats:', error);
+      res.status(500).json({ error: 'Failed to fetch bid package stats' });
     }
   });
 
