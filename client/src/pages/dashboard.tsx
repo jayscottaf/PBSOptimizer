@@ -538,7 +538,10 @@ export default function Dashboard() {
                     className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
                   >
                     <Star className="h-4 w-4" />
-                  </Button></old_str>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"</old_str>
                   <Button 
                     variant="outline" 
                     size="sm"
