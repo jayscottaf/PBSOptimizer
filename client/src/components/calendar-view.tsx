@@ -56,6 +56,19 @@ export function CalendarView({ userId }: CalendarViewProps) {
     refetchOnMount: true,
   });
 
+  // Fetch bid package stats to get the full range of possible C/B ratios
+  const { data: bidPackageStats } = useQuery({
+    queryKey: ['bid-package-stats', events[0]?.pairing?.id ? 31 : null], // Using bid package 31 from the current data
+    queryFn: async () => {
+      if (!events[0]?.pairing?.id) return null;
+      const response = await fetch('/api/bid-packages/31/stats'); // Get stats for current bid package
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: events.length > 0,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes since bid package stats don't change often
+  });
+
   // Remove from calendar mutation
   const removeFromCalendarMutation = useMutation({
     mutationFn: async ({ userId, pairingId }: { userId: number; pairingId: number }) => {
@@ -166,10 +179,10 @@ export function CalendarView({ userId }: CalendarViewProps) {
   else if (ratio >= 1.2) ratioLabel = 'Good';
   else if (ratio >= 1.1) ratioLabel = 'Average';
 
-  // Use realistic ratio range for efficiency scoring
-  // Most bid packages have ratios ranging from ~1.0 (poor) to ~1.8 (excellent)
-  const minRatio = 1.0;  // Equal credit and block hours (minimum efficiency)
-  const maxRatio = 1.8;  // Theoretical maximum for most bid packages
+  // Use actual bid package statistics for efficiency scoring
+  const minRatio = bidPackageStats?.creditBlockRatios?.min || 1.0;
+  const maxRatio = bidPackageStats?.creditBlockRatios?.max || 1.8;
+  const avgRatio = bidPackageStats?.creditBlockRatios?.average || 1.4;
 
   // Calculate weeks for the calendar
   const weeks = [];
@@ -518,23 +531,40 @@ export function CalendarView({ userId }: CalendarViewProps) {
 
             {/* Efficiency Score */}
             <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                     📈
                   </div>
                   <div>
                     <div className="text-sm font-medium text-gray-900">Efficiency Score</div>
-                    <div className="text-xs text-gray-600">Based on credit/block ratio and utilization</div>
+                    <div className="text-xs text-gray-600">
+                      Compared to all {bidPackageStats?.totalPairings || 0} pairings in bid package
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-blue-600">
                     {Math.round(Math.min(100, Math.max(0, ((ratio - minRatio) / (maxRatio - minRatio)) * 100)))}%
                   </div>
-                  <div className="text-sm text-blue-600 font-medium">Excellent</div>
+                  <div className="text-sm text-blue-600 font-medium">{ratioLabel}</div>
                 </div>
               </div>
+              
+              {bidPackageStats && (
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Your ratio: {ratio.toFixed(2)}</span>
+                    <span>Package average: {avgRatio.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Package range: {minRatio.toFixed(2)} - {maxRatio.toFixed(2)}</span>
+                    <span className={ratio > avgRatio ? 'text-green-600' : 'text-orange-600'}>
+                      {ratio > avgRatio ? '+' : ''}{((ratio - avgRatio) / avgRatio * 100).toFixed(1)}% vs avg
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
