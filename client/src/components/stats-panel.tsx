@@ -8,9 +8,10 @@ import { BarChart2 } from "lucide-react";
 interface StatsPanelProps {
   pairings: Pairing[];
   bidPackage?: BidPackage;
+  hideHeader?: boolean;
 }
 
-export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
+export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPanelProps) {
   const stats = useMemo(() => {
     if (!pairings || !Array.isArray(pairings) || pairings.length === 0) {
       return {
@@ -79,6 +80,114 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
   const isFailed = bidPackage?.status === 'failed';
   const expectedTotal = 534;
   const progressPercentage = Math.min((stats.totalPairings / expectedTotal) * 100, 100);
+
+  if (hideHeader) {
+    return (
+      <div className="p-0">
+        {isProcessing && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Processing bid package</span>
+              <span>{Math.round(progressPercentage)}%</span>
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
+          </div>
+        )}
+        {isFailed && (
+          <div className="space-y-2">
+            <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+              PDF processing failed. Please try uploading again.
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+          <div className="text-center">
+            <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
+            {isProcessing && (
+              <span className="text-xs text-orange-600">Processing...</span>
+            )}
+            {isFailed && (
+              <span className="text-xs text-red-600">Failed</span>
+            )}
+          </div>
+          <div className="text-center">
+            <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
+            <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xl lg:text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
+            <div className="text-xs lg:text-sm text-gray-600">6+ Day Trips</div>
+          </div>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="text-center">
+              <div className="font-medium text-gray-900">{stats.avgCreditHours.toFixed(1)}</div>
+              <div className="text-gray-600">Avg Credit</div>
+            </div>
+            <div className="text-center">
+              <div className="font-medium text-gray-900">{stats.avgBlockHours.toFixed(1)}</div>
+              <div className="text-gray-600">Avg Block</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Credit/Block Ratio Breakdown */}
+        {stats.totalPairings > 0 && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+              <BarChart2 className="h-4 w-4 mr-2" />
+              Credit/Block Ratio Quality
+            </h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Excellent (≥1.3)</span>
+                </div>
+                <div className="text-sm font-medium text-green-700">
+                  {stats.ratioBreakdown.excellent} ({((stats.ratioBreakdown.excellent / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Good (1.2-1.29)</span>
+                </div>
+                <div className="text-sm font-medium text-yellow-700">
+                  {stats.ratioBreakdown.good} ({((stats.ratioBreakdown.good / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Average (1.1-1.19)</span>
+                </div>
+                <div className="text-sm font-medium text-orange-700">
+                  {stats.ratioBreakdown.average} ({((stats.ratioBreakdown.average / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
+                  <span className="text-xs text-gray-600">Poor (&lt;1.1)</span>
+                </div>
+                <div className="text-sm font-medium text-red-700">
+                  {stats.ratioBreakdown.poor} ({((stats.ratioBreakdown.poor / stats.totalPairings) * 100).toFixed(0)}%)
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card>
