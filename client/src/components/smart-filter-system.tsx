@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -102,7 +101,7 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
 
     const functionOption = filterOptions.find(f => f.key === selectedFunction);
     const dataOption = currentFunctionOptions.find(d => d.value.toString() === selectedData);
-    
+
     if (!functionOption || !dataOption) return;
 
     // Apply main filter
