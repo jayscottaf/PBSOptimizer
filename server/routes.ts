@@ -182,6 +182,11 @@ export async function registerRoutes(app: Express) {
         seniorityPercentile
       } = req.query;
 
+      console.log('GET /api/pairings query params:', {
+        creditMin, creditMax, blockMin, blockMax, search, bidPackageId
+      });
+      console.log('All query params:', req.query);
+
       if (!bidPackageId) {
         return res.status(400).json({ error: 'bidPackageId is required' });
       }
@@ -231,6 +236,7 @@ export async function registerRoutes(app: Express) {
   // Pairing search endpoint
   app.post("/api/pairings/search", async (req, res) => {
     try {
+      console.log("POST /api/pairings/search request body:", req.body);
       const { bidPackageId, ...filters } = req.body;
 
       if (!bidPackageId) {
@@ -239,6 +245,7 @@ export async function registerRoutes(app: Express) {
       }
 
       console.log(`Searching pairings for bid package ${bidPackageId} with filters:`, filters);
+      console.log(`Full search params:`, { bidPackageId, ...filters });
       const pairings = await storage.searchPairings({ bidPackageId, ...filters });
 
       // Ensure we return an array
