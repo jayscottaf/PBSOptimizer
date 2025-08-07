@@ -1,0 +1,45 @@
+### Logic for Hold Probability Categories
+
+Use the following rules to define **hold probability ranges** for each pairing.
+
+#### 🔵 HIGH HOLD PROBABILITY (User Likely to Hold the Trip)
+A trip is considered **likely to be held** (high probability = 80–100%) when:
+- It has **low to moderate desirability** (e.g. short credit, high block time, no deadheads)
+- It appears **frequently** in the bid package
+- It **starts on a Saturday** or ends on a Sunday (less desirable days)
+- It does **not** include weekends off or long layovers
+- It has **no or few deadhead legs**
+
+#### 🟠 MEDIUM HOLD PROBABILITY (Could Go Either Way)
+A trip falls into **medium probability** (50–80%) when:
+- It has **average credit and block**
+- It has **moderate desirability** (e.g. a deadhead but moderate TAFB or credit)
+- It’s **not rare**, but not overly common either
+- It includes **somewhat desirable days** (e.g. midweek start with one weekend day)
+
+#### 🔴 LOW HOLD PROBABILITY (Unlikely to Hold)
+A trip is considered **low probability** (0–50%) when:
+- It has **high desirability** (e.g. high credit, low block, multiple deadheads, long layovers, weekends off)
+- It is **rare** in the bid package (only 1–2 instances)
+- It starts on **Monday or Thursday** and finishes before the weekend
+- It includes **multiple deadhead legs**
+- It’s known to be **popular with senior bidders**
+
+---
+
+### Logic Integration
+
+Use this logic in a `getHoldProbability()` function that takes:
+- `seniorityPercentile: number` (0–100)
+- `desirabilityScore: number` (0–100)
+- `pairingFrequency: number` (number of instances in the bid package)
+- `startsOnWeekend: boolean`
+- `includesDeadheads: number`
+- `includesWeekendOff: boolean`
+
+Return an estimated **hold probability (0–100%)** using conditional logic.
+
+Make sure to:
+- Cap probabilities to the expected ranges defined above.
+- Use some randomness (+/– 5%) for realism if desired.
+- Document why a trip was scored high, medium, or low (for debugging and transparency in UI).
