@@ -46,11 +46,11 @@ interface ParsedPairing {
 
 export class PDFParser {
   // Calculate hold probability using new tiered logic
-  private calculateHoldProbability(pairing: ParsedPairing, allPairings: ParsedPairing[]): number {
+  private calculateHoldProbability(pairing: ParsedPairing, allPairings: ParsedPairing[], userSeniorityPercentile?: number): number {
     const { HoldProbabilityCalculator } = require('./holdProbabilityCalculator');
 
-    // Default seniority percentile (this should come from user profile)
-    const seniorityPercentile = 50; // Middle seniority as default
+    // Use provided seniority percentile, default to 50 if not provided
+    const seniorityPercentile = userSeniorityPercentile !== undefined ? userSeniorityPercentile : 50; // Middle seniority as default
 
     const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
     const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
@@ -596,7 +596,7 @@ export class PDFParser {
     }
   }
 
-  async parseFile(filePath: string, bidPackageId: number, mimeType: string): Promise<void> {
+  async parseFile(filePath: string, bidPackageId: number, mimeType: string, userSeniorityPercentile?: number): Promise<void> {
     try {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
@@ -628,7 +628,7 @@ export class PDFParser {
       // Calculate hold probabilities now that we have all pairings
       console.log('Calculating hold probabilities...');
       for (const pairing of parsedPairings) {
-        pairing.holdProbability = this.calculateHoldProbability(pairing, parsedPairings);
+        pairing.holdProbability = this.calculateHoldProbability(pairing, parsedPairings, userSeniorityPercentile);
       }
 
       // Save pairings to database in batches for better performance
@@ -676,8 +676,8 @@ export class PDFParser {
     }
   }
 
-  async parsePDF(filePath: string, bidPackageId: number): Promise<void> {
-    return this.parseFile(filePath, bidPackageId, 'application/pdf');
+  async parsePDF(filePath: string, bidPackageId: number, userSeniorityPercentile?: number): Promise<void> {
+    return this.parseFile(filePath, bidPackageId, 'application/pdf', userSeniorityPercentile);
   }
 }
 
