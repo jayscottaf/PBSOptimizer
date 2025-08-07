@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,17 @@ interface Pairing {
 
 export default function Dashboard() {
   const [filters, setFilters] = useState<SearchFilters>({});
+  const [debouncedFilters, setDebouncedFilters] = useState<SearchFilters>({});
   const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
+
+  // Debounce filters to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300); // 300ms delay
+
+    return () => clearTimeout(timer);
+  }, [filters]);
   const [seniorityNumber, setSeniorityNumber] = useState(() => {
     return localStorage.getItem('seniorityNumber') || "15860";
   });
@@ -109,6 +119,8 @@ export default function Dashboard() {
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
     queryFn: api.getBidPackages,
+    staleTime: 10 * 60 * 1000, // Bid packages don't change often
+    refetchOnMount: false,
   });
 
   // Find the latest completed bid package
@@ -135,13 +147,15 @@ export default function Dashboard() {
   }, [seniorityPercentile, latestBidPackage]);
 
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
-    queryKey: ["pairings", latestBidPackage?.id, filters, seniorityPercentile],
+    queryKey: ["pairings", latestBidPackage?.id, debouncedFilters, seniorityPercentile],
     queryFn: () => api.searchPairings({
       bidPackageId: latestBidPackage?.id,
       seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
-      ...filters
+      ...debouncedFilters
     }),
     enabled: !!latestBidPackage,
+    staleTime: 2 * 60 * 1000, // Keep pairing data fresh for 2 minutes
+    refetchOnMount: false,
   });
 
   // Query for user data
@@ -155,6 +169,8 @@ export default function Dashboard() {
       });
     },
     enabled: !!seniorityNumber,
+    staleTime: 15 * 60 * 1000, // User data is stable for 15 minutes
+    refetchOnMount: false,
   });
 
   // Query for user's favorites
