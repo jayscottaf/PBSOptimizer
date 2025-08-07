@@ -166,6 +166,16 @@ export function CalendarView({ userId }: CalendarViewProps) {
   else if (ratio >= 1.2) ratioLabel = 'Good';
   else if (ratio >= 1.1) ratioLabel = 'Average';
 
+  // Calculate dynamic ratio range from all pairings in the calendar
+  const allRatios = events.map(event => {
+    const creditHours = parseFloat(event.pairing?.creditHours?.toString() || '0') || 0;
+    const blockHours = parseFloat(event.pairing?.blockHours?.toString() || '0') || 0;
+    return blockHours > 0 ? creditHours / blockHours : 0;
+  }).filter(r => r > 0);
+
+  const minRatio = allRatios.length > 0 ? Math.min(...allRatios) : 1.0;
+  const maxRatio = allRatios.length > 0 ? Math.max(...allRatios) : 1.72;
+
   // Calculate weeks for the calendar
   const weeks = [];
   for (let i = 0; i < calendarDays.length; i += 7) {
@@ -525,7 +535,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-blue-600">
-                    {Math.round(Math.min(100, Math.max(0, ((ratio - 1.0) / (1.72 - 1.0)) * 100)))}%
+                    {Math.round(Math.min(100, Math.max(0, ((ratio - minRatio) / (maxRatio - minRatio)) * 100)))}%
                   </div>
                   <div className="text-sm text-blue-600 font-medium">Excellent</div>
                 </div>
