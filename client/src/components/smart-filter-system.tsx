@@ -265,7 +265,7 @@ export function SmartFilterSystem({
       )}
 
       {/* Quick Filter Buttons */}
-      <div className="space-y-2"></div>
+      <div className="space-y-2">
         <span className="text-sm text-gray-500">Quick filters:</span>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <Button 
