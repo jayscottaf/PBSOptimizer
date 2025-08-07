@@ -207,10 +207,18 @@ export default function Dashboard() {
 
   const addFilter = (key: string, label: string, value: any) => {
     if (value !== undefined && value !== null && value !== '') {
+      // Determine the filter category for replacement logic
+      const isCreditFilter = key === 'creditRange' || key === 'creditMin' || key === 'creditMax';
+      const isBlockFilter = key === 'blockRange' || key === 'blockMin' || key === 'blockMax';
+      
       if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
         // Handle range filters specially
         setActiveFilters(prev => [
-          ...prev.filter(f => !f.key.startsWith(key.replace('Range', ''))),
+          ...prev.filter(f => 
+            isCreditFilter ? !f.key.match(/^credit/) : 
+            isBlockFilter ? !f.key.match(/^block/) : 
+            f.key !== key
+          ),
           { key, label, value }
         ]);
         setFilters(prev => {
@@ -227,11 +235,27 @@ export default function Dashboard() {
           return { ...newFilters, ...value };
         });
       } else {
+        // Handle single filters - remove existing filters of the same category
         setActiveFilters(prev => [
-          ...prev.filter(f => f.key !== key),
+          ...prev.filter(f => 
+            isCreditFilter ? !f.key.match(/^credit/) : 
+            isBlockFilter ? !f.key.match(/^block/) : 
+            f.key !== key
+          ),
           { key, label, value }
         ]);
-        setFilters(prev => ({ ...prev, [key]: value }));
+        setFilters(prev => {
+          const newFilters = { ...prev };
+          // Clear related filters when adding a new one of the same category
+          if (isCreditFilter) {
+            delete newFilters.creditMin;
+            delete newFilters.creditMax;
+          } else if (isBlockFilter) {
+            delete newFilters.blockMin;
+            delete newFilters.blockMax;
+          }
+          return { ...newFilters, [key]: value };
+        });
       }
     }
   };
