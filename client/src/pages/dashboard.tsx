@@ -512,16 +512,15 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-3 sm:w-auto">
+                  <TabsList className="grid grid-cols-2 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
-                    <TabsTrigger value="profile">Profile</TabsTrigger>
                   </TabsList>
                   <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => setShowProfileModal(true)}
-                    className="flex items-center gap-2 hover:bg-gray-50 transition-colors"
+                    className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 hover:scale-105"
                     title="User Profile"
                   >
                     <User className="h-4 w-4" />
@@ -655,72 +654,7 @@ export default function Dashboard() {
               )}
             </TabsContent>
 
-            {/* Profile Tab */}
-            <TabsContent value="profile" className="flex-1 overflow-auto">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <User className="h-5 w-5" />
-                      Profile Information
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
-                        <Input
-                          value={seniorityNumber}
-                          onChange={(e) => setSeniorityNumber(e.target.value)}
-                          placeholder="Enter seniority number"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 mb-1 block">Category Seniority %</label>
-                        <Input
-                          value={seniorityPercentile}
-                          onChange={(e) => setSeniorityPercentile(e.target.value)}
-                          placeholder="Enter seniority percentile"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
-                        <Select value={base} onValueChange={setBase}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select base" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="NYC">NYC</SelectItem>
-                            <SelectItem value="ATL">ATL</SelectItem>
-                            <SelectItem value="DFW">DFW</SelectItem>
-                            <SelectItem value="LAX">LAX</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
-                        <Select value={aircraft} onValueChange={setAircraft}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select aircraft" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="A220">A220</SelectItem>
-                            <SelectItem value="A320">A320</SelectItem>
-                            <SelectItem value="A350">A350</SelectItem>
-                            <SelectItem value="B737">B737</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="flex justify-end pt-6">
-                      <Button onClick={() => setShowProfileModal(true)}>
-                        Update Profile
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
+            
           </Tabs>
         </div>
       </div>
