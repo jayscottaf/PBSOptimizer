@@ -189,18 +189,40 @@ export default function Dashboard() {
     setActiveFilters(prev => prev.filter(f => f.key !== keyToRemove));
     setFilters(prev => {
       const newFilters = { ...prev };
-      delete newFilters[keyToRemove as keyof SearchFilters];
+      if (keyToRemove === 'creditRange') {
+        // Remove both min and max for credit range
+        delete newFilters.creditMin;
+        delete newFilters.creditMax;
+      } else {
+        delete newFilters[keyToRemove as keyof SearchFilters];
+      }
       return newFilters;
     });
   };
 
   const addFilter = (key: string, label: string, value: any) => {
     if (value !== undefined && value !== null && value !== '') {
-      setActiveFilters(prev => [
-        ...prev.filter(f => f.key !== key),
-        { key, label, value }
-      ]);
-      setFilters(prev => ({ ...prev, [key]: value }));
+      if (key === 'creditRange' && typeof value === 'object') {
+        // Handle credit range filters specially
+        setActiveFilters(prev => [
+          ...prev.filter(f => !f.key.startsWith('credit')),
+          { key, label, value }
+        ]);
+        setFilters(prev => {
+          const newFilters = { ...prev };
+          // Clear any existing credit filters
+          delete newFilters.creditMin;
+          delete newFilters.creditMax;
+          // Apply the range
+          return { ...newFilters, ...value };
+        });
+      } else {
+        setActiveFilters(prev => [
+          ...prev.filter(f => f.key !== key),
+          { key, label, value }
+        ]);
+        setFilters(prev => ({ ...prev, [key]: value }));
+      }
     }
   };
 

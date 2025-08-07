@@ -251,11 +251,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (filters.creditMin !== undefined) {
-      conditions.push(gte(pairings.creditHours, filters.creditMin.toString()));
+      conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`);
     }
 
     if (filters.creditMax !== undefined) {
-      conditions.push(lte(pairings.creditHours, filters.creditMax.toString()));
+      conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`);
     }
 
     if (filters.blockMin !== undefined) {
