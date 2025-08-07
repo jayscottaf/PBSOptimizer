@@ -228,6 +228,7 @@ export default function Dashboard() {
       // Determine the filter category for replacement logic
       const isCreditFilter = key === 'creditRange' || key === 'creditMin' || key === 'creditMax';
       const isBlockFilter = key === 'blockRange' || key === 'blockMin' || key === 'blockMax';
+      const isPairingDaysFilter = key === 'pairingDays' || key === 'pairingDaysMin' || key === 'pairingDaysMax';
 
       if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
         // Handle range filters specially
@@ -258,6 +259,7 @@ export default function Dashboard() {
           ...prev.filter(f => 
             isCreditFilter ? !f.key.match(/^credit/) : 
             isBlockFilter ? !f.key.match(/^block/) : 
+            isPairingDaysFilter ? !f.key.match(/^pairingDays/) :
             f.key !== key
           ),
           { key, label, value }
@@ -271,6 +273,10 @@ export default function Dashboard() {
           } else if (isBlockFilter) {
             delete newFilters.blockMin;
             delete newFilters.blockMax;
+          } else if (isPairingDaysFilter) {
+            delete newFilters.pairingDays;
+            delete newFilters.pairingDaysMin;
+            delete newFilters.pairingDaysMax;
           }
           return { ...newFilters, [key]: value };
         });

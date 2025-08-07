@@ -39,7 +39,14 @@ const filterOptions: FilterOption[] = [
       { value: 8.0, label: "Moderate (8:00-15:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 15.0 } },
       { value: 15.0, label: "Heavy (15:00-25:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 25.0 } },
       { value: 25.0, label: "Max Credit (25:00+)", filterKey: "creditMin" },
+    ]
+  },
+  {
+    key: "turnFilters",
+    label: "Turn Filters",
+    dataOptions: [
       { value: 8.0, label: "Turns Only (≤8:00)", filterKey: "creditMax" },
+      { value: 1, label: "Single Day Only", filterKey: "pairingDays" },
     ]
   },
   {
@@ -104,11 +111,18 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
 
     if (!functionOption || !dataOption) return;
 
-    // For credit hours and block hours, clear conflicting filters first
+    // Clear conflicting filters based on category
     if (functionOption.key === 'creditHours') {
       onFilterClear('creditMin');
       onFilterClear('creditMax');
       onFilterClear('creditRange');
+    } else if (functionOption.key === 'turnFilters') {
+      // Turn filters should clear existing credit and pairing day filters
+      onFilterClear('creditMin');
+      onFilterClear('creditMax');
+      onFilterClear('creditRange');
+      onFilterClear('pairingDaysMin');
+      onFilterClear('pairingDaysMax');
     } else if (functionOption.key === 'blockHours') {
       onFilterClear('blockMin');
       onFilterClear('blockMax');
@@ -199,7 +213,11 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => onFilterApply("pairingDays", 1, "Turns Only")}
+          onClick={() => {
+            onFilterClear("creditMin");
+            onFilterClear("creditMax");
+            onFilterApply("creditMax", 8.0, "Turns Only (≤8:00)");
+          }}
         >
           Turns Only
         </Button>
@@ -213,7 +231,10 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => onFilterApply("creditMin", 15.0, "High Credit")}
+          onClick={() => {
+            onFilterClear("creditMax");
+            onFilterApply("creditMin", 15.0, "High Credit (15:00+)");
+          }}
         >
           High Credit (15:00+)
         </Button>
