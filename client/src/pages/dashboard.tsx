@@ -186,6 +186,8 @@ export default function Dashboard() {
       }
     },
     enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000, // Favorites don't change often - 5 minutes
+    refetchOnMount: false,
   });
 
   const handleDeleteFavorite = async (pairingId: number) => {
