@@ -111,7 +111,7 @@ export default function Dashboard() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  
+
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -526,6 +526,14 @@ export default function Dashboard() {
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
                   <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setActiveTab("favorites")}
+                    className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
+                  >
+                    <Star className="h-4 w-4" />
+                  </Button>
+                  <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => setShowAIAssistant(true)}
@@ -534,7 +542,7 @@ export default function Dashboard() {
                   >
                     <Bot className="h-4 w-4 text-green-600 hover:text-green-700" />
                   </Button>
-                  
+
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -573,7 +581,7 @@ export default function Dashboard() {
                     </CardHeader>
                     {showQuickStats && (
                       <CardContent>
-                        <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} hideHeader={true} />
+                        <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
                       </CardContent>
                     )}
                   </Card>
@@ -728,7 +736,7 @@ export default function Dashboard() {
               )}
             </TabsContent>
 
-            
+
           </Tabs>
         </div>
       </div>
@@ -845,7 +853,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      
+
 
       {/* Profile Modal (moved inside the Profile tab content for better UX) */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
