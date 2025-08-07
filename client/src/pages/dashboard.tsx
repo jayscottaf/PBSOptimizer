@@ -505,22 +505,11 @@ export default function Dashboard() {
                     <Plane className="h-6 w-6 text-blue-600" />
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-900">PBS Bid Optimizer</h1>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {currentUser && (
-                      <Badge variant="outline" className="text-xs">
-                        Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentile?.toFixed(1)}%)
-                      </Badge>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowProfileModal(true)}
-                      className="flex items-center gap-2"
-                    >
-                      <User className="h-4 w-4" />
-                      <span className="hidden sm:inline">Profile</span>
-                    </Button>
-                  </div>
+                  {currentUser && (
+                    <Badge variant="outline" className="text-xs">
+                      Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentile?.toFixed(1)}%)
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <TabsList className="grid grid-cols-3 sm:w-auto">
@@ -528,6 +517,15 @@ export default function Dashboard() {
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                     <TabsTrigger value="profile">Profile</TabsTrigger>
                   </TabsList>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowProfileModal(true)}
+                    className="flex items-center gap-2 hover:bg-gray-50 transition-colors"
+                    title="User Profile"
+                  >
+                    <User className="h-4 w-4" />
+                  </Button>
                   <Button 
                     variant="outline" 
                     size="sm"
