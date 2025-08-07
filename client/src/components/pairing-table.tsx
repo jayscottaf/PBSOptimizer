@@ -2,9 +2,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Eye, Bookmark, Star, X } from "lucide-react";
+import { Eye, Bookmark, Star, X, Calendar } from "lucide-react";
 import type { Pairing } from "@/lib/api";
 import { useState } from "react";
+import { api } from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 interface PairingTableProps {
   pairings: Pairing[];
@@ -14,18 +17,109 @@ interface PairingTableProps {
   onPairingClick?: (pairing: Pairing) => void;
   showDeleteButton?: boolean;
   onDeleteFavorite?: (pairingId: number) => void;
+  showAddToCalendar?: boolean;
+  currentUser?: any;
 }
 
-export function PairingTable({ 
-  pairings, 
-  onSort, 
-  sortColumn, 
-  sortDirection, 
-  onPairingClick, 
-  showDeleteButton = false, 
-  onDeleteFavorite 
+export function PairingTable({
+  pairings,
+  onSort,
+  sortColumn,
+  sortDirection,
+  onPairingClick,
+  showDeleteButton = false,
+  onDeleteFavorite,
+  showAddToCalendar = false,
+  currentUser
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
+  const queryClient = useQueryClient();
+
+  // Add to calendar mutation
+  const addToCalendarMutation = useMutation({
+    mutationFn: async ({ userId, pairingId, startDate, endDate }: {
+      userId: number;
+      pairingId: number;
+      startDate: Date;
+      endDate: Date;
+    }) => {
+      return api.addToCalendar(userId, pairingId, startDate, endDate);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      toast({ title: 'Success', description: 'Pairing added to calendar successfully!' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to add pairing to calendar', variant: 'destructive' });
+    },
+  });
+
+  const handleAddToCalendar = async (pairing: any) => {
+    if (!currentUser) {
+      toast({ title: 'Error', description: 'User not found', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      // Parse effective dates similar to pairing modal logic
+      const effectiveDateStr = pairing.effectiveDates;
+      const currentYear = new Date().getFullYear();
+
+      const monthMap: { [key: string]: number } = {
+        'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+        'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+      };
+
+      // Function to parse a single date like "SEP10" or "31AUG"
+      const parseSingleDate = (dateStr: string) => {
+        const match = dateStr.match(/(\d{1,2})([A-Z]{3})|([A-Z]{3})(\d{1,2})/);
+        if (match) {
+          const [, dayFirst, monthFirst, monthSecond, daySecond] = match;
+          const day = dayFirst || daySecond;
+          const month = monthFirst || monthSecond;
+
+          if (month in monthMap && day) {
+            return new Date(currentYear, monthMap[month], parseInt(day));
+          }
+        }
+        return null;
+      };
+
+      let startDate: Date | null = null;
+
+      // Check for date range format "01SEP-30SEP"
+      const rangeMatch = effectiveDateStr.match(/(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/);
+      if (rangeMatch) {
+        const [, startDay, startMonth] = rangeMatch;
+        if (startMonth in monthMap) {
+          startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+        }
+      } else {
+        // Try parsing as single date
+        startDate = parseSingleDate(effectiveDateStr);
+      }
+
+      if (!startDate) {
+        toast({ title: 'Error', description: 'Could not parse effective date', variant: 'destructive' });
+        return;
+      }
+
+      const pairingDays = pairing.pairingDays || 4;
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + pairingDays - 1);
+
+      addToCalendarMutation.mutate({
+        userId: currentUser.id,
+        pairingId: pairing.id,
+        startDate,
+        endDate
+      });
+
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to add pairing to calendar', variant: 'destructive' });
+    }
+  };
+
 
   const handlePairingClick = (pairing: Pairing) => {
     if (onPairingClick) {
@@ -72,7 +166,7 @@ export function PairingTable({
         <table className="w-full min-w-[800px] sm:min-w-[900px] lg:min-w-[1000px]">
           <thead className="bg-gray-50">
             <tr>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('pairingNumber', sortColumn === 'pairingNumber' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -88,7 +182,7 @@ export function PairingTable({
               <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] sm:min-w-[150px]">
                 Route
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('creditHours', sortColumn === 'creditHours' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -101,7 +195,7 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('blockHours', sortColumn === 'blockHours' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -114,7 +208,7 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('tafb', sortColumn === 'tafb' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -127,7 +221,7 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('pairingDays', sortColumn === 'pairingDays' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -140,7 +234,7 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('creditBlockRatio', sortColumn === 'creditBlockRatio' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -153,7 +247,7 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th 
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
                 onClick={() => onSort('holdProbability', sortColumn === 'holdProbability' && sortDirection === 'desc' ? 'asc' : 'desc')}
               >
@@ -166,14 +260,16 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
-                    Actions
-                  </th>
-                  {showDeleteButton && (
-                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
-                      Remove
-                    </th>
-                  )}
+              {(showDeleteButton || showAddToCalendar) && (
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
+                  Actions
+                </th>
+              )}
+              {showDeleteButton && (
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
+                  Remove
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -263,32 +359,41 @@ export function PairingTable({
                       </span>
                     </div>
                   </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePairingClick(pairing);
-                        }}
-                      >
-                        <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Handle favorite toggle
-                        }}
-                      >
-                        <Bookmark className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </Button>
-                    </div>
-                  </td>
+                  {(showDeleteButton || showAddToCalendar) && (
+                    <td className="py-2 px-4 text-center border-b">
+                      <div className="flex items-center justify-center gap-1">
+                        {showAddToCalendar && currentUser && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddToCalendar(pairing);
+                            }}
+                            disabled={addToCalendarMutation.isPending}
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                            title="Add to Calendar"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {showDeleteButton && onDeleteFavorite && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteFavorite(pairing.id);
+                            }}
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                            title="Remove from favorites"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                   {showDeleteButton && (
                     <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-center">
                       <Button
