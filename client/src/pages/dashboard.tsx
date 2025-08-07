@@ -326,6 +326,9 @@ export default function Dashboard() {
               <div className="hidden md:flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
                 <span className="hidden lg:inline">Seniority:</span>
                 <span className="font-mono font-medium text-blue-600">#{seniorityNumber}</span>
+                {seniorityPercentile && (
+                  <span className="font-mono font-medium text-purple-600">({seniorityPercentile}%)</span>
+                )}
                 <span className="text-gray-400 hidden lg:inline">|</span>
                 <span className="font-medium hidden lg:inline">{base} {aircraft} FO</span>
               </div>
