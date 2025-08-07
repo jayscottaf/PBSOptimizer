@@ -39,7 +39,7 @@ const filterOptions: FilterOption[] = [
       { value: 8.0, label: "Moderate (8:00-15:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 15.0 } },
       { value: 15.0, label: "Heavy (15:00-25:00)", filterKey: "creditMin", additionalFilter: { key: "creditMax", value: 25.0 } },
       { value: 25.0, label: "Max Credit (25:00+)", filterKey: "creditMin" },
-      { value: 0.0, label: "Turns Only (≤8:00)", filterKey: "creditMax" },
+      { value: 8.0, label: "Turns Only (≤8:00)", filterKey: "creditMax" },
     ]
   },
   {
