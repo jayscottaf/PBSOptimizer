@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showFilters, setShowFilters] = useState(false);
+  const [showQuickStats, setShowQuickStats] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Debounce filters to prevent excessive API calls
@@ -540,7 +541,24 @@ export default function Dashboard() {
               {/* Mobile Stats Panel - Only show on mobile and when we have bid package data */}
               {bidPackageId && (
                 <div className="lg:hidden">
-                  <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BarChart2 className="h-5 w-5" />
+                          Quick Stats
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setShowQuickStats(!showQuickStats)}>
+                          {showQuickStats ? 'Hide' : 'Show'}
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    {showQuickStats && (
+                      <CardContent>
+                        <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} hideHeader={true} />
+                      </CardContent>
+                    )}
+                  </Card>
                 </div>
               )}
             </div>
