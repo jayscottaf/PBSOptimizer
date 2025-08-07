@@ -38,6 +38,7 @@ const searchFiltersSchema = z.object({
   pairingDays: z.number().optional(),
   pairingDaysMin: z.number().optional(),
   pairingDaysMax: z.number().optional(),
+  efficiency: z.number().optional(),
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
