@@ -89,6 +89,16 @@ export default function Dashboard() {
     localStorage.setItem('aircraft', aircraft);
   }, [seniorityNumber, seniorityPercentile, base, aircraft]);
 
+  // Find the latest completed bid package
+  const latestBidPackage = React.useMemo(() => {
+    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
+      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+        return pkg;
+      }
+      return latest;
+    }, null);
+  }, [bidPackages]);
+
   // Track when seniority percentage changes and trigger loading state
   React.useEffect(() => {
     if (seniorityPercentile && latestBidPackage) {
@@ -122,16 +132,6 @@ export default function Dashboard() {
     queryKey: ["bidPackages"],
     queryFn: api.getBidPackages,
   });
-
-  // Find the latest completed bid package
-  const latestBidPackage = React.useMemo(() => {
-    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
-      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
-        return pkg;
-      }
-      return latest;
-    }, null);
-  }, [bidPackages]);
 
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
     queryKey: ["pairings", latestBidPackage?.id, filters, seniorityPercentile],
