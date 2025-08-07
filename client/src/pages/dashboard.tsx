@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +35,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ProfileModal } from "@/components/profile-modal";
 
 interface SearchFilters {
   search?: string;
@@ -61,7 +61,6 @@ interface Pairing {
   blockHours: string;
   tafb: string;
   holdProbability: string;
-  pairingDays: string;
   // ... other properties
 }
 
@@ -90,7 +89,7 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  
+
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
@@ -396,7 +395,7 @@ export default function Dashboard() {
                     // Expanded view - show full stats panel
                     <div className="space-y-6">
                       <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
-                      
+
                       {/* Additional Tools Section */}
                       <div className="pt-4 border-t border-gray-200">
                         <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">

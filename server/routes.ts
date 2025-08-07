@@ -193,9 +193,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
 
         if (!pairing) {
-          return res.status(404).json({ 
-            message: "Pairing not found", 
-            pairingNumber, 
+          return res.status(404).json({
+            message: "Pairing not found",
+            pairingNumber,
             bidPackageId: recentBidPackage.id,
             totalPairings: allPairings.length,
             samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
@@ -213,9 +213,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
 
         if (!pairing) {
-          return res.status(404).json({ 
-            message: "Pairing not found", 
-            pairingNumber, 
+          return res.status(404).json({
+            message: "Pairing not found",
+            pairingNumber,
             bidPackageId,
             totalPairings: allPairings.length,
             samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
@@ -310,12 +310,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/calendar", async (req, res) => {
     try {
       const { userId, pairingId, startDate, endDate, notes } = req.body;
-      const event = await storage.addUserCalendarEvent({ 
-        userId, 
-        pairingId, 
+      const event = await storage.addUserCalendarEvent({
+        userId,
+        pairingId,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        notes 
+        notes
       });
       res.json(event);
     } catch (error) {
@@ -341,12 +341,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = parseInt(req.params.userId);
       const { startDate, endDate } = req.query;
-      
+
       if (startDate && endDate) {
         // Use date range query
         const events = await storage.getUserCalendarEventsInRange(
-          userId, 
-          new Date(startDate as string), 
+          userId,
+          new Date(startDate as string),
           new Date(endDate as string)
         );
         res.json(events);
@@ -441,15 +441,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (finalBidPackageId) {
         try {
           const { hybridService } = await import("./openai");
-          const result = await hybridService.analyzeQuery({ 
-            message: question, 
-            bidPackageId: finalBidPackageId 
+          const result = await hybridService.analyzeQuery({
+            message: question,
+            bidPackageId: finalBidPackageId
           });
 
-          res.json({ 
-            reply: result.response, 
+          res.json({
+            reply: result.response,
             data: result.data,
-            truncated: result.truncated 
+            truncated: result.truncated
           });
           return;
         } catch (hybridError) {
@@ -457,7 +457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // If it's a rate limit error, provide a specific message
           if (hybridError.message && hybridError.message.includes('rate_limit_exceeded')) {
-            res.json({ 
+            res.json({
               reply: "I'm experiencing high demand right now. Please try your question again in a moment, or try asking for more specific information to reduce the processing load."
             });
             return;
@@ -465,7 +465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // If it's a token limit error, provide helpful guidance
           if (hybridError.message && hybridError.message.includes('context_length_exceeded')) {
-            res.json({ 
+            res.json({
               reply: "This query involves too much data to process at once. Please refine your search with more specific filters, such as:\n\n• 'Show me high credit 3-day pairings'\n• 'Find efficient turns with good hold probability'\n• 'Analyze layovers in DFW'\n\nThis will help me provide more detailed insights."
             });
             return;
@@ -475,9 +475,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             const { PairingAnalysisService } = await import("./openai");
             const analysisService = new PairingAnalysisService();
-            const result = await analysisService.analyzeQuery({ 
-              message: question, 
-              bidPackageId: finalBidPackageId 
+            const result = await analysisService.analyzeQuery({
+              message: question,
+              bidPackageId: finalBidPackageId
             }, storage);
 
             res.json({ reply: result.response, data: result.data });
