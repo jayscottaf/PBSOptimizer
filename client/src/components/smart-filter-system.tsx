@@ -104,6 +104,17 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
 
     if (!functionOption || !dataOption) return;
 
+    // For credit hours and block hours, clear conflicting filters first
+    if (functionOption.key === 'creditHours') {
+      onFilterClear('creditMin');
+      onFilterClear('creditMax');
+      onFilterClear('creditRange');
+    } else if (functionOption.key === 'blockHours') {
+      onFilterClear('blockMin');
+      onFilterClear('blockMax');
+      onFilterClear('blockRange');
+    }
+
     // Handle range filters (like credit hours and block hours) specially
     if (dataOption.additionalFilter) {
       // For range filters, create a combined filter object
