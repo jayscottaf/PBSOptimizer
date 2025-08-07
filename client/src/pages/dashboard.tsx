@@ -22,7 +22,8 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  Bot
+  Bot,
+  Star
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -111,6 +112,7 @@ export default function Dashboard() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -531,6 +533,15 @@ export default function Dashboard() {
                   <Button 
                     variant="outline" 
                     size="sm"
+                    onClick={() => setShowFavoritesModal(true)}
+                    className="flex items-center justify-center w-9 h-9 hover:bg-yellow-50 hover:border-yellow-300 transition-all duration-200 hover:scale-105 hover:shadow-md"
+                    title="View Favorites"
+                  >
+                    <Star className="h-4 w-4 text-yellow-600 hover:text-yellow-700" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
                     onClick={() => setShowProfileModal(true)}
                     className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 hover:scale-105"
                     title="User Profile"
@@ -793,6 +804,44 @@ export default function Dashboard() {
                 <div className="text-center">
                   <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p>Upload a bid package to start using the AI assistant</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Favorites Modal */}
+      <Dialog open={showFavoritesModal} onOpenChange={setShowFavoritesModal}>
+        <DialogContent className="max-w-5xl h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-yellow-600" />
+              Your Favorites
+            </DialogTitle>
+            <DialogDescription>
+              View and manage your favorite pairings
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {favorites && favorites.length > 0 ? (
+              <div className="h-full">
+                <PairingTable 
+                  pairings={favorites} 
+                  onSort={handleSort}
+                  sortColumn={sortColumn || ''}
+                  sortDirection={sortDirection}
+                  onPairingClick={handlePairingClick}
+                  showDeleteButton={true}
+                  onDeleteFavorite={handleDeleteFavorite}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <Star className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium mb-2">No favorites yet</p>
+                  <p className="text-sm">Start adding pairings to your favorites to see them here</p>
                 </div>
               </div>
             )}
