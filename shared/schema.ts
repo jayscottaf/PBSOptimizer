@@ -6,9 +6,11 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   seniorityNumber: integer("seniority_number").notNull(),
-  base: text("base").notNull(),
-  aircraft: text("aircraft").notNull(),
+  seniorityPercentile: integer("seniority_percentile").default(50), // 0-100, lower is more senior
+  base: varchar("base", { length: 10 }).notNull(),
+  aircraft: varchar("aircraft", { length: 50 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const bidPackages = pgTable("bid_packages", {
@@ -125,6 +127,7 @@ export const userCalendarEventsRelations = relations(userCalendarEvents, ({ one 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertBidPackageSchema = createInsertSchema(bidPackages).omit({
