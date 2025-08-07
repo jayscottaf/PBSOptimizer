@@ -80,7 +80,11 @@ const searchFiltersSchema = z.object({
   efficiency: z.number().optional(),
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express) {
+  // Health check endpoint
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
   // Seed database endpoint (development only)
   app.post("/api/seed", async (req, res) => {
@@ -237,7 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Searching pairings for bid package ${bidPackageId} with filters:`, filters);
       const pairings = await storage.searchPairings({ bidPackageId, ...filters });
 
-      // Ensure we always return an array
+      // Ensure we return an array
       const safePairings = Array.isArray(pairings) ? pairings : [];
       console.log(`Found ${safePairings.length} pairings`);
       res.json(safePairings);
