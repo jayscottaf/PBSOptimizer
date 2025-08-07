@@ -3,11 +3,49 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import { pairings } from "@shared/schema";
 
 import { openaiAssistant } from "./openaiAssistant";
 import multer from "multer";
 import { z } from "zod";
 import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
+
+// Function to recalculate hold probabilities with updated seniority
+async function recalculateHoldProbabilities(bidPackageId: number, seniorityPercentile: number) {
+  try {
+    const allPairings = await db.select().from(pairings).where(eq(pairings.bidPackageId, bidPackageId));
+
+    for (const pairing of allPairings) {
+      const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+      const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
+        pairing.pairingNumber,
+        allPairings
+      );
+      const startsOnWeekend = HoldProbabilityCalculator.startsOnWeekend(pairing);
+      const includesWeekendOff = HoldProbabilityCalculator.includesWeekendOff(pairing);
+
+      const holdProbabilityResult = HoldProbabilityCalculator.calculateHoldProbability({
+        seniorityPercentile,
+        desirabilityScore,
+        pairingFrequency,
+        startsOnWeekend,
+        includesDeadheads: pairing.deadheads || 0,
+        includesWeekendOff
+      });
+
+      await db
+        .update(pairings)
+        .set({ holdProbability: holdProbabilityResult.probability })
+        .where(eq(pairings.id, pairing.id));
+    }
+
+    console.log(`Recalculated hold probabilities for ${allPairings.length} pairings with seniority ${seniorityPercentile}%`);
+  } catch (error) {
+    console.error('Error recalculating hold probabilities:', error);
+  }
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -121,15 +159,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get pairings with optional filtering
   app.get("/api/pairings", async (req, res) => {
     try {
-      const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
+      const {
+        bidPackageId,
+        search,
+        creditMin,
+        creditMax,
+        blockMin,
+        blockMax,
+        tafb,
+        tafbMin,
+        tafbMax,
+        holdProbabilityMin,
+        pairingDays,
+        pairingDaysMin,
+        pairingDaysMax,
+        efficiency,
+        seniorityPercentile
+      } = req.query;
 
-      if (bidPackageId) {
-        const pairings = await storage.getPairings(bidPackageId);
-        res.json(pairings);
-      } else {
-        const pairings = await storage.getPairings();
-        res.json(pairings);
+      if (!bidPackageId) {
+        return res.status(400).json({ error: 'bidPackageId is required' });
       }
+
+      // If seniority percentile is provided, recalculate hold probabilities
+      if (seniorityPercentile) {
+        await recalculateHoldProbabilities(parseInt(bidPackageId as string), parseFloat(seniorityPercentile as string));
+      }
+
+      let query = db
+        .select()
+        .from(pairings)
+        .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
+
+      // Apply filters based on query parameters
+      if (search) {
+        query = query.where(
+          sql`
+            pairingNumber ILIKE ${`%${search}%`} OR
+            base ILIKE ${`%${search}%`} OR
+            aircraft ILIKE ${`%${search}%`} OR
+            notes ILIKE ${`%${search}%`}
+          `
+        );
+      }
+      if (creditMin) query = query.where(gte(pairings.creditHours, parseFloat(creditMin as string)));
+      if (creditMax) query = query.where(lte(pairings.creditHours, parseFloat(creditMax as string)));
+      if (blockMin) query = query.where(gte(pairings.blockHours, parseFloat(blockMin as string)));
+      if (blockMax) query = query.where(lte(pairings.blockHours, parseFloat(blockMax as string)));
+      if (tafb) query = query.where(eq(pairings.tafb, tafb as string));
+      if (tafbMin) query = query.where(gte(pairings.tafb, tafb as string));
+      if (tafbMax) query = query.where(lte(pairings.tafb, tafb as string));
+      if (holdProbabilityMin) query = query.where(gte(pairings.holdProbability, parseFloat(holdProbabilityMin as string)));
+      if (pairingDays) query = query.where(eq(pairings.pairingDays, parseInt(pairingDays as string)));
+      if (pairingDaysMin) query = query.where(gte(pairings.pairingDays, parseInt(pairingDaysMin as string)));
+      if (pairingDaysMax) query = query.where(lte(pairings.pairingDays, parseInt(pairingDaysMax as string)));
+      if (efficiency) query = query.where(gte(pairings.efficiency, parseFloat(efficiency as string)));
+
+      const pairingsResult = await query.execute();
+      res.json(pairingsResult);
     } catch (error) {
       console.error("Error fetching pairings:", error);
       res.status(500).json({ message: "Failed to fetch pairings" });

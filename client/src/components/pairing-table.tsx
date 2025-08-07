@@ -42,9 +42,13 @@ export function PairingTable({
   };
 
   const getProgressColor = (probability: number) => {
-    if (probability >= 80) return "bg-green-500";
-    if (probability >= 50) return "bg-yellow-500";
-    return "bg-red-500";
+    const seniorityPercentile = parseFloat(localStorage.getItem('seniorityPercentile') || '50');
+
+    // Color based on seniority percentile ranges
+    if (seniorityPercentile <= 25) return 'bg-green-500';
+    if (seniorityPercentile <= 50) return 'bg-yellow-500';
+    if (seniorityPercentile <= 75) return 'bg-orange-500';
+    return 'bg-red-500';
   };
 
   // Ensure pairings is always an array
@@ -221,21 +225,24 @@ export function PairingTable({
                       const ratio = parseFloat(pairing.creditHours.toString()) / parseFloat(pairing.blockHours.toString());
                       let colorClass = '';
                       let bgClass = '';
-                      
-                      if (ratio >= 1.3) {
+
+                      // Use seniority percentile for color coding if available
+                      const seniorityPercentile = parseFloat(localStorage.getItem('seniorityPercentile') || '50');
+
+                      if (seniorityPercentile <= 25) {
                         colorClass = 'text-green-700';
                         bgClass = 'bg-green-100';
-                      } else if (ratio >= 1.2) {
+                      } else if (seniorityPercentile <= 50) {
                         colorClass = 'text-yellow-700';
                         bgClass = 'bg-yellow-100';
-                      } else if (ratio >= 1.1) {
+                      } else if (seniorityPercentile <= 75) {
                         colorClass = 'text-orange-700';
                         bgClass = 'bg-orange-100';
                       } else {
                         colorClass = 'text-red-700';
                         bgClass = 'bg-red-100';
                       }
-                      
+
                       return (
                         <span className={`font-mono text-xs sm:text-sm font-medium px-2 py-1 rounded ${colorClass} ${bgClass}`}>
                           {ratio.toFixed(2)}

@@ -59,7 +59,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       description: "Profile updated successfully! Hold probabilities will be recalculated."
     });
 
-    // Refresh the page to recalculate hold probabilities
+    // Trigger a data refresh to recalculate hold probabilities
     window.location.reload();
   };
 
