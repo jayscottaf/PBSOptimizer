@@ -58,11 +58,11 @@ const filterOptions: FilterOption[] = [
     key: "holdProbability",
     label: "Hold Probability",
     dataOptions: [
-      { value: 0.9, label: "Senior (90%+)", filterKey: "holdProbabilityMin" },
-      { value: 0.7, label: "Good (70%+)", filterKey: "holdProbabilityMin" },
-      { value: 0.5, label: "Fair (50%+)", filterKey: "holdProbabilityMin" },
-      { value: 0.25, label: "Long Shot (25%+)", filterKey: "holdProbabilityMin" },
-      { value: 0.1, label: "Any Chance (10%+)", filterKey: "holdProbabilityMin" },
+      { value: 90, label: "Senior (90%+)", filterKey: "holdProbabilityMin" },
+      { value: 70, label: "Good (70%+)", filterKey: "holdProbabilityMin" },
+      { value: 50, label: "Fair (50%+)", filterKey: "holdProbabilityMin" },
+      { value: 25, label: "Long Shot (25%+)", filterKey: "holdProbabilityMin" },
+      { value: 10, label: "Any Chance (10%+)", filterKey: "holdProbabilityMin" },
     ]
   },
   {
@@ -191,7 +191,7 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => onFilterApply("holdProbabilityMin", 0.7, "Good Hold Probability")}
+          onClick={() => onFilterApply("holdProbabilityMin", 70, "Good Hold Probability")}
         >
           Good Hold (70%+)
         </Button>

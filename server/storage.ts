@@ -265,19 +265,19 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
     }
 
-    if (filters.holdProbabilityMin) {
+    if (filters.holdProbabilityMin !== undefined) {
       conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
     }
 
-        if (filters.pairingDays) {
+    if (filters.pairingDays !== undefined) {
       conditions.push(eq(pairings.pairingDays, filters.pairingDays));
     }
 
-    if (filters.pairingDaysMin) {
+    if (filters.pairingDaysMin !== undefined) {
       conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
     }
 
-    if (filters.pairingDaysMax) {
+    if (filters.pairingDaysMax !== undefined) {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
     }
 
@@ -290,24 +290,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-        let query = db.select().from(pairings)
+        let results = await db.select().from(pairings)
           .where(and(...conditions))
           .orderBy(asc(pairings.pairingNumber));
-
-        // Apply pairing days filter
-        if (filters.pairingDays !== undefined) {
-          query = query.where(eq(pairings.pairingDays, filters.pairingDays));
-        }
-
-        if (filters.pairingDaysMin !== undefined) {
-          query = query.where(gte(pairings.pairingDays, filters.pairingDaysMin));
-        }
-
-        if (filters.pairingDaysMax !== undefined) {
-          query = query.where(lte(pairings.pairingDays, filters.pairingDaysMax));
-        }
-
-        let results = await query;
 
         // Apply efficiency filter (credit/block ratio) after database query
         if (filters.efficiency !== undefined) {
