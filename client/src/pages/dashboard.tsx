@@ -156,17 +156,21 @@ export default function Dashboard() {
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
 
-  // Track when seniority percentage changes and trigger loading state
+  // Only update loading state when user manually changes seniority in profile
   React.useEffect(() => {
-    if (seniorityPercentile && latestBidPackage) {
-      setIsUpdatingSeniority(true);
-      const timer = setTimeout(() => {
-        setIsUpdatingSeniority(false);
-      }, 20000); // Reset after 20 seconds max
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'seniorityPercentile' && e.newValue !== e.oldValue) {
+        setIsUpdatingSeniority(true);
+        const timer = setTimeout(() => {
+          setIsUpdatingSeniority(false);
+        }, 5000); // Reset after 5 seconds
+        return () => clearTimeout(timer);
+      }
+    };
 
-      return () => clearTimeout(timer);
-    }
-  }, [seniorityPercentile, latestBidPackage]);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
     queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile],

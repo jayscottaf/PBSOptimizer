@@ -53,13 +53,25 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     localStorage.setItem('base', base);
     localStorage.setItem('aircraft', aircraft);
 
+    // Trigger storage event for seniority update
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'seniorityPercentile',
+      newValue: seniorityPercentile,
+      oldValue: localStorage.getItem('seniorityPercentile')
+    }));
+
     toast({
       title: "Success",
       description: "Profile updated successfully! Hold probabilities will be recalculated."
     });
 
+    // Close modal and refresh data without full page reload
+    onClose();
+    
     // Trigger a data refresh to recalculate hold probabilities
-    window.location.reload();
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   return (
