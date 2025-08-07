@@ -525,7 +525,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-blue-600">
-                    {Math.round((ratio * 50) + (Math.min(totalCreditHours / 85, 1) * 50))}%
+                    {Math.min(100, Math.round((ratio * 50) + (Math.min(totalCreditHours / 85, 1) * 50)))}%
                   </div>
                   <div className="text-sm text-blue-600 font-medium">Excellent</div>
                 </div>
