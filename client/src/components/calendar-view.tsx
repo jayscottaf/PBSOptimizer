@@ -166,15 +166,10 @@ export function CalendarView({ userId }: CalendarViewProps) {
   else if (ratio >= 1.2) ratioLabel = 'Good';
   else if (ratio >= 1.1) ratioLabel = 'Average';
 
-  // Calculate dynamic ratio range from all pairings in the calendar
-  const allRatios = events.map(event => {
-    const creditHours = parseFloat(event.pairing?.creditHours?.toString() || '0') || 0;
-    const blockHours = parseFloat(event.pairing?.blockHours?.toString() || '0') || 0;
-    return blockHours > 0 ? creditHours / blockHours : 0;
-  }).filter(r => r > 0);
-
-  const minRatio = allRatios.length > 0 ? Math.min(...allRatios) : 1.0;
-  const maxRatio = allRatios.length > 0 ? Math.max(...allRatios) : 1.72;
+  // Use realistic ratio range for efficiency scoring
+  // Most bid packages have ratios ranging from ~1.0 (poor) to ~1.8 (excellent)
+  const minRatio = 1.0;  // Equal credit and block hours (minimum efficiency)
+  const maxRatio = 1.8;  // Theoretical maximum for most bid packages
 
   // Calculate weeks for the calendar
   const weeks = [];
