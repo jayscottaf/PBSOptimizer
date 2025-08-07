@@ -250,7 +250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create/update user
   app.post('/api/user', async (req, res) => {
     try {
-      const { seniorityNumber, base, aircraft } = req.body;
+      const { seniorityNumber, seniorityPercentile, base, aircraft } = req.body;
 
       if (!seniorityNumber || !base || !aircraft) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -258,6 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createOrUpdateUser({
         seniorityNumber: parseInt(seniorityNumber),
+        seniorityPercentile: seniorityPercentile ? parseInt(seniorityPercentile) : 50,
         base,
         aircraft
       });

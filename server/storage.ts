@@ -1,12 +1,12 @@
-import { 
-  users, 
-  bidPackages, 
-  pairings, 
-  bidHistory, 
+import {
+  users,
+  bidPackages,
+  pairings,
+  bidHistory,
   userFavorites,
   chatHistory,
   userCalendarEvents,
-  type User, 
+  type User,
   type InsertUser,
   type BidPackage,
   type InsertBidPackage,
@@ -28,7 +28,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  createOrUpdateUser(userData: { seniorityNumber: number; base: string; aircraft: string }): Promise<User>;
+  createOrUpdateUser(userData: { seniorityNumber: number; seniorityPercentile?: number; base: string; aircraft: string }): Promise<User>;
   getUserBySeniority(seniorityNumber: number): Promise<User | undefined>;
 
   // Bid Package operations
@@ -102,8 +102,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createOrUpdateUser(userData: { seniorityNumber: number; base: string; aircraft: string }): Promise<User> {
-    // Check if user already exists
+  async createOrUpdateUser(userData: { seniorityNumber: number; seniorityPercentile?: number; base: string; aircraft: string }): Promise<User> {
     const existingUser = await this.getUserBySeniority(userData.seniorityNumber);
 
     if (existingUser) {
@@ -113,6 +112,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           base: userData.base,
           aircraft: userData.aircraft,
+          seniorityPercentile: userData.seniorityPercentile || existingUser.seniorityPercentile,
           updatedAt: new Date()
         })
         .where(eq(users.seniorityNumber, userData.seniorityNumber))
@@ -123,7 +123,8 @@ export class DatabaseStorage implements IStorage {
       return await this.createUser({
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
-        aircraft: userData.aircraft
+        aircraft: userData.aircraft,
+        seniorityPercentile: userData.seniorityPercentile || 50 // Default to 50 if not provided
       });
     }
   }
@@ -160,7 +161,7 @@ export class DatabaseStorage implements IStorage {
     // Delete associated data in the correct order (foreign key constraints)
     await db.delete(chatHistory).where(eq(chatHistory.bidPackageId, id));
     await db.delete(userFavorites).where(
-      eq(userFavorites.pairingId, 
+      eq(userFavorites.pairingId,
         db.select({ id: pairings.id }).from(pairings).where(eq(pairings.bidPackageId, id))
       )
     );
@@ -475,10 +476,10 @@ export class DatabaseStorage implements IStorage {
 
     const turnCount = allPairings.filter(p => p.pairingDays === 1).length;
     const multiDayCount = allPairings.filter(p => p.pairingDays > 1).length;
-    const deadheadCount = allPairings.filter(p => 
-      p.fullText?.includes('DH') || 
-      p.fullTextBlock?.includes('DH') || 
-      (p.flightSegments && Array.isArray(p.flightSegments) && 
+    const deadheadCount = allPairings.filter(p =>
+      p.fullText?.includes('DH') ||
+      p.fullTextBlock?.includes('DH') ||
+      (p.flightSegments && Array.isArray(p.flightSegments) &&
        p.flightSegments.some((seg: any) => seg.isDeadhead === true))
     ).length;
 
@@ -548,16 +549,16 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    const deadheadPairings = allPairings.filter(p => 
-      p.fullText?.includes('DH') || 
-      p.fullTextBlock?.includes('DH') || 
-      (p.flightSegments && Array.isArray(p.flightSegments) && 
+    const deadheadPairings = allPairings.filter(p =>
+      p.fullText?.includes('DH') ||
+      p.fullTextBlock?.includes('DH') ||
+      (p.flightSegments && Array.isArray(p.flightSegments) &&
        p.flightSegments.some((seg: any) => seg.isDeadhead === true))
     );
-    const nonDeadheadPairings = allPairings.filter(p => 
-      !(p.fullText?.includes('DH') || 
-        p.fullTextBlock?.includes('DH') || 
-        (p.flightSegments && Array.isArray(p.flightSegments) && 
+    const nonDeadheadPairings = allPairings.filter(p =>
+      !(p.fullText?.includes('DH') ||
+        p.fullTextBlock?.includes('DH') ||
+        (p.flightSegments && Array.isArray(p.flightSegments) &&
          p.flightSegments.some((seg: any) => seg.isDeadhead === true)))
     );
 

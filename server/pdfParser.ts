@@ -45,33 +45,31 @@ interface ParsedPairing {
 }
 
 export class PDFParser {
-  private calculateHoldProbability(pairing: ParsedPairing): number {
-    // Basic probability calculation based on credit hours, block time, and TAFB
-    const credit = parseFloat(pairing.creditHours);
-    const block = parseFloat(pairing.blockHours);
-    const tafbDays = this.extractTafbDays(pairing.tafb);
+  // Calculate hold probability using new tiered logic
+  private calculateHoldProbability(pairing: ParsedPairing, allPairings: ParsedPairing[]): number {
+    const { HoldProbabilityCalculator } = require('./holdProbabilityCalculator');
 
-    let probability = 50; // Base probability
+    // Default seniority percentile (this should come from user profile)
+    const seniorityPercentile = 50; // Middle seniority as default
 
-    // Higher credit hours = higher probability
-    if (credit >= 6.0) probability += 20;
-    else if (credit >= 5.5) probability += 10;
-    else if (credit < 5.0) probability -= 10;
+    const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+    const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
+      pairing.pairingNumber,
+      allPairings
+    );
+    const startsOnWeekend = HoldProbabilityCalculator.startsOnWeekend(pairing);
+    const includesWeekendOff = HoldProbabilityCalculator.includesWeekendOff(pairing);
 
-    // Lower block time per day = higher probability
-    const blockPerDay = block / tafbDays;
-    if (blockPerDay < 4.0) probability += 15;
-    else if (blockPerDay > 5.0) probability -= 10;
+    const result = HoldProbabilityCalculator.calculateHoldProbability({
+      seniorityPercentile,
+      desirabilityScore,
+      pairingFrequency,
+      startsOnWeekend,
+      includesDeadheads: pairing.deadheads,
+      includesWeekendOff
+    });
 
-    // TAFB preferences (3-4 days preferred)
-    if (tafbDays >= 3 && tafbDays <= 4) probability += 10;
-    else if (tafbDays > 5) probability -= 15;
-
-    // Deadheads reduce probability
-    probability -= (pairing.deadheads * 10);
-
-    // Ensure probability is between 0 and 100
-    return Math.max(0, Math.min(100, probability));
+    return result.probability;
   }
 
   private extractTafbDays(tafb: string): number {
@@ -204,9 +202,9 @@ export class PDFParser {
         const isDeadhead = line.includes('DH');
 
         // Check for duplicates before adding
-        const isDuplicate = flightSegments.some(seg => 
-          seg.flightNumber === dayFlightMatch[2] && 
-          seg.departure === dayFlightMatch[3] && 
+        const isDuplicate = flightSegments.some(seg =>
+          seg.flightNumber === dayFlightMatch[2] &&
+          seg.departure === dayFlightMatch[3] &&
           seg.departureTime === dayFlightMatch[4] &&
           seg.date === currentDay
         );
@@ -341,9 +339,9 @@ export class PDFParser {
           blockTime = '0' + blockTime;
         }
         // Check for duplicates before adding
-        const isDuplicate = flightSegments.some(seg => 
-          seg.flightNumber === standaloneFlight[1] && 
-          seg.departure === standaloneFlight[2] && 
+        const isDuplicate = flightSegments.some(seg =>
+          seg.flightNumber === standaloneFlight[1] &&
+          seg.departure === standaloneFlight[2] &&
           seg.departureTime === standaloneFlight[3] &&
           seg.date === currentDay
         );
@@ -376,9 +374,9 @@ export class PDFParser {
         }
 
         // Check for duplicates before adding
-        const isDuplicate = flightSegments.some(seg => 
-          seg.flightNumber === dayStartMatch[2] && 
-          seg.departure === dayStartMatch[3] && 
+        const isDuplicate = flightSegments.some(seg =>
+          seg.flightNumber === dayStartMatch[2] &&
+          seg.departure === dayStartMatch[3] &&
           seg.departureTime === dayStartMatch[4] &&
           seg.date === currentDay
         );
@@ -405,9 +403,9 @@ export class PDFParser {
         currentDay = singleDayFlight[1];
 
         // Check for duplicates before adding
-        const isDuplicate = flightSegments.some(seg => 
-          seg.flightNumber === singleDayFlight[2] && 
-          seg.departure === singleDayFlight[3] && 
+        const isDuplicate = flightSegments.some(seg =>
+          seg.flightNumber === singleDayFlight[2] &&
+          seg.departure === singleDayFlight[3] &&
           seg.departureTime === singleDayFlight[4] &&
           seg.date === currentDay
         );
@@ -544,9 +542,6 @@ export class PDFParser {
       checkInTime: checkInTime || undefined
     };
 
-    // Calculate hold probability
-    pairing.holdProbability = this.calculateHoldProbability(pairing);
-
     return pairing;
   }
 
@@ -578,7 +573,7 @@ export class PDFParser {
       }
 
       // Use standalone Node.js worker to avoid tsx/ES module conflicts
-      const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, { 
+      const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, {
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large PDFs
       });
@@ -628,7 +623,13 @@ export class PDFParser {
         }
       }
 
-      console.log(`Successfully parsed ${parsedPairings.length} pairings`);
+      console.log(`Successfully parsed ${parsedPairings.length} pairings from PDF`);
+
+      // Calculate hold probabilities now that we have all pairings
+      console.log('Calculating hold probabilities...');
+      for (const pairing of parsedPairings) {
+        pairing.holdProbability = this.calculateHoldProbability(pairing, parsedPairings);
+      }
 
       // Save pairings to database in batches for better performance
       const batchSize = 50;
