@@ -527,11 +527,18 @@ export default function Dashboard() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => setActiveTab("favorites")}
+                    onClick={() => {
+                      // Toggle between showing all pairings and favorites
+                      if (activeTab === "favorites") {
+                        setActiveTab("dashboard");
+                      } else {
+                        setActiveTab("favorites");
+                      }
+                    }}
                     className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
                   >
                     <Star className="h-4 w-4" />
-                  </Button>
+                  </Button></old_str>
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -682,6 +689,44 @@ export default function Dashboard() {
               </div>
             </TabsContent>
 
+            {/* Favorites Tab */}
+            <TabsContent value="favorites" className="flex-1 overflow-hidden">
+              <div className="space-y-6 h-full">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-lg font-medium flex items-center gap-2">
+                      <Star className="h-5 w-5 text-yellow-500" />
+                      Your Favorites
+                    </CardTitle>
+                    <span className="text-sm text-gray-500">
+                      {favorites.length} favorite pairings
+                    </span>
+                  </CardHeader>
+                  <CardContent className="flex-1 overflow-auto p-0">
+                    {favorites.length > 0 ? (
+                      <PairingTable 
+                        pairings={favorites} 
+                        onSort={handleSort}
+                        sortColumn={sortColumn || ''}
+                        sortDirection={sortDirection}
+                        onPairingClick={handlePairingClick}
+                        showDeleteButton={true}
+                        onDeleteFavorite={handleDeleteFavorite}
+                      />
+                    ) : (
+                      <div className="text-center py-8">
+                        <Star className="mx-auto h-16 w-16 text-gray-300" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">No Favorites Yet</h3>
+                        <p className="mt-2 text-sm text-gray-500">
+                          Click the star icon on any pairing to add it to your favorites.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
               {currentUser ? (
@@ -695,7 +740,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
-            </TabsContent>
+            </TabsContent></old_str>
 
 
           </Tabs>
