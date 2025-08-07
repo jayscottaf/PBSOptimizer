@@ -70,6 +70,9 @@ export default function Dashboard() {
   const [seniorityNumber, setSeniorityNumber] = useState(() => {
     return localStorage.getItem('seniorityNumber') || "15860";
   });
+  const [seniorityPercentile, setSeniorityPercentile] = useState(() => {
+    return localStorage.getItem('seniorityPercentile') || '';
+  });
   const [base, setBase] = useState(() => {
     return localStorage.getItem('base') || "NYC";
   });
@@ -80,9 +83,10 @@ export default function Dashboard() {
   // Save user info to localStorage when it changes
   React.useEffect(() => {
     localStorage.setItem('seniorityNumber', seniorityNumber);
+    localStorage.setItem('seniorityPercentile', seniorityPercentile);
     localStorage.setItem('base', base);
     localStorage.setItem('aircraft', aircraft);
-  }, [seniorityNumber, base, aircraft]);
+  }, [seniorityNumber, seniorityPercentile, base, aircraft]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -721,6 +725,14 @@ export default function Dashboard() {
                 value={seniorityNumber}
                 onChange={(e) => setSeniorityNumber(e.target.value)}
                 placeholder="Enter seniority number"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Category Seniority %</label>
+              <Input
+                value={seniorityPercentile}
+                onChange={(e) => setSeniorityPercentile(e.target.value)}
+                placeholder="Enter seniority percentile"
               />
             </div>
             <div>
