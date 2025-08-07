@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [seniorityPercentile, setSeniorityPercentile] = useState(() => {
     return localStorage.getItem('seniorityPercentile') || '';
   });
+  const [isUpdatingSeniority, setIsUpdatingSeniority] = useState(false);
   const [base, setBase] = useState(() => {
     return localStorage.getItem('base') || "NYC";
   });
@@ -87,6 +88,18 @@ export default function Dashboard() {
     localStorage.setItem('base', base);
     localStorage.setItem('aircraft', aircraft);
   }, [seniorityNumber, seniorityPercentile, base, aircraft]);
+
+  // Track when seniority percentage changes and trigger loading state
+  React.useEffect(() => {
+    if (seniorityPercentile && latestBidPackage) {
+      setIsUpdatingSeniority(true);
+      const timer = setTimeout(() => {
+        setIsUpdatingSeniority(false);
+      }, 20000); // Reset after 20 seconds max
+
+      return () => clearTimeout(timer);
+    }
+  }, [seniorityPercentile, latestBidPackage]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -128,6 +141,9 @@ export default function Dashboard() {
       ...filters
     }),
     enabled: !!latestBidPackage,
+    onSuccess: () => {
+      setIsUpdatingSeniority(false);
+    },
   });
 
   // Query for user data
@@ -330,6 +346,12 @@ export default function Dashboard() {
                 {seniorityPercentile && (
                   <span className="font-mono font-medium text-purple-600">({seniorityPercentile}%)</span>
                 )}
+                {isUpdatingSeniority && (
+                  <span className="flex items-center text-orange-600 text-xs">
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                    Updating...
+                  </span>
+                )}
                 <span className="text-gray-400 hidden lg:inline">|</span>
                 <span className="font-medium hidden lg:inline">{base} {aircraft} FO</span>
               </div>
@@ -523,13 +545,29 @@ export default function Dashboard() {
                           />
 
                           {/* Results */}
-                          <div>
+                          <div className="relative">
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
-                              <span className="text-sm text-gray-500">
-                                {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
-                              </span>
+                              <div className="flex items-center space-x-2">
+                                {isUpdatingSeniority && (
+                                  <span className="flex items-center text-orange-600 text-sm">
+                                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                    Recalculating hold probabilities...
+                                  </span>
+                                )}
+                                <span className="text-sm text-gray-500">
+                                  {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
+                                </span>
+                              </div>
                             </div>
+                            {isUpdatingSeniority && (
+                              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                                <div className="flex items-center space-x-2 text-orange-600">
+                                  <RefreshCw className="h-6 w-6 animate-spin" />
+                                  <span className="text-lg font-medium">Updating hold probabilities...</span>
+                                </div>
+                              </div>
+                            )}
                             <PairingTable 
                               pairings={sortedPairings || []} 
                               onSort={handleSort}
