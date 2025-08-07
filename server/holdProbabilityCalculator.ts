@@ -212,4 +212,72 @@ export class HoldProbabilityCalculator {
   static calculatePairingFrequency(pairingNumber: string, allPairings: any[]): number {
     return allPairings.filter(p => p.pairingNumber === pairingNumber).length;
   }
+
+  /**
+   * Main hold probability calculation
+   */
+  static calculateHoldProbability(params: {
+    seniorityPercentile: number;
+    desirabilityScore: number;
+    pairingFrequency: number;
+    startsOnWeekend: boolean;
+    includesDeadheads: number;
+    includesWeekendOff: boolean;
+  }): { probability: number; factors: any } {
+    const { seniorityPercentile, desirabilityScore, pairingFrequency, startsOnWeekend, includesDeadheads, includesWeekendOff } = params;
+
+    // Base probability based on seniority percentile
+    let baseProbability: number;
+    if (seniorityPercentile <= 25) {
+      baseProbability = 85; // Top 25% - very high hold probability
+    } else if (seniorityPercentile <= 50) {
+      baseProbability = 65; // Top 50% - good hold probability
+    } else if (seniorityPercentile <= 75) {
+      baseProbability = 45; // Top 75% - moderate hold probability
+    } else {
+      baseProbability = 25; // Bottom 25% - low hold probability
+    }
+
+    // Adjust based on desirability
+    let desirabilityAdjustment = 0;
+    if (desirabilityScore >= 80) {
+      desirabilityAdjustment = -15; // Very desirable = harder to hold
+    } else if (desirabilityScore >= 60) {
+      desirabilityAdjustment = -10; // Somewhat desirable
+    } else if (desirabilityScore <= 30) {
+      desirabilityAdjustment = 10; // Less desirable = easier to hold
+    }
+
+    // Frequency adjustment
+    const frequencyAdjustment = pairingFrequency > 1 ? 5 : 0;
+
+    // Weekend adjustments
+    const weekendStartAdjustment = startsOnWeekend ? -5 : 0;
+    const weekendOffAdjustment = includesWeekendOff ? -10 : 0;
+
+    // Deadhead adjustment
+    const deadheadAdjustment = includesDeadheads > 0 ? 5 : 0;
+
+    // Calculate final probability
+    const finalProbability = Math.max(5, Math.min(95, 
+      baseProbability + 
+      desirabilityAdjustment + 
+      frequencyAdjustment + 
+      weekendStartAdjustment + 
+      weekendOffAdjustment + 
+      deadheadAdjustment
+    ));
+
+    const factors = {
+      baseProbability,
+      desirabilityAdjustment,
+      frequencyAdjustment,
+      weekendStartAdjustment,
+      weekendOffAdjustment,
+      deadheadAdjustment
+    };
+
+    return { probability: Math.round(finalProbability), factors };
+  }airingNumber === pairingNumber).length;
+  }
 }

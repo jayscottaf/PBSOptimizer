@@ -105,7 +105,7 @@ export const api = {
         }
       });
 
-      const response = await fetch(`${API_BASE}/pairings?${params}`);
+      const response = await fetch(`/api/pairings?${params}`);
       if (!response.ok) {
         throw new Error('Failed to search pairings');
       }
@@ -126,6 +126,7 @@ export const api = {
   // User
   createOrUpdateUser: async (data: {
     seniorityNumber: number;
+    seniorityPercentile?: number;
     base: string;
     aircraft: string;
   }) => {
