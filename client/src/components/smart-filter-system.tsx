@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, X } from "lucide-react";
 
 interface FilterOption {
   key: string;
@@ -228,8 +229,43 @@ export function SmartFilterSystem({
         </Button>
       </div>
 
+      {/* Active Filters Display */}
+      {activeFilters.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">Active Filters:</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onClearFilters}
+              className="text-xs text-red-600 hover:text-red-700"
+            >
+              Clear All
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {activeFilters.map((filter, index) => (
+              <Badge 
+                key={index} 
+                variant="secondary" 
+                className="flex items-center gap-1 pr-1"
+              >
+                <span className="text-xs">{filter.label}</span>
+                <button
+                  onClick={() => onFilterClear(filter.key)}
+                  className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                  title="Remove filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick Filter Buttons */}
-      <div className="space-y-2">
+      <div className="space-y-2"></div>
         <span className="text-sm text-gray-500">Quick filters:</span>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <Button 
@@ -237,9 +273,11 @@ export function SmartFilterSystem({
             size="sm" 
             className="text-xs"
             onClick={() => {
-              onFilterClear("creditMin");
-              onFilterClear("creditMax");
-              onFilterApply("creditMax", 8.0, "Turns Only (≤8:00)");
+              // Clear existing credit filters
+              const newFilters: any = {};
+              newFilters.creditMin = undefined;
+              newFilters.creditMax = 8.0;
+              onFiltersChange(newFilters);
             }}
           >
             Turns Only
@@ -248,7 +286,11 @@ export function SmartFilterSystem({
             variant="outline" 
             size="sm" 
             className="text-xs"
-            onClick={() => onFilterApply("holdProbabilityMin", 70, "Good Hold Probability")}
+            onClick={() => {
+              const newFilters: any = {};
+              newFilters.holdProbabilityMin = 70;
+              onFiltersChange(newFilters);
+            }}
           >
             Good Hold
           </Button>
@@ -257,8 +299,10 @@ export function SmartFilterSystem({
             size="sm" 
             className="text-xs"
             onClick={() => {
-              onFilterClear("creditMax");
-              onFilterApply("creditMin", 15.0, "High Credit (15:00+)");
+              const newFilters: any = {};
+              newFilters.creditMin = 15.0;
+              newFilters.creditMax = undefined;
+              onFiltersChange(newFilters);
             }}
           >
             High Credit
@@ -267,7 +311,11 @@ export function SmartFilterSystem({
             variant="outline" 
             size="sm" 
             className="text-xs"
-            onClick={() => onFilterApply("pairingDaysMin", 2, "Multi-Day")}
+            onClick={() => {
+              const newFilters: any = {};
+              newFilters.pairingDaysMin = 2;
+              onFiltersChange(newFilters);
+            }}
           >
             Multi-Day
           </Button>

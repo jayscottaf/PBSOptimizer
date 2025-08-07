@@ -324,9 +324,61 @@ export default function Dashboard() {
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
-    setFilters(newFilters);
-    // Update activeFilters based on newFilters if needed for display
-    // This part might need more specific logic depending on how activeFilters is managed
+    setFilters(prev => ({ ...prev, ...newFilters }));
+    
+    // Update activeFilters to reflect the new filters
+    const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
+    
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        let label = '';
+        
+        // Generate appropriate labels for different filter types
+        switch (key) {
+          case 'creditMin':
+            label = `Credit: ≥${value}:00`;
+            break;
+          case 'creditMax':
+            label = `Credit: ≤${value}:00`;
+            break;
+          case 'blockMin':
+            label = `Block: ≥${value}:00`;
+            break;
+          case 'blockMax':
+            label = `Block: ≤${value}:00`;
+            break;
+          case 'holdProbabilityMin':
+            label = `Hold: ≥${value}%`;
+            break;
+          case 'pairingDaysMin':
+            label = `Days: ≥${value}`;
+            break;
+          case 'pairingDays':
+            label = `Days: ${value}`;
+            break;
+          case 'tafbMin':
+            label = `TAFB: ≥${value}hrs`;
+            break;
+          case 'tafbMax':
+            label = `TAFB: ≤${value}hrs`;
+            break;
+          case 'efficiency':
+            label = `Efficiency: ≥${value}`;
+            break;
+          default:
+            label = `${key}: ${value}`;
+        }
+        
+        updatedActiveFilters.push({ key, label, value });
+      }
+    });
+    
+    setActiveFilters(updatedActiveFilters);
+  };
+
+  const clearAllFilters = () => {
+    setFilters({});
+    setActiveFilters([]);
   };
 
 
@@ -619,7 +671,7 @@ export default function Dashboard() {
                             pairings={sortedPairings || []}
                             onFiltersChange={handleFiltersChange}
                             activeFilters={activeFilters}
-                            onClearFilters={() => setActiveFilters([])}
+                            onClearFilters={clearAllFilters}
                           />
                         </CardContent>
                       )}
@@ -641,7 +693,7 @@ export default function Dashboard() {
                         pairings={sortedPairings || []}
                         onFiltersChange={handleFiltersChange}
                         activeFilters={activeFilters}
-                        onClearFilters={() => setActiveFilters([])}
+                        onClearFilters={clearAllFilters}
                       />
                     </CardContent>
                   </Card>
