@@ -507,7 +507,7 @@ export default function Dashboard() {
                   </div>
                   {currentUser && (
                     <Badge variant="outline" className="text-xs">
-                      Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentile}%)
+                      Seniority #{currentUser.seniorityNumber} ({seniorityPercentile}%)
                     </Badge>
                   )}
                 </div>
