@@ -542,7 +542,7 @@ export default function Dashboard() {
                             <div className="flex flex-wrap gap-2">
                               {activeFilters.map((filter) => (
                                 <Badge key={filter.key} variant="secondary" className="flex items-center gap-1">
-                                  {filter.label}: {filter.value}
+                                  {filter.label}
                                   <X 
                                     className="h-3 w-3 cursor-pointer" 
                                     onClick={() => removeFilter(filter.key)}
