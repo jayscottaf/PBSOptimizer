@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Bot
 } from "lucide-react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StatsPanel } from "@/components/stats-panel";
@@ -109,6 +110,7 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -520,6 +522,15 @@ export default function Dashboard() {
                   <Button 
                     variant="outline" 
                     size="sm"
+                    onClick={() => setShowAIAssistant(true)}
+                    className="flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md"
+                    title="AI Assistant"
+                  >
+                    <Bot className="h-4 w-4 text-green-600 hover:text-green-700" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
                     onClick={() => setShowProfileModal(true)}
                     className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 hover:scale-105"
                     title="User Profile"
@@ -755,6 +766,36 @@ export default function Dashboard() {
               <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
               Supports NYC A220 bid packages (PDF or TXT format)
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Assistant Modal */}
+      <Dialog open={showAIAssistant} onOpenChange={setShowAIAssistant}>
+        <DialogContent className="max-w-4xl h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-green-600" />
+              PBS AI Assistant
+            </DialogTitle>
+            <DialogDescription>
+              Ask questions about your pairings, get bidding recommendations, and analyze your options
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {currentUser && latestBidPackage ? (
+              <PairingChat 
+                bidPackage={latestBidPackage}
+                currentUser={currentUser}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p>Upload a bid package to start using the AI assistant</p>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
