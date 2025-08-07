@@ -80,11 +80,11 @@ const filterOptions: FilterOption[] = [
     key: "efficiency",
     label: "Credit/Block Ratio",
     dataOptions: [
-      { value: 1.3, label: "Excellent (≥1.30)" },
-      { value: 1.2, label: "Very Good (≥1.20)" },
-      { value: 1.1, label: "Good (≥1.10)" },
-      { value: 1.0, label: "Average (≥1.00)" },
-      { value: 0.9, label: "Below Average (≥0.90)" },
+      { value: 1.3, label: "Excellent (≥1.30)", filterKey: "efficiency" },
+      { value: 1.2, label: "Very Good (≥1.20)", filterKey: "efficiency" },
+      { value: 1.1, label: "Good (≥1.10)", filterKey: "efficiency" },
+      { value: 1.0, label: "Average (≥1.00)", filterKey: "efficiency" },
+      { value: 0.9, label: "Below Average (≥0.90)", filterKey: "efficiency" },
     ]
   }
 ];

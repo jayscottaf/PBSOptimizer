@@ -58,6 +58,7 @@ export interface IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
+        efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]>;
 
   // Bid History operations
@@ -224,6 +225,7 @@ export class DatabaseStorage implements IStorage {
         pairingDays?: number;
         pairingDaysMin?: number;
         pairingDaysMax?: number;
+        efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]> {
     try {
       const conditions = [];
@@ -288,9 +290,36 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-        return await db.select().from(pairings)
+        let query = db.select().from(pairings)
           .where(and(...conditions))
           .orderBy(asc(pairings.pairingNumber));
+
+        // Apply pairing days filter
+        if (filters.pairingDays !== undefined) {
+          query = query.where(eq(pairings.pairingDays, filters.pairingDays));
+        }
+
+        if (filters.pairingDaysMin !== undefined) {
+          query = query.where(gte(pairings.pairingDays, filters.pairingDaysMin));
+        }
+
+        if (filters.pairingDaysMax !== undefined) {
+          query = query.where(lte(pairings.pairingDays, filters.pairingDaysMax));
+        }
+
+        let results = await query;
+
+        // Apply efficiency filter (credit/block ratio) after database query
+        if (filters.efficiency !== undefined) {
+          results = results.filter(pairing => {
+            const creditHours = parseFloat(pairing.creditHours.toString());
+            const blockHours = parseFloat(pairing.blockHours.toString());
+            const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+            return efficiency >= filters.efficiency;
+          });
+        }
+
+        return results;
       }
 
       return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));

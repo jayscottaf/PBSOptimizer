@@ -50,6 +50,7 @@ interface SearchFilters {
   pairingDays?: number;
   pairingDaysMin?: number;
   pairingDaysMax?: number;
+  efficiency?: number;
 }
 
 // Placeholder for Pairing type if not defined elsewhere
