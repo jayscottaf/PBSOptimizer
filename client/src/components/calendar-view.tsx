@@ -21,6 +21,7 @@ type CalendarEvent = {
     blockHours: string;
     tafb: string;
     checkInTime?: string;
+    pairingDays?: number; // Added for calculating working days
   };
 };
 
@@ -32,7 +33,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
   // Set to September 2025 for the bid month (even though bid period starts Aug 31)
   const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 1, 2025 (month is 0-indexed)
   const queryClient = useQueryClient();
-  
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
@@ -46,7 +47,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
       // Get events for a wider range to ensure we catch all carryover pairings
       const startOfCalendarView = calendarStart;
       const endOfCalendarView = calendarEnd;
-      
+
       const response = await fetch(`/api/calendar/${userId}?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`);
       if (!response.ok) throw new Error('Failed to fetch calendar events');
       return response.json();
@@ -85,42 +86,42 @@ export function CalendarView({ userId }: CalendarViewProps) {
 
   // Check for FAA crew rest violations
   const checkCrewRestViolations = (events: CalendarEvent[]): CalendarEvent[] => {
-    const sortedEvents = events.sort((a, b) => 
+    const sortedEvents = events.sort((a, b) =>
       new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );
-    
+
     const violatingEvents: CalendarEvent[] = [];
-    
+
     for (let i = 0; i < sortedEvents.length - 1; i++) {
       const currentEnd = new Date(sortedEvents[i].endDate);
       const nextStart = new Date(sortedEvents[i + 1].startDate);
-      
+
       // Calculate hours between trips
       const hoursBetween = (nextStart.getTime() - currentEnd.getTime()) / (1000 * 60 * 60);
-      
+
       // FAA requires minimum 10 hours rest between duty periods
       if (hoursBetween < 10) {
         violatingEvents.push(sortedEvents[i], sortedEvents[i + 1]);
       }
     }
-    
+
     return violatingEvents;
   };
 
   const crewRestViolations = checkCrewRestViolations(events);
-  
+
   const getEventSpan = (event: CalendarEvent, startDay: Date): { span: number; isStart: boolean } => {
     const eventStart = new Date(event.startDate);
     const eventEnd = new Date(event.endDate);
     const weekStart = startOfWeek(startDay, { weekStartsOn: 0 });
     const weekEnd = endOfWeek(startDay, { weekStartsOn: 0 });
-    
+
     const displayStart = isBefore(eventStart, weekStart) ? weekStart : eventStart;
     const displayEnd = isAfter(eventEnd, weekEnd) ? weekEnd : eventEnd;
-    
+
     const span = differenceInDays(displayEnd, displayStart) + 1;
     const isStart = isSameDay(eventStart, displayStart) || isSameDay(eventStart, startDay);
-    
+
     return { span, isStart };
   };
 
@@ -140,6 +141,30 @@ export function CalendarView({ userId }: CalendarViewProps) {
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => direction === 'next' ? addMonths(prev, 1) : subMonths(prev, 1));
   };
+
+  // Calculate stats
+  const totalCreditHours = events.reduce((sum, event) => {
+    return sum + (parseFloat(event.pairing?.creditHours?.toString() || '0') || 0);
+  }, 0);
+
+  const totalBlockHours = events.reduce((sum, event) => {
+    return sum + (parseFloat(event.pairing?.blockHours?.toString() || '0') || 0);
+  }, 0);
+
+  // Calculate total working days and days off
+  const totalWorkingDays = events.reduce((sum, event) => {
+    return sum + (event.pairing?.pairingDays || 0);
+  }, 0);
+
+  // Calculate days off (total days in month minus working days)
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const totalDaysOff = daysInMonth - totalWorkingDays;
+
+  const ratio = totalBlockHours > 0 ? totalCreditHours / totalBlockHours : 0;
+  let ratioLabel = 'Poor';
+  if (ratio >= 1.3) ratioLabel = 'Excellent';
+  else if (ratio >= 1.2) ratioLabel = 'Good';
+  else if (ratio >= 1.1) ratioLabel = 'Average';
 
   // Calculate weeks for the calendar
   const weeks = [];
@@ -189,11 +214,11 @@ export function CalendarView({ userId }: CalendarViewProps) {
               </div>
             ))}
           </div>
-          
+
           {/* Calendar weeks */}
           {weeks.map((week, weekIndex) => {
             const weekEvents = getEventsForWeek(week[0]);
-            
+
             return (
               <div key={weekIndex} className="relative border-b last:border-b-0">
                 {/* Day numbers and basic layout */}
@@ -201,7 +226,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
                   {week.map((day, dayIndex) => {
                     const isCurrentMonth = isSameMonth(day, currentDate);
                     const isToday = isSameDay(day, new Date());
-                    
+
                     return (
                       <div
                         key={day.toISOString()}
@@ -210,7 +235,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
                         }`}
                       >
                         <div className={`text-lg font-semibold ${
-                          isToday ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center' : 
+                          isToday ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center' :
                           isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
                         }`}>
                           {format(day, 'd')}
@@ -219,33 +244,33 @@ export function CalendarView({ userId }: CalendarViewProps) {
                     );
                   })}
                 </div>
-                
+
                 {/* Pairing bars overlay */}
                 <div className="absolute inset-0 pointer-events-none">
                   {weekEvents.map((event, eventIndex) => {
                     const eventStart = new Date(event.startDate);
                     const eventEnd = new Date(event.endDate);
-                    
+
                     // Find which day in the week this event starts
                     let startDayIndex = -1;
                     for (let i = 0; i < week.length; i++) {
-                      if (isSameDay(week[i], eventStart) || 
+                      if (isSameDay(week[i], eventStart) ||
                           (isBefore(eventStart, week[i]) && i === 0)) {
                         startDayIndex = i;
                         break;
                       }
                     }
-                    
+
                     if (startDayIndex === -1) return null;
-                    
+
                     const { span } = getEventSpan(event, week[startDayIndex]);
                     const isViolation = crewRestViolations.some(v => v.id === event.id);
                     const destination = getDestinationFromRoute(event.pairing.route);
-                    
+
                     const topOffset = 40 + (eventIndex * 30); // Stack events vertically
                     const leftOffset = (startDayIndex * (100 / 7)) + 0.5; // Percentage based positioning
                     const width = (span * (100 / 7)) - 1; // Span across days
-                    
+
                     return (
                       <div
                         key={event.id}
@@ -280,7 +305,7 @@ export function CalendarView({ userId }: CalendarViewProps) {
                             <Trash2 className="h-3 w-3 text-white" />
                           </Button>
                         </div>
-                        
+
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                           {event.pairing.pairingNumber}: {event.pairing.creditHours} credit hrs
@@ -297,69 +322,40 @@ export function CalendarView({ userId }: CalendarViewProps) {
           })}
         </div>
       )}
-      
+
       {events.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
           <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="text-sm font-medium text-blue-700">Total Pairings</div>
+            <div className="text-sm text-blue-600 mb-1">Total Pairings</div>
             <div className="text-2xl font-bold text-blue-900">{events.length}</div>
           </div>
+
           <div className="bg-green-50 p-4 rounded-lg">
-            <div className="text-sm font-medium text-green-700">Total Credit Hours</div>
-            <div className="text-2xl font-bold text-green-900">
-              {events.reduce((sum, event) => sum + parseFloat(event.pairing.creditHours), 0).toFixed(2)}
-            </div>
+            <div className="text-sm text-green-600 mb-1">Total Credit Hours</div>
+            <div className="text-2xl font-bold text-green-900">{totalCreditHours.toFixed(2)}</div>
           </div>
+
+          <div className="bg-orange-50 p-4 rounded-lg">
+            <div className="text-sm text-orange-600 mb-1">Total Block Hours</div>
+            <div className="text-2xl font-bold text-orange-900">{totalBlockHours.toFixed(2)}</div>
+          </div>
+
+          <div className="bg-indigo-50 p-4 rounded-lg">
+            <div className="text-sm text-indigo-600 mb-1">Total Days Working</div>
+            <div className="text-2xl font-bold text-indigo-900">{totalWorkingDays}</div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-600 mb-1">Total Days Off</div>
+            <div className="text-2xl font-bold text-gray-900">{totalDaysOff}</div>
+          </div>
+
           <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="text-sm font-medium text-purple-700">Total Block Hours</div>
+            <div className="text-sm text-purple-600 mb-1">Credit/Block Ratio</div>
             <div className="text-2xl font-bold text-purple-900">
-              {events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0).toFixed(2)}
+              {ratio.toFixed(2)} <span className="text-sm">({ratioLabel})</span>
             </div>
-            {(() => {
-              const totalCredit = events.reduce((sum, event) => sum + parseFloat(event.pairing.creditHours), 0);
-              const totalBlock = events.reduce((sum, event) => sum + parseFloat(event.pairing.blockHours), 0);
-              const ratio = totalBlock > 0 ? totalCredit / totalBlock : 0;
-              
-              // Calculate quartile based on efficiency ratio (credit/block)
-              // Higher ratios are better (more credit per block hour)
-              let color = '';
-              let bgColor = '';
-              let quartileText = '';
-              
-              if (ratio >= 1.3) { // Top 25% - Excellent
-                color = 'text-green-800';
-                bgColor = 'bg-green-100';
-                quartileText = 'Top 10%';
-              } else if (ratio >= 1.2) { // 25-50% - Good
-                color = 'text-yellow-700';
-                bgColor = 'bg-yellow-100';
-                quartileText = 'Top 25%';
-              } else if (ratio >= 1.1) { // 50-75% - Below Average
-                color = 'text-orange-700';
-                bgColor = 'bg-orange-100';
-                quartileText = 'Top 50%';
-              } else { // Bottom 25% - Poor
-                color = 'text-red-800';
-                bgColor = 'bg-red-100';
-                quartileText = 'Below Average';
-              }
-              
-              return (
-                <div className={`mt-2 p-2 rounded ${bgColor}`}>
-                  <div className="text-xs font-medium text-gray-600">Credit/Block Ratio</div>
-                  <div className={`text-lg font-bold ${color}`}>
-                    {ratio.toFixed(2)} ({quartileText})
-                  </div>
-                </div>
-              );
-            })()}
           </div>
-          {crewRestViolations.length > 0 && (
-            <div className="bg-red-50 p-4 rounded-lg">
-              <div className="text-sm font-medium text-red-700">FAA Rest Violations</div>
-              <div className="text-2xl font-bold text-red-900">{crewRestViolations.length}</div>
-            </div>
-          )}
         </div>
       )}
     </div>
