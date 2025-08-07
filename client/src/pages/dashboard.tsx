@@ -712,6 +712,8 @@ export default function Dashboard() {
                         onPairingClick={handlePairingClick}
                         showDeleteButton={true}
                         onDeleteFavorite={handleDeleteFavorite}
+                        showAddToCalendar={true}
+                        currentUser={currentUser}
                       />
                     ) : (
                       <div className="text-center py-8">
