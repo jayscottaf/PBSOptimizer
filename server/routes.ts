@@ -4,8 +4,9 @@ import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, gte, lte, sql } from "drizzle-orm";
 import { pairings } from "@shared/schema";
+import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
 
 import { openaiAssistant } from "./openaiAssistant";
 import multer from "multer";
@@ -345,7 +346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createOrUpdateUser({
         seniorityNumber: parseInt(seniorityNumber),
-        seniorityPercentile: seniorityPercentile ? parseInt(seniorityPercentile) : 50,
+        seniorityPercentile: seniorityPercentile ? parseFloat(seniorityPercentile) : 50,
         base,
         aircraft
       });

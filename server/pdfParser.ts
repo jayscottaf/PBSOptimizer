@@ -596,7 +596,7 @@ export class PDFParser {
     }
   }
 
-  async parseFile(filePath: string, bidPackageId: number, mimeType: string, userSeniorityPercentile?: number): Promise<void> {
+  async parseFile(filePath: string, bidPackageId: number, mimeType: string, userSeniorityPercentile: number = 50): Promise<void> {
     try {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
@@ -676,7 +676,7 @@ export class PDFParser {
     }
   }
 
-  async parsePDF(filePath: string, bidPackageId: number, userSeniorityPercentile?: number): Promise<void> {
+  async parsePDF(filePath: string, bidPackageId: number, userSeniorityPercentile: number = 50): Promise<void> {
     return this.parseFile(filePath, bidPackageId, 'application/pdf', userSeniorityPercentile);
   }
 }

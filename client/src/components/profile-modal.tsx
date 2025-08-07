@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -41,7 +40,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const percentile = parseFloat(seniorityPercentile);
     if (isNaN(percentile) || percentile < 0 || percentile > 100) {
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Seniority percentile must be between 0 and 100",
         variant: "destructive"
       });
@@ -69,7 +68,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         <DialogHeader>
           <DialogTitle>User Profile</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           <div>
             <Label htmlFor="seniorityNumber">Seniority Number</Label>
