@@ -121,9 +121,10 @@ export default function Dashboard() {
   }, [bidPackages]);
 
   const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
-    queryKey: ["pairings", latestBidPackage?.id, filters],
+    queryKey: ["pairings", latestBidPackage?.id, filters, seniorityPercentile],
     queryFn: () => api.searchPairings({
       bidPackageId: latestBidPackage?.id,
+      seniorityPercentile: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
       ...filters
     }),
     enabled: !!latestBidPackage,

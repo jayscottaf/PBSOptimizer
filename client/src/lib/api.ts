@@ -30,6 +30,7 @@ export interface Pairing {
   fullTextBlock: string;
   holdProbability: number;
   pairingDays?: number;
+  seniorityPercentage?: number; // Added seniorityPercentage
 }
 
 export interface SearchFilters {
@@ -40,7 +41,10 @@ export interface SearchFilters {
   blockMin?: number;
   tafb?: string;
   holdProbabilityMin?: number;
+  seniorityPercentage?: number; // Added seniorityPercentage
 }
+
+const API_BASE = ""; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
 
 export const api = {
   // Bid packages
@@ -93,7 +97,18 @@ export const api = {
 
   searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
     try {
-      const response = await apiRequest("POST", "/api/pairings/search", filters);
+      const params = new URLSearchParams();
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+
+      const response = await fetch(`${API_BASE}/pairings?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to search pairings');
+      }
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     } catch (error) {
@@ -101,6 +116,7 @@ export const api = {
       return [];
     }
   },
+
 
   getPairing: async (id: number): Promise<Pairing> => {
     const response = await apiRequest("GET", `/api/pairings/${id}`);
@@ -156,15 +172,15 @@ export const api = {
         endDate: endDate.toISOString()
       }),
     });
-    
+
     console.log('API: Response status:', response.status);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('API: Error response:', errorText);
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
-    
+
     const result = await response.json();
     console.log('API: Success response:', result);
     return result;
