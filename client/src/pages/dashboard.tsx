@@ -112,7 +112,7 @@ export default function Dashboard() {
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
-    return saved ? JSON.JSON.parse(saved) : false;
+    return saved !== null ? JSON.parse(saved) : false;
   });
 
   // Save sidebar state to localStorage
