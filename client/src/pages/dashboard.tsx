@@ -548,39 +548,6 @@ export default function Dashboard() {
 
             <TabsContent value="dashboard" className="flex-1 overflow-hidden">
               <div className="space-y-6 h-full">
-                {/* Upload Section */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CloudUpload className="h-5 w-5" />
-                      Upload Bid Package PDF
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <FileUpload
-                      accept={{
-                        'application/pdf': ['.pdf'],
-                      }}
-                      onUpload={handleFileUpload}
-                      maxFileSize={50 * 1024 * 1024} // 50MB
-                      disabled={uploadMutation.isPending}
-                    />
-                    {uploadMutation.isPending && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-sm mb-2">
-                          <span>Uploading and processing PDF...</span>
-                          <span>{Math.round(uploadProgress)}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
 
                 {/* Mobile Filters - Only show on mobile when we have data */}
                 {bidPackageId && (
