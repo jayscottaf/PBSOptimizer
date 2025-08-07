@@ -505,17 +505,39 @@ export default function Dashboard() {
                     <Plane className="h-6 w-6 text-blue-600" />
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-900">PBS Bid Optimizer</h1>
                   </div>
-                  {currentUser && (
-                    <Badge variant="outline" className="text-xs">
-                      Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentage}%)
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {currentUser && (
+                      <Badge variant="outline" className="text-xs">
+                        Seniority #{currentUser.seniorityNumber} ({currentUser.seniorityPercentile?.toFixed(1)}%)
+                      </Badge>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowProfileModal(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <User className="h-4 w-4" />
+                      <span className="hidden sm:inline">Profile</span>
+                    </Button>
+                  </div>
                 </div>
-                <TabsList className="grid w-full grid-cols-3 sm:w-auto">
-                  <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-                  <TabsTrigger value="calendar">Calendar</TabsTrigger>
-                  <TabsTrigger value="profile">Profile</TabsTrigger>
-                </TabsList>
+                <div className="flex items-center gap-2">
+                  <TabsList className="grid grid-cols-3 sm:w-auto">
+                    <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                    <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                    <TabsTrigger value="profile">Profile</TabsTrigger>
+                  </TabsList>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowUploadModal(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <CloudUpload className="h-4 w-4" />
+                    <span className="hidden sm:inline">Upload</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Mobile Stats Panel - Only show on mobile and when we have bid package data */}
