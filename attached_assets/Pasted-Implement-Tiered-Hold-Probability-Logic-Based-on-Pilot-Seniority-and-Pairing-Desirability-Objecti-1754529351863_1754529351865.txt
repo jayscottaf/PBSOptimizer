@@ -1,0 +1,103 @@
+Implement Tiered Hold Probability Logic Based on Pilot Seniority and Pairing Desirability
+🎯 Objective:
+Create a function getHoldProbability() that estimates the likelihood a pilot will hold a trip, using rule-based logic without historical data. The output should fall into one of four fixed probability tiers matching PBS-style award behavior.
+
+📥 Input Parameters:
+seniorityPercentile: number (0–100):
+User’s seniority percentile (lower is more senior).
+
+desirabilityScore: number (0–100):
+Score representing trip desirability (e.g. higher credit, lower block, more deadheads = higher desirability).
+
+pairingFrequency: number:
+Number of times this trip appears in the bid package (e.g. 1 = rare, 3+ = common).
+
+startsOnWeekend: boolean:
+Whether the trip starts on Saturday or Sunday.
+
+includesDeadheads: number:
+Number of deadhead legs included.
+
+includesWeekendOff: boolean:
+Whether the pairing includes time off over a weekend (Friday–Sunday).
+
+🎯 Output:
+Return a rounded hold probability in one of these bands, with an optional randomization of ±5%:
+
+100% → Very Likely
+
+75% → Likely
+
+50% → Unlikely
+
+25% → Very Unlikely
+
+🧠 Hold Probability Tier Logic:
+Use the following logic tree to assign the proper tier. Rules compound, so multiple matching traits strengthen the case.
+
+🔵 Very Likely (100%)
+Assign when:
+
+desirabilityScore < 40
+
+pairingFrequency ≥ 3
+
+startsOnWeekend === true
+
+includesDeadheads <= 1
+
+includesWeekendOff === false
+
+AND seniorityPercentile <= 75 (bottom 75% of pilots)
+
+🟢 Likely (75%)
+Assign when:
+
+desirabilityScore < 60
+
+pairingFrequency ≥ 2
+
+includesDeadheads <= 2
+
+Not extremely popular (mid desirability)
+
+OR user is in bottom 50% (seniorityPercentile > 50)
+
+🟠 Unlikely (50%)
+Assign when:
+
+desirabilityScore 60–80
+
+pairingFrequency = 1–2
+
+includesDeadheads ≥ 2
+
+May include a weekend off
+
+User is in middle 50% (seniority 25–75)
+
+🔴 Very Unlikely (25%)
+Assign when:
+
+desirabilityScore > 80
+
+pairingFrequency = 1
+
+includesDeadheads ≥ 2
+
+includesWeekendOff === true
+
+startsOnWeekend === false
+
+seniorityPercentile <= 25 (top 25%, more senior = harder to hold)
+
+🔧 Implementation Notes:
+Round final output to exact 25% tiers (no in-betweens).
+
+Add optional ±5% randomizer for realism (clamped 0–100).
+
+Return both the numerical probability and label (e.g., 75% - Likely) if possible.
+
+Use console.log() to show which rules were triggered and why a tier was chosen.
+
+Keep all logic client-side.
