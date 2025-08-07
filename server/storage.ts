@@ -21,7 +21,7 @@ import {
   type InsertUserCalendarEvent
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, like, gte, lte, or } from "drizzle-orm";
+import { eq, and, desc, asc, like, gte, lte, or, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
