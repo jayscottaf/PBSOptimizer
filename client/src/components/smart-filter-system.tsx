@@ -138,11 +138,17 @@ export function SmartFilterSystem({
       onFilterClear('creditMin');
       onFilterClear('creditMax');
       onFilterClear('creditRange');
+    } else if (functionOption.key === 'pairingDays') {
+      // Clear all pairing day related filters when setting a new pairing days filter
+      onFilterClear('pairingDays');
+      onFilterClear('pairingDaysMin');
+      onFilterClear('pairingDaysMax');
     } else if (functionOption.key === 'turnFilters') {
       // Turn filters should clear existing credit and pairing day filters
       onFilterClear('creditMin');
       onFilterClear('creditMax');
       onFilterClear('creditRange');
+      onFilterClear('pairingDays');
       onFilterClear('pairingDaysMin');
       onFilterClear('pairingDaysMax');
     } else if (functionOption.key === 'blockHours') {
@@ -273,10 +279,13 @@ export function SmartFilterSystem({
             size="sm" 
             className="text-xs"
             onClick={() => {
-              // Clear existing credit filters
+              // Clear existing credit and pairing day filters
               const newFilters: any = {};
               newFilters.creditMin = undefined;
               newFilters.creditMax = 8.0;
+              newFilters.pairingDays = undefined;
+              newFilters.pairingDaysMin = undefined;
+              newFilters.pairingDaysMax = undefined;
               onFiltersChange(newFilters);
             }}
           >
@@ -312,8 +321,11 @@ export function SmartFilterSystem({
             size="sm" 
             className="text-xs"
             onClick={() => {
+              // Clear existing pairing day filters before setting new one
               const newFilters: any = {};
+              newFilters.pairingDays = undefined;
               newFilters.pairingDaysMin = 2;
+              newFilters.pairingDaysMax = undefined;
               onFiltersChange(newFilters);
             }}
           >
