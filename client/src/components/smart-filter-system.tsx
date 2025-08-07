@@ -252,7 +252,6 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
           </Button>
         </div>
       </div>
-      </div>
     </div>
   );
 }
