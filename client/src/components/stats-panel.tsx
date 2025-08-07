@@ -102,10 +102,10 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
-            <div className="text-sm text-gray-600">Total Pairings</div>
+            <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
             {isProcessing && (
               <span className="text-xs text-orange-600">Processing...</span>
             )}
@@ -114,19 +114,17 @@ export function StatsPanel({ pairings, bidPackage }: StatsPanelProps) {
             )}
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
-            <div className="text-sm text-gray-600">Likely to Hold</div>
+            <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
+            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">{stats.highCredit}</div>
-            <div className="text-sm text-gray-600">High Credit</div>
+            <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
+            <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
           </div>
-          {stats.sixDayCombos > 0 && (
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
-              <div className="text-sm text-gray-600">6-Day Combos</div>
-            </div>
-          )}
+          <div className="text-center">
+            <div className="text-xl lg:text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
+            <div className="text-xs lg:text-sm text-gray-600">6+ Day Trips</div>
+          </div>
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-200">

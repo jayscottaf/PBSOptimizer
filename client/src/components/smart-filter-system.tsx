@@ -208,43 +208,50 @@ export function SmartFilterSystem({ onFilterApply, onFilterClear }: SmartFilterS
       </div>
 
       {/* Quick Filter Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-gray-500 flex items-center">Quick filters:</span>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => {
-            onFilterClear("creditMin");
-            onFilterClear("creditMax");
-            onFilterApply("creditMax", 8.0, "Turns Only (≤8:00)");
-          }}
-        >
-          Turns Only
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onFilterApply("holdProbabilityMin", 70, "Good Hold Probability")}
-        >
-          Good Hold (70%+)
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => {
-            onFilterClear("creditMax");
-            onFilterApply("creditMin", 15.0, "High Credit (15:00+)");
-          }}
-        >
-          High Credit (15:00+)
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onFilterApply("pairingDaysMin", 2, "Multi-Day")}
-        >
-          Multi-Day
-        </Button>
+      <div className="space-y-2">
+        <span className="text-sm text-gray-500">Quick filters:</span>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs"
+            onClick={() => {
+              onFilterClear("creditMin");
+              onFilterClear("creditMax");
+              onFilterApply("creditMax", 8.0, "Turns Only (≤8:00)");
+            }}
+          >
+            Turns Only
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs"
+            onClick={() => onFilterApply("holdProbabilityMin", 70, "Good Hold Probability")}
+          >
+            Good Hold
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs"
+            onClick={() => {
+              onFilterClear("creditMax");
+              onFilterApply("creditMin", 15.0, "High Credit (15:00+)");
+            }}
+          >
+            High Credit
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs"
+            onClick={() => onFilterApply("pairingDaysMin", 2, "Multi-Day")}
+          >
+            Multi-Day
+          </Button>
+        </div>
+      </div>
       </div>
     </div>
   );
