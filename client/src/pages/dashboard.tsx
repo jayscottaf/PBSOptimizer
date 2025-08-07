@@ -194,6 +194,10 @@ export default function Dashboard() {
         // Remove both min and max for credit range
         delete newFilters.creditMin;
         delete newFilters.creditMax;
+      } else if (keyToRemove === 'blockRange') {
+        // Remove both min and max for block range
+        delete newFilters.blockMin;
+        delete newFilters.blockMax;
       } else {
         delete newFilters[keyToRemove as keyof SearchFilters];
       }
@@ -203,17 +207,22 @@ export default function Dashboard() {
 
   const addFilter = (key: string, label: string, value: any) => {
     if (value !== undefined && value !== null && value !== '') {
-      if (key === 'creditRange' && typeof value === 'object') {
-        // Handle credit range filters specially
+      if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
+        // Handle range filters specially
         setActiveFilters(prev => [
-          ...prev.filter(f => !f.key.startsWith('credit')),
+          ...prev.filter(f => !f.key.startsWith(key.replace('Range', ''))),
           { key, label, value }
         ]);
         setFilters(prev => {
           const newFilters = { ...prev };
-          // Clear any existing credit filters
-          delete newFilters.creditMin;
-          delete newFilters.creditMax;
+          // Clear any existing filters for this range type
+          if (key === 'creditRange') {
+            delete newFilters.creditMin;
+            delete newFilters.creditMax;
+          } else if (key === 'blockRange') {
+            delete newFilters.blockMin;
+            delete newFilters.blockMax;
+          }
           // Apply the range
           return { ...newFilters, ...value };
         });
