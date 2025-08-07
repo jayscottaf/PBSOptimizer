@@ -526,6 +526,14 @@ export default function Dashboard() {
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
                   <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setActiveTab("favorites")}
+                    className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
+                  >
+                    <Star className="h-4 w-4" />
+                  </Button>
+                  <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => setShowAIAssistant(true)}
