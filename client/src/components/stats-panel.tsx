@@ -9,9 +9,18 @@ interface StatsPanelProps {
   pairings: Pairing[];
   bidPackage?: BidPackage;
   hideHeader?: boolean;
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+  };
+  statistics?: {
+    likelyToHold: number;
+    highCredit: number;
+  };
 }
 
-export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPanelProps) {
+export function StatsPanel({ pairings, bidPackage, hideHeader = false, pagination, statistics }: StatsPanelProps) {
   const stats = useMemo(() => {
     if (!pairings || !Array.isArray(pairings) || pairings.length === 0) {
       return {
@@ -39,8 +48,13 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
       return 0;
     };
 
-    const highCreditCount = pairings.filter(p => parseHours(p.creditHours) >= 18).length;
-    const likelyToHoldCount = pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
+    // Use total from pagination if available, otherwise use current page count
+    const totalPairings = pagination?.total || pairings.length;
+
+    // Prefer backend-provided statistics when available; otherwise calculate from current page
+    const highCreditCount = statistics?.highCredit ?? pairings.filter(p => parseHours(p.creditHours) >= 18).length;
+    const getHoldProb = (value: any): number => typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+    const likelyToHoldCount = statistics?.likelyToHold ?? pairings.filter(p => getHoldProb((p as any).holdProbability) >= 70).length;
 
     const totalCredit = pairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
     const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
@@ -65,14 +79,14 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
     }, { excellent: 0, good: 0, average: 0, poor: 0 });
 
     return {
-      totalPairings: pairings.length,
+      totalPairings, // This will now show the correct total
       likelyToHold: likelyToHoldCount,
       highCredit: highCreditCount,
       avgCreditHours: pairings.length > 0 ? totalCredit / pairings.length : 0,
       avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
       ratioBreakdown
     };
-  }, [pairings]);
+  }, [pairings, pagination, statistics]);
 
   // Show processing status for current bid package
   const isProcessing = bidPackage?.status === 'processing';

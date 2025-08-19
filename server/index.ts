@@ -22,12 +22,14 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+        // Only log response size and type, not the full content
+        const responseSize = JSON.stringify(capturedJsonResponse).length;
+        const responseType = Array.isArray(capturedJsonResponse) 
+          ? `array[${capturedJsonResponse.length}]` 
+          : typeof capturedJsonResponse;
+        logLine += ` :: ${responseType} (${responseSize} bytes)`;
       }
 
       log(logLine);

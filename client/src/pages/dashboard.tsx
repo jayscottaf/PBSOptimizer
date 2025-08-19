@@ -53,6 +53,8 @@ interface SearchFilters {
   pairingDaysMin?: number;
   pairingDaysMax?: number;
   efficiency?: number;
+  sortBy?: string;        // Add this line
+  sortOrder?: 'asc' | 'desc';  // Add this line
 }
 
 // Placeholder for Pairing type if not defined elsewhere
@@ -172,17 +174,26 @@ export default function Dashboard() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const { data: pairings = [], isLoading: isLoadingPairings } = useQuery({
-    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile],
+  // Update the useQuery to include sort parameters
+  const { data: pairingsResponse, isLoading: isLoadingPairings } = useQuery({
+    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection],
     queryFn: () => api.searchPairings({
       bidPackageId: bidPackageId,
       seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
+      sortBy: sortColumn || 'pairingNumber',
+      sortOrder: sortDirection || 'asc',
       ...debouncedFilters
     }),
     enabled: !!bidPackageId,
-    staleTime: 2 * 60 * 1000, // Keep pairing data fresh for 2 minutes
+    staleTime: 2 * 60 * 1000,
     refetchOnMount: false,
   });
+
+  // Extract pairings and pagination from the response
+  const pairings = pairingsResponse?.pairings || [];
+  const pagination = pairingsResponse?.pagination;
+
+  // Debug logs removed after verification
 
   // Query for user data
   const { data: currentUser } = useQuery({
@@ -403,100 +414,60 @@ export default function Dashboard() {
 
 
   // Sorting logic
-  const sortedPairings = React.useMemo(() => {
-    if (!pairings || pairings.length === 0) {
-      return [];
-    }
+  // Remove the sortedPairings calculation and use pairings directly
+  // const sortedPairings = React.useMemo(() => { ... }); // DELETE THIS
 
-    let sorted = [...pairings];
-
-    if (sortColumn) {
-      sorted.sort((a, b) => {
-        let valA: any, valB: any;
-
-        switch (sortColumn) {
-          case 'creditHours':
-          case 'credit':
-            valA = parseFloat(a.creditHours?.toString() || '0');
-            valB = parseFloat(b.creditHours?.toString() || '0');
-            break;
-          case 'blockHours':
-          case 'block':
-            valA = parseFloat(a.blockHours?.toString() || '0');
-            valB = parseFloat(b.blockHours?.toString() || '0');
-            break;
-          case 'tafb':
-            valA = parseFloat(a.tafb?.toString() || '0');
-            valB = parseFloat(b.tafb?.toString() || '0');
-            break;
-          case 'pairingDays':
-            valA = parseInt(a.pairingDays?.toString() || '1', 10);
-            valB = parseInt(b.pairingDays?.toString() || '1', 10);
-            break;
-          case 'creditBlockRatio':
-            const creditA = parseFloat(a.creditHours?.toString() || '0');
-            const blockA = parseFloat(a.blockHours?.toString() || '1');
-            const creditB = parseFloat(b.creditHours?.toString() || '0');
-            const blockB = parseFloat(b.blockHours?.toString() || '1');
-            valA = creditA / blockA;
-            valB = creditB / blockB;
-            break;
-          case 'holdProbability':
-            valA = parseInt(a.holdProbability?.toString() || '0', 10);
-            valB = parseInt(b.holdProbability?.toString() || '0', 10);
-            break;
-          case 'pairingNumber':
-            valA = parseInt(a.pairingNumber, 10);
-            valB = parseInt(b.pairingNumber, 10);
-            break;
-          default:
-            valA = (a as any)[sortColumn];
-            valB = (b as any)[sortColumn];
-        }
-
-        if (valA === undefined || valA === null) return sortDirection === "asc" ? 1 : -1;
-        if (valB === undefined || valB === null) return sortDirection === "asc" ? -1 : 1;
-
-        if (typeof valA === 'string' && typeof valB === 'string') {
-          return sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        } else if (typeof valA === 'number' && typeof valB === 'number') {
-          return sortDirection === "asc" ? valA - valB : valB - valA;
-        } else {
-          // Fallback for mixed or other types
-          return sortDirection === "asc" ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
-        }
+  // Use pairings directly since backend will sort them
+  const displayPairings = React.useMemo(() => {
+    if (!pairings || pairings.length === 0) return [];
+    
+    // If sorting by C/B ratio, do it in frontend since it's calculated
+    if (sortColumn === 'creditBlockRatio') {
+      const sorted = [...pairings].sort((a, b) => {
+        const creditA = parseFloat(a.creditHours?.toString() || '0');
+        const blockA = parseFloat(a.blockHours?.toString() || '1');
+        const creditB = parseFloat(b.creditHours?.toString() || '0');
+        const blockB = parseFloat(b.blockHours?.toString() || '1');
+        
+        const ratioA = blockA > 0 ? creditA / blockA : 0;
+        const ratioB = blockB > 0 ? creditB / blockB : 0;
+        
+        return sortDirection === 'asc' ? ratioA - ratioB : ratioB - ratioA;
       });
+      return sorted;
     }
-
-    return sorted;
+    
+    // For other columns, use backend sorting
+    return pairings;
   }, [pairings, sortColumn, sortDirection]);
 
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
 
-  // Calculate quick stats for collapsed view
+  // Update the quick stats to use backend statistics
   const quickStats = React.useMemo(() => {
-    if (!sortedPairings || sortedPairings.length === 0) {
+    if (!pairings || pairings.length === 0) {
       return { totalPairings: 0, likelyToHold: 0, highCredit: 0 };
     }
 
-    const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
-      if (typeof hours === 'string') {
-        return parseFloat(hours) || 0;
-      }
-      return 0;
-    };
-
-    const highCreditCount = sortedPairings.filter(p => parseHours(p.creditHours) >= 18).length;
-    const likelyToHoldCount = sortedPairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
-
+    // Use pagination total if available, otherwise fall back to current page count
+    const totalPairings = pagination && pagination.total ? pagination.total : pairings.length;
+    
+    // Use backend statistics if available, otherwise calculate from current page
+    const likelyToHold = pairingsResponse?.statistics?.likelyToHold 
+      ? Number(pairingsResponse.statistics.likelyToHold)
+      : pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
+    
+    const highCredit = pairingsResponse?.statistics?.highCredit 
+      ? Number(pairingsResponse.statistics.highCredit)
+      : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
+    
     return {
-      totalPairings: sortedPairings.length,
-      likelyToHold: likelyToHoldCount,
-      highCredit: highCreditCount
+      totalPairings,
+      likelyToHold,
+      highCredit
     };
-  }, [sortedPairings]);
+  }, [pairings, pagination, pairingsResponse?.statistics]);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -551,7 +522,12 @@ export default function Dashboard() {
               ) : (
                 // Expanded view - show full stats panel
                 <div className="space-y-6">
-                  <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+                  <StatsPanel 
+                    pairings={displayPairings || []} 
+                    bidPackage={latestBidPackage} 
+                    pagination={pagination}
+                    statistics={pairingsResponse?.statistics as any}
+                  />
                 </div>
               )}
             </div>
@@ -644,7 +620,7 @@ export default function Dashboard() {
                     </CardHeader>
                     {showQuickStats && (
                       <CardContent>
-                        <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
+                        <StatsPanel pairings={displayPairings || []} bidPackage={latestBidPackage} />
                       </CardContent>
                     )}
                   </Card>
@@ -673,7 +649,7 @@ export default function Dashboard() {
                       {showFilters && (
                         <CardContent>
                           <SmartFilterSystem
-                            pairings={sortedPairings || []}
+                            pairings={displayPairings || []}
                             onFiltersChange={handleFiltersChange}
                             activeFilters={activeFilters}
                             onClearFilters={clearAllFilters}
@@ -695,7 +671,7 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                       <SmartFilterSystem
-                        pairings={sortedPairings || []}
+                        pairings={displayPairings || []}
                         onFiltersChange={handleFiltersChange}
                         activeFilters={activeFilters}
                         onClearFilters={clearAllFilters}
@@ -720,7 +696,7 @@ export default function Dashboard() {
                           </span>
                         )}
                         <span className="text-sm text-gray-500">
-                          {latestBidPackage.month} {latestBidPackage.year} - {sortedPairings.length} pairings
+                          {latestBidPackage.month} {latestBidPackage.year} - {pagination?.total || displayPairings.length} pairings
                         </span>
                       </div>
                     </CardHeader>
@@ -734,7 +710,7 @@ export default function Dashboard() {
                         </div>
                       )}
                       <PairingTable 
-                        pairings={sortedPairings || []} 
+                        pairings={displayPairings || []} 
                         onSort={handleSort}
                         sortColumn={sortColumn || ''}
                         sortDirection={sortDirection}

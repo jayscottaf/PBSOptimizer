@@ -51,6 +51,23 @@ export interface SearchFilters {
   seniorityPercentage?: number;
 }
 
+// Add this type for the new response format
+interface PaginatedResponse<T> {
+  pairings: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  statistics?: {
+    likelyToHold: number;
+    highCredit: number;
+  };
+}
+
 const API_BASE = ""; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
 
 export const api = {
@@ -102,10 +119,8 @@ export const api = {
     }
   },
 
-  searchPairings: async (filters: SearchFilters): Promise<Pairing[]> => {
+  searchPairings: async (filters: SearchFilters): Promise<PaginatedResponse<Pairing>> => {
     try {
-      console.log('API searchPairings called with filters:', filters);
-
       const response = await fetch('/api/pairings/search', {
         method: 'POST',
         headers: {
@@ -118,11 +133,37 @@ export const api = {
         throw new Error('Failed to search pairings');
       }
       const data = await response.json();
-      console.log('API searchPairings response:', data.length, 'pairings');
-      return Array.isArray(data) ? data : [];
+      
+      // Handle new paginated response format
+      if (data && data.pairings && data.pagination) {
+        return data;
+      }
+      
+      // Fallback for old format (array)
+      return {
+        pairings: Array.isArray(data) ? data : [],
+        pagination: {
+          page: 1,
+          limit: data.length || 0,
+          total: data.length || 0,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false
+        }
+      };
     } catch (error) {
       console.error("Error searching pairings:", error);
-      return [];
+      return {
+        pairings: [],
+        pagination: {
+          page: 1,
+          limit: 0,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false
+        }
+      };
     }
   },
 

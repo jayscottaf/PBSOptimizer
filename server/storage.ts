@@ -65,6 +65,41 @@ export interface IStorage {
         efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]>;
 
+  searchPairingsWithPagination(filters: {
+    bidPackageId?: number;
+    search?: string;
+    creditMin?: number;
+    creditMax?: number;
+    blockMin?: number;
+    blockMax?: number;
+    tafb?: string;
+    tafbMin?: number;
+    tafbMax?: number;
+    holdProbabilityMin?: number;
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    efficiency?: number;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    pairings: Pairing[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+    statistics: {
+      likelyToHold: number;
+      highCredit: number;
+    };
+  }>;
+
   // Bid History operations
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
   getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]>;
@@ -338,6 +373,211 @@ if (filters.tafbMax !== undefined) {
     } catch (error) {
       console.error("Error in searchPairings:", error);
       return [];
+    }
+  }
+
+  async searchPairingsWithPagination(filters: {
+    bidPackageId?: number;
+    search?: string;
+    creditMin?: number;
+    creditMax?: number;
+    blockMin?: number;
+    blockMax?: number;
+    tafb?: string;
+    tafbMin?: number;
+    tafbMax?: number;
+    holdProbabilityMin?: number;
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    efficiency?: number;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    pairings: Pairing[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+    statistics: {
+      likelyToHold: number;
+      highCredit: number;
+    };
+  }> {
+    try {
+      const conditions = [];
+      const page = filters.page || 1;
+      const limit = Math.min(filters.limit || 50, 100); // Cap at 100 items per page
+      const offset = (page - 1) * limit;
+
+      // Always require bidPackageId for safety
+      if (!filters.bidPackageId) {
+        console.error("Bid package ID is required for pairing search");
+        return {
+          pairings: [],
+          pagination: { page, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
+          statistics: { likelyToHold: 0, highCredit: 0 }
+        };
+      }
+
+      conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
+
+      // Add all the existing filter conditions (copy from searchPairings method)
+      if (filters.search) {
+        conditions.push(
+          or(
+            like(pairings.route, `%${filters.search}%`),
+            like(pairings.pairingNumber, `%${filters.search}%`),
+            like(pairings.effectiveDates, `%${filters.search}%`),
+            like(pairings.fullTextBlock, `%${filters.search}%`)
+          )
+        );
+      }
+
+      if (filters.creditMin !== undefined) {
+        conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`);
+      }
+
+      if (filters.creditMax !== undefined) {
+        conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`);
+      }
+
+      if (filters.blockMin !== undefined) {
+        conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`);
+      }
+      if (filters.blockMax !== undefined) {
+        conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`);
+      }
+
+      if (filters.holdProbabilityMin !== undefined) {
+        conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
+      }
+
+      if (filters.pairingDays !== undefined) {
+        conditions.push(eq(pairings.pairingDays, filters.pairingDays));
+      }
+
+      if (filters.pairingDaysMin !== undefined) {
+        conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
+      }
+
+      if (filters.pairingDaysMax !== undefined) {
+        conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+      }
+
+      // TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
+      if (filters.tafbMin !== undefined) {
+        const minMins = filters.tafbMin * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) >= ${minMins}
+        `);
+      }
+      if (filters.tafbMax !== undefined) {
+        const maxMins = filters.tafbMax * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) <= ${maxMins}
+        `);
+      }
+
+      // Get total count for pagination
+      const countQuery = db.select({ count: sql<number>`count(*)` })
+        .from(pairings)
+        .where(and(...conditions));
+      const [{ count }] = await countQuery.execute();
+      const total = count;
+      const totalPages = Math.ceil(total / limit);
+
+      // Calculate statistics for the entire filtered dataset
+      const statsQuery = db.select({
+        likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
+        highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`
+      })
+      .from(pairings)
+      .where(and(...conditions));
+
+      const [stats] = await statsQuery.execute();
+
+      // Build the main query with pagination and sorting
+      const sortColumn = filters.sortBy || 'pairingNumber';
+      const sortDirection = filters.sortOrder === 'desc' ? desc : asc;
+      
+      // Map sortBy to actual column names
+      const sortColumnMap: Record<string, any> = {
+        pairingNumber: pairings.pairingNumber,
+        creditHours: pairings.creditHours,
+        blockHours: pairings.blockHours,
+        holdProbability: pairings.holdProbability,
+        pairingDays: pairings.pairingDays,
+        route: pairings.route
+      };
+
+      const sortColumnField = sortColumnMap[sortColumn] || pairings.pairingNumber;
+
+      // Build the complete query in one chain
+      const pairingsResult = await db
+        .select()
+        .from(pairings)
+        .where(and(...conditions))
+        .orderBy(sortDirection(sortColumnField))
+        .limit(limit)
+        .offset(offset)
+        .execute();
+
+      // Apply efficiency filter (credit/block ratio) after database query if needed
+      let finalResults = pairingsResult;
+      if (filters.efficiency !== undefined) {
+        finalResults = pairingsResult.filter(pairing => {
+          const creditHours = parseFloat(pairing.creditHours.toString());
+          const blockHours = parseFloat(pairing.blockHours.toString());
+          const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
+          return efficiency >= filters.efficiency!;
+        });
+      }
+
+      return {
+        pairings: finalResults,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        },
+        statistics: {
+          likelyToHold: stats.likelyToHold,
+          highCredit: stats.highCredit
+        }
+      };
+    } catch (error) {
+      console.error('Error in searchPairingsWithPagination:', error);
+      return {
+        pairings: [],
+        pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
+        statistics: { likelyToHold: 0, highCredit: 0 }
+      };
     }
   }
 

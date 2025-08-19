@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
 import { db } from "./db";
-import { eq, gte, lte, sql, and } from "drizzle-orm";
+import { eq, gte, lte, sql, and, or, like, asc, desc } from "drizzle-orm";
 import { pairings } from "@shared/schema";
 import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
 import { openaiAssistant } from "./openaiAssistant";
@@ -242,25 +242,46 @@ export async function registerRoutes(app: Express) {
   // Pairing search endpoint
   app.post("/api/pairings/search", async (req, res) => {
     try {
-      console.log("POST /api/pairings/search request body:", req.body);
-      const { bidPackageId, ...filters } = req.body;
+      // Minimal request log for debugging; avoid dumping large payloads
+      console.log("POST /api/pairings/search", { path: req.path });
+      const { 
+        bidPackageId, 
+        page = 1, 
+        limit = 50, 
+        sortBy = 'pairingNumber', 
+        sortOrder = 'asc',
+        ...filters 
+      } = req.body;
 
       if (!bidPackageId) {
         console.log("No bid package ID provided in search request");
-        return res.status(400).json({ message: "Bid package ID is required", pairings: [] });
+        return res.status(400).json({ 
+          message: "Bid package ID is required", 
+          pairings: [],
+          pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false }
+        });
       }
 
-      console.log(`Searching pairings for bid package ${bidPackageId} with filters:`, filters);
-      console.log(`Full search params:`, { bidPackageId, ...filters });
-      const pairings = await storage.searchPairings({ bidPackageId, ...filters });
+      // Avoid verbose logging of filters in production
+      
+      const result = await storage.searchPairingsWithPagination({ 
+        bidPackageId, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        sortBy, 
+        sortOrder, 
+        ...filters 
+      });
 
-      // Ensure we return an array
-      const safePairings = Array.isArray(pairings) ? pairings : [];
-      console.log(`Found ${safePairings.length} pairings`);
-      res.json(safePairings);
+      console.log(`Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`);
+      res.json(result);
     } catch (error) {
       console.error("Error searching pairings:", error);
-      res.status(500).json({ message: "Failed to search pairings", pairings: [] });
+      res.status(500).json({ 
+        message: "Failed to search pairings", 
+        pairings: [],
+        pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false }
+      });
     }
   });
 
