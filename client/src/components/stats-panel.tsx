@@ -115,7 +115,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
-            <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
+            <div className="text-xs lg:text-sm text-gray-600">High Credit (18+ hrs)</div>
           </div>
         </div>
 
@@ -222,7 +222,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
-            <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
+            <div className="text-xs lg:text-sm text-gray-600">High Credit (18+ hrs)</div>
           </div>
         </div>
 
