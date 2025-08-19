@@ -41,7 +41,6 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
 
     const highCreditCount = pairings.filter(p => parseHours(p.creditHours) >= 18).length;
     const likelyToHoldCount = pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
-    const sixDayCount = pairings.filter(p => (p.pairingDays || 0) >= 6).length;
 
     const totalCredit = pairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
     const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
@@ -68,7 +67,6 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
       totalPairings: pairings.length,
       likelyToHold: likelyToHoldCount,
       highCredit: highCreditCount,
-      sixDayCombos: sixDayCount,
       avgCreditHours: pairings.length > 0 ? totalCredit / pairings.length : 0,
       avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
       ratioBreakdown
@@ -100,7 +98,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
             <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
@@ -118,10 +116,6 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
             <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
-            <div className="text-xs lg:text-sm text-gray-600">6+ Day Trips</div>
           </div>
         </div>
 
@@ -211,7 +205,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
             <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
@@ -229,10 +223,6 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
             <div className="text-xs lg:text-sm text-gray-600">High Credit</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-orange-600">{stats.sixDayCombos}</div>
-            <div className="text-xs lg:text-sm text-gray-600">6+ Day Trips</div>
           </div>
         </div>
 
