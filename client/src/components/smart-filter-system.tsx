@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X } from "lucide-react";
-
+import { SearchFilters } from "@/lib/api";
 interface FilterOption {
   key: string;
   label: string;
@@ -44,14 +44,7 @@ const filterOptions: FilterOption[] = [
       { value: 25.0, label: "Max Credit (25:00+)", filterKey: "creditMin" },
     ]
   },
-  {
-    key: "turnFilters",
-    label: "Turn Filters",
-    dataOptions: [
-      { value: 8.0, label: "Turns Only (≤8:00)", filterKey: "creditMax" },
-      { value: 1, label: "Single Day Only", filterKey: "pairingDays" },
-    ]
-  },
+
   {
     key: "blockHours",
     label: "Block Hours",
@@ -143,14 +136,7 @@ export function SmartFilterSystem({
       onFilterClear('pairingDays');
       onFilterClear('pairingDaysMin');
       onFilterClear('pairingDaysMax');
-    } else if (functionOption.key === 'turnFilters') {
-      // Turn filters should clear existing credit and pairing day filters
-      onFilterClear('creditMin');
-      onFilterClear('creditMax');
-      onFilterClear('creditRange');
-      onFilterClear('pairingDays');
-      onFilterClear('pairingDaysMin');
-      onFilterClear('pairingDaysMax');
+
     } else if (functionOption.key === 'blockHours') {
       onFilterClear('blockMin');
       onFilterClear('blockMax');
@@ -274,23 +260,7 @@ export function SmartFilterSystem({
       <div className="space-y-2">
         <span className="text-sm text-gray-500">Quick filters:</span>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs"
-            onClick={() => {
-              // Clear existing credit and pairing day filters
-              const newFilters: any = {};
-              newFilters.creditMin = undefined;
-              newFilters.creditMax = 8.0;
-              newFilters.pairingDays = undefined;
-              newFilters.pairingDaysMin = undefined;
-              newFilters.pairingDaysMax = undefined;
-              onFiltersChange(newFilters);
-            }}
-          >
-            Turns Only
-          </Button>
+
           <Button 
             variant="outline" 
             size="sm" 
