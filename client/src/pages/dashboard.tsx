@@ -552,21 +552,6 @@ export default function Dashboard() {
                 // Expanded view - show full stats panel
                 <div className="space-y-6">
                   <StatsPanel pairings={sortedPairings || []} bidPackage={latestBidPackage} />
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-gray-900">Smart Filters</h3>
-                      <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <SmartFilterSystem
-                      pairings={sortedPairings || []}
-                      onFiltersChange={handleFiltersChange}
-                      activeFilters={activeFilters}
-                      onClearFilters={() => setActiveFilters([])}
-                    />
-                  </div>
                 </div>
               )}
             </div>
@@ -916,8 +901,7 @@ export default function Dashboard() {
           <div className="flex-1 overflow-hidden">
             {currentUser && latestBidPackage ? (
               <PairingChat 
-                bidPackage={latestBidPackage}
-                currentUser={currentUser}
+                bidPackageId={bidPackageId}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
