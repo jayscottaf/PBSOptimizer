@@ -44,7 +44,8 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false }: StatsPa
 
     const totalCredit = pairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
     const totalBlock = pairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
-
+    const avgCreditHours = pairings.length > 0 ? totalCredit / pairings.length : 0;
+    const avgBlockHours = pairings.length > 0 ? totalBlock / pairings.length : 0;
     // Calculate credit-to-block ratio breakdown
     const ratioBreakdown = pairings.reduce((acc, pairing) => {
       const credit = parseHours(pairing.creditHours);

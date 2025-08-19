@@ -4,10 +4,9 @@ import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
 import { db } from "./db";
-import { eq, gte, lte, sql } from "drizzle-orm";
+import { eq, gte, lte, sql, and } from "drizzle-orm";
 import { pairings } from "@shared/schema";
 import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
-
 import { openaiAssistant } from "./openaiAssistant";
 import multer from "multer";
 import { z } from "zod";
@@ -208,35 +207,30 @@ export async function registerRoutes(app: Express) {
         await recalculateHoldProbabilities(parseInt(bidPackageId as string), parseFloat(seniorityPercentile as string));
       }
 
-      let query = db
-        .select()
-        .from(pairings)
-        .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
+      // Build all conditions first, then apply with and()
+      const conditions = [eq(pairings.bidPackageId, parseInt(bidPackageId as string))];
 
-      // Apply filters based on query parameters
       if (search) {
-        query = query.where(
-          sql`
-            pairingNumber ILIKE ${`%${search}%`} OR
-            base ILIKE ${`%${search}%`} OR
-            aircraft ILIKE ${`%${search}%`} OR
-            notes ILIKE ${`%${search}%`}
-          `
-        );
+        conditions.push(sql`
+          pairingNumber ILIKE ${`%${search}%`} OR
+          base ILIKE ${`%${search}%`} OR
+          aircraft ILIKE ${`%${search}%`} OR
+          notes ILIKE ${`%${search}%`}
+        `);
       }
-      if (creditMin) query = query.where(gte(pairings.creditHours, parseFloat(creditMin as string)));
-      if (creditMax) query = query.where(lte(pairings.creditHours, parseFloat(creditMax as string)));
-      if (blockMin) query = query.where(gte(pairings.blockHours, parseFloat(blockMin as string)));
-      if (blockMax) query = query.where(lte(pairings.blockHours, parseFloat(blockMax as string)));
-      if (tafb) query = query.where(eq(pairings.tafb, tafb as string));
-      if (tafbMin) query = query.where(gte(pairings.tafb, tafb as string));
-      if (tafbMax) query = query.where(lte(pairings.tafb, tafb as string));
-      if (holdProbabilityMin) query = query.where(gte(pairings.holdProbability, parseFloat(holdProbabilityMin as string)));
-      if (pairingDays) query = query.where(eq(pairings.pairingDays, parseInt(pairingDays as string)));
-      if (pairingDaysMin) query = query.where(gte(pairings.pairingDays, parseInt(pairingDaysMin as string)));
-      if (pairingDaysMax) query = query.where(lte(pairings.pairingDays, parseInt(pairingDaysMax as string)));
-      if (efficiency) query = query.where(gte(pairings.efficiency, parseFloat(efficiency as string)));
+      if (creditMin) conditions.push(gte(pairings.creditHours, creditMin as string));
+      if (creditMax) conditions.push(lte(pairings.creditHours, creditMax as string));
+      if (blockMin) conditions.push(gte(pairings.blockHours, blockMin as string));
+      if (blockMax) conditions.push(lte(pairings.blockHours, blockMax as string));
+      if (tafb) conditions.push(eq(pairings.tafb, tafb as string));
+      if (tafbMin) conditions.push(gte(pairings.tafb, tafbMin as string));
+      if (tafbMax) conditions.push(lte(pairings.tafb, tafbMax as string));
+      if (holdProbabilityMin) conditions.push(gte(pairings.holdProbability, parseFloat(holdProbabilityMin as string)));
+      if (pairingDays) conditions.push(eq(pairings.pairingDays, parseInt(pairingDays as string)));
+      if (pairingDaysMin) conditions.push(gte(pairings.pairingDays, parseInt(pairingDaysMin as string)));
+      if (pairingDaysMax) conditions.push(lte(pairings.pairingDays, parseInt(pairingDaysMax as string)));
 
+      const query = db.select().from(pairings).where(and(...conditions));
       const pairingsResult = await query.execute();
       res.json(pairingsResult);
     } catch (error) {
@@ -567,16 +561,14 @@ export async function registerRoutes(app: Express) {
           console.log("Hybrid service failed, trying legacy analysis:", hybridError);
 
           // If it's a rate limit error, provide a specific message
-          if (hybridError.message && hybridError.message.includes('rate_limit_exceeded')) {
-            res.json({
+          if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof hybridError.message === 'string' && hybridError.message.includes('rate_limit_exceeded')) {            res.json({
               reply: "I'm experiencing high demand right now. Please try your question again in a moment, or try asking for more specific information to reduce the processing load."
             });
             return;
           }
 
           // If it's a token limit error, provide helpful guidance
-          if (hybridError.message && hybridError.message.includes('context_length_exceeded')) {
-            res.json({
+          if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof hybridError.message === 'string' && hybridError.message.includes('context_length_exceeded')) {            res.json({
               reply: "This query involves too much data to process at once. Please refine your search with more specific filters, such as:\n\n• 'Show me high credit 3-day pairings'\n• 'Find efficient turns with good hold probability'\n• 'Analyze layovers in DFW'\n\nThis will help me provide more detailed insights."
             });
             return;
@@ -637,11 +629,13 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+
   // Database verification endpoint
   app.get("/api/verify-data", async (req, res) => {
     try {
+      const verification = {} as Record<number, any>;
       const bidPackages = await storage.getBidPackages();
-      const verification = {};
+
 
       for (const bidPackage of bidPackages) {
         const pairings = await storage.getPairings(bidPackage.id);
@@ -674,8 +668,8 @@ export async function registerRoutes(app: Express) {
           },
           dataIntegrity: {
             hasPairings: pairings.length > 0,
-            hasValidCreditHours: pairings.filter(p => p.creditHours > 0).length,
-            hasValidBlockHours: pairings.filter(p => p.blockHours > 0).length,
+            hasValidCreditHours: pairings.filter(p => parseFloat(String(p.creditHours)) > 0).length,
+            hasValidBlockHours: pairings.filter(p => parseFloat(String(p.blockHours)) > 0).length,
             hasValidPairingNumbers: pairings.filter(p => p.pairingNumber && p.pairingNumber.length > 0).length,
             hasHoldProbabilities: pairings.filter(p => p.holdProbability !== null && p.holdProbability !== undefined).length
           }

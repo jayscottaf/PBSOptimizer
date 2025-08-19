@@ -17,12 +17,16 @@ import {
   type UserFavorite,
   type InsertUserFavorite,
   type ChatMessage,
+  type InsertChatHistory,
+  type ChatHistory,
   type UserCalendarEvent,
   type InsertUserCalendarEvent
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, like, gte, lte, or, sql } from "drizzle-orm";
-
+// Helper functions for decimal field parsing
+const parseDecimal = (value: any): number => parseFloat(String(value)) || 0;
+const parseNullable = (value: any): number => value !== null && value !== undefined ? parseFloat(String(value)) || 0 : 0;
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
@@ -259,11 +263,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (filters.blockMin !== undefined) {
-      conditions.push(gte(pairings.blockHours, filters.blockMin.toString()));
+      conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`);
     }
-
     if (filters.blockMax !== undefined) {
-      conditions.push(lte(pairings.blockHours, filters.blockMax.toString()));
+      conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`);
     }
 
     if (filters.holdProbabilityMin !== undefined) {
@@ -282,13 +285,36 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
     }
 
-    // TAFB filter (decimal hours format)
-    if (filters.tafbMin !== undefined) {
-      conditions.push(gte(pairings.tafb, filters.tafbMin.toString()));
-    }
-    if (filters.tafbMax !== undefined) {
-      conditions.push(lte(pairings.tafb, filters.tafbMax.toString()));
-    }
+    // TAFB filter: compare as minutes (handles 'HH:MM' format)
+// TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
+if (filters.tafbMin !== undefined) {
+	const minMins = filters.tafbMin * 60;
+	conditions.push(sql`
+		(
+			CASE
+				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+					(split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+				WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+					floor((${pairings.tafb}::numeric) * 60)
+				ELSE 0
+			END
+		) >= ${minMins}
+	`);
+}
+if (filters.tafbMax !== undefined) {
+	const maxMins = filters.tafbMax * 60;
+	conditions.push(sql`
+		(
+			CASE
+				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+					(split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+				WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+					floor((${pairings.tafb}::numeric) * 60)
+				ELSE 0
+			END
+		) <= ${maxMins}
+	`);
+}
 
     if (conditions.length > 0) {
         let results = await db.select().from(pairings)
@@ -301,7 +327,7 @@ export class DatabaseStorage implements IStorage {
             const creditHours = parseFloat(pairing.creditHours.toString());
             const blockHours = parseFloat(pairing.blockHours.toString());
             const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
-            return efficiency >= filters.efficiency;
+            return efficiency >= filters.efficiency!;
           });
         }
 
@@ -360,12 +386,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Chat history methods
-  async saveChatMessage(message: InsertChatHistory): Promise<ChatHistory> {
+  async saveChatMessage(message: InsertChatHistory): Promise<ChatMessage> {
     const [savedMessage] = await db.insert(chatHistory).values(message).returning();
     return savedMessage;
   }
 
-  async getChatHistory(sessionId: string): Promise<ChatHistory[]> {
+  async getChatHistory(sessionId: string): Promise<ChatMessage[]> {
     return await db
       .select()
       .from(chatHistory)
@@ -395,28 +421,27 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Calculate efficiency (credit hours / block hours ratio)
+    // Calculate efficiency (credit hours / block hours ratio)
     const pairingsWithEfficiency = allPairings.map(p => {
       const creditHours = parseHours(p.creditHours);
       const blockHours = parseHours(p.blockHours);
       return {
         ...p,
-        creditHours,
-        blockHours,
         efficiency: blockHours > 0 ? creditHours / blockHours : 0
       };
     });
 
     // Sort by efficiency descending
     const topPairings = pairingsWithEfficiency
-      .sort((a, b) => b.efficiency - a.efficiency)
+      .sort((a, b) => (b.efficiency || 0) - (a.efficiency || 0))
       .slice(0, limit);
 
     const stats = {
       totalPairings: allPairings.length,
       avgEfficiency: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length).toFixed(2)),
       topEfficiency: Number((topPairings[0]?.efficiency || 0).toFixed(2)),
-      avgCredit: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.creditHours, 0) / pairingsWithEfficiency.length).toFixed(2)),
-      avgBlock: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.blockHours, 0) / pairingsWithEfficiency.length).toFixed(2))
+      avgCredit: Number((pairingsWithEfficiency.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / pairingsWithEfficiency.length).toFixed(2)),
+      avgBlock: Number((pairingsWithEfficiency.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0) / pairingsWithEfficiency.length).toFixed(2))
     };
 
     return { pairings: topPairings, stats };
@@ -438,8 +463,8 @@ export class DatabaseStorage implements IStorage {
     const stats = {
       totalPairings: allPairings.length,
       maxCredit: topPairings[0]?.creditHours || 0,
-      avgCredit: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
-      minCredit: Math.min(...allPairings.map(p => p.creditHours))
+      avgCreditHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / allPairings.length,
+      minCredit: Math.min(...allPairings.map(p => parseDecimal(p.creditHours)))
     };
 
     return { pairings: topPairings, stats };
@@ -479,11 +504,11 @@ export class DatabaseStorage implements IStorage {
 
     // Calculate C/B ratios for all pairings
     const ratios = allPairings
-      .filter(p => p.blockHours > 0) // Avoid division by zero
-      .map(p => p.creditHours / p.blockHours);
+      .filter(p => parseDecimal(p.blockHours) > 0) // Avoid division by zero
+      .map(p => parseDecimal(p.creditHours) / parseDecimal(p.blockHours));
 
-    const creditHours = allPairings.map(p => p.creditHours);
-    const blockHours = allPairings.map(p => p.blockHours);
+      const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
+      const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
 
     return {
       totalPairings: allPairings.length,
@@ -534,10 +559,9 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    const turnCount = allPairings.filter(p => p.pairingDays === 1).length;
-    const multiDayCount = allPairings.filter(p => p.pairingDays > 1).length;
+      const turnCount = allPairings.filter(p => parseNullable(p.pairingDays) === 1).length;
+      const multiDayCount = allPairings.filter(p => parseNullable(p.pairingDays) > 1).length;
     const deadheadCount = allPairings.filter(p =>
-      p.fullText?.includes('DH') ||
       p.fullTextBlock?.includes('DH') ||
       (p.flightSegments && Array.isArray(p.flightSegments) &&
        p.flightSegments.some((seg: any) => seg.isDeadhead === true))
@@ -545,22 +569,22 @@ export class DatabaseStorage implements IStorage {
 
     return {
       totalPairings: allPairings.length,
-      avgCreditHours: allPairings.reduce((sum, p) => sum + p.creditHours, 0) / allPairings.length,
-      avgBlockHours: allPairings.reduce((sum, p) => sum + p.blockHours, 0) / allPairings.length,
-      avgPairingDays: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length,
+      avgCreditHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / allPairings.length,
+      avgBlockHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0) / allPairings.length,
+      avgPairingDays: allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) / allPairings.length,
       avgHoldProbability: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
-      maxCreditHours: Math.max(...allPairings.map(p => p.creditHours)),
-      minCreditHours: Math.min(...allPairings.map(p => p.creditHours)),
-      maxBlockHours: Math.max(...allPairings.map(p => p.blockHours)),
+      maxCreditHours: Math.max(...allPairings.map(p => parseDecimal(p.creditHours))),
+      minCreditHours: Math.min(...allPairings.map(p => parseDecimal(p.creditHours))),
+      maxBlockHours: Math.max(...allPairings.map(p => parseDecimal(p.blockHours))),
       turnCount,
       multiDayCount,
       deadheadCount,
       dayDistribution: {
-        '1day': allPairings.filter(p => p.pairingDays === 1).length,
-        '2day': allPairings.filter(p => p.pairingDays === 2).length,
-        '3day': allPairings.filter(p => p.pairingDays === 3).length,
-        '4day': allPairings.filter(p => p.pairingDays === 4).length,
-        '5day+': allPairings.filter(p => p.pairingDays >= 5).length,
+        '1day': allPairings.filter(p => parseNullable(p.pairingDays) === 1).length,
+        '2day': allPairings.filter(p => parseNullable(p.pairingDays) === 2).length,
+        '3day': allPairings.filter(p => parseNullable(p.pairingDays) === 3).length,
+        '4day': allPairings.filter(p => parseNullable(p.pairingDays) === 4).length,
+        '5day+': allPairings.filter(p => parseNullable(p.pairingDays) >= 5).length,
       }
     };
   }
@@ -610,14 +634,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(pairings.bidPackageId, bidPackageId));
 
     const deadheadPairings = allPairings.filter(p =>
-      p.fullText?.includes('DH') ||
       p.fullTextBlock?.includes('DH') ||
       (p.flightSegments && Array.isArray(p.flightSegments) &&
        p.flightSegments.some((seg: any) => seg.isDeadhead === true))
     );
     const nonDeadheadPairings = allPairings.filter(p =>
-      !(p.fullText?.includes('DH') ||
-        p.fullTextBlock?.includes('DH') ||
+      !(p.fullTextBlock?.includes('DH') ||
         (p.flightSegments && Array.isArray(p.flightSegments) &&
          p.flightSegments.some((seg: any) => seg.isDeadhead === true)))
     );
@@ -626,10 +648,10 @@ export class DatabaseStorage implements IStorage {
       totalPairings: allPairings.length,
       deadheadCount: deadheadPairings.length,
       deadheadPercentage: (deadheadPairings.length / allPairings.length) * 100,
-      avgCreditWithDeadhead: deadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / deadheadPairings.length,
-      avgCreditWithoutDeadhead: nonDeadheadPairings.reduce((sum, p) => sum + p.creditHours, 0) / nonDeadheadPairings.length,
+      avgCreditWithDeadhead: deadheadPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / deadheadPairings.length,
+      avgCreditWithoutDeadhead: nonDeadheadPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / nonDeadheadPairings.length,
       topDeadheadPairings: deadheadPairings
-        .sort((a, b) => b.creditHours - a.creditHours)
+      .sort((a:any, b:any) => parseDecimal(b.creditHours) - parseDecimal(a.creditHours))
         .slice(0, 10)
         .map(p => ({ pairingNumber: p.pairingNumber, creditHours: p.creditHours, blockHours: p.blockHours }))
     };
@@ -669,7 +691,7 @@ export class DatabaseStorage implements IStorage {
       totalPairings: allPairings.length,
       durationBreakdown: durationGroups,
       mostCommonDuration: Object.entries(durationGroups).sort(([,a]: [string, any], [,b]: [string, any]) => b.count - a.count)[0]?.[0],
-      avgDuration: allPairings.reduce((sum, p) => sum + p.pairingDays, 0) / allPairings.length
+      avgDuration: allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) / allPairings.length
     };
   }
 
