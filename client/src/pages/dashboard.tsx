@@ -239,16 +239,13 @@ export default function Dashboard() {
     }
   }, [latestBidPackage?.status, latestBidPackage?.id]);
 
-  // When processing, poll for progress by refetching bid packages and pairings until completion
+  // SSE handles progress; keep a light refresh on completion only
   React.useEffect(() => {
-    if (latestBidPackage?.id && latestBidPackage.status === 'processing') {
-      const interval = setInterval(() => {
-        refetchBidPackages();
-        refetchPairings();
-      }, 1000);
-      return () => clearInterval(interval);
+    if (latestBidPackage?.status === 'completed') {
+      refetchBidPackages();
+      refetchPairings();
     }
-  }, [latestBidPackage?.status, latestBidPackage?.id]);
+  }, [latestBidPackage?.status]);
 
   // Extract pairings and pagination from the response, with fallback to preloaded data
   const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];

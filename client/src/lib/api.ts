@@ -82,6 +82,18 @@ export const api = {
     return response.json();
   },
 
+  // Progress stream (SSE)
+  openProgressStream: (bidPackageId: number, onMessage: (data: any) => void): EventSource => {
+    const es = new EventSource(`/api/progress/stream?bidPackageId=${bidPackageId}`);
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        onMessage(data);
+      } catch {}
+    };
+    return es;
+  },
+
   uploadBidPackage: async (file: File, data: {
     name: string;
     month: string;

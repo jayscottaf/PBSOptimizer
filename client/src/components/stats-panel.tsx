@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { Pairing, BidPackage } from "@/lib/api";
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart2 } from "lucide-react";
+import { api } from "@/lib/api";
 
 
 interface StatsPanelProps {
@@ -21,6 +22,8 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({ pairings, bidPackage, hideHeader = false, pagination, statistics }: StatsPanelProps) {
+  const [streamProgress, setStreamProgress] = useState<{ percent: number; processed?: number; total?: number } | null>(null);
+  const esRef = useRef<EventSource | null>(null);
   const stats = useMemo(() => {
     if (!pairings || !Array.isArray(pairings) || pairings.length === 0) {
       return {
@@ -91,8 +94,40 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
   // Show processing status for current bid package
   const isProcessing = bidPackage?.status === 'processing';
   const isFailed = bidPackage?.status === 'failed';
-  const expectedTotal = 534;
-  const progressPercentage = Math.min((stats.totalPairings / expectedTotal) * 100, 100);
+  const expectedTotalBase = 534;
+  const totalFromStream = streamProgress?.total && streamProgress.total > 0 ? streamProgress.total : undefined;
+  const expectedTotal = totalFromStream ?? expectedTotalBase;
+  const computedPct = Math.min((stats.totalPairings / expectedTotal) * 100, 100);
+  const progressPercentage = typeof streamProgress?.percent === 'number'
+    ? Math.min(Math.max(streamProgress.percent, 0), 100)
+    : computedPct;
+  const displayTotalPairings = (isProcessing && (streamProgress?.processed !== undefined || typeof streamProgress?.percent === 'number'))
+    ? (streamProgress?.processed !== undefined
+        ? streamProgress.processed!
+        : Math.round((progressPercentage / 100) * expectedTotal))
+    : stats.totalPairings;
+
+  // Open SSE stream while processing to update progress live
+  useEffect(() => {
+    if (isProcessing && bidPackage?.id && !esRef.current) {
+      const es: EventSource = api.openProgressStream(bidPackage.id, (data: any) => {
+        if (typeof data?.percent === 'number') {
+          setStreamProgress({ percent: data.percent, processed: data?.processed, total: data?.total });
+        }
+        if (data?.status === 'completed' || data?.status === 'failed') {
+          es.close();
+          esRef.current = null;
+        }
+      });
+      esRef.current = es;
+    }
+    return () => {
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
+    };
+  }, [isProcessing, bidPackage?.id]);
 
   if (hideHeader) {
     return (
@@ -115,7 +150,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
         )}
           <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
+            <div className="text-xl lg:text-2xl font-bold text-blue-600">{displayTotalPairings}</div>
             <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
             {isProcessing && (
               <span className="text-xs text-orange-600">Processing...</span>
@@ -161,7 +196,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
                   <span className="text-xs text-gray-600">Excellent (≥1.3)</span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
-                  {stats.ratioBreakdown.excellent} ({((stats.ratioBreakdown.excellent / stats.totalPairings) * 100).toFixed(0)}%)
+                  {stats.ratioBreakdown.excellent} ({((stats.ratioBreakdown.excellent / (displayTotalPairings || 1)) * 100).toFixed(0)}%)
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -170,7 +205,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
                   <span className="text-xs text-gray-600">Good (1.2-1.29)</span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
-                  {stats.ratioBreakdown.good} ({((stats.ratioBreakdown.good / stats.totalPairings) * 100).toFixed(0)}%)
+                  {stats.ratioBreakdown.good} ({((stats.ratioBreakdown.good / (displayTotalPairings || 1)) * 100).toFixed(0)}%)
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -179,7 +214,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
                   <span className="text-xs text-gray-600">Average (1.1-1.19)</span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
-                  {stats.ratioBreakdown.average} ({((stats.ratioBreakdown.average / stats.totalPairings) * 100).toFixed(0)}%)
+                  {stats.ratioBreakdown.average} ({((stats.ratioBreakdown.average / (displayTotalPairings || 1)) * 100).toFixed(0)}%)
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -188,7 +223,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
                   <span className="text-xs text-gray-600">Poor (&lt;1.1)</span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
-                  {stats.ratioBreakdown.poor} ({((stats.ratioBreakdown.poor / stats.totalPairings) * 100).toFixed(0)}%)
+                  {stats.ratioBreakdown.poor} ({((stats.ratioBreakdown.poor / (displayTotalPairings || 1)) * 100).toFixed(0)}%)
                 </div>
               </div>
             </div>
@@ -222,7 +257,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
         )}
         <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-blue-600">{stats.totalPairings}</div>
+            <div className="text-xl lg:text-2xl font-bold text-blue-600">{displayTotalPairings}</div>
             <div className="text-xs lg:text-sm text-gray-600">Total Pairings</div>
             {isProcessing && (
               <span className="text-xs text-orange-600">Processing...</span>

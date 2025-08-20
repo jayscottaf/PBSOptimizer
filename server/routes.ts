@@ -156,6 +156,31 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Progress stream via Server-Sent Events
+  app.get('/api/progress/stream', async (req, res) => {
+    try {
+      const bidPackageId = parseInt((req.query.bidPackageId as string) || '');
+      if (!bidPackageId) {
+        return res.status(400).end('bidPackageId required');
+      }
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const { registerProgressClient, removeProgressClient } = await import('./progress');
+      registerProgressClient(bidPackageId, res);
+
+      req.on('close', () => {
+        removeProgressClient(bidPackageId, res);
+        res.end();
+      });
+    } catch (error) {
+      res.status(500).end('failed to open stream');
+    }
+  });
+
   // Get bid package statistics (C/B ratio ranges, etc.)
   app.get('/api/bid-packages/:id/stats', async (req, res) => {
     try {

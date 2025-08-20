@@ -767,6 +767,17 @@ export class PDFParser {
 
       // Save pairings to database in batches for better performance
       const batchSize = 50;
+      const total = parsedPairings.length;
+      let processed = 0;
+      const emit = async (status: 'processing' | 'completed' | 'failed') => {
+        try {
+          const { emitProgress } = await import('./progress');
+          const percent = total === 0 ? 0 : Math.min(Math.round((processed / total) * 100), 100);
+          emitProgress(bidPackageId, { status, processed, total, percent });
+        } catch {}
+      };
+
+      await emit('processing');
       for (let i = 0; i < parsedPairings.length; i += batchSize) {
         const batch = parsedPairings.slice(i, i + batchSize);
 
@@ -796,16 +807,24 @@ export class PDFParser {
         }
 
         console.log(`Saved batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(parsedPairings.length/batchSize)} (${batch.length} pairings)`);
+        processed += batch.length;
+        await emit('processing');
       }
 
       // Update bid package status to completed
       await storage.updateBidPackageStatus(bidPackageId, "completed");
+      processed = total;
+      await emit('completed');
 
       console.log(`File parsing completed for bid package ${bidPackageId}`);
 
     } catch (error) {
       console.error('Error parsing file:', error);
       await storage.updateBidPackageStatus(bidPackageId, "failed");
+      try {
+        const { emitProgress } = await import('./progress');
+        emitProgress(bidPackageId, { status: 'failed', processed: 0, total: 0, percent: 0 });
+      } catch {}
       throw error;
     }
   }
