@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface PairingModalProps {
   pairingId: number;
@@ -18,6 +19,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isAddedToCalendar, setIsAddedToCalendar] = useState(false);
+  const [showDateChooser, setShowDateChooser] = useState(false);
+  const [dateOptions, setDateOptions] = useState<Date[]>([]);
+  const [selectedDates, setSelectedDates] = useState<Record<number, boolean>>({});
   const queryClient = useQueryClient();
 
   const { data: pairing, isLoading } = useQuery({
@@ -195,9 +199,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             onClick={async () => {
               try {
                 console.log('Add to Calendar button clicked');
-                
                 if (!pairing) {
-                  console.error('No pairing data available');
                   toast({ title: 'Error', description: 'No pairing data available', variant: 'destructive' });
                   return;
                 }
@@ -206,140 +208,154 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 const base = localStorage.getItem('base') || "NYC";
                 const aircraft = localStorage.getItem('aircraft') || "A220";
 
-                console.log('Adding to calendar - pairing:', pairing.pairingNumber, 'effective dates:', pairing.effectiveDates);
-
-                // Create or update user first
                 const user = await api.createOrUpdateUser({
                   seniorityNumber: parseInt(seniorityNumber),
                   base,
                   aircraft
                 });
 
-                console.log('User created/updated:', user);
-
-                // Parse effective dates - can be formats like "SEP10", "31AUG,03SEP", "01SEP-30SEP"
-                const effectiveDateStr = pairing.effectiveDates;
+                // Parse effective dates and extract possible start dates
+                const effectiveDateStr = (pairing.effectiveDates || '').toUpperCase();
                 const currentYear = new Date().getFullYear();
-
-                console.log('Parsing date string:', effectiveDateStr);
-
                 const monthMap: { [key: string]: number } = {
                   'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
                   'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
                 };
+                const weekdayMap: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
-                // Function to parse a single date like "SEP10" or "31AUG"
                 const parseSingleDate = (dateStr: string) => {
-                  const match = dateStr.match(/(\d{1,2})([A-Z]{3})|([A-Z]{3})(\d{1,2})/);
-                  if (match) {
-                    const [, dayFirst, monthFirst, monthSecond, daySecond] = match;
-                    const day = dayFirst || daySecond;
-                    const month = monthFirst || monthSecond;
-                    
-                    if (month in monthMap && day) {
-                      return new Date(currentYear, monthMap[month], parseInt(day));
+                  const clean = dateStr.replace(/\./g, '').trim();
+                  const m = clean.match(/(?:(\d{1,2})([A-Z]{3}))|(?:([A-Z]{3})(\d{1,2}))/);
+                  if (!m) return null;
+                  const day = parseInt((m[1] || m[4]) as string);
+                  const mon = (m[2] || m[3]) as string;
+                  if (!monthMap.hasOwnProperty(mon)) return null;
+                  return new Date(currentYear, monthMap[mon], day);
+                };
+
+                const extractDatesFromRange = (text: string) => {
+                  // Remove periods but preserve the original for debugging
+                  const t = text.replace(/\./g, '');
+                  console.log('Extracting dates from range:', text, 'cleaned:', t);
+                  
+                  // Day-first range, e.g., 22SEP-25SEP
+                  let m = t.match(/(\d{1,2})([A-Z]{3})\s*-\s*(\d{1,2})([A-Z]{3})/);
+                  let start: Date | null = null;
+                  let end: Date | null = null;
+                  if (m) {
+                    const [, sd, sm, ed, em] = m;
+                    start = new Date(currentYear, monthMap[sm], parseInt(sd));
+                    end = new Date(currentYear, monthMap[em], parseInt(ed));
+                    console.log('Day-first match:', sd, sm, '-', ed, em);
+                  } else {
+                    // Month-first range, e.g., SEP22-SEP25 or SEP21-SEP 28
+                    m = t.match(/([A-Z]{3})(\d{1,2})\s*-\s*([A-Z]{3})\s*(\d{1,2})/);
+                    if (m) {
+                      const [, sm2, sd2, em2, ed2] = m;
+                      start = new Date(currentYear, monthMap[sm2], parseInt(sd2));
+                      end = new Date(currentYear, monthMap[em2], parseInt(ed2));
+                      console.log('Month-first match:', sm2, sd2, '-', em2, ed2);
                     }
                   }
-                  return null;
+                  if (!start || !end) {
+                    console.log('No range match found');
+                    return [] as Date[];
+                  }
+                  
+                  // Extract weekday qualifiers if present
+                  const weekdayTokens = Array.from(t.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)).map(x => x[1]);
+                  const allowed = weekdayTokens.length > 0 ? new Set(weekdayTokens.map(w => weekdayMap[w])) : null;
+                  console.log('Weekday tokens:', weekdayTokens);
+                  
+                  const out: Date[] = [];
+                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    if (!allowed || allowed.has(d.getDay())) out.push(new Date(d));
+                  }
+                  console.log('Date range results:', out.map(d => d.toLocaleDateString()));
+                  return out;
                 };
 
                 let possibleStartDates: Date[] = [];
-
-                // Check for multiple dates separated by comma
-                if (effectiveDateStr.includes(',')) {
-                  const dates = effectiveDateStr.split(',').map(d => d.trim());
-                  for (const dateStr of dates) {
-                    const parsed = parseSingleDate(dateStr);
-                    if (parsed) {
-                      possibleStartDates.push(parsed);
-                    }
+                const cleaned = effectiveDateStr.replace(/EFFECTIVE/g, '').replace(/ONLY/g, '').trim();
+                
+                console.log('Parsing effective dates:', effectiveDateStr);
+                console.log('Cleaned:', cleaned);
+                
+                // Check for comma-separated dates first
+                if (cleaned.includes(',')) {
+                  // Example: SEP17, SEP24
+                  for (const part of cleaned.split(',')) {
+                    const d = parseSingleDate(part);
+                    if (d) possibleStartDates.push(d);
                   }
                 } else {
-                  // Check for date range format "01SEP-30SEP"
-                  const rangeMatch = effectiveDateStr.match(/(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/);
-                  if (rangeMatch) {
-                    const [, startDay, startMonth, endDay, endMonth] = rangeMatch;
-                    
-                    if (startMonth in monthMap && endMonth in monthMap) {
-                      const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                      const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
-                      
-                      console.log('Range dates:', { startDate, endDate });
-                      
-                      addToCalendarMutation.mutate({
-                        userId: user.id,
-                        pairingId: pairingId,
-                        startDate,
-                        endDate
-                      });
-                      return;
+                  // Check if it's a range pattern
+                  const rangeDates = extractDatesFromRange(cleaned);
+                  if (rangeDates.length > 0) {
+                    possibleStartDates = rangeDates;
+                  }
+                }
+                
+                // Single explicit date fallback
+                if (possibleStartDates.length === 0) {
+                  const single = parseSingleDate(cleaned);
+                  if (single) possibleStartDates.push(single);
+                }
+
+                // Fallback 2: Try parsing from full text block EFFECTIVE line if we still have <= 1 date
+                if (possibleStartDates.length <= 1) {
+                  const full = (pairing.fullTextBlock || '').toUpperCase();
+                  const effLine = full.split(/\n/).find(l => l.includes('EFFECTIVE')) || '';
+                  if (effLine) {
+                    console.log('Fallback using fullText EFFECTIVE line:', effLine);
+                    const cleanedEff = effLine.replace(/EFFECTIVE\s*/g, '').trim();
+                    // Re-run both parsers on this richer text
+                    let extra: Date[] = [];
+                    if (cleanedEff.includes(',')) {
+                      for (const part of cleanedEff.split(',')) {
+                        const d = parseSingleDate(part);
+                        if (d) extra.push(d);
+                      }
                     }
-                  } else {
-                    // Single date format
-                    const parsed = parseSingleDate(effectiveDateStr);
-                    if (parsed) {
-                      possibleStartDates.push(parsed);
+                    if (extra.length === 0) {
+                      extra = extractDatesFromRange(cleanedEff);
+                    }
+                    if (extra.length === 0) {
+                      const single2 = parseSingleDate(cleanedEff);
+                      if (single2) extra.push(single2);
+                    }
+                    if (extra.length > possibleStartDates.length) {
+                      possibleStartDates = extra;
                     }
                   }
                 }
+                
+                console.log('Possible start dates found:', possibleStartDates.length, possibleStartDates.map(d => d.toLocaleDateString()));
 
                 if (possibleStartDates.length === 0) {
                   toast({ title: 'Error', description: 'Could not parse any valid dates from pairing', variant: 'destructive' });
                   return;
                 }
 
-                // If multiple start dates, ask user to choose
+                // Multiple dates: open selection dialog
                 if (possibleStartDates.length > 1) {
-                  const dateOptions = possibleStartDates.map(date => 
-                    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                  ).join(' or ');
-                  
-                  const choice = confirm(`This pairing has multiple start dates: ${dateOptions}. Click OK to add all dates, or Cancel to add only the first date.`);
-                  
-                  if (choice) {
-                    // Add all dates
-                    for (const startDate of possibleStartDates) {
-                      const pairingDays = pairing.pairingDays || 4;
-                      const endDate = new Date(startDate);
-                      endDate.setDate(endDate.getDate() + pairingDays - 1);
-                      
-                      console.log('Adding date range:', { startDate, endDate, days: pairingDays });
-                      
-                      try {
-                        await api.addToCalendar(user.id, pairing.id, startDate, endDate);
-                      } catch (error) {
-                        console.error('Error adding one of the date ranges:', error);
-                      }
-                    }
-                    
-                    toast({ title: 'Success', description: `Added ${possibleStartDates.length} date ranges to calendar!` });
-                    setIsAddedToCalendar(true);
-                    queryClient.invalidateQueries({ queryKey: ['calendar'] });
-                    queryClient.refetchQueries({ queryKey: ['calendar'] });
-                    return;
-                  } else {
-                    // Use only the first date
-                    possibleStartDates = [possibleStartDates[0]];
-                  }
+                  setDateOptions(possibleStartDates);
+                  const init: Record<number, boolean> = {};
+                  possibleStartDates.forEach(d => { init[d.getTime()] = true; });
+                  setSelectedDates(init);
+                  console.log('Opening date chooser with options:', possibleStartDates.map(d => d.toDateString()));
+                  setShowDateChooser(true);
+                  return;
                 }
 
-                // Single start date
+                // Single date
                 const startDate = possibleStartDates[0];
                 const pairingDays = pairing.pairingDays || 4;
                 const endDate = new Date(startDate);
                 endDate.setDate(endDate.getDate() + pairingDays - 1);
-
-                console.log('Adding single date range:', { startDate, endDate, days: pairingDays });
-
-                addToCalendarMutation.mutate({
-                  userId: user.id,
-                  pairingId: pairing.id,
-                  startDate,
-                  endDate
-                });
+                addToCalendarMutation.mutate({ userId: user.id, pairingId: pairing.id, startDate, endDate });
 
               } catch (error) {
-                console.error('Error adding to calendar:', error);
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
                 toast({ title: 'Error', description: `Failed to add pairing to calendar: ${errorMessage}`, variant: 'destructive' });
               }
@@ -359,29 +375,11 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
                 const base = localStorage.getItem('base') || "NYC";
                 const aircraft = localStorage.getItem('aircraft') || "A220";
-
-                // Create or update user first
-                const user = await api.createOrUpdateUser({
-                  seniorityNumber: parseInt(seniorityNumber),
-                  base,
-                  aircraft
-                });
-
-                // Add to favorites
+                const user = await api.createOrUpdateUser({ seniorityNumber: parseInt(seniorityNumber), base, aircraft });
                 await api.addFavorite(user.id, pairingId);
-
-                // Update state for visual feedback
                 setIsFavorited(true);
-
-                // Invalidate favorites query to refresh the favorites tab
-                queryClient.invalidateQueries({
-                  queryKey: ["favorites", seniorityNumber]
-                });
-
-                // Show success feedback
-                console.log('Added to favorites successfully');
+                queryClient.invalidateQueries({ queryKey: ["favorites", seniorityNumber] });
               } catch (error) {
-                console.error('Error adding to favorites:', error);
                 setIsFavorited(false);
               } finally {
                 setIsAddingFavorite(false);
@@ -392,6 +390,66 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             {isAddingFavorite ? 'Adding...' : isFavorited ? 'Added to Favorites' : 'Add to Favorites'}
           </Button>
         </div>
+
+        {/* Multi-date chooser dialog */}
+        {showDateChooser && (
+          <Dialog open={showDateChooser} onOpenChange={setShowDateChooser}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Select start dates</DialogTitle>
+                <DialogDescription>
+                  This pairing appears on multiple start dates. Choose which dates to add to your calendar.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {dateOptions.map(d => (
+                  <label key={d.getTime()} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={!!selectedDates[d.getTime()]}
+                      onCheckedChange={(val: boolean) => setSelectedDates(prev => ({ ...prev, [d.getTime()]: !!val }))}
+                    />
+                    <span className="text-sm">{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="pt-3 flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowDateChooser(false)}>Cancel</Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      setShowDateChooser(false);
+                      const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
+                      const base = localStorage.getItem('base') || "NYC";
+                      const aircraft = localStorage.getItem('aircraft') || "A220";
+                      const user = await api.createOrUpdateUser({ seniorityNumber: parseInt(seniorityNumber), base, aircraft });
+
+                      const starts = dateOptions.filter(d => selectedDates[d.getTime()]);
+                      if (starts.length === 0) {
+                        toast({ title: 'No dates selected', description: 'Please choose at least one date.' });
+                        return;
+                      }
+                      for (const startDate of starts) {
+                        const pairingDays = pairing.pairingDays || 4;
+                        const endDate = new Date(startDate);
+                        endDate.setDate(endDate.getDate() + pairingDays - 1);
+                        await api.addToCalendar(user.id, pairing.id, startDate, endDate);
+                      }
+                      toast({ title: 'Success', description: `Added ${starts.length} date${starts.length > 1 ? 's' : ''} to calendar.` });
+                      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+                      queryClient.refetchQueries({ queryKey: ['calendar'] });
+                      setIsAddedToCalendar(true);
+                    } catch (err) {
+                      toast({ title: 'Error', description: 'Failed to add selected dates.', variant: 'destructive' });
+                    }
+                  }}
+                >
+                  Add Selected
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   );

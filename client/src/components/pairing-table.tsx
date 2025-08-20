@@ -302,7 +302,10 @@ export function PairingTable({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="text-xs sm:text-sm text-gray-900 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.route}>{pairing.route}</div>
-                    <div className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.effectiveDates}>{pairing.effectiveDates}</div>
+                    <div className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.effectiveDates}>
+                      {pairing.effectiveDates}
+                      {pairing.pairingDays && pairing.pairingDays > 1 && ` (${pairing.pairingDays} days)`}
+                    </div>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="font-mono text-xs sm:text-sm font-medium text-gray-900">

@@ -272,10 +272,11 @@ export class PDFParser {
       const line = lines[i].trim();
 
       if (line.includes('EFFECTIVE')) {
-        const dateMatch = line.match(/EFFECTIVE\s+([A-Z]{3}\d{2}(?:-[A-Z]{3}\.\s*\d{2})?)/);
-        if (dateMatch) {
-          effectiveDates = dateMatch[1];
-        }
+        // Extract everything after EFFECTIVE
+        const effectiveIndex = line.indexOf('EFFECTIVE');
+        effectiveDates = line.substring(effectiveIndex + 'EFFECTIVE'.length).trim();
+        console.log('Found EFFECTIVE line:', line);
+        console.log('Extracted effectiveDates:', effectiveDates);
       }
 
       // Enhanced flight pattern detection to capture all flights within each day
