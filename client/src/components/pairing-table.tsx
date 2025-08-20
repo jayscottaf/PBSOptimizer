@@ -39,6 +39,89 @@ export function PairingTable({
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
 
+  const formatEffectiveDisplay = (pairing: Pairing): string => {
+    try {
+      const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      const monthRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/g;
+      const raw = (pairing.effectiveDates || '').toUpperCase();
+      const cleanedFromField = raw.replace(/EFFECTIVE/g, '').replace(/ONLY/g, '').replace(/\./g, '').trim();
+
+      // EFFECTIVE line and weekday qualifiers from full text, if present
+      const full = (pairing.fullTextBlock || '').toUpperCase();
+      const effIndex = full.indexOf('EFFECTIVE');
+      const beforeEff = effIndex >= 0 ? full.substring(0, effIndex) : full;
+      const effTail = effIndex >= 0 ? full.substring(effIndex + 'EFFECTIVE'.length) : '';
+      const cleanedFromFull = effTail.replace(/ONLY/g, '').replace(/\./g, '').trim().split(/\n|CHECK-IN|DAY\s+[A-Z]/)[0] || '';
+
+      const weekdayTokens = Array.from(beforeEff.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)).map(m => m[1]);
+      const weekdaySuffix = weekdayTokens.length > 0 ? ` ${weekdayTokens.join(',')}` : '';
+
+      const normalizeToken = (mon: string, day: string) => `${mon}${parseInt(day,10)}`;
+
+      const collectExplicitDates = (s: string): string[] => {
+        const out: string[] = [];
+        // token forms: MONdd or ddMON possibly separated by commas/spaces
+        const tokenRegex = /\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*\d{1,2}|\d{1,2}\s*(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))\b/g;
+        for (const m of s.matchAll(tokenRegex)) {
+          const part = m[1];
+          const md = part.match(/^(?:([A-Z]{3})\s*(\d{1,2})|(\d{1,2})\s*([A-Z]{3}))$/);
+          if (md) {
+            const mon = (md[1] || md[4]) as string;
+            const day = (md[2] || md[3]) as string;
+            if (months.includes(mon)) out.push(normalizeToken(mon, day));
+          }
+        }
+        return Array.from(new Set(out));
+      };
+
+      // Prefer richer EFFECTIVE tail when it contains months
+      const source = (cleanedFromFull.match(monthRegex) ? cleanedFromFull : cleanedFromField) || cleanedFromField;
+
+      // 1) Explicit comma/space-separated dates
+      const explicitDates = collectExplicitDates(source);
+
+      // 2) Ranges → for rows, prefer listing endpoints only; if no weekdays, show as a range; if weekdays exist, list endpoints
+      const currentYear = new Date().getFullYear();
+      const monthMap: Record<string, number> = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+      const dayFirst = source.match(/\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*-\s*(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/);
+      const monFirst = source.match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\s*-\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b/);
+      if (dayFirst || monFirst) {
+        const sm = monFirst ? monFirst[1] : dayFirst![2];
+        const sd = monFirst ? monFirst[2] : dayFirst![1];
+        const em = monFirst ? monFirst[3] : dayFirst![4];
+        const ed = monFirst ? monFirst[4] : dayFirst![3];
+        const startToken = normalizeToken(sm, sd);
+        const endToken = normalizeToken(em, ed);
+        if (weekdayTokens.length > 0) {
+          // Prioritize explicit endpoints when weekdays are present (avoid mid-range extras like SEP26)
+          const parts = Array.from(new Set([startToken, endToken]));
+          return `${parts.join(', ')}${weekdaySuffix}`.trim();
+        }
+        return `${sm}${parseInt(sd,10)} - ${em}${parseInt(ed,10)}${weekdaySuffix}`.trim();
+      }
+
+      const allDates = Array.from(new Set(explicitDates));
+      if (allDates.length > 1) {
+        return `${allDates.join(', ')}${weekdaySuffix}`.trim();
+      }
+      if (allDates.length === 1) {
+        return `${allDates[0]}${weekdaySuffix}`.trim();
+      }
+
+      // Fallback: single normalized token from source if present
+      const md = source.match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b|\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/);
+      if (md) {
+        const mon = (md[1] || md[4]) as string;
+        const day = (md[2] || md[3]) as string;
+        return `${normalizeToken(mon, day)}${weekdaySuffix}`.trim();
+      }
+
+      return pairing.effectiveDates;
+    } catch {
+      return pairing.effectiveDates;
+    }
+  };
+
   // Add to calendar mutation
   const addToCalendarMutation = useMutation({
     mutationFn: async ({ userId, pairingId, startDate, endDate }: {
@@ -302,9 +385,8 @@ export function PairingTable({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="text-xs sm:text-sm text-gray-900 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.route}>{pairing.route}</div>
-                    <div className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={pairing.effectiveDates}>
-                      {pairing.effectiveDates}
-                      {pairing.pairingDays && pairing.pairingDays > 1 && ` (${pairing.pairingDays} days)`}
+                    <div className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]" title={formatEffectiveDisplay(pairing)}>
+                      {formatEffectiveDisplay(pairing)}
                     </div>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">

@@ -272,9 +272,11 @@ export class PDFParser {
       const line = lines[i].trim();
 
       if (line.includes('EFFECTIVE')) {
-        // Extract everything after EFFECTIVE
+        // Extract everything after EFFECTIVE, but stop before CHECK-IN or DAY blocks
         const effectiveIndex = line.indexOf('EFFECTIVE');
-        effectiveDates = line.substring(effectiveIndex + 'EFFECTIVE'.length).trim();
+        let tail = line.substring(effectiveIndex + 'EFFECTIVE'.length).trim();
+        tail = tail.split(/CHECK-IN|DAY\s+[A-Z]/)[0].trim();
+        effectiveDates = tail;
         console.log('Found EFFECTIVE line:', line);
         console.log('Extracted effectiveDates:', effectiveDates);
       }

@@ -264,12 +264,17 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   
                   // Extract weekday qualifiers if present
                   const weekdayTokens = Array.from(t.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)).map(x => x[1]);
-                  const allowed = weekdayTokens.length > 0 ? new Set(weekdayTokens.map(w => weekdayMap[w])) : null;
                   console.log('Weekday tokens:', weekdayTokens);
+                  
+                  // In modal, when weekdays present, present endpoints only to avoid accidental mid-range dates
+                  if (weekdayTokens.length > 0) {
+                    console.log('Returning endpoints only due to weekday qualifiers');
+                    return [start, end];
+                  }
                   
                   const out: Date[] = [];
                   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                    if (!allowed || allowed.has(d.getDay())) out.push(new Date(d));
+                    out.push(new Date(d));
                   }
                   console.log('Date range results:', out.map(d => d.toLocaleDateString()));
                   return out;

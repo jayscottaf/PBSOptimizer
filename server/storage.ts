@@ -609,8 +609,8 @@ if (filters.tafbMax !== undefined) {
           tafb: pairings.tafb,
           holdProbability: pairings.holdProbability,
           pairingDays: pairings.pairingDays,
+          fullTextBlock: pairings.fullTextBlock,
           totalCount: sql<number>`count(*) over()`
-          // Note: exclude fullTextBlock, layovers, flightSegments here to reduce payload
         })
         .from(pairings)
         .where(and(...conditions))
