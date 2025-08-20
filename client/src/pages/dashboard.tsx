@@ -850,7 +850,7 @@ export default function Dashboard() {
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
               {currentUser ? (
-                <CalendarView userId={currentUser.id} />
+                <CalendarView userId={currentUser.id} bidPackageId={bidPackageId} />
               ) : (
                 <div className="text-center py-8">
                   <Calendar className="mx-auto h-16 w-16 text-gray-300" />

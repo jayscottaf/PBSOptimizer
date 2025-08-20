@@ -27,9 +27,10 @@ type CalendarEvent = {
 
 type CalendarViewProps = {
   userId: number;
+  bidPackageId?: number;
 };
 
-export function CalendarView({ userId }: CalendarViewProps) {
+export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   // Set to September 2025 for the bid month (even though bid period starts Aug 31)
   const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 1, 2025 (month is 0-indexed)
   const queryClient = useQueryClient();
@@ -56,17 +57,17 @@ export function CalendarView({ userId }: CalendarViewProps) {
     refetchOnMount: true,
   });
 
-  // Fetch bid package stats to get the full range of possible C/B ratios
+  // Fetch bid package stats for the active bid package
   const { data: bidPackageStats } = useQuery({
-    queryKey: ['bid-package-stats', events[0]?.pairing?.id ? 31 : null], // Using bid package 31 from the current data
+    queryKey: ['bid-package-stats', bidPackageId || null],
     queryFn: async () => {
-      if (!events[0]?.pairing?.id) return null;
-      const response = await fetch('/api/bid-packages/31/stats'); // Get stats for current bid package
+      if (!bidPackageId) return null;
+      const response = await fetch(`/api/bid-packages/${bidPackageId}/stats`);
       if (!response.ok) return null;
       return response.json();
     },
-    enabled: events.length > 0,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes since bid package stats don't change often
+    enabled: !!bidPackageId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Remove from calendar mutation
@@ -180,9 +181,10 @@ export function CalendarView({ userId }: CalendarViewProps) {
   else if (ratio >= 1.1) ratioLabel = 'Average';
 
   // Use actual bid package statistics for efficiency scoring
-  const minRatio = bidPackageStats?.creditBlockRatios?.min || 1.0;
-  const maxRatio = bidPackageStats?.creditBlockRatios?.max || 1.8;
-  const avgRatio = bidPackageStats?.creditBlockRatios?.average || 1.4;
+  const hasStats = !!bidPackageStats && (bidPackageStats.totalPairings || 0) > 0;
+  const minRatio = hasStats ? bidPackageStats.creditBlockRatios.min : undefined;
+  const maxRatio = hasStats ? bidPackageStats.creditBlockRatios.max : undefined;
+  const avgRatio = hasStats ? bidPackageStats.creditBlockRatios.average : undefined;
 
   // Calculate weeks for the calendar
   const weeks = [];
@@ -545,22 +547,24 @@ export function CalendarView({ userId }: CalendarViewProps) {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-blue-600">
-                    {Math.round(Math.min(100, Math.max(0, ((ratio - minRatio) / (maxRatio - minRatio)) * 100)))}%
+                    {hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio
+                      ? Math.round(Math.min(100, Math.max(0, ((ratio - minRatio) / (maxRatio - minRatio)) * 100)))
+                      : 0}%
                   </div>
-                  <div className="text-sm text-blue-600 font-medium">{ratioLabel}</div>
+                  <div className="text-sm text-blue-600 font-medium">{hasStats ? ratioLabel : 'Insufficient data'}</div>
                 </div>
               </div>
               
-              {bidPackageStats && (
+              {hasStats && (
                 <div className="text-xs text-gray-600 space-y-1">
                   <div className="flex justify-between">
                     <span>Your ratio: {ratio.toFixed(2)}</span>
-                    <span>Package average: {avgRatio.toFixed(2)}</span>
+                    <span>Package average: {avgRatio!.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Package range: {minRatio.toFixed(2)} - {maxRatio.toFixed(2)}</span>
-                    <span className={ratio > avgRatio ? 'text-green-600' : 'text-orange-600'}>
-                      {ratio > avgRatio ? '+' : ''}{((ratio - avgRatio) / avgRatio * 100).toFixed(1)}% vs avg
+                    <span>Package range: {minRatio!.toFixed(2)} - {maxRatio!.toFixed(2)}</span>
+                    <span className={ratio > (avgRatio as number) ? 'text-green-600' : 'text-orange-600'}>
+                      {ratio > (avgRatio as number) ? '+' : ''}{(((ratio - (avgRatio as number)) / (avgRatio as number)) * 100).toFixed(1)}% vs avg
                     </span>
                   </div>
                 </div>
