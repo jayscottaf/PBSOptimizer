@@ -498,14 +498,14 @@ export class PDFParser {
     }
 
     // Calculate pairing days from unique day letters in flight segments
-    const uniqueDays = [...new Set(flightSegments.map(seg => seg.date))].sort();
+    const uniqueDays = Array.from(new Set(flightSegments.map(seg => seg.date))).sort();
     let pairingDays = uniqueDays.length;
 
     // Enhanced validation: check for day patterns in the full text block
     // Some pairings might have days mentioned that don't have flight segments
     const dayPatternMatches = block.match(/^([A-E])\s/gm);
     if (dayPatternMatches) {
-      const textDays = [...new Set(dayPatternMatches.map(match => match.trim().charAt(0)))];
+      const textDays = Array.from(new Set(dayPatternMatches.map(match => match.trim().charAt(0))));
       const textDayCount = textDays.length;
 
       // Use the higher count between flight segments and text patterns
@@ -559,7 +559,8 @@ export class PDFParser {
       return text;
     } catch (error) {
       console.error('Error reading TXT file:', error);
-      throw new Error(`Failed to read TXT file: ${error.message}`);
+      
+      throw new Error(`Failed to read TXT file: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -592,7 +593,7 @@ export class PDFParser {
       return parsed.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
-      throw new Error(`Failed to extract text from PDF: ${error.message}`);
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
