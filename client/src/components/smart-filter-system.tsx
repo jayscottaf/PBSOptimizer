@@ -166,6 +166,53 @@ export function SmartFilterSystem({
     setSelectedData("");
   };
 
+  // Apply immediately when user selects a value
+  const handleSelectValueAndApply = (value: string) => {
+    setSelectedData(value);
+    if (!selectedFunction || !value) return;
+
+    // Single-filter UX: clear all existing filters before applying a new one
+    onClearFilters();
+
+    const functionOption = filterOptions.find(f => f.key === selectedFunction);
+    const optionList = functionOption?.dataOptions || [];
+    const dataOption = optionList.find(d => d.value.toString() === value);
+    if (!functionOption || !dataOption) return;
+
+    // Clear conflicting filters based on category
+    if (functionOption.key === 'creditHours') {
+      onFilterClear('creditMin');
+      onFilterClear('creditMax');
+      onFilterClear('creditRange');
+    } else if (functionOption.key === 'pairingDays') {
+      onFilterClear('pairingDays');
+      onFilterClear('pairingDaysMin');
+      onFilterClear('pairingDaysMax');
+    } else if (functionOption.key === 'blockHours') {
+      onFilterClear('blockMin');
+      onFilterClear('blockMax');
+      onFilterClear('blockRange');
+    }
+
+    if (dataOption.additionalFilter) {
+      const rangeFilter = {
+        [dataOption.filterKey || functionOption.key]: dataOption.value,
+        [dataOption.additionalFilter.key]: dataOption.additionalFilter.value
+      };
+      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' : 
+                      functionOption.key === 'blockHours' ? 'blockRange' : 
+                      functionOption.key + 'Range';
+      onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
+    } else {
+      const filterKey = dataOption.filterKey || functionOption.key;
+      onFilterApply(filterKey, dataOption.value, `${functionOption.label}: ${dataOption.label}`);
+    }
+
+    // Reset selections after applying
+    setSelectedFunction("");
+    setSelectedData("");
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
@@ -194,7 +241,7 @@ export function SmartFilterSystem({
           <label className="text-sm font-medium text-gray-700">Value</label>
           <Select 
             value={selectedData} 
-            onValueChange={setSelectedData}
+            onValueChange={handleSelectValueAndApply}
             disabled={!selectedFunction}
           >
             <SelectTrigger>
@@ -210,11 +257,11 @@ export function SmartFilterSystem({
           </Select>
         </div>
 
-        {/* Add Filter Button */}
+        {/* Add Filter Button (hidden; auto-applies on selection) */}
         <Button 
           onClick={handleAddFilter}
-          disabled={!selectedFunction || !selectedData}
-          className="flex items-center gap-2"
+          disabled
+          className="hidden items-center gap-2"
         >
           <Plus className="h-4 w-4" />
           Add Filter
