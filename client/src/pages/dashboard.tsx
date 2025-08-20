@@ -253,6 +253,11 @@ export default function Dashboard() {
         // Remove both min and max for block range
         delete newFilters.blockMin;
         delete newFilters.blockMax;
+      } else if (keyToRemove === 'pairingDays' || keyToRemove === 'pairingDaysMin' || keyToRemove === 'pairingDaysMax') {
+        // Remove all related pairingDays filters to ensure unfiltered state
+        delete newFilters.pairingDays;
+        delete newFilters.pairingDaysMin;
+        delete newFilters.pairingDaysMax;
       } else {
         delete newFilters[keyToRemove as keyof SearchFilters];
       }

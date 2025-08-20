@@ -535,9 +535,21 @@ if (filters.tafbMax !== undefined) {
 
       const sortColumnField = sortColumnMap[sortColumn] || pairings.pairingNumber;
 
-      // Build the complete query in one chain
+      // Build the complete query in one chain with a lean projection (exclude large JSON/text fields)
       const pairingsResult = await db
-        .select()
+        .select({
+          id: pairings.id,
+          bidPackageId: pairings.bidPackageId,
+          pairingNumber: pairings.pairingNumber,
+          effectiveDates: pairings.effectiveDates,
+          route: pairings.route,
+          creditHours: pairings.creditHours,
+          blockHours: pairings.blockHours,
+          tafb: pairings.tafb,
+          holdProbability: pairings.holdProbability,
+          pairingDays: pairings.pairingDays,
+          // Note: exclude fullTextBlock, layovers, flightSegments here to reduce payload
+        })
         .from(pairings)
         .where(and(...conditions))
         .orderBy(sortDirection(sortColumnField))
@@ -546,9 +558,9 @@ if (filters.tafbMax !== undefined) {
         .execute();
 
       // Apply efficiency filter (credit/block ratio) after database query if needed
-      let finalResults = pairingsResult;
+      let finalResults = pairingsResult as unknown as Pairing[];
       if (filters.efficiency !== undefined) {
-        finalResults = pairingsResult.filter(pairing => {
+        finalResults = (pairingsResult as any[]).filter(pairing => {
           const creditHours = parseFloat(pairing.creditHours.toString());
           const blockHours = parseFloat(pairing.blockHours.toString());
           const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
