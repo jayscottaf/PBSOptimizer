@@ -49,6 +49,11 @@ export interface SearchFilters {
   pairingDaysMax?: number;
   efficiency?: number;
   seniorityPercentage?: number;
+  // Pagination and sorting
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // Add this type for the new response format

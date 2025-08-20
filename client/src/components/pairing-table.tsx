@@ -19,6 +19,8 @@ interface PairingTableProps {
   onDeleteFavorite?: (pairingId: number) => void;
   showAddToCalendar?: boolean;
   currentUser?: any;
+  pagination?: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  onPageChange?: (page: number) => void;
 }
 
 export function PairingTable({
@@ -30,7 +32,9 @@ export function PairingTable({
   showDeleteButton = false,
   onDeleteFavorite,
   showAddToCalendar = false,
-  currentUser
+  currentUser,
+  pagination,
+  onPageChange
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -419,26 +423,30 @@ export function PairingTable({
       </div>
 
       {/* Pagination */}
-      {safePairings.length > 0 && (
+      {safePairings.length > 0 && pagination && (
         <div className="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
-            <Button variant="outline">Previous</Button>
-            <Button variant="outline">Next</Button>
+            <Button variant="outline" disabled={!pagination.hasPrev} onClick={() => onPageChange && onPageChange(Math.max(1, (pagination.page || 1) - 1))}>Previous</Button>
+            <Button variant="outline" disabled={!pagination.hasNext} onClick={() => onPageChange && onPageChange((pagination.page || 1) + 1)}>Next</Button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">1</span> to{" "}
-                <span className="font-medium">{Math.min(20, safePairings.length)}</span> of{" "}
-                <span className="font-medium">{safePairings.length}</span> results
+                Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{" "}
+                <span className="font-medium">{(pagination.page - 1) * pagination.limit + safePairings.length}</span> of{" "}
+                <span className="font-medium">{pagination.total}</span> results
               </p>
             </div>
             <div className="flex space-x-1">
-              <Button variant="outline" size="sm">Previous</Button>
-              <Button variant="default" size="sm">1</Button>
-              <Button variant="outline" size="sm">2</Button>
-              <Button variant="outline" size="sm">3</Button>
-              <Button variant="outline" size="sm">Next</Button>
+              <Button variant="outline" size="sm" disabled={!pagination.hasPrev} onClick={() => onPageChange && onPageChange(Math.max(1, pagination.page - 1))}>Previous</Button>
+              <Button variant={"default"} size="sm">{pagination.page}</Button>
+              {pagination.hasNext && (
+                <Button variant="outline" size="sm" onClick={() => onPageChange && onPageChange(pagination.page + 1)}>{pagination.page + 1}</Button>
+              )}
+              {pagination.page + 1 < pagination.totalPages && (
+                <Button variant="outline" size="sm" onClick={() => onPageChange && onPageChange(pagination.page + 2)}>{pagination.page + 2}</Button>
+              )}
+              <Button variant="outline" size="sm" disabled={!pagination.hasNext} onClick={() => onPageChange && onPageChange(pagination.page + 1)}>Next</Button>
             </div>
           </div>
         </div>

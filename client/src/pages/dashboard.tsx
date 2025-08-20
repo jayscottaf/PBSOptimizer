@@ -110,6 +110,8 @@ export default function Dashboard() {
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize] = useState<number>(50);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
@@ -176,12 +178,14 @@ export default function Dashboard() {
 
   // Update the useQuery to include sort parameters
   const { data: pairingsResponse, isLoading: isLoadingPairings } = useQuery({
-    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection],
+    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize],
     queryFn: () => api.searchPairings({
       bidPackageId: bidPackageId,
       seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
       sortBy: sortColumn || 'pairingNumber',
       sortOrder: sortDirection || 'asc',
+      page: currentPage,
+      limit: pageSize,
       ...debouncedFilters
     }),
     enabled: !!bidPackageId,
@@ -337,6 +341,7 @@ export default function Dashboard() {
       setSortColumn(column);
       setSortDirection("desc");
     }
+    setCurrentPage(1);
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
@@ -360,7 +365,17 @@ export default function Dashboard() {
       }
     });
     
-    setFilters(prev => ({ ...prev, ...processedFilters }));
+    setFilters(prev => {
+      const merged: any = { ...prev, ...processedFilters };
+      // drop cleared keys so they don't persist silently
+      Object.keys(merged).forEach((k) => {
+        if (merged[k] === undefined || merged[k] === null || merged[k] === "") {
+          delete merged[k];
+        }
+      });
+      return merged;
+    });
+    setCurrentPage(1);
     
     // Update activeFilters to reflect the new filters
     const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
@@ -720,6 +735,8 @@ export default function Dashboard() {
                         sortColumn={sortColumn || ''}
                         sortDirection={sortDirection}
                         onPairingClick={handlePairingClick}
+                        pagination={pagination as any}
+                        onPageChange={(page) => setCurrentPage(page)}
                       />
                     </CardContent>
                   </Card>

@@ -262,7 +262,17 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      // Avoid verbose logging of filters in production
+      // Log only key filter knobs for debugging
+      console.log('Search params:', {
+        bidPackageId,
+        page,
+        limit,
+        sortBy,
+        sortOrder,
+        efficiency: (filters as any)?.efficiency,
+        holdProbabilityMin: (filters as any)?.holdProbabilityMin,
+        pairingDays: (filters as any)?.pairingDays,
+      });
       
       const result = await storage.searchPairingsWithPagination({ 
         bidPackageId, 

@@ -533,7 +533,17 @@ if (filters.tafbMax !== undefined) {
         route: pairings.route
       };
 
-      const sortColumnField = sortColumnMap[sortColumn] || pairings.pairingNumber;
+      // Computed SQL expressions
+      const efficiencyExpr = sql`(CAST(${pairings.creditHours} AS numeric) / NULLIF(CAST(${pairings.blockHours} AS numeric), 0))`;
+
+      // Apply efficiency filter at the SQL layer if provided
+      if (filters.efficiency !== undefined) {
+        conditions.push(sql`${efficiencyExpr} >= ${filters.efficiency}`);
+      }
+
+      const sortColumnField = sortColumn === 'creditBlockRatio'
+        ? efficiencyExpr
+        : (sortColumnMap[sortColumn] || pairings.pairingNumber);
 
       // Build the complete query in one chain with a lean projection (exclude large JSON/text fields)
       const pairingsResult = await db
