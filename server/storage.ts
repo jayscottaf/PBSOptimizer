@@ -501,13 +501,7 @@ if (filters.tafbMax !== undefined) {
         `);
       }
 
-      // Get total count for pagination
-      const countQuery = db.select({ count: sql<number>`count(*)` })
-        .from(pairings)
-        .where(and(...conditions));
-      const [{ count }] = await countQuery.execute();
-      const total = count;
-      const totalPages = Math.ceil(total / limit);
+      // We will compute total rows using a window function in the main select
 
       // Calculate statistics for the entire filtered dataset
       const statsQuery = db.select({
@@ -535,6 +529,18 @@ if (filters.tafbMax !== undefined) {
 
       // Computed SQL expressions
       const efficiencyExpr = sql`(CAST(${pairings.creditHours} AS numeric) / NULLIF(CAST(${pairings.blockHours} AS numeric), 0))`;
+      const tafbMinutesExpr = sql`
+        (
+          CASE
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+              (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
+              (split_part(${pairings.tafb}::text, '.', 1)::int * 60 + split_part(${pairings.tafb}::text, '.', 2)::int)
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+$' THEN
+              (${pairings.tafb}::int * 60)
+            ELSE 0
+          END
+        )`;
 
       // Apply efficiency filter at the SQL layer if provided
       if (filters.efficiency !== undefined) {
@@ -543,7 +549,9 @@ if (filters.tafbMax !== undefined) {
 
       const sortColumnField = sortColumn === 'creditBlockRatio'
         ? efficiencyExpr
-        : (sortColumnMap[sortColumn] || pairings.pairingNumber);
+        : sortColumn === 'tafb'
+          ? tafbMinutesExpr
+          : (sortColumnMap[sortColumn] || pairings.pairingNumber);
 
       // Build the complete query in one chain with a lean projection (exclude large JSON/text fields)
       const pairingsResult = await db
@@ -558,6 +566,7 @@ if (filters.tafbMax !== undefined) {
           tafb: pairings.tafb,
           holdProbability: pairings.holdProbability,
           pairingDays: pairings.pairingDays,
+          totalCount: sql<number>`count(*) over()`
           // Note: exclude fullTextBlock, layovers, flightSegments here to reduce payload
         })
         .from(pairings)
@@ -568,9 +577,17 @@ if (filters.tafbMax !== undefined) {
         .execute();
 
       // Apply efficiency filter (credit/block ratio) after database query if needed
-      let finalResults = pairingsResult as unknown as Pairing[];
+      // Derive total from window function (0 if no rows)
+      const total = pairingsResult.length > 0 ? (pairingsResult[0] as any).totalCount as number : 0;
+      const totalPages = Math.ceil(total / limit);
+
+      // Strip totalCount from rows to satisfy Pairing shape
+      let finalResults = (pairingsResult as any[]).map(r => {
+        const { totalCount, ...rest } = r;
+        return rest;
+      }) as Pairing[];
       if (filters.efficiency !== undefined) {
-        finalResults = (pairingsResult as any[]).filter(pairing => {
+        finalResults = finalResults.filter(pairing => {
           const creditHours = parseFloat(pairing.creditHours.toString());
           const blockHours = parseFloat(pairing.blockHours.toString());
           const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
