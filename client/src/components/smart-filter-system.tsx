@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X } from "lucide-react";
 import { SearchFilters } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 interface FilterOption {
   key: string;
   label: string;
@@ -210,6 +213,63 @@ export function SmartFilterSystem({
     setSelectedData("");
   };
 
+  // Quick Filters - user configurable
+  type QuickFilterKey = 'goodHold' | 'highCredit' | 'multiDay' | 'excellentRatio';
+  const allQuickFilters: Array<{ key: QuickFilterKey; label: string }> = [
+    { key: 'goodHold', label: 'Good Hold' },
+    { key: 'highCredit', label: 'High Credit' },
+    { key: 'multiDay', label: 'Multi-Day' },
+    { key: 'excellentRatio', label: 'Excellent C/B (≥1.30)' },
+  ];
+
+  const [quickFilterKeys, setQuickFilterKeys] = useState<QuickFilterKey[]>([]);
+  const [showCustomize, setShowCustomize] = useState(false);
+
+  // Load persisted preferences
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pbs.quickFilters');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setQuickFilterKeys(parsed as QuickFilterKey[]);
+        else setQuickFilterKeys(['goodHold', 'highCredit', 'multiDay']);
+      } else {
+        setQuickFilterKeys(['goodHold', 'highCredit', 'multiDay']);
+      }
+    } catch {
+      setQuickFilterKeys(['goodHold', 'highCredit', 'multiDay']);
+    }
+  }, []);
+
+  const persistQuickFilters = (keys: QuickFilterKey[]) => {
+    setQuickFilterKeys(keys);
+    try { localStorage.setItem('pbs.quickFilters', JSON.stringify(keys)); } catch {}
+  };
+
+  const toggleQuickFilter = (key: QuickFilterKey, checked: boolean) => {
+    const next = checked
+      ? Array.from(new Set([...(quickFilterKeys || []), key]))
+      : (quickFilterKeys || []).filter(k => k !== key);
+    persistQuickFilters(next);
+  };
+
+  const applyQuickFilter = (key: QuickFilterKey) => {
+    const newFilters: any = {};
+    if (key === 'goodHold') {
+      newFilters.holdProbabilityMin = 70;
+    } else if (key === 'highCredit') {
+      newFilters.creditMin = 15.0;
+      newFilters.creditMax = undefined;
+    } else if (key === 'multiDay') {
+      newFilters.pairingDays = undefined;
+      newFilters.pairingDaysMin = 2;
+      newFilters.pairingDaysMax = undefined;
+    } else if (key === 'excellentRatio') {
+      newFilters.efficiency = 1.3;
+    }
+    onFiltersChange(newFilters);
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
@@ -302,51 +362,56 @@ export function SmartFilterSystem({
 
       {/* Quick Filter Buttons */}
       <div className="space-y-2">
-        <span className="text-sm text-gray-500">Quick filters:</span>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs"
-            onClick={() => {
-              const newFilters: any = {};
-              newFilters.holdProbabilityMin = 70;
-              onFiltersChange(newFilters);
-            }}
-          >
-            Good Hold
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs"
-            onClick={() => {
-              const newFilters: any = {};
-              newFilters.creditMin = 15.0;
-              newFilters.creditMax = undefined;
-              onFiltersChange(newFilters);
-            }}
-          >
-            High Credit
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs"
-            onClick={() => {
-              // Clear existing pairing day filters before setting new one
-              const newFilters: any = {};
-              newFilters.pairingDays = undefined;
-              newFilters.pairingDaysMin = 2;
-              newFilters.pairingDaysMax = undefined;
-              onFiltersChange(newFilters);
-            }}
-          >
-            Multi-Day
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-500">Quick filters:</span>
+          <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowCustomize(true)}>
+            Customize
           </Button>
         </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          {(quickFilterKeys || []).map((key) => {
+            const meta = allQuickFilters.find(f => f.key === key);
+            if (!meta) return null;
+            return (
+              <Button
+                key={key}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => applyQuickFilter(key)}
+              >
+                {meta.label}
+              </Button>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Customize Quick Filters Dialog */}
+      <Dialog open={showCustomize} onOpenChange={setShowCustomize}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Customize Quick Filters</DialogTitle>
+            <DialogDescription>
+              Choose which shortcuts show below. Your selections are saved in this browser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {allQuickFilters.map(item => (
+              <label key={item.key} className="flex items-center gap-2">
+                <Checkbox
+                  checked={quickFilterKeys?.includes(item.key)}
+                  onCheckedChange={(val: boolean) => toggleQuickFilter(item.key, !!val)}
+                />
+                <Label className="text-sm cursor-pointer">{item.label}</Label>
+              </label>
+            ))}
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowCustomize(false)}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
