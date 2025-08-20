@@ -12,11 +12,22 @@ import multer from "multer";
 import { z } from "zod";
 import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
 
-// Function to recalculate hold probabilities with updated seniority
-async function recalculateHoldProbabilities(bidPackageId: number, seniorityPercentile: number) {
+// Optimized hold probability recalculation with batching
+async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, seniorityPercentile: number) {
   try {
+    console.log(`Starting optimized hold probability recalculation for bid package ${bidPackageId} with seniority ${seniorityPercentile}%`);
+    
+    // Fetch all pairings in one query
     const allPairings = await db.select().from(pairings).where(eq(pairings.bidPackageId, bidPackageId));
+    
+    if (allPairings.length === 0) {
+      console.log('No pairings found for recalculation');
+      return;
+    }
 
+    // Calculate all hold probabilities in memory
+    const updates: Array<{ id: number; holdProbability: number }> = [];
+    
     for (const pairing of allPairings) {
       const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
       const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
@@ -35,16 +46,46 @@ async function recalculateHoldProbabilities(bidPackageId: number, seniorityPerce
         includesWeekendOff
       });
 
-      await db
-        .update(pairings)
-        .set({ holdProbability: holdProbabilityResult.probability })
-        .where(eq(pairings.id, pairing.id));
+      updates.push({
+        id: pairing.id,
+        holdProbability: holdProbabilityResult.probability
+      });
     }
 
-    console.log(`Recalculated hold probabilities for ${allPairings.length} pairings with seniority ${seniorityPercentile}%`);
+    // Batch update all pairings in chunks of 50
+    const batchSize = 50;
+    for (let i = 0; i < updates.length; i += batchSize) {
+      const batch = updates.slice(i, i + batchSize);
+      
+      // Use a single query with CASE statements for batch update
+      const updateQuery = sql`
+        UPDATE pairings 
+        SET hold_probability = CASE id 
+          ${batch.map(update => sql`WHEN ${update.id} THEN ${update.holdProbability}`).join(' ')}
+        END
+        WHERE id IN (${batch.map(update => update.id)})
+      `;
+      
+      await db.execute(updateQuery);
+    }
+
+    console.log(`✅ Optimized recalculation completed: ${updates.length} pairings updated in ${Math.ceil(updates.length / batchSize)} batches`);
   } catch (error) {
-    console.error('Error recalculating hold probabilities:', error);
+    console.error('Error in optimized hold probability recalculation:', error);
+    throw error;
   }
+}
+
+// Background recalculation function (non-blocking)
+async function recalculateHoldProbabilitiesBackground(bidPackageId: number, seniorityPercentile: number) {
+  // Start recalculation in background without awaiting
+  setImmediate(async () => {
+    try {
+      await recalculateHoldProbabilitiesOptimized(bidPackageId, seniorityPercentile);
+    } catch (error) {
+      console.error('Background hold probability recalculation failed:', error);
+    }
+  });
 }
 
 // Configure multer for file uploads
@@ -202,9 +243,9 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: 'bidPackageId is required' });
       }
 
-      // If seniority percentile is provided, recalculate hold probabilities
+      // Trigger background recalculation if seniority changed (non-blocking)
       if (seniorityPercentile) {
-        await recalculateHoldProbabilities(parseInt(bidPackageId as string), parseFloat(seniorityPercentile as string));
+        recalculateHoldProbabilitiesBackground(parseInt(bidPackageId as string), parseFloat(seniorityPercentile as string));
       }
 
       // Build all conditions first, then apply with and()

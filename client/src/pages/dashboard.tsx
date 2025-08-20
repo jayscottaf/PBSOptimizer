@@ -77,11 +77,11 @@ export default function Dashboard() {
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Debounce filters to prevent excessive API calls
+  // Enhanced debouncing with request deduplication
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedFilters(filters);
-    }, 300); // 300ms delay
+    }, 500); // Increased to 500ms for better deduplication
 
     return () => clearTimeout(timer);
   }, [filters]);
@@ -143,8 +143,11 @@ export default function Dashboard() {
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
     queryKey: ["bidPackages"],
     queryFn: api.getBidPackages,
-    staleTime: 10 * 60 * 1000, // Bid packages don't change often
+    staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
+    gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Find the latest completed bid package
@@ -159,6 +162,24 @@ export default function Dashboard() {
   }, [bidPackages]);
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
+
+  // Preload initial data for better performance
+  const { data: initialPairingsResponse } = useQuery({
+    queryKey: ["initial-pairings", bidPackageId],
+    queryFn: () => api.searchPairings({
+      bidPackageId: bidPackageId,
+      page: 1,
+      limit: 50,
+      sortBy: 'pairingNumber',
+      sortOrder: 'asc'
+    }),
+    enabled: !!bidPackageId && !debouncedFilters.search && Object.keys(debouncedFilters).length === 0,
+    staleTime: 10 * 60 * 1000, // Cache initial data longer
+    gcTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   // Only update loading state when user manually changes seniority in profile
   React.useEffect(() => {
@@ -176,7 +197,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Update the useQuery to include sort parameters
+  // Optimized useQuery with enhanced caching and deduplication
   const { data: pairingsResponse, isLoading: isLoadingPairings } = useQuery({
     queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize],
     queryFn: () => api.searchPairings({
@@ -189,17 +210,22 @@ export default function Dashboard() {
       ...debouncedFilters
     }),
     enabled: !!bidPackageId,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
     refetchOnMount: false,
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnReconnect: false, // Prevent refetch on reconnect
+    // Add optimistic updates for better perceived performance
+    placeholderData: (previousData) => previousData,
   });
 
-  // Extract pairings and pagination from the response
-  const pairings = pairingsResponse?.pairings || [];
-  const pagination = pairingsResponse?.pagination;
+  // Extract pairings and pagination from the response, with fallback to preloaded data
+  const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];
+  const pagination = pairingsResponse?.pagination || initialPairingsResponse?.pagination;
 
   // Debug logs removed after verification
 
-  // Query for user data
+  // Query for user data with enhanced caching
   const { data: currentUser } = useQuery({
     queryKey: ["user", seniorityNumber, base, aircraft],
     queryFn: async () => {
@@ -210,11 +236,14 @@ export default function Dashboard() {
       });
     },
     enabled: !!seniorityNumber,
-    staleTime: 15 * 60 * 1000, // User data is stable for 15 minutes
+    staleTime: 30 * 60 * 1000, // User data is stable for 30 minutes
+    gcTime: 60 * 60 * 1000, // Keep in memory for 1 hour
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  // Query for user's favorites
+  // Query for user's favorites with enhanced caching
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
     queryKey: ["favorites", currentUser?.id],
     queryFn: async () => {
@@ -227,8 +256,11 @@ export default function Dashboard() {
       }
     },
     enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000, // Favorites don't change often - 5 minutes
+    staleTime: 10 * 60 * 1000, // Increased cache time to 10 minutes
+    gcTime: 20 * 60 * 1000, // Keep in memory for 20 minutes
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const handleDeleteFavorite = async (pairingId: number) => {
