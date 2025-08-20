@@ -4,6 +4,7 @@ import path from "path";
 import { storage } from "./storage";
 import type { InsertPairing } from "@shared/schema";
 import { samplePdfText } from "./samplePdfText";
+import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
 
 interface FlightSegment {
   date: string;
@@ -47,8 +48,6 @@ interface ParsedPairing {
 export class PDFParser {
   // Calculate hold probability using new tiered logic
   private calculateHoldProbability(pairing: ParsedPairing, allPairings: ParsedPairing[], userSeniorityPercentile?: number): number {
-    const { HoldProbabilityCalculator } = require('./holdProbabilityCalculator');
-
     // Use provided seniority percentile, default to 50 if not provided
     const seniorityPercentile = userSeniorityPercentile !== undefined ? userSeniorityPercentile : 50; // Middle seniority as default
 
@@ -116,6 +115,94 @@ export class PDFParser {
     return cleanedRoute.join('-');
   }
 
+  private extractBidPackageDate(text: string): string | null {
+    const lines = text.split('\n');
+    
+    // Look for the bid package header information in the first few lines
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i].trim();
+      
+      // Pattern 1: Look for "PILOT BID PACKAGE" followed by month/year
+      // Example: "NEW YORK CITY 220 PILOT BID PACKAGE September 2025"
+      // This is the PRIMARY pattern - the yellow highlighted date in the screenshot
+      const bidPackageMatch = line.match(/PILOT\s+BID\s+PACKAGE\s+([A-Za-z]+\s+\d{4})/i);
+      if (bidPackageMatch) {
+        const monthYear = bidPackageMatch[1];
+        console.log(`Found bid package date from header: ${monthYear}`);
+        return monthYear;
+      }
+      
+      // Pattern 2: Look for month year pattern near the top
+      // Example: "September 2025" or "SEP 2025"
+      // This catches standalone month/year that might be the bid package month
+      const monthYearMatch = line.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{4}\b/i);
+      if (monthYearMatch) {
+        const monthYear = monthYearMatch[0];
+        console.log(`Found bid package date from month/year pattern: ${monthYear}`);
+        return monthYear;
+      }
+    }
+    
+    // Pattern 3: Look for the specific header format from the image
+    // The header shows "NEW YORK CITY 220 PILOT BID PACKAGE" and the month appears separately
+    // We need to look for lines that contain "PILOT BID PACKAGE" and then find the month in nearby lines
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i].trim();
+      
+      // Check if this line contains "PILOT BID PACKAGE"
+      if (line.includes('PILOT BID PACKAGE')) {
+        console.log(`Found PILOT BID PACKAGE header on line ${i}: "${line}"`);
+        
+        // Look in the next few lines for the month/year
+        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+          const nextLine = lines[j].trim();
+          const monthYearMatch = nextLine.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{4}\b/i);
+          if (monthYearMatch) {
+            const monthYear = monthYearMatch[0];
+            console.log(`Found bid package date near PILOT BID PACKAGE header: ${monthYear}`);
+            return monthYear;
+          }
+        }
+      }
+    }
+    
+    // Pattern 4: Look for date range that includes the bid period (LAST RESORT)
+    // Example: "August 31, 2025 – September 30, 2025"
+    // This should only be used if we can't find the actual bid package month from the header
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i].trim();
+      const dateRangeMatch = line.match(/([A-Za-z]+)\s+\d{1,2},\s+(\d{4})\s*[–-]\s*([A-Za-z]+)\s+\d{1,2},\s+(\d{4})/);
+      if (dateRangeMatch) {
+        const startMonth = dateRangeMatch[1];
+        const startYear = dateRangeMatch[2];
+        const endMonth = dateRangeMatch[3];
+        const endYear = dateRangeMatch[4];
+        
+        // If the date range spans multiple months, we need to determine which month
+        // contains the majority of the bid period
+        if (startMonth !== endMonth || startYear !== endYear) {
+          // For bid packages, the month where most of the bid period occurs is typically
+          // the month that contains more days of the bid period
+          // Since bid periods often start late in one month and end early in the next,
+          // we'll use the end month as it typically contains more of the bid period
+          const monthYear = `${endMonth} ${endYear}`;
+          console.log(`Found bid package date from date range (using end month): ${monthYear}`);
+          console.log(`Note: Date range spans ${startMonth} ${startYear} to ${endMonth} ${endYear}`);
+          return monthYear;
+        } else {
+          // Same month, use either
+          const monthYear = `${startMonth} ${startYear}`;
+          console.log(`Found bid package date from date range: ${monthYear}`);
+          return monthYear;
+        }
+      }
+    }
+    
+    // If no date found, return null to indicate we couldn't extract it
+    console.log('Could not extract bid package date from PDF header');
+    return null;
+  }
+
   private extractPairingBlocks(text: string): string[] {
     const pairingBlocks: string[] = [];
     const lines = text.split('\n');
@@ -155,7 +242,7 @@ export class PDFParser {
     return pairingBlocks;
   }
 
-  private parsePairingBlock(block: string): ParsedPairing | null {
+  private parsePairingBlock(block: string, bidPackageDate: string | null): ParsedPairing | null {
     const lines = block.split('\n');
     if (lines.length < 2) return null;
 
@@ -484,16 +571,42 @@ export class PDFParser {
     // Generate route from flight segments
     const route = this.parseRoute(flightSegments);
 
-    // If no effective dates found, try to infer from bid package or use current month
+    // If no effective dates found, try to infer from bid package date
     if (!effectiveDates) {
-      // Try to extract from any line containing month abbreviations
-      const monthPattern = /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}(?:-\w+)?\b/i;
-      const monthMatch = block.match(monthPattern);
-      if (monthMatch) {
-        effectiveDates = monthMatch[0];
+      if (bidPackageDate) {
+        // Convert bid package date to the expected format
+        // Example: "September 2025" -> "SEP01-SEP30"
+        const monthMatch = bidPackageDate.match(/(January|February|March|April|May|June|July|August|September|October|November|December|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i);
+        if (monthMatch) {
+          const month = monthMatch[1].toUpperCase();
+          const yearMatch = bidPackageDate.match(/\d{4}/);
+          const year = yearMatch ? yearMatch[0] : '2025';
+          
+          // Convert full month names to abbreviations
+          const monthMap: { [key: string]: string } = {
+            'JANUARY': 'JAN', 'FEBRUARY': 'FEB', 'MARCH': 'MAR', 'APRIL': 'APR',
+            'MAY': 'MAY', 'JUNE': 'JUN', 'JULY': 'JUL', 'AUGUST': 'AUG',
+            'SEPTEMBER': 'SEP', 'OCTOBER': 'OCT', 'NOVEMBER': 'NOV', 'DECEMBER': 'DEC'
+          };
+          
+          const monthAbbr = monthMap[month] || month;
+          effectiveDates = `${monthAbbr}01-${monthAbbr}30`;
+          console.log(`Formatted bid package date as effective dates: ${effectiveDates}`);
+        } else {
+          effectiveDates = bidPackageDate;
+        }
       } else {
-        // Default to September if no dates found (current bid package)
-        effectiveDates = "SEP01-SEP30";
+        // Try to extract from any line containing month abbreviations
+        const monthPattern = /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}(?:-\w+)?\b/i;
+        const monthMatch = block.match(monthPattern);
+        if (monthMatch) {
+          effectiveDates = monthMatch[0];
+          console.log(`Inferred effective dates from month pattern: ${effectiveDates}`);
+        } else {
+          // Default to September if no dates found (current bid package)
+          effectiveDates = "SEP01-SEP30";
+          console.log('Defaulting effective dates to SEP01-SEP30 as bid package date could not be extracted.');
+        }
       }
     }
 
@@ -610,6 +723,26 @@ export class PDFParser {
         console.log(`PDF parsed successfully, ${text.length} characters`);
       }
 
+      // Extract bid package date from the PDF header
+      const bidPackageDate = this.extractBidPackageDate(text);
+      if (bidPackageDate) {
+        console.log(`Extracted bid package date: ${bidPackageDate}`);
+        // Try to update bid package month/year to match header
+        const monthMatch = bidPackageDate.match(/(January|February|March|April|May|June|July|August|September|October|November|December|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i);
+        const yearMatch = bidPackageDate.match(/\d{4}/);
+        if (monthMatch && yearMatch) {
+          const monthFull = monthMatch[1];
+          const normalize = (m: string) => ({
+            JAN: 'January', FEB: 'February', MAR: 'March', APR: 'April', MAY: 'May', JUN: 'June',
+            JUL: 'July', AUG: 'August', SEP: 'September', OCT: 'October', NOV: 'November', DEC: 'December'
+          } as any)[m.toUpperCase()] || m;
+          const normalizedMonth = normalize(monthFull);
+          await storage.updateBidPackageInfo(bidPackageId, { month: normalizedMonth, year: parseInt(yearMatch[0]) });
+        }
+      } else {
+        console.log('Could not extract bid package date, proceeding with individual pairing dates only');
+      }
+
       // Extract pairing blocks from the text
       const pairingBlocks = this.extractPairingBlocks(text);
       console.log(`Found ${pairingBlocks.length} pairing blocks`);
@@ -618,7 +751,7 @@ export class PDFParser {
 
       // Parse each pairing block
       for (const block of pairingBlocks) {
-        const pairing = this.parsePairingBlock(block);
+        const pairing = this.parsePairingBlock(block, null);
         if (pairing) {
           parsedPairings.push(pairing);
         }

@@ -32,7 +32,7 @@ import { FiltersPanel } from "@/components/filters-panel";
 import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { SmartFilterSystem } from "@/components/smart-filter-system";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -76,6 +76,8 @@ export default function Dashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const queryClient = useQueryClient();
 
   // Enhanced debouncing with request deduplication
   useEffect(() => {
@@ -131,7 +133,6 @@ export default function Dashboard() {
   const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage({
     onUploadProgress: setUploadProgress,
     onSuccess: (data) => {
-      refetchBidPackages();
       // Optionally, trigger a refetch of pairings or other relevant data
     },
   });
@@ -150,16 +151,26 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
-  // Find the latest completed bid package
+  // Debug logging
+  console.log('Bid packages from API:', bidPackages);
+
+  // Find the latest bid package (prefer completed, fall back to most recent by uploadedAt if none are completed)
   const latestBidPackage = React.useMemo(() => {
     if (!bidPackages || bidPackages.length === 0) return null;
-    return (bidPackages as any[]).reduce((latest: any, pkg: any) => {
-      if (pkg.status === "completed" && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
-        return pkg;
-      }
-      return latest;
-    }, null);
+
+    const packagesArray = (bidPackages as any[]).slice();
+    // Sort by uploadedAt descending
+    packagesArray.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+
+    // Try to find the most recent completed package first
+    const mostRecentCompleted = packagesArray.find((pkg: any) => pkg.status === "completed");
+    if (mostRecentCompleted) return mostRecentCompleted;
+
+    // Fallback: return the most recent package regardless of status
+    return packagesArray[0];
   }, [bidPackages]);
+
+  console.log('Latest bid package:', latestBidPackage);
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
 
@@ -198,7 +209,7 @@ export default function Dashboard() {
   }, []);
 
   // Optimized useQuery with enhanced caching and deduplication
-  const { data: pairingsResponse, isLoading: isLoadingPairings } = useQuery({
+  const { data: pairingsResponse, isLoading: isLoadingPairings, refetch: refetchPairings } = useQuery({
     queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize],
     queryFn: () => api.searchPairings({
       bidPackageId: bidPackageId,
@@ -218,6 +229,26 @@ export default function Dashboard() {
     // Add optimistic updates for better perceived performance
     placeholderData: (previousData) => previousData,
   });
+
+  // When the bid package transitions to completed, invalidate and refetch pairings
+  React.useEffect(() => {
+    if (latestBidPackage?.id && latestBidPackage.status === 'completed') {
+      queryClient.invalidateQueries({ queryKey: ["pairings", latestBidPackage.id] });
+      queryClient.invalidateQueries({ queryKey: ["initial-pairings", latestBidPackage.id] });
+      refetchPairings();
+    }
+  }, [latestBidPackage?.status, latestBidPackage?.id]);
+
+  // When processing, poll for progress by refetching bid packages and pairings until completion
+  React.useEffect(() => {
+    if (latestBidPackage?.id && latestBidPackage.status === 'processing') {
+      const interval = setInterval(() => {
+        refetchBidPackages();
+        refetchPairings();
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [latestBidPackage?.status, latestBidPackage?.id]);
 
   // Extract pairings and pagination from the response, with fallback to preloaded data
   const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];
@@ -871,7 +902,7 @@ export default function Dashboard() {
                         try {
                           const packages = await api.getBidPackages();
                           const latestPackage = packages.reduce((latest: any, pkg: any) => {
-                            if (pkg.status === 'completed' && (!latest || new Date(pkg.createdAt) > new Date(latest.createdAt))) {
+                            if (pkg.status === 'completed' && (!latest || new Date(pkg.uploadedAt) > new Date(latest.uploadedAt))) {
                               return pkg;
                             }
                             return latest;

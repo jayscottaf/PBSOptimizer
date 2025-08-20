@@ -23,7 +23,7 @@ import {
   type InsertUserCalendarEvent
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, like, gte, lte, or, sql } from "drizzle-orm";
+import { eq, and, desc, asc, like, gte, lte, or, sql, inArray } from "drizzle-orm";
 // Helper functions for decimal field parsing
 const parseDecimal = (value: any): number => parseFloat(String(value)) || 0;
 const parseNullable = (value: any): number => value !== null && value !== undefined ? parseFloat(String(value)) || 0 : 0;
@@ -40,6 +40,7 @@ export interface IStorage {
   getBidPackages(): Promise<BidPackage[]>;
   getBidPackage(id: number): Promise<BidPackage | undefined>;
   updateBidPackageStatus(id: number, status: string): Promise<void>;
+  updateBidPackageInfo(id: number, data: { name?: string; month?: string; year?: number; base?: string; aircraft?: string }): Promise<void>;
   deleteBidPackage(id: number): Promise<void>;
   clearAllData(): Promise<void>;
 
@@ -196,14 +197,34 @@ export class DatabaseStorage implements IStorage {
       .where(eq(bidPackages.id, id));
   }
 
+  async updateBidPackageInfo(id: number, data: { name?: string; month?: string; year?: number; base?: string; aircraft?: string }): Promise<void> {
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.month !== undefined) updateData.month = data.month;
+    if (data.year !== undefined) updateData.year = data.year;
+    if (data.base !== undefined) updateData.base = data.base;
+    if (data.aircraft !== undefined) updateData.aircraft = data.aircraft;
+    if (Object.keys(updateData).length === 0) return;
+    await db.update(bidPackages)
+      .set(updateData)
+      .where(eq(bidPackages.id, id));
+  }
+
   async deleteBidPackage(id: number): Promise<void> {
     // Delete associated data in the correct order (foreign key constraints)
     await db.delete(chatHistory).where(eq(chatHistory.bidPackageId, id));
-    await db.delete(userFavorites).where(
-      eq(userFavorites.pairingId,
-        db.select({ id: pairings.id }).from(pairings).where(eq(pairings.bidPackageId, id))
-      )
-    );
+    
+    // Get all pairing IDs for this bid package
+    const pairingIds = await db.select({ id: pairings.id }).from(pairings).where(eq(pairings.bidPackageId, id));
+    const pairingIdArray = pairingIds.map(p => p.id);
+    
+    // Delete user favorites that reference any of these pairings
+    if (pairingIdArray.length > 0) {
+      await db.delete(userFavorites).where(inArray(userFavorites.pairingId, pairingIdArray));
+      // Delete user calendar events that reference any of these pairings
+      await db.delete(userCalendarEvents).where(inArray(userCalendarEvents.pairingId, pairingIdArray));
+    }
+    
     await db.delete(pairings).where(eq(pairings.bidPackageId, id));
     await db.delete(bidPackages).where(eq(bidPackages.id, id));
     console.log(`Deleted bid package ${id} and all associated data`);
@@ -212,6 +233,7 @@ export class DatabaseStorage implements IStorage {
   async clearAllData(): Promise<void> {
     await db.delete(chatHistory);
     await db.delete(userFavorites);
+    await db.delete(userCalendarEvents);
     await db.delete(bidHistory);
     await db.delete(pairings);
     await db.delete(bidPackages);

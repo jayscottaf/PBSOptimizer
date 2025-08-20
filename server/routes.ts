@@ -140,7 +140,15 @@ export async function registerRoutes(app: Express) {
   // Get all bid packages
   app.get("/api/bid-packages", async (req, res) => {
     try {
+      // Add cache control headers to prevent browser caching
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
       const packages = await storage.getBidPackages();
+      console.log('Bid packages from database:', JSON.stringify(packages, null, 2));
       res.json(packages);
     } catch (error) {
       console.error('Error fetching bid packages:', error);
