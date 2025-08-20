@@ -171,15 +171,12 @@ export function SmartFilterSystem({
     setSelectedData(value);
     if (!selectedFunction || !value) return;
 
-    // Single-filter UX: clear all existing filters before applying a new one
-    onClearFilters();
-
     const functionOption = filterOptions.find(f => f.key === selectedFunction);
     const optionList = functionOption?.dataOptions || [];
     const dataOption = optionList.find(d => d.value.toString() === value);
     if (!functionOption || !dataOption) return;
 
-    // Clear conflicting filters based on category
+    // Clear conflicting filters within the same category only (allow multi-category combos)
     if (functionOption.key === 'creditHours') {
       onFilterClear('creditMin');
       onFilterClear('creditMax');

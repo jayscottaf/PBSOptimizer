@@ -425,6 +425,7 @@ export default function Dashboard() {
       }
     });
     
+    let mergedAfter: any = {};
     setFilters(prev => {
       const merged: any = { ...prev, ...processedFilters };
       // drop cleared keys so they don't persist silently
@@ -433,14 +434,16 @@ export default function Dashboard() {
           delete merged[k];
         }
       });
+      mergedAfter = merged;
       return merged;
     });
     setCurrentPage(1);
     
-    // Update activeFilters to reflect the new filters
+    // Update activeFilters to reflect the FULL merged filter set
     const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
-    
-    Object.entries(processedFilters).forEach(([key, value]) => {
+    const sourceForLabels = mergedAfter && Object.keys(mergedAfter).length ? mergedAfter : processedFilters;
+
+    Object.entries(sourceForLabels).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         let label = '';
         
