@@ -98,6 +98,12 @@ export interface IStorage {
     statistics: {
       likelyToHold: number;
       highCredit: number;
+      ratioBreakdown: {
+        excellent: number;
+        good: number;
+        average: number;
+        poor: number;
+      };
     };
   }>;
 
@@ -430,6 +436,12 @@ if (filters.tafbMax !== undefined) {
     statistics: {
       likelyToHold: number;
       highCredit: number;
+      ratioBreakdown: {
+        excellent: number;
+        good: number;
+        average: number;
+        poor: number;
+      };
     };
   }> {
     try {
@@ -444,7 +456,11 @@ if (filters.tafbMax !== undefined) {
         return {
           pairings: [],
           pagination: { page, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
-          statistics: { likelyToHold: 0, highCredit: 0 }
+          statistics: {
+            likelyToHold: 0,
+            highCredit: 0,
+            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 }
+          }
         };
       }
 
@@ -528,7 +544,12 @@ if (filters.tafbMax !== undefined) {
       // Calculate statistics for the entire filtered dataset
       const statsQuery = db.select({
         likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
-        highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`
+        highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
+        totalCount: sql<number>`cast(count(*) as integer)`,
+        excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
+        good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
+        average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
+        poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`
       })
       .from(pairings)
       .where(and(...conditions));
@@ -629,7 +650,13 @@ if (filters.tafbMax !== undefined) {
         },
         statistics: {
           likelyToHold: stats.likelyToHold,
-          highCredit: stats.highCredit
+          highCredit: stats.highCredit,
+          ratioBreakdown: {
+            excellent: stats.excellent,
+            good: stats.good,
+            average: stats.average,
+            poor: stats.poor
+          }
         }
       };
     } catch (error) {
@@ -637,7 +664,7 @@ if (filters.tafbMax !== undefined) {
       return {
         pairings: [],
         pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
-        statistics: { likelyToHold: 0, highCredit: 0 }
+        statistics: { likelyToHold: 0, highCredit: 0, ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 } }
       };
     }
   }

@@ -18,6 +18,12 @@ interface StatsPanelProps {
   statistics?: {
     likelyToHold: number;
     highCredit: number;
+    ratioBreakdown?: {
+      excellent: number;
+      good: number;
+      average: number;
+      poor: number;
+    };
   };
 }
 
@@ -64,7 +70,8 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
     const avgCreditHours = pairings.length > 0 ? totalCredit / pairings.length : 0;
     const avgBlockHours = pairings.length > 0 ? totalBlock / pairings.length : 0;
     // Calculate credit-to-block ratio breakdown
-    const ratioBreakdown = pairings.reduce((acc, pairing) => {
+    // Use backend global ratio breakdown when available so the sidebar card reflects all pairings, not just current page
+    const ratioBreakdown = statistics?.ratioBreakdown ?? pairings.reduce((acc, pairing) => {
       const credit = parseHours(pairing.creditHours);
       const block = parseHours(pairing.blockHours);
       const ratio = block > 0 ? credit / block : 0;
