@@ -16,9 +16,28 @@ function Router() {
 }
 
 function App() {
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  // Listen for online/offline events (simple banner only)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+      const el = document.getElementById('offline-banner');
+      if (el) el.style.display = 'none';
+    });
+    window.addEventListener('offline', () => {
+      const el = document.getElementById('offline-banner');
+      if (el) el.style.display = 'block';
+    });
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <div id="offline-banner" style={{
+          display: isOffline ? 'block' : 'none',
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
+          background: '#b91c1c', color: 'white', padding: '8px', textAlign: 'center'
+        }}>
+          You are offline. Some data may be unavailable.
+        </div>
         <Toaster />
         <Router />
       </TooltipProvider>

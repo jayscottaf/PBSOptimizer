@@ -33,6 +33,7 @@ import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { SmartFilterSystem } from "@/components/smart-filter-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache } from "@/lib/offlineCache";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -230,6 +231,63 @@ export default function Dashboard() {
     placeholderData: (previousData) => previousData,
   });
 
+  // State for offline cache status
+  const [isFullCacheReady, setIsFullCacheReady] = useState(false);
+  const [isPrefetching, setIsPrefetching] = useState(false);
+
+  // Auto-prefetch full dataset for current bid package and filters
+  React.useEffect(() => {
+    const run = async () => {
+      if (!bidPackageId) {
+        setIsFullCacheReady(false);
+        setFullLocal(null);
+        return;
+      }
+      
+      // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
+      console.log('Dashboard: debouncedFilters =', debouncedFilters);
+      const cacheKey = cacheKeyForPairings(bidPackageId, debouncedFilters);
+      console.log('Dashboard: Generated cache key =', cacheKey);
+      
+      // Check if full cache exists
+      const hasFull = await hasFullPairingsCache(cacheKey);
+      console.log('Dashboard: Cache check result for key', cacheKey, ':', hasFull);
+      setIsFullCacheReady(hasFull);
+      
+      if (hasFull) {
+        // Load existing full cache
+        console.log('Dashboard: Loading existing full cache');
+        const full = await loadFullPairingsCache<any[]>(cacheKey);
+        console.log('Dashboard: Loaded full cache, length:', full?.length || 0);
+        setFullLocal(full || null);
+      } else if (navigator.onLine) {
+        // Prefetch full dataset
+        try {
+          setIsPrefetching(true);
+          await api.prefetchAllPairings({
+            bidPackageId,
+            ...debouncedFilters
+          } as any);
+          
+          // Re-check and load after prefetch
+          const newHasFull = await hasFullPairingsCache(cacheKey);
+          setIsFullCacheReady(newHasFull);
+          
+          if (newHasFull) {
+            const full = await loadFullPairingsCache<any[]>(cacheKey);
+            setFullLocal(full || null);
+          }
+        } catch (error) {
+          console.error('Prefetch failed:', error);
+          setIsFullCacheReady(false);
+        } finally {
+          setIsPrefetching(false);
+        }
+      }
+    };
+    run();
+  }, [bidPackageId, JSON.stringify(debouncedFilters)]);
+
   // When the bid package transitions to completed, invalidate and refetch pairings
   React.useEffect(() => {
     if (latestBidPackage?.id && latestBidPackage.status === 'completed') {
@@ -248,8 +306,29 @@ export default function Dashboard() {
   }, [latestBidPackage?.status]);
 
   // Extract pairings and pagination from the response, with fallback to preloaded data
+  // Store full local cache data
+  const [fullLocal, setFullLocal] = useState<any[] | null>(null);
+
+  // Prefer full local cache whenever it exists (online or offline); fallback to server page
   const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];
   const pagination = pairingsResponse?.pagination || initialPairingsResponse?.pagination;
+  
+  // Create custom pagination when using offline full cache sorting
+  const effectivePagination = React.useMemo(() => {
+    if (isFullCacheReady && fullLocal && !navigator.onLine && sortColumn) {
+      const total = fullLocal.length;
+      const totalPages = Math.ceil(total / pageSize);
+      return {
+        page: currentPage,
+        limit: pageSize,
+        total: total,
+        totalPages: totalPages,
+        hasNext: currentPage < totalPages,
+        hasPrev: currentPage > 1
+      };
+    }
+    return pagination;
+  }, [isFullCacheReady, fullLocal, sortColumn, currentPage, pageSize, pagination]);
 
   // Debug logs removed after verification
 
@@ -500,29 +579,65 @@ export default function Dashboard() {
   // Remove the sortedPairings calculation and use pairings directly
   // const sortedPairings = React.useMemo(() => { ... }); // DELETE THIS
 
-  // Use pairings directly since backend will sort them
+  // Use pairings directly since backend will sort them, but prefer full cache for offline sorting
   const displayPairings = React.useMemo(() => {
+    // If we have full cache and are offline, use it for sorting with pagination
+    if (isFullCacheReady && fullLocal && !navigator.onLine && sortColumn) {
+      console.log(`Offline: Sorting full dataset (${fullLocal.length} items) by ${sortColumn} ${sortDirection}`);
+      const dataToSort = [...fullLocal];
+      const sorted = dataToSort.sort((a: any, b: any) => {
+        const getVal = (p: any, col: string) => {
+          switch (col) {
+            case 'creditBlockRatio': {
+              const ca = parseFloat(p.creditHours?.toString() || '0');
+              const ba = parseFloat(p.blockHours?.toString() || '1');
+              return ba > 0 ? ca / ba : 0;
+            }
+            case 'creditHours': return parseFloat(p.creditHours?.toString() || '0');
+            case 'blockHours': return parseFloat(p.blockHours?.toString() || '0');
+            case 'tafb': {
+              const s = (p.tafb || '0').toString();
+              if (s.includes(':')) { const [h,m] = s.split(':').map(Number); return h*60+m; }
+              if (s.includes('.')) { const [h,m]=s.split('.').map(Number); return h*60+(m||0); }
+              return parseFloat(s)*60;
+            }
+            case 'pairingDays': return p.pairingDays || 0;
+            case 'holdProbability': return p.holdProbability || 0;
+            case 'pairingNumber': default: return (p.pairingNumber || '').toString();
+          }
+        };
+        const va = getVal(a, sortColumn);
+        const vb = getVal(b, sortColumn);
+        return sortDirection === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+      });
+      
+      // Apply pagination to sorted results
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedSorted = sorted.slice(startIndex, endIndex);
+      console.log(`Offline pagination: showing ${startIndex + 1}-${Math.min(endIndex, sorted.length)} of ${sorted.length}`);
+      return paginatedSorted;
+    }
+    
     if (!pairings || pairings.length === 0) return [];
     
-    // If sorting by C/B ratio, do it in frontend since it's calculated
+    // For credit/block ratio, always sort locally since it's computed
     if (sortColumn === 'creditBlockRatio') {
       const sorted = [...pairings].sort((a, b) => {
         const creditA = parseFloat(a.creditHours?.toString() || '0');
         const blockA = parseFloat(a.blockHours?.toString() || '1');
         const creditB = parseFloat(b.creditHours?.toString() || '0');
         const blockB = parseFloat(b.blockHours?.toString() || '1');
-        
         const ratioA = blockA > 0 ? creditA / blockA : 0;
         const ratioB = blockB > 0 ? creditB / blockB : 0;
-        
         return sortDirection === 'asc' ? ratioA - ratioB : ratioB - ratioA;
       });
       return sorted;
     }
     
-    // For other columns, use backend sorting
+    // Otherwise use server-sorted results (already paginated)
     return pairings;
-  }, [pairings, sortColumn, sortDirection]);
+  }, [pairings, fullLocal, isFullCacheReady, sortColumn, sortDirection, currentPage, pageSize]);
 
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
@@ -534,7 +649,7 @@ export default function Dashboard() {
     }
 
     // Use pagination total if available, otherwise fall back to current page count
-    const totalPairings = pagination && pagination.total ? pagination.total : pairings.length;
+    const totalPairings = effectivePagination && effectivePagination.total ? effectivePagination.total : pairings.length;
     
     // Use backend statistics if available, otherwise calculate from current page
     const likelyToHold = pairingsResponse?.statistics?.likelyToHold 
@@ -772,6 +887,62 @@ export default function Dashboard() {
                         Pairing Results
                       </CardTitle>
                       <div className="flex items-center space-x-2">
+                        {isPrefetching ? (
+                          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
+                          </span>
+                        ) : isFullCacheReady ? (
+                          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">Available offline: Yes</span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
+                                onClick={async () => {
+                                  console.log('Manual prefetch triggered');
+                                  console.log('Clearing old cache entries first...');
+                                  // Clear old cache entries
+                                  try {
+                                    const request = indexedDB.open('pbs-cache', 1);
+                                    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                                      request.onsuccess = () => resolve(request.result);
+                                      request.onerror = () => reject(request.error);
+                                    });
+                                    const tx = db.transaction(['pairings'], 'readwrite');
+                                    const store = tx.objectStore('pairings');
+                                    await new Promise<void>((resolve, reject) => {
+                                      const clearReq = store.clear();
+                                      clearReq.onsuccess = () => resolve();
+                                      clearReq.onerror = () => reject(clearReq.error);
+                                    });
+                                    console.log('Cache cleared');
+                                  } catch (e) {
+                                    console.log('Failed to clear cache:', e);
+                                  }
+                                  
+                                  setIsPrefetching(true);
+                                  try {
+                                    await api.prefetchAllPairings({
+                                      bidPackageId,
+                                      ...debouncedFilters
+                                    } as any);
+                                    
+                                    const key = cacheKeyForPairings(bidPackageId, debouncedFilters);
+                                    const exists = await hasFullPairingsCache(key);
+                                    console.log('Manual prefetch - final check:', exists);
+                                    
+                                    if (exists) {
+                                      const data = await loadFullPairingsCache(key);
+                                      console.log('Manual prefetch - data length:', data?.length);
+                                      setIsFullCacheReady(true);
+                                      setFullLocal(data || null);
+                                    }
+                                  } catch (error) {
+                                    console.error('Manual prefetch failed:', error);
+                                  } finally {
+                                    setIsPrefetching(false);
+                                  }
+                                }}>
+                            Available offline: No (click to recheck)
+                          </span>
+                        )}
                         {isUpdatingSeniority && (
                           <span className="flex items-center text-orange-600 text-sm">
                             <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
@@ -779,7 +950,7 @@ export default function Dashboard() {
                           </span>
                         )}
                         <span className="text-sm text-gray-500">
-                          {latestBidPackage.month} {latestBidPackage.year} - {pagination?.total || displayPairings.length} pairings
+                          {latestBidPackage.month} {latestBidPackage.year} - {effectivePagination?.total || displayPairings.length} pairings
                         </span>
                       </div>
                     </CardHeader>
@@ -798,7 +969,7 @@ export default function Dashboard() {
                         sortColumn={sortColumn || ''}
                         sortDirection={sortDirection}
                         onPairingClick={handlePairingClick}
-                        pagination={pagination as any}
+                        pagination={effectivePagination as any}
                         onPageChange={(page) => setCurrentPage(page)}
                       />
                     </CardContent>

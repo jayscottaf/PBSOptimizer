@@ -25,3 +25,10 @@ if (import.meta.env.DEV) {
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Register service worker (Stage 1: basic app shell installability)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

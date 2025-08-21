@@ -1,4 +1,5 @@
 import { apiRequest } from "./queryClient";
+import { cacheKeyForPairings, savePairingsCache, loadPairingsCache, saveFullPairingsCache, loadFullPairingsCache } from "./offlineCache";
 
 export interface BidPackage {
   id: number;
@@ -82,6 +83,60 @@ export const api = {
     return response.json();
   },
 
+  // Prefetch entire dataset for current filters and cache for offline/global sorting
+  prefetchAllPairings: async (filters: SearchFilters & { bidPackageId: number }) => {
+    console.log('Starting prefetch for filters:', filters);
+    
+    // Use cache key WITHOUT sortBy/sortOrder to enable global sorting on one dataset
+    const { sortBy, sortOrder, page, limit: _, ...filtersForCache } = filters;
+    const key = cacheKeyForPairings(filters.bidPackageId, filtersForCache);
+    
+    console.log('Prefetch cache key:', key);
+    
+    // Check if already cached
+    const existing = await loadFullPairingsCache(key);
+    if (existing && existing.length > 0) {
+      console.log('Full cache already exists, skipping prefetch');
+      return { total: existing.length, cached: true };
+    }
+    
+    // First page to determine total
+    const first = await fetch('/api/pairings/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...filters, page: 1, limit: 100, sortBy: 'pairingNumber', sortOrder: 'asc' })
+    });
+    if (!first.ok) throw new Error('Prefetch failed');
+    const firstData = await first.json();
+    const total = firstData?.pagination?.total || (Array.isArray(firstData) ? firstData.length : 0);
+    const limit = firstData?.pagination?.limit || 100;
+    let rows: Pairing[] = firstData?.pairings || (Array.isArray(firstData) ? firstData : []);
+
+    console.log(`Prefetch: Page 1 fetched, total=${total}, limit=${limit}, found=${rows.length}`);
+
+    const totalPages = Math.ceil(total / limit);
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await fetch('/api/pairings/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...filters, page, limit, sortBy: 'pairingNumber', sortOrder: 'asc' })
+      });
+      if (!res.ok) {
+        console.warn(`Prefetch: Failed to fetch page ${page}`);
+        break;
+      }
+      const data = await res.json();
+      const part: Pairing[] = data?.pairings || [];
+      rows = rows.concat(part);
+      console.log(`Prefetch: Page ${page}/${totalPages} fetched, total rows=${rows.length}`);
+    }
+
+    console.log(`Prefetch: Caching ${rows.length} total rows with key: ${key}`);
+    await saveFullPairingsCache(key, rows);
+    console.log('Prefetch: Cache save completed');
+    return { total: rows.length, cached: true };
+  },
+
   // Progress stream (SSE)
   openProgressStream: (bidPackageId: number, onMessage: (data: any) => void): EventSource => {
     const es = new EventSource(`/api/progress/stream?bidPackageId=${bidPackageId}`);
@@ -125,13 +180,19 @@ export const api = {
 
   // Pairings
   getPairings: async (bidPackageId?: number): Promise<Pairing[]> => {
+    const key = cacheKeyForPairings(bidPackageId);
     try {
       const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
       const response = await apiRequest("GET", url);
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      const list = Array.isArray(data) ? data : [];
+      // Save to offline cache
+      savePairingsCache(key, list).catch(() => {});
+      return list;
     } catch (error) {
-      console.error("Error fetching pairings:", error);
+      // Offline/read error → return cached if present
+      const cached = await loadPairingsCache<Pairing[]>(key);
+      if (cached) return cached;
       return [];
     }
   },
@@ -150,7 +211,16 @@ export const api = {
         throw new Error('Failed to search pairings');
       }
       const data = await response.json();
-      
+      // Cache the result snapshot (page)
+      const list = data?.pairings ?? (Array.isArray(data) ? data : []);
+      const key = cacheKeyForPairings(filters.bidPackageId, filters);
+      savePairingsCache(key, list).catch(() => {});
+
+      // If server returned total<=limit, treat as full dataset and cache fully
+      if (data?.pagination && data.pagination.total <= (data.pagination.limit || 50)) {
+        saveFullPairingsCache(key, list).catch(() => {});
+      }
+
       // Handle new paginated response format
       if (data && data.pairings && data.pagination) {
         return data;
@@ -158,11 +228,11 @@ export const api = {
       
       // Fallback for old format (array)
       return {
-        pairings: Array.isArray(data) ? data : [],
+        pairings: list,
         pagination: {
           page: 1,
-          limit: data.length || 0,
-          total: data.length || 0,
+          limit: list.length || 0,
+          total: list.length || 0,
           totalPages: 1,
           hasNext: false,
           hasPrev: false
@@ -170,6 +240,37 @@ export const api = {
       };
     } catch (error) {
       console.error("Error searching pairings:", error);
+      // Offline: try cached
+      const key = cacheKeyForPairings(filters.bidPackageId, filters);
+      // Prefer full cache; fallback to last page cache
+      const full = await loadFullPairingsCache<Pairing[]>(key);
+      if (full) {
+        return {
+          pairings: full,
+          pagination: {
+            page: 1,
+            limit: full.length,
+            total: full.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false
+          }
+        };
+      }
+      const cached = await loadPairingsCache<Pairing[]>(key);
+      if (cached) {
+        return {
+          pairings: cached,
+          pagination: {
+            page: 1,
+            limit: cached.length,
+            total: cached.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false
+          }
+        };
+      }
       return {
         pairings: [],
         pagination: {
