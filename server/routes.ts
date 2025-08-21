@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { seedDatabase } from "./seedData";
 import { pdfParser } from "./pdfParser";
 import { db } from "./db";
-import { eq, gte, lte, sql, and, or, like, asc, desc } from "drizzle-orm";
+import { eq, gte, lte, sql, and, or, like, asc, desc, inArray } from "drizzle-orm";
 import { pairings } from "@shared/schema";
 import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
 import { openaiAssistant } from "./openaiAssistant";
@@ -56,17 +56,13 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, senio
     const batchSize = 50;
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize);
-      
-      // Use a single query with CASE statements for batch update
-      const updateQuery = sql`
-        UPDATE pairings 
-        SET hold_probability = CASE id 
-          ${batch.map(update => sql`WHEN ${update.id} THEN ${update.holdProbability}`).join(' ')}
-        END
-        WHERE id IN (${batch.map(update => update.id)})
-      `;
-      
-      await db.execute(updateQuery);
+      // Use straightforward per-row updates to avoid SQL builder edge-cases
+      for (const u of batch) {
+        await db
+          .update(pairings)
+          .set({ holdProbability: u.holdProbability })
+          .where(eq(pairings.id, u.id));
+      }
     }
 
     console.log(`✅ Optimized recalculation completed: ${updates.length} pairings updated in ${Math.ceil(updates.length / batchSize)} batches`);
@@ -276,10 +272,7 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: 'bidPackageId is required' });
       }
 
-      // Trigger background recalculation if seniority changed (non-blocking)
-      if (seniorityPercentile) {
-        recalculateHoldProbabilitiesBackground(parseInt(bidPackageId as string), parseFloat(seniorityPercentile as string));
-      }
+      // Do not mutate DB on seniority changes; compute per-request below
 
       // Build all conditions first, then apply with and()
       const conditions = [eq(pairings.bidPackageId, parseInt(bidPackageId as string))];
@@ -306,6 +299,30 @@ export async function registerRoutes(app: Express) {
 
       const query = db.select().from(pairings).where(and(...conditions));
       const pairingsResult = await query.execute();
+
+      // If seniority provided, compute holdProbability per-request (no DB writes)
+      if (seniorityPercentile) {
+        const allForPackage = await db
+          .select()
+          .from(pairings)
+          .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
+
+        const seniorityValue = parseFloat(seniorityPercentile as string);
+        for (const p of pairingsResult) {
+          const desirability = HoldProbabilityCalculator.calculateDesirabilityScore(p);
+          const freq = HoldProbabilityCalculator.calculatePairingFrequency(p.pairingNumber, allForPackage);
+          const hp = HoldProbabilityCalculator.calculateHoldProbability({
+            seniorityPercentile: seniorityValue,
+            desirabilityScore: desirability,
+            pairingFrequency: freq,
+            startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
+            includesDeadheads: p.deadheads || 0,
+            includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
+          });
+          (p as any).holdProbability = hp.probability;
+        }
+      }
+
       res.json(pairingsResult);
     } catch (error) {
       console.error("Error fetching pairings:", error);
@@ -336,17 +353,23 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      // Log only key filter knobs for debugging
-      console.log('Search params:', {
-        bidPackageId,
-        page,
-        limit,
-        sortBy,
-        sortOrder,
-        efficiency: (filters as any)?.efficiency,
-        holdProbabilityMin: (filters as any)?.holdProbabilityMin,
-        pairingDays: (filters as any)?.pairingDays,
-      });
+      // Do not mutate DB on seniority changes; compute per-response below
+
+      // Log only key filter knobs for debugging (only in debug mode)
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log('Search params:', {
+          bidPackageId,
+          page,
+          limit,
+          sortBy,
+          sortOrder,
+          efficiency: (filters as any)?.efficiency,
+          holdProbabilityMin: (filters as any)?.holdProbabilityMin,
+          pairingDays: (filters as any)?.pairingDays,
+          seniorityPercentile: (filters as any)?.seniorityPercentile,
+          seniorityPercentage: (filters as any)?.seniorityPercentage,
+        });
+      }
       
       const result = await storage.searchPairingsWithPagination({ 
         bidPackageId, 
@@ -357,7 +380,34 @@ export async function registerRoutes(app: Express) {
         ...filters 
       });
 
-      console.log(`Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`);
+      // If seniority provided, compute holdProbability per-response
+      const seniorityValueRaw = (filters as any)?.seniorityPercentile || (filters as any)?.seniorityPercentage;
+      if (seniorityValueRaw) {
+        const seniorityValue = parseFloat(seniorityValueRaw);
+        const allForPackage = await db
+          .select()
+          .from(pairings)
+          .where(eq(pairings.bidPackageId, bidPackageId));
+
+        for (const p of result.pairings) {
+          const desirability = HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
+          const freq = HoldProbabilityCalculator.calculatePairingFrequency((p as any).pairingNumber, allForPackage as any);
+          const hp = HoldProbabilityCalculator.calculateHoldProbability({
+            seniorityPercentile: seniorityValue,
+            desirabilityScore: desirability,
+            pairingFrequency: freq,
+            startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
+            includesDeadheads: (p as any).deadheads || 0,
+            includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
+          });
+          (p as any).holdProbability = hp.probability;
+        }
+      }
+
+      // Only log in debug mode to reduce noise
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log(`Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`);
+      }
       res.json(result);
     } catch (error) {
       console.error("Error searching pairings:", error);

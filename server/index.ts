@@ -3,6 +3,21 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Simple logging utility
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_HTTP = process.env.LOG_HTTP !== '0'; // Default to true unless explicitly set to 0
+
+function logger(level: string, message: string) {
+  const levels = { error: 0, warn: 1, info: 2, debug: 3 };
+  const currentLevel = levels[level as keyof typeof levels] || 2;
+  const maxLevel = levels[LOG_LEVEL as keyof typeof levels] || 2;
+  
+  if (currentLevel <= maxLevel) {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`${timestamp} [${level.toUpperCase()}] ${message}`);
+  }
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -19,8 +34,8 @@ app.use((req, res, next) => {
   };
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
+    if (LOG_HTTP && path.startsWith("/api")) {
+      const duration = Date.now() - start;
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       
       if (capturedJsonResponse) {
@@ -32,7 +47,7 @@ app.use((req, res, next) => {
         logLine += ` :: ${responseType} (${responseSize} bytes)`;
       }
 
-      log(logLine);
+      logger('info', logLine);
     }
   });
 
@@ -65,6 +80,6 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen(port, "0.0.0.0", () => {
-    log(`serving on port ${port}`);
+    logger('info', `Server started on port ${port}`);
   });
 })();

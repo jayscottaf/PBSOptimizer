@@ -32,19 +32,27 @@ export class HoldProbabilityCalculator {
     const reasoning: string[] = [];
     let baseProbability = 50;
     let label = "Unlikely";
+    // Floors ensure senior pilots never drop below a minimum threshold
+    // e.g., 1-2% => ~100%, 3-5% => >=95%, 6-10% => >=90%
+    let seniorityFloor = 0;
 
     // SENIORITY IS THE PRIMARY FACTOR
     // Senior pilots (top 10%) - Very high hold probability for most pairings
     if (seniorityPercentile <= 10) {
-      baseProbability = 90;
+      // Define floors for very senior pilots
+      if (seniorityPercentile <= 2) seniorityFloor = 98; // rounds to 100
+      else if (seniorityPercentile <= 5) seniorityFloor = 95;
+      else seniorityFloor = 90;
+
+      baseProbability = Math.max(90, seniorityFloor);
       label = "Very Likely";
       reasoning.push(`✅ Very senior pilot (top ${seniorityPercentile.toFixed(1)}%) - high hold probability`);
       
       // Only reduce for extremely desirable trips
       if (desirabilityScore > 90) {
-        baseProbability = 75;
-        label = "Likely";
-        reasoning.push("⚠️ Extremely desirable pairing may go to even more senior pilots");
+        // Even for extremely desirable trips, do not go below the senior floor
+        baseProbability = Math.max(seniorityFloor, 90);
+        reasoning.push("⚠️ Extremely desirable pairing (senior floor applied)");
       }
     }
     // Mid-senior pilots (10-25%) - High hold probability for most pairings
@@ -116,7 +124,7 @@ export class HoldProbabilityCalculator {
       }
     }
 
-    // Minor adjustments for pairing characteristics
+    // Minor adjustments for pairing characteristics (informational only for now)
     if (pairingFrequency >= 4) {
       reasoning.push("• Frequent pairing (+5% boost)");
     }
@@ -127,22 +135,29 @@ export class HoldProbabilityCalculator {
       reasoning.push("• Weekend start - less popular with senior pilots");
     }
 
-    // Add small randomization (±3%) for realism
-    const randomAdjustment = (Math.random() - 0.5) * 6; // -3 to +3
-    const finalProbability = Math.max(0, Math.min(100, baseProbability + randomAdjustment));
+    // Add small randomization for realism only for non-senior cases
+    const randomAdjustment = seniorityPercentile <= 10 ? 0 : (Math.random() - 0.5) * 6; // -3 to +3
+    let finalProbability = Math.max(0, Math.min(100, baseProbability + randomAdjustment));
+
+    // Enforce seniority floor if applicable
+    if (seniorityFloor > 0) {
+      finalProbability = Math.max(finalProbability, seniorityFloor);
+    }
     
     // Round to nearest 5% for more granular display
     const roundedProbability = Math.round(finalProbability / 5) * 5;
 
-    console.log(`Hold Probability Calculation for pairing:`);
-    console.log(`  Seniority Percentile: ${seniorityPercentile}%`);
-    console.log(`  Desirability Score: ${desirabilityScore}`);
-    console.log(`  Pairing Frequency: ${pairingFrequency}`);
-    console.log(`  Starts on Weekend: ${startsOnWeekend}`);
-    console.log(`  Deadheads: ${includesDeadheads}`);
-    console.log(`  Weekend Off: ${includesWeekendOff}`);
-    console.log(`  Result: ${roundedProbability}% - ${label}`);
-    reasoning.forEach(reason => console.log(`  ${reason}`));
+    if (process.env.NODE_ENV === 'development' && process.env.LOG_HOLD_DEBUG === '1') {
+      console.log(`Hold Probability Calculation for pairing:`);
+      console.log(`  Seniority Percentile: ${seniorityPercentile}%`);
+      console.log(`  Desirability Score: ${desirabilityScore}`);
+      console.log(`  Pairing Frequency: ${pairingFrequency}`);
+      console.log(`  Starts on Weekend: ${startsOnWeekend}`);
+      console.log(`  Deadheads: ${includesDeadheads}`);
+      console.log(`  Weekend Off: ${includesWeekendOff}`);
+      console.log(`  Result: ${roundedProbability}% - ${label}`);
+      reasoning.forEach(reason => console.log(`  ${reason}`));
+    }
 
     return {
       probability: roundedProbability,
