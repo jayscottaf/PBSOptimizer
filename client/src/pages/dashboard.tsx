@@ -234,6 +234,7 @@ export default function Dashboard() {
   // State for offline cache status
   const [isFullCacheReady, setIsFullCacheReady] = useState(false);
   const [isPrefetching, setIsPrefetching] = useState(false);
+  const [showInitialStatus, setShowInitialStatus] = useState(true);
 
   // Auto-prefetch full dataset for current bid package and filters
   React.useEffect(() => {
@@ -260,6 +261,9 @@ export default function Dashboard() {
         const full = await loadFullPairingsCache<any[]>(cacheKey);
         console.log('Dashboard: Loaded full cache, length:', full?.length || 0);
         setFullLocal(full || null);
+        
+        // Hide status indicator after 3 seconds when cache already exists
+        setTimeout(() => setShowInitialStatus(false), 3000);
       } else if (navigator.onLine) {
         // Prefetch full dataset
         try {
@@ -276,6 +280,9 @@ export default function Dashboard() {
           if (newHasFull) {
             const full = await loadFullPairingsCache<any[]>(cacheKey);
             setFullLocal(full || null);
+            
+            // Hide status indicator after 3 seconds when cache is ready
+            setTimeout(() => setShowInitialStatus(false), 3000);
           }
         } catch (error) {
           console.error('Prefetch failed:', error);
@@ -313,9 +320,9 @@ export default function Dashboard() {
   const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];
   const pagination = pairingsResponse?.pagination || initialPairingsResponse?.pagination;
   
-  // Create custom pagination when using offline full cache sorting
+  // Create custom pagination when using full cache sorting (online or offline)
   const effectivePagination = React.useMemo(() => {
-    if (isFullCacheReady && fullLocal && !navigator.onLine && sortColumn) {
+    if (isFullCacheReady && fullLocal && sortColumn) {
       const total = fullLocal.length;
       const totalPages = Math.ceil(total / pageSize);
       return {
@@ -581,9 +588,10 @@ export default function Dashboard() {
 
   // Use pairings directly since backend will sort them, but prefer full cache for offline sorting
   const displayPairings = React.useMemo(() => {
-    // If we have full cache and are offline, use it for sorting with pagination
-    if (isFullCacheReady && fullLocal && !navigator.onLine && sortColumn) {
-      console.log(`Offline: Sorting full dataset (${fullLocal.length} items) by ${sortColumn} ${sortDirection}`);
+    // If we have full cache, always use it for sorting with pagination (online or offline)
+    // This is more efficient than repeated server calls for sorting/pagination
+    if (isFullCacheReady && fullLocal && sortColumn) {
+      console.log(`Full cache: Sorting dataset (${fullLocal.length} items) by ${sortColumn} ${sortDirection}`);
       const dataToSort = [...fullLocal];
       const sorted = dataToSort.sort((a: any, b: any) => {
         const getVal = (p: any, col: string) => {
@@ -615,7 +623,7 @@ export default function Dashboard() {
       const startIndex = (currentPage - 1) * pageSize;
       const endIndex = startIndex + pageSize;
       const paginatedSorted = sorted.slice(startIndex, endIndex);
-      console.log(`Offline pagination: showing ${startIndex + 1}-${Math.min(endIndex, sorted.length)} of ${sorted.length}`);
+      console.log(`Local pagination: showing ${startIndex + 1}-${Math.min(endIndex, sorted.length)} of ${sorted.length}`);
       return paginatedSorted;
     }
     
@@ -887,61 +895,71 @@ export default function Dashboard() {
                         Pairing Results
                       </CardTitle>
                       <div className="flex items-center space-x-2">
-                        {isPrefetching ? (
-                          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
-                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
-                          </span>
-                        ) : isFullCacheReady ? (
-                          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">Available offline: Yes</span>
-                        ) : (
-                          <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
-                                onClick={async () => {
-                                  console.log('Manual prefetch triggered');
-                                  console.log('Clearing old cache entries first...');
-                                  // Clear old cache entries
-                                  try {
-                                    const request = indexedDB.open('pbs-cache', 1);
-                                    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                                      request.onsuccess = () => resolve(request.result);
-                                      request.onerror = () => reject(request.error);
-                                    });
-                                    const tx = db.transaction(['pairings'], 'readwrite');
-                                    const store = tx.objectStore('pairings');
-                                    await new Promise<void>((resolve, reject) => {
-                                      const clearReq = store.clear();
-                                      clearReq.onsuccess = () => resolve();
-                                      clearReq.onerror = () => reject(clearReq.error);
-                                    });
-                                    console.log('Cache cleared');
-                                  } catch (e) {
-                                    console.log('Failed to clear cache:', e);
-                                  }
-                                  
-                                  setIsPrefetching(true);
-                                  try {
-                                    await api.prefetchAllPairings({
-                                      bidPackageId,
-                                      ...debouncedFilters
-                                    } as any);
-                                    
-                                    const key = cacheKeyForPairings(bidPackageId, debouncedFilters);
-                                    const exists = await hasFullPairingsCache(key);
-                                    console.log('Manual prefetch - final check:', exists);
-                                    
-                                    if (exists) {
-                                      const data = await loadFullPairingsCache(key);
-                                      console.log('Manual prefetch - data length:', data?.length);
-                                      setIsFullCacheReady(true);
-                                      setFullLocal(data || null);
-                                    }
-                                  } catch (error) {
-                                    console.error('Manual prefetch failed:', error);
-                                  } finally {
-                                    setIsPrefetching(false);
-                                  }
-                                }}>
-                            Available offline: No (click to recheck)
-                          </span>
+                        {/* Only show cache status when it's actually useful */}
+                        {(isPrefetching || !isFullCacheReady || showInitialStatus) && (
+                          <>
+                            {isPrefetching ? (
+                              <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
+                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
+                              </span>
+                            ) : isFullCacheReady ? (
+                              <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
+                                Available offline: Yes
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
+                                    onClick={async () => {
+                                      console.log('Manual prefetch triggered');
+                                      setShowInitialStatus(true); // Show status during manual prefetch
+                                      console.log('Clearing old cache entries first...');
+                                      // Clear old cache entries
+                                      try {
+                                        const request = indexedDB.open('pbs-cache', 1);
+                                        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                                          request.onsuccess = () => resolve(request.result);
+                                          request.onerror = () => reject(request.error);
+                                        });
+                                        const tx = db.transaction(['pairings'], 'readwrite');
+                                        const store = tx.objectStore('pairings');
+                                        await new Promise<void>((resolve, reject) => {
+                                          const clearReq = store.clear();
+                                          clearReq.onsuccess = () => resolve();
+                                          clearReq.onerror = () => reject(clearReq.error);
+                                        });
+                                        console.log('Cache cleared');
+                                      } catch (e) {
+                                        console.log('Failed to clear cache:', e);
+                                      }
+                                      
+                                      setIsPrefetching(true);
+                                      try {
+                                        await api.prefetchAllPairings({
+                                          bidPackageId,
+                                          ...debouncedFilters
+                                        } as any);
+                                        
+                                        const key = cacheKeyForPairings(bidPackageId, debouncedFilters);
+                                        const exists = await hasFullPairingsCache(key);
+                                        console.log('Manual prefetch - final check:', exists);
+                                        
+                                        if (exists) {
+                                          const data = await loadFullPairingsCache(key);
+                                          console.log('Manual prefetch - data length:', data?.length);
+                                          setIsFullCacheReady(true);
+                                          setFullLocal(data || null);
+                                          // Hide after manual prefetch completes
+                                          setTimeout(() => setShowInitialStatus(false), 3000);
+                                        }
+                                      } catch (error) {
+                                        console.error('Manual prefetch failed:', error);
+                                      } finally {
+                                        setIsPrefetching(false);
+                                      }
+                                    }}>
+                                Available offline: No (click to cache)
+                              </span>
+                            )}
+                          </>
                         )}
                         {isUpdatingSeniority && (
                           <span className="flex items-center text-orange-600 text-sm">
