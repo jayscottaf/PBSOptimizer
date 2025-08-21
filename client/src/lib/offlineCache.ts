@@ -7,21 +7,70 @@ type PairingCacheRecord = {
 };
 
 const DB_NAME = 'pbs-cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Increment when schema changes
+const CURRENT_SCHEMA_VERSION = '1.2.0'; // Match SW version for consistency
 
 function openDB(): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
 		const req = indexedDB.open(DB_NAME, DB_VERSION);
-		req.onupgradeneeded = () => {
+		req.onupgradeneeded = (event) => {
 			const db = req.result;
-			if (!db.objectStoreNames.contains('pairings')) {
-				db.createObjectStore('pairings', { keyPath: 'key' });
+			const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
+			
+			console.log(`IndexedDB: Upgrading from version ${oldVersion} to ${DB_VERSION}`);
+			
+			// Initial setup (version 1)
+			if (oldVersion < 1) {
+				if (!db.objectStoreNames.contains('pairings')) {
+					const pairingsStore = db.createObjectStore('pairings', { keyPath: 'key' });
+					pairingsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+				}
+				if (!db.objectStoreNames.contains('stats')) {
+					const statsStore = db.createObjectStore('stats', { keyPath: 'key' });
+					statsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+				}
 			}
-			if (!db.objectStoreNames.contains('stats')) {
-				db.createObjectStore('stats', { keyPath: 'key' });
+			
+			// Schema version 2 improvements
+			if (oldVersion < 2) {
+				// Add metadata store for tracking versions and migrations
+				if (!db.objectStoreNames.contains('metadata')) {
+					db.createObjectStore('metadata', { keyPath: 'key' });
+				}
+				
+				// Add indexes if missing
+				if (db.objectStoreNames.contains('pairings')) {
+					const pairingsStore = req.transaction?.objectStore('pairings');
+					if (pairingsStore && !pairingsStore.indexNames.contains('updatedAt')) {
+						pairingsStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+					}
+				}
 			}
 		};
-		req.onsuccess = () => resolve(req.result);
+		req.onsuccess = async () => {
+			const db = req.result;
+			
+			// Set schema version metadata (only if metadata store exists)
+			try {
+				if (db.objectStoreNames.contains('metadata')) {
+					const tx = db.transaction('metadata', 'readwrite');
+					const store = tx.objectStore('metadata');
+					await new Promise<void>((resolve, reject) => {
+						const putReq = store.put({ 
+							key: 'schema_version', 
+							value: CURRENT_SCHEMA_VERSION,
+							updatedAt: Date.now()
+						});
+						putReq.onsuccess = () => resolve();
+						putReq.onerror = () => reject(putReq.error);
+					});
+				}
+			} catch (error) {
+				console.warn('Failed to set schema version:', error);
+			}
+			
+			resolve(db);
+		};
 		req.onerror = () => reject(req.error);
 	});
 }
@@ -172,6 +221,108 @@ export async function clearAllCache(): Promise<void> {
 	} catch (error) {
 		console.error('Failed to clear all cache:', error);
 		throw error;
+	}
+}
+
+// Schema migration and diagnostics
+export async function getCacheInfo(): Promise<{
+	schemaVersion: string;
+	dbVersion: number;
+	totalEntries: number;
+	userCacheStats: Record<string, number>;
+	lastUpdated: Date | null;
+}> {
+	try {
+		const db = await openDB();
+		
+		// Get schema version
+		let schemaVersion = 'unknown';
+		try {
+			if (db.objectStoreNames.contains('metadata')) {
+				const metaTx = db.transaction('metadata', 'readonly');
+				const metaStore = metaTx.objectStore('metadata');
+				const schemaReq = await new Promise<any>((resolve, reject) => {
+					const req = metaStore.get('schema_version');
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => reject(req.error);
+				});
+				schemaVersion = schemaReq?.value || 'unknown';
+			} else {
+				schemaVersion = 'pre-1.2.0';
+			}
+		} catch (error) {
+			console.warn('Could not get schema version:', error);
+		}
+		
+		// Count entries by user
+		const pairingsTx = db.transaction('pairings', 'readonly');
+		const pairingsStore = pairingsTx.objectStore('pairings');
+		const allKeys = await new Promise<string[]>((resolve, reject) => {
+			const req = pairingsStore.getAllKeys();
+			req.onsuccess = () => resolve(req.result as string[]);
+			req.onerror = () => reject(req.error);
+		});
+		
+		const userCacheStats: Record<string, number> = {};
+		let totalEntries = allKeys.length;
+		let lastUpdated: Date | null = null;
+		
+		for (const key of allKeys) {
+			// Extract user from key pattern: user:15600:pairings:...
+			const userMatch = key.match(/^user:(\d+):/);
+			if (userMatch) {
+				const userId = userMatch[1];
+				userCacheStats[userId] = (userCacheStats[userId] || 0) + 1;
+			} else {
+				userCacheStats['no-user'] = (userCacheStats['no-user'] || 0) + 1;
+			}
+		}
+		
+		// Get most recent update time
+		try {
+			if (pairingsStore.indexNames.contains('updatedAt')) {
+				const cursor = await new Promise<IDBCursorWithValue | null>((resolve, reject) => {
+					const req = pairingsStore.index('updatedAt').openCursor(null, 'prev');
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => reject(req.error);
+				});
+				if (cursor) {
+					lastUpdated = new Date(cursor.value.updatedAt);
+				}
+			}
+		} catch (error) {
+			console.warn('Could not get last updated time:', error);
+		}
+		
+		return {
+			schemaVersion,
+			dbVersion: DB_VERSION,
+			totalEntries,
+			userCacheStats,
+			lastUpdated
+		};
+	} catch (error) {
+		console.error('Failed to get cache info:', error);
+		throw error;
+	}
+}
+
+export async function migrateOldCacheFormat(): Promise<void> {
+	try {
+		console.log('Checking for old cache format migration...');
+		const info = await getCacheInfo();
+		
+		// If we have entries without user prefixes, they need migration
+		if (info.userCacheStats['no-user'] > 0) {
+			console.log(`Found ${info.userCacheStats['no-user']} entries without user prefix, migration recommended`);
+			// For now, just log. In the future, could implement automatic migration
+			// or prompt user to clear old cache
+		}
+		
+		console.log('Cache migration check complete:', info);
+	} catch (error) {
+		console.warn('Cache migration check failed (this is normal for first-time users):', error instanceof Error ? error.message : String(error));
+		// Don't rethrow - migration failures shouldn't break app startup
 	}
 }
 

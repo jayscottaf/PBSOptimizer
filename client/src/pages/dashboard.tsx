@@ -33,7 +33,7 @@ import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { SmartFilterSystem } from "@/components/smart-filter-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache, purgeUserCache } from "@/lib/offlineCache";
+import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache, purgeUserCache, getCacheInfo } from "@/lib/offlineCache";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -1257,6 +1257,24 @@ export default function Dashboard() {
                 >
                   Reset App Data
                 </Button>
+                {import.meta.env.DEV && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const info = await getCacheInfo();
+                        console.log('📊 Cache Diagnostics:', info);
+                        alert(`Cache Info:\n• Schema: ${info.schemaVersion}\n• Total: ${info.totalEntries} entries\n• Users: ${Object.keys(info.userCacheStats).join(', ')}\n• Updated: ${info.lastUpdated?.toLocaleString() || 'Never'}`);
+                      } catch (error) {
+                        console.error('Cache diagnostics failed:', error);
+                        alert('Failed to get cache info - check console');
+                      }
+                    }}
+                  >
+                    Cache Info
+                  </Button>
+                )}
               </div>
             </div>
             <div className="flex justify-end pt-4">
