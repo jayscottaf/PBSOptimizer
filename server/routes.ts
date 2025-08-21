@@ -117,9 +117,19 @@ const searchFiltersSchema = z.object({
 });
 
 export async function registerRoutes(app: Express) {
-  // Health check endpoint
+  // Health check endpoint (enhanced for PWA Stage 7)
+  app.head('/api/health', (req, res) => {
+    res.status(200).end();
+  });
+  
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: '1.2.0',
+      environment: process.env.NODE_ENV || 'development'
+    });
   });
 
   // Seed database endpoint (development only)
@@ -144,7 +154,6 @@ export async function registerRoutes(app: Express) {
       });
       
       const packages = await storage.getBidPackages();
-      console.log('Bid packages from database:', JSON.stringify(packages, null, 2));
       res.json(packages);
     } catch (error) {
       console.error('Error fetching bid packages:', error);

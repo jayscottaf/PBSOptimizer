@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, X } from "lucide-react";
@@ -276,42 +275,41 @@ export function SmartFilterSystem({
         {/* Function Selector */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Filter By</label>
-          <Select value={selectedFunction} onValueChange={(value) => {
-            setSelectedFunction(value);
-            setSelectedData(""); // Reset data selection when function changes
-          }}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select function..." />
-            </SelectTrigger>
-            <SelectContent>
-              {filterOptions.map((option) => (
-                <SelectItem key={option.key} value={option.key}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select 
+            value={selectedFunction} 
+            onChange={(e) => {
+              setSelectedFunction(e.target.value);
+              setSelectedData(""); // Reset data selection when function changes
+            }}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Select function...</option>
+            {filterOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Data Selector */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Value</label>
-          <Select 
+          <select 
             value={selectedData} 
-            onValueChange={handleSelectValueAndApply}
+            onChange={(e) => {
+              handleSelectValueAndApply(e.target.value);
+            }}
             disabled={!selectedFunction}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <SelectTrigger>
-              <SelectValue placeholder={selectedFunction ? "Select value..." : "Select function first"} />
-            </SelectTrigger>
-            <SelectContent>
-              {currentFunctionOptions.map((option, index) => (
-                <SelectItem key={index} value={option.value.toString()}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <option value="">{selectedFunction ? "Select value..." : "Select function first"}</option>
+            {currentFunctionOptions.map((option, index) => (
+              <option key={index} value={option.value.toString()}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Add Filter Button (hidden; auto-applies on selection) */}

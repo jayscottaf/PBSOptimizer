@@ -3,6 +3,7 @@ import App from "./App";
 import "./index.css";
 import { queryClient, clearAllCache, clearPairingCache, refreshAllData } from "./lib/queryClient";
 import { migrateOldCacheFormat, getCacheInfo } from "./lib/offlineCache";
+import { addTestingUtilities } from "./lib/offlineTestSuite";
 
 // Development utilities - available in browser console
 if (import.meta.env.DEV) {
@@ -25,6 +26,9 @@ if (import.meta.env.DEV) {
     }
   };
   console.log('🛠️ Cache utilities available: window.debugCache');
+  
+  // Add offline testing utilities
+  addTestingUtilities();
 }
 
 // Initialize app with migration checks
@@ -87,6 +91,56 @@ if ('serviceWorker' in navigator) {
         break;
     }
   });
+
+  // Function to aggressively remove offline banners
+  const removeOfflineBanners = () => {
+    // Remove common offline banner selectors
+    const selectors = [
+      '.chrome-offline-banner',
+      '.browser-offline-bar', 
+      '.offline-notification',
+      'div[style*="You are offline"]',
+      'div[style*="background"][style*="red"]',
+      'div[style*="position: fixed"][style*="top: 0"]'
+    ];
+    
+    selectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        (el as HTMLElement).remove();
+      });
+    });
+    
+    // Remove any element containing "You are offline" text
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach(el => {
+      if (el.textContent?.includes('You are offline') && 
+          el !== document.body && 
+          el !== document.documentElement) {
+        const styles = getComputedStyle(el);
+        if (styles.position === 'fixed' || styles.position === 'absolute') {
+          (el as HTMLElement).remove();
+        }
+      }
+    });
+  };
+
+  // Hide browser's default offline UI
+  window.addEventListener('online', () => {
+    document.body.classList.remove('offline');
+    removeOfflineBanners();
+  });
+  
+  window.addEventListener('offline', () => {
+    document.body.classList.add('offline');
+    // Aggressively remove offline banners
+    removeOfflineBanners();
+    // Continue checking for new banners
+    const interval = setInterval(removeOfflineBanners, 500);
+    setTimeout(() => clearInterval(interval), 5000);
+  });
+
+  // Initial banner removal
+  setTimeout(removeOfflineBanners, 100);
 }
 
 // Show update available notification

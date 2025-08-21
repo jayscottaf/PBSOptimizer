@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide ALL intrusive browser offline banners and notifications */
+.chrome-offline-banner,
+.browser-offline-bar,
+.offline-notification,
+body.offline::before,
+body::before {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Override browser's default offline UI completely */
+html.offline body,
+body.offline {
+  background-color: inherit !important;
+}
+
+/* Target Chrome's specific offline banner styles */
+body > div[style*="background"]:first-child,
+body > div[style*="red"]:first-child,
+div[style*="position: fixed"][style*="top: 0"],
+div[class*="offline"][style*="background"] {
+  display: none !important;
+}
+
+/* Remove any top-positioned warning banners */
+div[style*="position: absolute"][style*="top: 0"][style*="background"],
+div[style*="position: fixed"][style*="z-index"][style*="background"] {
+  display: none !important;
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(20, 14.3%, 4.1%);

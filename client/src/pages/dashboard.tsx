@@ -32,6 +32,7 @@ import { FiltersPanel } from "@/components/filters-panel";
 import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { SmartFilterSystem } from "@/components/smart-filter-system";
+import { NetworkStatus } from "@/components/network-status";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache, purgeUserCache, getCacheInfo } from "@/lib/offlineCache";
 import { api } from "@/lib/api";
@@ -152,8 +153,7 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
-  // Debug logging
-  console.log('Bid packages from API:', bidPackages);
+
 
   // Find the latest bid package (prefer completed, fall back to most recent by uploadedAt if none are completed)
   const latestBidPackage = React.useMemo(() => {
@@ -171,27 +171,11 @@ export default function Dashboard() {
     return packagesArray[0];
   }, [bidPackages]);
 
-  console.log('Latest bid package:', latestBidPackage);
+
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
 
-  // Preload initial data for better performance
-  const { data: initialPairingsResponse } = useQuery({
-    queryKey: ["initial-pairings", bidPackageId],
-    queryFn: () => api.searchPairings({
-      bidPackageId: bidPackageId,
-      page: 1,
-      limit: 50,
-      sortBy: 'pairingNumber',
-      sortOrder: 'asc'
-    }),
-    enabled: !!bidPackageId && !debouncedFilters.search && Object.keys(debouncedFilters).length === 0,
-    staleTime: 10 * 60 * 1000, // Cache initial data longer
-    gcTime: 15 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  // Removed redundant initial query to prevent duplicate API calls
 
   // Query for user data with enhanced caching
   const { data: currentUser } = useQuery({
@@ -336,8 +320,8 @@ export default function Dashboard() {
   const [fullLocal, setFullLocal] = useState<any[] | null>(null);
 
   // Prefer full local cache whenever it exists (online or offline); fallback to server page
-  const pairings = pairingsResponse?.pairings || initialPairingsResponse?.pairings || [];
-  const pagination = pairingsResponse?.pagination || initialPairingsResponse?.pagination;
+  const pairings = pairingsResponse?.pairings || [];
+  const pagination = pairingsResponse?.pagination;
   
   // Create custom pagination when using full cache sorting (online or offline)
   const effectivePagination = React.useMemo(() => {
@@ -492,6 +476,7 @@ export default function Dashboard() {
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
+
     // Process the new filters to handle range objects
     const processedFilters: SearchFilters = {};
     
@@ -522,6 +507,7 @@ export default function Dashboard() {
         }
       });
       mergedAfter = merged;
+
       return merged;
     });
     setCurrentPage(1);
@@ -742,6 +728,8 @@ export default function Dashboard() {
         </div>
       </div>
 
+
+
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         <div className="p-3 sm:p-6 h-full">
@@ -798,15 +786,22 @@ export default function Dashboard() {
                   >
                     <User className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowUploadModal(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <CloudUpload className="h-4 w-4" />
-                    <span className="hidden sm:inline">Upload</span>
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowUploadModal(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <CloudUpload className="h-4 w-4" />
+                      <span className="hidden sm:inline">Upload</span>
+                    </Button>
+                    
+                    {/* Network Status - Inline WiFi icon */}
+                    <div className="relative">
+                      <NetworkStatus />
+                    </div>
+                  </div>
                 </div>
               </div>
 
