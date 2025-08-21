@@ -84,12 +84,12 @@ export const api = {
   },
 
   // Prefetch entire dataset for current filters and cache for offline/global sorting
-  prefetchAllPairings: async (filters: SearchFilters & { bidPackageId: number }) => {
-    console.log('Starting prefetch for filters:', filters);
+  prefetchAllPairings: async (filters: SearchFilters & { bidPackageId: number }, userId?: string | number) => {
+    console.log('Starting prefetch for filters:', filters, 'userId:', userId);
     
     // Use cache key WITHOUT sortBy/sortOrder to enable global sorting on one dataset
     const { sortBy, sortOrder, page, limit: _, ...filtersForCache } = filters;
-    const key = cacheKeyForPairings(filters.bidPackageId, filtersForCache);
+    const key = cacheKeyForPairings(filters.bidPackageId, filtersForCache, userId);
     
     console.log('Prefetch cache key:', key);
     
@@ -179,8 +179,8 @@ export const api = {
   },
 
   // Pairings
-  getPairings: async (bidPackageId?: number): Promise<Pairing[]> => {
-    const key = cacheKeyForPairings(bidPackageId);
+  getPairings: async (bidPackageId?: number, userId?: string | number): Promise<Pairing[]> => {
+    const key = cacheKeyForPairings(bidPackageId, undefined, userId);
     try {
       const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
       const response = await apiRequest("GET", url);
@@ -197,7 +197,7 @@ export const api = {
     }
   },
 
-  searchPairings: async (filters: SearchFilters): Promise<PaginatedResponse<Pairing>> => {
+  searchPairings: async (filters: SearchFilters, userId?: string | number): Promise<PaginatedResponse<Pairing>> => {
     try {
       const response = await fetch('/api/pairings/search', {
         method: 'POST',
@@ -213,7 +213,7 @@ export const api = {
       const data = await response.json();
       // Cache the result snapshot (page)
       const list = data?.pairings ?? (Array.isArray(data) ? data : []);
-      const key = cacheKeyForPairings(filters.bidPackageId, filters);
+      const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
       savePairingsCache(key, list).catch(() => {});
 
       // If server returned total<=limit, treat as full dataset and cache fully
@@ -241,7 +241,7 @@ export const api = {
     } catch (error) {
       console.error("Error searching pairings:", error);
       // Offline: try cached
-      const key = cacheKeyForPairings(filters.bidPackageId, filters);
+      const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
       // Prefer full cache; fallback to last page cache
       const full = await loadFullPairingsCache<Pairing[]>(key);
       if (full) {

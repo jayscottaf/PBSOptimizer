@@ -33,7 +33,7 @@ import { PairingModal } from "@/components/pairing-modal";
 import { CalendarView } from "@/components/calendar-view";
 import { SmartFilterSystem } from "@/components/smart-filter-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache } from "@/lib/offlineCache";
+import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache, purgeUserCache } from "@/lib/offlineCache";
 import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -193,6 +193,24 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
+  // Query for user data with enhanced caching
+  const { data: currentUser } = useQuery({
+    queryKey: ["user", seniorityNumber, base, aircraft],
+    queryFn: async () => {
+      return await api.createOrUpdateUser({
+        seniorityNumber: parseInt(seniorityNumber),
+        base,
+        aircraft
+      });
+    },
+    enabled: !!seniorityNumber,
+    staleTime: 30 * 60 * 1000, // User data is stable for 30 minutes
+    gcTime: 60 * 60 * 1000, // Keep in memory for 1 hour
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
   // Only update loading state when user manually changes seniority in profile
   React.useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -211,7 +229,7 @@ export default function Dashboard() {
 
   // Optimized useQuery with enhanced caching and deduplication
   const { data: pairingsResponse, isLoading: isLoadingPairings, refetch: refetchPairings } = useQuery({
-    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize],
+    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize, currentUser?.seniorityNumber, currentUser?.id],
     queryFn: () => api.searchPairings({
       bidPackageId: bidPackageId,
       seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
@@ -220,7 +238,7 @@ export default function Dashboard() {
       page: currentPage,
       limit: pageSize,
       ...debouncedFilters
-    }),
+    }, currentUser?.seniorityNumber || currentUser?.id),
     enabled: !!bidPackageId,
     staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
@@ -247,8 +265,9 @@ export default function Dashboard() {
       
       // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
       console.log('Dashboard: debouncedFilters =', debouncedFilters);
-      const cacheKey = cacheKeyForPairings(bidPackageId, debouncedFilters);
-      console.log('Dashboard: Generated cache key =', cacheKey);
+      const userId = currentUser?.seniorityNumber || currentUser?.id;
+      const cacheKey = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
+      console.log('Dashboard: Generated cache key =', cacheKey, 'for user:', userId);
       
       // Check if full cache exists
       const hasFull = await hasFullPairingsCache(cacheKey);
@@ -271,7 +290,7 @@ export default function Dashboard() {
           await api.prefetchAllPairings({
             bidPackageId,
             ...debouncedFilters
-          } as any);
+          } as any, userId);
           
           // Re-check and load after prefetch
           const newHasFull = await hasFullPairingsCache(cacheKey);
@@ -293,7 +312,7 @@ export default function Dashboard() {
       }
     };
     run();
-  }, [bidPackageId, JSON.stringify(debouncedFilters)]);
+  }, [bidPackageId, JSON.stringify(debouncedFilters), currentUser?.seniorityNumber, currentUser?.id]);
 
   // When the bid package transitions to completed, invalidate and refetch pairings
   React.useEffect(() => {
@@ -338,24 +357,6 @@ export default function Dashboard() {
   }, [isFullCacheReady, fullLocal, sortColumn, currentPage, pageSize, pagination]);
 
   // Debug logs removed after verification
-
-  // Query for user data with enhanced caching
-  const { data: currentUser } = useQuery({
-    queryKey: ["user", seniorityNumber, base, aircraft],
-    queryFn: async () => {
-      return await api.createOrUpdateUser({
-        seniorityNumber: parseInt(seniorityNumber),
-        base,
-        aircraft
-      });
-    },
-    enabled: !!seniorityNumber,
-    staleTime: 30 * 60 * 1000, // User data is stable for 30 minutes
-    gcTime: 60 * 60 * 1000, // Keep in memory for 1 hour
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
 
   // Query for user's favorites with enhanced caching
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
@@ -933,12 +934,13 @@ export default function Dashboard() {
                                       
                                       setIsPrefetching(true);
                                       try {
+                                        const userId = currentUser?.seniorityNumber || currentUser?.id;
                                         await api.prefetchAllPairings({
                                           bidPackageId,
                                           ...debouncedFilters
-                                        } as any);
+                                        } as any, userId);
                                         
-                                        const key = cacheKeyForPairings(bidPackageId, debouncedFilters);
+                                        const key = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
                                         const exists = await hasFullPairingsCache(key);
                                         console.log('Manual prefetch - final check:', exists);
                                         
@@ -1220,6 +1222,42 @@ export default function Dashboard() {
                   <SelectItem value="B737">B737</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="border-t pt-4 mt-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">Cache Management</div>
+              <div className="flex gap-2 mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={async () => {
+                    const userId = currentUser?.seniorityNumber || currentUser?.id;
+                    if (userId) {
+                      try {
+                        await purgeUserCache(userId);
+                        // Clear React Query cache as well
+                        queryClient.clear();
+                        console.log('User cache purged successfully');
+                      } catch (error) {
+                        console.error('Failed to purge user cache:', error);
+                      }
+                    }
+                  }}
+                >
+                  Clear My Cache
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Clear localStorage
+                    localStorage.clear();
+                    // Reload page to reset state
+                    window.location.reload();
+                  }}
+                >
+                  Reset App Data
+                </Button>
+              </div>
             </div>
             <div className="flex justify-end pt-4">
               <Button onClick={() => setShowProfileModal(false)}>

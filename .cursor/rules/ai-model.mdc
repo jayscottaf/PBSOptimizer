@@ -1,0 +1,5 @@
+---
+description:add a small remark stating which ai model is being used in the responses 
+globs:
+alwaysApply: true
+---

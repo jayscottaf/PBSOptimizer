@@ -46,9 +46,11 @@ async function get(store: 'pairings'|'stats', key: string): Promise<PairingCache
 	});
 }
 
-export function cacheKeyForPairings(bidPackageId?: number, filters?: Record<string, any>): string {
-	if (!bidPackageId) return 'pairings:default';
-	if (!filters) return `pairings:${bidPackageId}:all`;
+export function cacheKeyForPairings(bidPackageId?: number, filters?: Record<string, any>, userId?: string | number): string {
+	const userPrefix = userId ? `user:${userId}:` : '';
+	
+	if (!bidPackageId) return `${userPrefix}pairings:default`;
+	if (!filters) return `${userPrefix}pairings:${bidPackageId}:all`;
 	// Omit pagination, sort fields, and bidPackageId since it's already in the key prefix
 	const { sortBy, sortOrder, page, limit, bidPackageId: _, ...rest } = filters as any;
 	const cleaned: Record<string, any> = {};
@@ -59,11 +61,11 @@ export function cacheKeyForPairings(bidPackageId?: number, filters?: Record<stri
 	
 	// If no actual filters remain, use simple key
 	if (Object.keys(cleaned).length === 0) {
-		return `pairings:${bidPackageId}:all`;
+		return `${userPrefix}pairings:${bidPackageId}:all`;
 	}
 	
 	const sorted = Object.keys(cleaned).sort().reduce((acc, k) => { (acc as any)[k] = (cleaned as any)[k]; return acc; }, {} as Record<string, any>);
-	return `pairings:${bidPackageId}:${btoa(unescape(encodeURIComponent(JSON.stringify(sorted))).slice(0, 64))}`;
+	return `${userPrefix}pairings:${bidPackageId}:${btoa(unescape(encodeURIComponent(JSON.stringify(sorted))).slice(0, 64))}`;
 }
 
 export async function savePairingsCache(key: string, data: any): Promise<void> { return put('pairings', key, data); }
@@ -90,6 +92,87 @@ export async function loadFullPairingsCache<T = any[]>(key: string): Promise<T |
 export async function hasFullPairingsCache(key: string): Promise<boolean> {
 	const data = await loadFullPairingsCache(key).catch(() => undefined);
 	return !!data;
+}
+
+// Cache management utilities
+export async function getAllCacheKeys(store: 'pairings' | 'stats'): Promise<string[]> {
+	const db = await openDB();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(store, 'readonly');
+		const objectStore = tx.objectStore(store);
+		const request = objectStore.getAllKeys();
+		request.onsuccess = () => resolve(request.result as string[]);
+		request.onerror = () => reject(request.error);
+	});
+}
+
+export async function deleteCache(store: 'pairings' | 'stats', key: string): Promise<void> {
+	const db = await openDB();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(store, 'readwrite');
+		const deleteRequest = tx.objectStore(store).delete(key);
+		deleteRequest.onsuccess = () => resolve();
+		deleteRequest.onerror = () => reject(deleteRequest.error);
+	});
+}
+
+// User-specific cache management
+export async function purgeUserCache(userId: string | number): Promise<void> {
+	const userPrefix = `user:${userId}:`;
+	console.log(`Purging cache for user ${userId}...`);
+	
+	try {
+		// Purge pairings cache
+		const pairingsKeys = await getAllCacheKeys('pairings');
+		const userPairingsKeys = pairingsKeys.filter(key => key.startsWith(userPrefix));
+		console.log(`Found ${userPairingsKeys.length} pairing cache entries to purge`);
+		
+		for (const key of userPairingsKeys) {
+			await deleteCache('pairings', key);
+		}
+		
+		// Purge stats cache  
+		const statsKeys = await getAllCacheKeys('stats');
+		const userStatsKeys = statsKeys.filter(key => key.startsWith(userPrefix));
+		console.log(`Found ${userStatsKeys.length} stats cache entries to purge`);
+		
+		for (const key of userStatsKeys) {
+			await deleteCache('stats', key);
+		}
+		
+		console.log(`Cache purge completed for user ${userId}`);
+	} catch (error) {
+		console.error(`Failed to purge cache for user ${userId}:`, error);
+		throw error;
+	}
+}
+
+export async function clearAllCache(): Promise<void> {
+	console.log('Clearing all cache...');
+	try {
+		const db = await openDB();
+		
+		// Clear pairings
+		const pairingsTx = db.transaction('pairings', 'readwrite');
+		await new Promise<void>((resolve, reject) => {
+			const clearReq = pairingsTx.objectStore('pairings').clear();
+			clearReq.onsuccess = () => resolve();
+			clearReq.onerror = () => reject(clearReq.error);
+		});
+		
+		// Clear stats
+		const statsTx = db.transaction('stats', 'readwrite');
+		await new Promise<void>((resolve, reject) => {
+			const clearReq = statsTx.objectStore('stats').clear();
+			clearReq.onsuccess = () => resolve();
+			clearReq.onerror = () => reject(clearReq.error);
+		});
+		
+		console.log('All cache cleared');
+	} catch (error) {
+		console.error('Failed to clear all cache:', error);
+		throw error;
+	}
 }
 
 
