@@ -71,6 +71,31 @@ export class HybridOpenAIService {
         return await this.handleWithSummaryOnly(query);
       }
 
+      // If the user explicitly asks for "best" pairings, handle deterministically
+      const lowerMsg = query.message.toLowerCase();
+      if (lowerMsg.includes('best')) {
+        // Extract optional limit (e.g., "2 best" or "top 3")
+        const limitMatch = lowerMsg.match(/(?:^|\s)(?:top|best)\s*(\d{1,2})|(?:\b(\d{1,2})\b\s*best)/);
+        const limit = limitMatch ? parseInt(limitMatch[1] || limitMatch[2] || '5', 10) : 5;
+
+        // Extract pairing days (e.g., "5 day", "5-day")
+        const daysMatch = lowerMsg.match(/(\d+)[-\s]?day/);
+        const pairingDays = daysMatch ? parseInt(daysMatch[1], 10) : undefined;
+
+        // Infer criteria if explicitly mentioned
+        let criteria: 'credit' | 'efficiency' | 'hold_probability' | 'overall' = 'overall';
+        if (lowerMsg.includes('credit')) criteria = 'credit';
+        else if (lowerMsg.includes('efficiency') || lowerMsg.includes('efficient')) criteria = 'efficiency';
+        else if (lowerMsg.includes('hold')) criteria = 'hold_probability';
+
+        const directResult = await this.handleFunctionCall({
+          name: 'findBestPairings',
+          arguments: JSON.stringify({ pairingDays, limit, criteria })
+        } as any, query.bidPackageId);
+
+        return directResult;
+      }
+
       // Call OpenAI with tool_calls (replaces deprecated function_call)
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
@@ -775,6 +800,99 @@ export class HybridOpenAIService {
           truncated: false
         };
 
+      case 'findBestPairings':
+        const allPairingsForBest = await this.storage.getPairings(bidPackageId);
+        let bestPairings = allPairingsForBest;
+
+        // Filter by pairing days if specified
+        if (args.pairingDays) {
+          bestPairings = bestPairings.filter(p => p.pairingDays === args.pairingDays);
+        }
+
+        if (bestPairings.length === 0) {
+          return {
+            response: `No pairings found matching the criteria.`,
+            data: { pairings: [], totalFound: 0 },
+            truncated: false
+          };
+        }
+
+        // Parse hours and calculate efficiency
+        const parseHours = (timeStr: string) => {
+          if (!timeStr) return 0;
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours + (minutes || 0) / 60;
+        };
+
+        const analyzedPairings = bestPairings.map((p: any) => ({
+          pairingNumber: p.pairingNumber,
+          creditHours: parseHours(p.creditHours.toString()),
+          blockHours: parseHours(p.blockHours.toString()),
+          pairingDays: p.pairingDays || 1,
+          efficiency: parseHours(p.creditHours.toString()) / (parseHours(p.blockHours.toString()) || 1),
+          dailyPay: parseHours(p.creditHours.toString()) / (p.pairingDays || 1),
+          holdProbability: p.holdProbability || 0,
+          layovers: p.layovers || [],
+          route: p.route || 'N/A',
+          tafb: p.tafb || 'N/A'
+        })).filter(p => p.creditHours > 0);
+
+        // Sort by different criteria
+        let sortedBestPairings = [...analyzedPairings];
+        const limit = args.limit || 5;
+        const criteria = args.criteria || 'overall';
+
+        switch (criteria) {
+          case 'credit':
+            sortedBestPairings.sort((a, b) => b.creditHours - a.creditHours);
+            break;
+          case 'efficiency':
+            sortedBestPairings.sort((a, b) => b.efficiency - a.efficiency);
+            break;
+          case 'hold_probability':
+            sortedBestPairings.sort((a, b) => b.holdProbability - a.holdProbability);
+            break;
+          case 'overall':
+          default:
+            // Overall score: 40% credit, 30% efficiency, 20% hold probability, 10% daily pay
+            sortedBestPairings.sort((a, b) => {
+              const scoreA = (a.creditHours * 0.4) + (a.efficiency * 0.3) + (a.holdProbability * 0.2) + (a.dailyPay * 0.1);
+              const scoreB = (b.creditHours * 0.4) + (b.efficiency * 0.3) + (b.holdProbability * 0.2) + (b.dailyPay * 0.1);
+              return scoreB - scoreA;
+            });
+            break;
+        }
+
+        const topBestPairings = sortedBestPairings.slice(0, limit);
+        
+        // Generate detailed response
+        let responseText = `**Top ${Math.min(limit, topBestPairings.length)} Best ${args.pairingDays ? args.pairingDays + '-Day ' : ''}Pairings (${criteria} ranking):**\n\n`;
+        
+        topBestPairings.forEach((p, i) => {
+          responseText += `${i + 1}. **Pairing ${p.pairingNumber}**\n`;
+          responseText += `   • Credit: ${this.formatHoursDeltaPBS(p.creditHours)} | Block: ${this.formatHoursDeltaPBS(p.blockHours)}\n`;
+          responseText += `   • Efficiency: ${p.efficiency.toFixed(2)} | Hold: ${p.holdProbability}%\n`;
+          responseText += `   • Route: ${p.route.substring(0, 50)}...\n\n`;
+        });
+
+        responseText += `**Analysis Summary:**\n`;
+        responseText += `• Total ${args.pairingDays ? args.pairingDays + '-day ' : ''}pairings analyzed: ${analyzedPairings.length}\n`;
+        responseText += `• Ranking criteria: ${criteria}\n`;
+        responseText += `• Average credit: ${this.formatHoursDeltaPBS(analyzedPairings.reduce((sum, p) => sum + p.creditHours, 0) / analyzedPairings.length)}\n`;
+        responseText += `• Average efficiency: ${(analyzedPairings.reduce((sum, p) => sum + p.efficiency, 0) / analyzedPairings.length).toFixed(2)}\n`;
+
+        return {
+          response: responseText,
+          data: {
+            bestPairings: topBestPairings,
+            totalFound: analyzedPairings.length,
+            criteria: criteria,
+            pairingDays: args.pairingDays,
+            analysisType: 'Best Pairings Analysis'
+          },
+          truncated: topBestPairings.length < analyzedPairings.length
+        };
+
       case 'getLayoverAnalysis':
         const allPairingsForLayover = await this.storage.getPairings(bidPackageId);
         const targetCity = args.city;
@@ -921,6 +1039,14 @@ When provided with pairing data:
 - For 4-day pairing requests, focus on the 4-day pairings specifically
 - Provide practical bidding advice based on the data
 
+IMPORTANT FOR "BEST" PAIRING REQUESTS:
+- When asked for "best" pairings, use the findBestPairings function
+- Always analyze and rank by multiple criteria (credit, efficiency, hold probability, overall score)
+- Provide specific reasoning for why each pairing is recommended
+- If asked for a specific number (e.g., "2 best"), limit your response to that number
+- Explain the ranking criteria used
+- Be specific about what makes each pairing desirable
+
 CRITICAL FOR LAYOVER QUERIES:
 - When a specific city is mentioned (e.g., "layovers in DFW"), ONLY show layovers in that exact city
 - If the data is filtered for a specific city, confirm this in your response (e.g., "The longest layovers in DFW are:")
@@ -992,6 +1118,21 @@ Use the backend-processed summaries to provide accurate analysis within token li
               city: { type: "string", description: "3-letter airport code (e.g., DFW, ATL)" },
               count: { type: "number", description: "Number of layovers to return (default 10)" },
               minDuration: { type: "number", description: "Minimum layover duration in hours" }
+            }
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "findBestPairings",
+          description: "Find the best pairings based on multiple criteria like credit hours, efficiency, hold probability, and layover quality",
+          parameters: {
+            type: "object",
+            properties: {
+              pairingDays: { type: "number", description: "Filter by number of pairing days (1, 2, 3, 4, 5, etc.)" },
+              limit: { type: "number", description: "Number of top pairings to return (default: 5)" },
+              criteria: { type: "string", description: "Primary criteria for ranking: 'credit', 'efficiency', 'hold_probability', or 'overall'" }
             }
           }
         }

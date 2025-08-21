@@ -678,7 +678,7 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post("/api/askAssistant", async (req, res) => {
     try {
-      const { question, bidPackageId } = req.body;
+      const { question, bidPackageId, seniorityPercentile } = req.body;
 
       if (!question) {
         return res.status(400).json({ message: "Question is required" });
@@ -697,51 +697,70 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      // Try hybrid analysis service first (handles token limits)
+      // Route based on intent; ensure DB-backed results for "best/top" queries
       if (finalBidPackageId) {
-        try {
-          const { hybridService } = await import("./openai");
-          const result = await hybridService.analyzeQuery({
-            message: question,
-            bidPackageId: finalBidPackageId
-          });
+        // Prepend seniority context for analysis if provided
+        const enrichedQuestion = typeof seniorityPercentile === 'number'
+          ? `User seniority: ${seniorityPercentile}%. ${question}`
+          : question;
+        const lowerQ = question.toLowerCase();
+        const isBestQuery = lowerQ.includes("best") || lowerQ.includes("top");
 
-          res.json({
-            reply: result.response,
-            data: result.data,
-            truncated: result.truncated
-          });
-          return;
-        } catch (hybridError) {
-          console.log("Hybrid service failed, trying legacy analysis:", hybridError);
-
-          // If it's a rate limit error, provide a specific message
-          if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof hybridError.message === 'string' && hybridError.message.includes('rate_limit_exceeded')) {            res.json({
-              reply: "I'm experiencing high demand right now. Please try your question again in a moment, or try asking for more specific information to reduce the processing load."
-            });
-            return;
-          }
-
-          // If it's a token limit error, provide helpful guidance
-          if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof hybridError.message === 'string' && hybridError.message.includes('context_length_exceeded')) {            res.json({
-              reply: "This query involves too much data to process at once. Please refine your search with more specific filters, such as:\n\n• 'Show me high credit 3-day pairings'\n• 'Find efficient turns with good hold probability'\n• 'Analyze layovers in DFW'\n\nThis will help me provide more detailed insights."
-            });
-            return;
-          }
-
-          // Try the legacy analysis service as fallback
+        // Prefer hybrid for "best/top" to guarantee real pairing numbers
+        if (isBestQuery) {
           try {
-            const { PairingAnalysisService } = await import("./openai");
-            const analysisService = new PairingAnalysisService();
-            const result = await analysisService.analyzeQuery({
-              message: question,
+            const { HybridOpenAIService } = await import("./openaiHybrid");
+            const hybridService = new HybridOpenAIService(storage);
+            const result = await hybridService.analyzeQuery({
+              message: enrichedQuestion,
               bidPackageId: finalBidPackageId
-            }, storage);
+            });
 
-            res.json({ reply: result.response, data: result.data });
+            res.json({ reply: result.response, data: result.data, truncated: result.truncated });
             return;
-          } catch (legacyError) {
-            console.log("Legacy analysis also failed, falling back to basic assistant:", legacyError);
+          } catch (hybridError) {
+            console.log("Hybrid (best/top) failed, falling back to natural analysis:", hybridError);
+          }
+        }
+
+        // Natural-language-first for everything else or as fallback
+        try {
+          const { PairingAnalysisService } = await import("./openai");
+          const analysisService = new PairingAnalysisService();
+          const result = await analysisService.analyzeQuery({
+            message: enrichedQuestion,
+            bidPackageId: finalBidPackageId
+          }, storage);
+
+          res.json({ reply: result.response, data: result.data });
+          return;
+        } catch (analysisError) {
+          console.log("Natural analysis failed, falling back to hybrid optimizer:", analysisError);
+
+          try {
+            const { HybridOpenAIService } = await import("./openaiHybrid");
+            const hybridService = new HybridOpenAIService(storage);
+            const result = await hybridService.analyzeQuery({
+              message: enrichedQuestion,
+              bidPackageId: finalBidPackageId
+            });
+
+            res.json({ reply: result.response, data: result.data, truncated: result.truncated });
+            return;
+          } catch (hybridError) {
+            console.log("Hybrid optimizer also failed, providing guidance:", hybridError);
+
+            if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof (hybridError as any).message === 'string') {
+              const msg = (hybridError as any).message as string;
+              if (msg.includes('rate_limit_exceeded')) {
+                res.json({ reply: "I'm experiencing high demand right now. Please try again in a moment." });
+                return;
+              }
+              if (msg.includes('context_length_exceeded')) {
+                res.json({ reply: "This request is very large. Try narrowing your question (e.g., by day count or destination) and I'll go deeper." });
+                return;
+              }
+            }
           }
         }
       }

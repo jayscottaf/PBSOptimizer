@@ -432,7 +432,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   };
 
   return (
-    <div className="flex h-[600px]">
+    <div className="flex h-full">
       {/* Conversation Sidebar */}
       {showConversations && (
         <Card className="w-80 mr-4 flex flex-col">
@@ -481,8 +481,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       )}
 
       {/* Main Chat Interface */}
-      <Card className="flex-1 flex flex-col">
-        <CardHeader className="pb-4">
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="pb-4 flex-shrink-0">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Bot className="h-5 w-5 text-blue-600" />
@@ -515,9 +515,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col p-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 space-y-4">
+          <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-4">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -571,7 +571,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           </div>
 
           {/* Input */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 flex-shrink-0">
             <form onSubmit={handleSubmit} className="flex space-x-2">
               <Input
                 value={input}

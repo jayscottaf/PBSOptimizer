@@ -280,9 +280,20 @@ export const api = {
 
   // AI Chat Analysis
   async analyzePairings(question: string, bidPackageId?: number) {
-    // Include bidPackageId in the question context if provided
-    const contextualQuestion = bidPackageId
-      ? `Analyzing bid package #${bidPackageId}: ${question}`
+    // Include bidPackageId and seniority context automatically
+    let seniorityFromLocal: string | null = null;
+    try {
+      if (typeof window !== 'undefined') {
+        seniorityFromLocal = localStorage.getItem('seniorityPercentile');
+      }
+    } catch {}
+
+    const prefixParts: string[] = [];
+    if (bidPackageId) prefixParts.push(`Bid package #${bidPackageId}`);
+    if (seniorityFromLocal) prefixParts.push(`User seniority ${seniorityFromLocal}%`);
+
+    const contextualQuestion = prefixParts.length
+      ? `${prefixParts.join(' | ')}: ${question}`
       : question;
 
     const response = await fetch('/api/askAssistant', {
@@ -290,7 +301,7 @@ export const api = {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ question: contextualQuestion }),
+      body: JSON.stringify({ question: contextualQuestion, bidPackageId, seniorityPercentile: seniorityFromLocal ? parseFloat(seniorityFromLocal) : undefined }),
     });
 
     if (!response.ok) {
