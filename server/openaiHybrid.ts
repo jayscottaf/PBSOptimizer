@@ -958,19 +958,19 @@ export class HybridOpenAIService {
         });
 
         // Format the response with actual layover details
-        let responseText = `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}.`;
+        let layoverResponseText = `Found ${allLayovers.length} layovers${targetCity ? ` in ${targetCity}` : ''}${minDuration > 0 ? ` longer than ${minDuration} hours` : ''}.`;
 
         if (sortedLayovers.length > 0) {
-          responseText += `\n\nLayover Details:\n`;
+          layoverResponseText += `\n\nLayover Details:\n`;
           sortedLayovers.forEach((layover, index) => {
-            responseText += `${index + 1}. Pairing ${layover.pairingNumber}: ${layover.city} layover (${layover.duration} hours)${layover.hotel ? ` at ${layover.hotel}` : ''}\n`;
+            layoverResponseText += `${index + 1}. Pairing ${layover.pairingNumber}: ${layover.city} layover (${layover.duration} hours)${layover.hotel ? ` at ${layover.hotel}` : ''}\n`;
           });
         } else {
-          responseText += ` No layovers found matching your criteria.`;
+          layoverResponseText += ` No layovers found matching your criteria.`;
         }
 
         return {
-          response: responseText,
+          response: layoverResponseText,
           data: {
             targetCity,
             longestLayovers: sortedLayovers.map(layover => ({
