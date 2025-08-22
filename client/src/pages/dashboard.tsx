@@ -794,9 +794,10 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-2 sm:w-auto">
+                  <TabsList className="grid grid-cols-3 lg:grid-cols-2 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                    <TabsTrigger value="ai-assistant" className="lg:hidden">AI Assistant</TabsTrigger>
                   </TabsList>
                   <Button 
                     variant="ghost" 
@@ -816,11 +817,21 @@ export default function Dashboard() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => setShowAIAssistant(true)}
-                    className="flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md"
+                    onClick={() => {
+                      // On mobile: switch to AI Assistant tab
+                      // On desktop: open AI Assistant modal
+                      if (window.innerWidth < 1024) { // lg breakpoint
+                        setActiveTab("ai-assistant");
+                      } else {
+                        setShowAIAssistant(true);
+                      }
+                    }}
+                    className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md ${
+                      activeTab === "ai-assistant" ? "bg-green-50 border-green-300 text-green-700" : "text-green-600"
+                    }`}
                     title="AI Assistant"
                   >
-                    <Bot className="h-4 w-4 text-green-600 hover:text-green-700" />
+                    <Bot className="h-4 w-4 hover:text-green-700" />
                   </Button>
 
                   <Button 
@@ -1097,6 +1108,35 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
+            </TabsContent>
+
+            {/* AI Assistant Tab - Mobile Only */}
+            <TabsContent value="ai-assistant" className="flex-1 overflow-hidden lg:hidden">
+              <div className="h-full flex flex-col">
+                <div className="flex-shrink-0 pb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Bot className="h-5 w-5 text-green-600" />
+                    <h2 className="text-lg font-semibold">PBS AI Assistant</h2>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Ask questions about your pairings, get bidding recommendations, and analyze your options
+                  </p>
+                </div>
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {currentUser && latestBidPackage ? (
+                    <PairingChat 
+                      bidPackageId={bidPackageId}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p>Upload a bid package to start using the AI assistant</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
