@@ -912,34 +912,7 @@ export default function Dashboard() {
             <TabsContent value="dashboard" className="flex-1 overflow-hidden">
               <div className="space-y-6 h-full">
 
-                {/* Mobile Filters - Only show on mobile when we have data */}
-                {bidPackageId && (
-                  <div className="lg:hidden">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Settings className="h-5 w-5" />
-                            Smart Filters
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
-                            {showFilters ? 'Hide' : 'Show'}
-                          </Button>
-                        </CardTitle>
-                      </CardHeader>
-                      {showFilters && (
-                        <CardContent>
-                          <SmartFilterSystem
-                            pairings={displayPairings || []}
-                            onFiltersChange={handleFiltersChange}
-                            activeFilters={activeFilters}
-                            onClearFilters={clearAllFilters}
-                          />
-                        </CardContent>
-                      )}
-                    </Card>
-                  </div>
-                )}
+                {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
                 {/* Smart Filters - Always visible above pairing results */}
                 {bidPackageId && (
