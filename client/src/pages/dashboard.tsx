@@ -941,9 +941,9 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Desktop Filters - Only show on desktop */}
-                {!sidebarCollapsed && bidPackageId && (
-                  <Card className="hidden lg:block">
+                {/* Smart Filters - Always visible above pairing results */}
+                {bidPackageId && (
+                  <Card className="mb-4">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Settings className="h-5 w-5" />
