@@ -340,6 +340,52 @@ export default function Dashboard() {
     return pagination;
   }, [isFullCacheReady, fullLocal, sortColumn, currentPage, pageSize, pagination]);
 
+  // Calculate full dataset statistics when using offline cache
+  const effectiveStatistics = React.useMemo(() => {
+    if (isFullCacheReady && fullLocal && fullLocal.length > 0) {
+      // Helper function to parse hours safely
+      const parseHours = (hours: any): number => {
+        if (typeof hours === 'number') return hours;
+        if (typeof hours === 'string') return parseFloat(hours) || 0;
+        return 0;
+      };
+
+      const getHoldProb = (value: any): number => 
+        typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+
+      // Calculate stats from full dataset
+      const highCredit = fullLocal.filter(p => parseHours(p.creditHours) >= 18).length;
+      const likelyToHold = fullLocal.filter(p => getHoldProb(p.holdProbability) >= 70).length;
+
+      // Calculate ratio breakdown from full dataset
+      const ratioBreakdown = fullLocal.reduce((acc, pairing) => {
+        const credit = parseHours(pairing.creditHours);
+        const block = parseHours(pairing.blockHours);
+        const ratio = block > 0 ? credit / block : 0;
+
+        if (ratio >= 1.3) {
+          acc.excellent++;
+        } else if (ratio >= 1.2) {
+          acc.good++;
+        } else if (ratio >= 1.1) {
+          acc.average++;
+        } else {
+          acc.poor++;
+        }
+        return acc;
+      }, { excellent: 0, good: 0, average: 0, poor: 0 });
+
+      return {
+        highCredit,
+        likelyToHold,
+        ratioBreakdown
+      };
+    }
+    
+    // Fall back to server statistics when not using full cache
+    return pairingsResponse?.statistics as any;
+  }, [isFullCacheReady, fullLocal, pairingsResponse?.statistics]);
+
   // Debug logs removed after verification
 
   // Query for user's favorites with enhanced caching
@@ -718,8 +764,8 @@ export default function Dashboard() {
                   <StatsPanel 
                     pairings={displayPairings || []} 
                     bidPackage={latestBidPackage} 
-                    pagination={pagination}
-                    statistics={pairingsResponse?.statistics as any}
+                    pagination={effectivePagination}
+                    statistics={effectiveStatistics}
                   />
                 </div>
               )}
@@ -822,7 +868,12 @@ export default function Dashboard() {
                     </CardHeader>
                     {showQuickStats && (
                       <CardContent>
-                        <StatsPanel pairings={displayPairings || []} bidPackage={latestBidPackage} />
+                        <StatsPanel 
+                          pairings={displayPairings || []} 
+                          bidPackage={latestBidPackage}
+                          pagination={effectivePagination}
+                          statistics={effectiveStatistics}
+                        />
                       </CardContent>
                     )}
                   </Card>
