@@ -98,6 +98,34 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
+  // Ensure critical PWA assets resolve even if not emitted to dist/public
+  // Serve from source client directory as a fallback in production
+  const clientPath = path.resolve(import.meta.dirname, "..", "client");
+  app.get(["/manifest.webmanifest"], (_req, res, next) => {
+    const filePath = path.resolve(distPath, "manifest.webmanifest");
+    fs.existsSync(filePath)
+      ? res.sendFile(filePath)
+      : res.type("application/manifest+json").sendFile(path.resolve(clientPath, "manifest.webmanifest"));
+  });
+  app.get(["/favicon.ico"], (_req, res, next) => {
+    const filePath = path.resolve(distPath, "favicon.ico");
+    fs.existsSync(filePath)
+      ? res.sendFile(filePath)
+      : res.sendFile(path.resolve(clientPath, "favicon.ico"));
+  });
+  app.get(["/sw.js"], (_req, res, next) => {
+    const filePath = path.resolve(distPath, "sw.js");
+    fs.existsSync(filePath)
+      ? res.sendFile(filePath)
+      : res.type("application/javascript").sendFile(path.resolve(clientPath, "sw.js"));
+  });
+  app.use("/icons", express.static(fs.existsSync(path.resolve(distPath, "icons"))
+    ? path.resolve(distPath, "icons")
+    : path.resolve(clientPath, "icons")));
+  app.use("/screenshots", express.static(fs.existsSync(path.resolve(distPath, "screenshots"))
+    ? path.resolve(distPath, "screenshots")
+    : path.resolve(clientPath, "screenshots")));
+
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
