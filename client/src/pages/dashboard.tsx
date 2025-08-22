@@ -805,9 +805,8 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-2 sm:w-auto">
+                  <TabsList className="grid grid-cols-1 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-                    <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
                   <Button 
                     variant="ghost" 
@@ -823,6 +822,14 @@ export default function Dashboard() {
                     className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
                   >
                     <Star className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setActiveTab("calendar")}
+                    className={`${activeTab === "calendar" ? "bg-blue-50 text-blue-700" : "text-gray-600"}`}
+                  >
+                    <Calendar className="h-4 w-4" />
                   </Button>
                   <Button 
                     variant="outline" 
