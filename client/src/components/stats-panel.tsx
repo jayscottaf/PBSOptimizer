@@ -168,7 +168,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
-            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold</div>
+            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold (≥70%)</div>
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
@@ -275,7 +275,7 @@ export function StatsPanel({ pairings, bidPackage, hideHeader = false, paginatio
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
-            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold</div>
+            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold (≥70%)</div>
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">{stats.highCredit}</div>
