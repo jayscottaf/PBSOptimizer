@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, jsonb, varchar, json, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -60,7 +60,10 @@ export const userFavorites = pgTable("user_favorites", {
   userId: integer("user_id").references(() => users.id).notNull(),
   pairingId: integer("pairing_id").references(() => pairings.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate favorites
+  uniqueUserPairing: unique("unique_user_pairing_favorite").on(table.userId, table.pairingId),
+}));
 
 export const chatHistory = pgTable("chat_history", {
   id: serial("id").primaryKey(),

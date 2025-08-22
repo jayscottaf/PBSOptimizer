@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { X, Heart, Calendar } from "lucide-react";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,6 +36,31 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     queryFn: () => pairing ? api.getBidHistory(pairing.pairingNumber) : Promise.resolve([]),
     enabled: !!pairing,
   });
+
+  // Check if this pairing is already in user's favorites
+  const { data: userFavorites = [] } = useQuery({
+    queryKey: ["favorites"],
+    queryFn: async () => {
+      try {
+        const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
+        const base = localStorage.getItem('base') || "NYC";
+        const aircraft = localStorage.getItem('aircraft') || "A220";
+        const user = await api.createOrUpdateUser({ seniorityNumber: parseInt(seniorityNumber), base, aircraft });
+        return await api.getFavorites(user.id);
+      } catch (error) {
+        return [];
+      }
+    },
+    enabled: !!pairingId,
+  });
+
+  // Update isFavorited state when favorites data changes
+  useEffect(() => {
+    if (userFavorites && pairingId) {
+      const isAlreadyFavorited = userFavorites.some((fav: any) => fav.id === pairingId);
+      setIsFavorited(isAlreadyFavorited);
+    }
+  }, [userFavorites, pairingId]);
 
   // Add to calendar mutation
   const addToCalendarMutation = useMutation({
@@ -373,8 +398,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             variant="outline" 
             size="sm"
             className="w-full sm:w-auto"
-            disabled={isAddingFavorite}
+            disabled={isAddingFavorite || isFavorited}
             onClick={async () => {
+              if (isFavorited) return; // Prevent double-adding
+              
               try {
                 setIsAddingFavorite(true);
                 const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
@@ -384,7 +411,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 await api.addFavorite(user.id, pairingId);
                 setIsFavorited(true);
                 queryClient.invalidateQueries({ queryKey: ["favorites", user.id] });
+                queryClient.invalidateQueries({ queryKey: ["favorites"] }); // Also invalidate the modal's favorites query
               } catch (error) {
+                console.error('Error adding favorite:', error);
                 setIsFavorited(false);
               } finally {
                 setIsAddingFavorite(false);

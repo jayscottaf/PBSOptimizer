@@ -684,6 +684,23 @@ if (filters.tafbMax !== undefined) {
   }
 
   async addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite> {
+    // Check if favorite already exists
+    const existing = await db
+      .select()
+      .from(userFavorites)
+      .where(
+        and(
+          eq(userFavorites.userId, favorite.userId),
+          eq(userFavorites.pairingId, favorite.pairingId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Return existing favorite instead of creating duplicate
+      return existing[0];
+    }
+
     const [newFavorite] = await db
       .insert(userFavorites)
       .values(favorite)

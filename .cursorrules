@@ -1,0 +1,39 @@
+# PBS Optimizer - Cursor AI Rules
+
+## Project Context
+This is a Delta Airlines PBS (Preferential Bidding System) optimization app that helps pilots analyze and bid on flight pairings.
+
+## Development Guidelines
+- Follow the user's preference for automatic background data prefetching instead of explicit UI actions
+- Implement one fix at a time in priority order
+- Always review entire files before making suggestions
+- Number tasks with position and total count (e.g., '(2 of x)')
+- Prefer thorough review over quick fixes
+
+## Architecture Notes
+- React + TypeScript frontend with Vite
+- Node.js + Express backend with Drizzle ORM
+- PostgreSQL database (Neon serverless)
+- PWA with offline-first capabilities
+- Tailwind CSS + shadcn/ui components
+
+## Future Enhancement Ideas
+- Voice command integration for accessibility
+- Advanced analytics dashboard with trend analysis
+- Integration with airline crew scheduling systems
+- Machine learning for bid strategy optimization
+- Multi-airline support beyond Delta
+- Real-time collaboration features for crew coordination
+- Mobile app version with push notifications
+- Integration with calendar apps (Google Calendar, Outlook)
+- Advanced filtering by route preferences
+- Historical bidding success rate tracking
+
+## Technical Debt & Improvements
+- Implement comprehensive error boundaries
+- Add unit and integration test coverage
+- Optimize bundle size and loading performance
+- Implement proper logging and monitoring
+- Add performance metrics tracking
+- Enhance accessibility compliance (WCAG 2.1)
+- Implement proper CI/CD pipeline
