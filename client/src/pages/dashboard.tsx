@@ -90,26 +90,36 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [filters]);
   const [seniorityNumber, setSeniorityNumber] = useState(() => {
-    return localStorage.getItem('seniorityNumber') || "15860";
+    return localStorage.getItem('seniorityNumber') || '';
   });
   const [seniorityPercentile, setSeniorityPercentile] = useState(() => {
     return localStorage.getItem('seniorityPercentile') || '';
   });
   const [isUpdatingSeniority, setIsUpdatingSeniority] = useState(false);
   const [base, setBase] = useState(() => {
-    return localStorage.getItem('base') || "NYC";
+    return localStorage.getItem('base') || '';
   });
   const [aircraft, setAircraft] = useState(() => {
-    return localStorage.getItem('aircraft') || "A220";
+    return localStorage.getItem('aircraft') || '';
   });
 
-  // Save user info to localStorage when it changes
+  // Track if this is the initial load to prevent overwriting saved values
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Mark as initialized after first render
   React.useEffect(() => {
-    localStorage.setItem('seniorityNumber', seniorityNumber);
-    localStorage.setItem('seniorityPercentile', seniorityPercentile);
-    localStorage.setItem('base', base);
-    localStorage.setItem('aircraft', aircraft);
-  }, [seniorityNumber, seniorityPercentile, base, aircraft]);
+    setHasInitialized(true);
+  }, []);
+
+  // Save user info to localStorage when it changes (but not on initial load)
+  React.useEffect(() => {
+    if (hasInitialized) {
+      localStorage.setItem('seniorityNumber', seniorityNumber);
+      localStorage.setItem('seniorityPercentile', seniorityPercentile);
+      localStorage.setItem('base', base);
+      localStorage.setItem('aircraft', aircraft);
+    }
+  }, [seniorityNumber, seniorityPercentile, base, aircraft, hasInitialized]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
