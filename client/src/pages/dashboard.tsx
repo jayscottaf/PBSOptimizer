@@ -119,6 +119,7 @@ export default function Dashboard() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [showMobileAI, setShowMobileAI] = useState(false);
 
 
   // Sidebar collapsed state
@@ -794,10 +795,9 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-3 lg:grid-cols-2 sm:w-auto">
+                  <TabsList className="grid grid-cols-2 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
-                    <TabsTrigger value="ai-assistant" className="lg:hidden">AI Assistant</TabsTrigger>
                   </TabsList>
                   <Button 
                     variant="ghost" 
@@ -818,16 +818,16 @@ export default function Dashboard() {
                     variant="outline" 
                     size="sm"
                     onClick={() => {
-                      // On mobile: switch to AI Assistant tab
+                      // On mobile: show full-screen AI view
                       // On desktop: open AI Assistant modal
                       if (window.innerWidth < 1024) { // lg breakpoint
-                        setActiveTab("ai-assistant");
+                        setShowMobileAI(true);
                       } else {
                         setShowAIAssistant(true);
                       }
                     }}
                     className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md ${
-                      activeTab === "ai-assistant" ? "bg-green-50 border-green-300 text-green-700" : "text-green-600"
+                      showMobileAI ? "bg-green-50 border-green-300 text-green-700" : "text-green-600"
                     }`}
                     title="AI Assistant"
                   >
@@ -1110,34 +1110,7 @@ export default function Dashboard() {
               )}
             </TabsContent>
 
-            {/* AI Assistant Tab - Mobile Only */}
-            <TabsContent value="ai-assistant" className="flex-1 overflow-hidden lg:hidden">
-              <div className="h-full flex flex-col">
-                <div className="flex-shrink-0 pb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Bot className="h-5 w-5 text-green-600" />
-                    <h2 className="text-lg font-semibold">PBS AI Assistant</h2>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Ask questions about your pairings, get bidding recommendations, and analyze your options
-                  </p>
-                </div>
-                <div className="flex-1 overflow-hidden min-h-0">
-                  {currentUser && latestBidPackage ? (
-                    <PairingChat 
-                      bidPackageId={bidPackageId}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <div className="text-center">
-                        <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                        <p>Upload a bid package to start using the AI assistant</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </TabsContent>
+
           </Tabs>
         </div>
       </div>
@@ -1253,7 +1226,51 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-
+      {/* Mobile AI Assistant Full Screen - Only on Mobile */}
+      {showMobileAI && (
+        <div className="fixed inset-0 z-50 bg-white lg:hidden">
+          <div className="h-full flex flex-col">
+            {/* Header with close button */}
+            <div className="flex-shrink-0 p-4 border-b bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-green-600" />
+                  <h1 className="text-lg font-semibold">PBS AI Assistant</h1>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowMobileAI(false)}
+                  className="p-2"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Ask questions about your pairings, get bidding recommendations, and analyze your options
+              </p>
+            </div>
+            
+            {/* Chat content */}
+            <div className="flex-1 overflow-hidden min-h-0 bg-gray-50">
+              {currentUser && latestBidPackage ? (
+                <div className="h-full">
+                  <PairingChat 
+                    bidPackageId={bidPackageId}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p>Upload a bid package to start using the AI assistant</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Profile Modal (moved inside the Profile tab content for better UX) */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
