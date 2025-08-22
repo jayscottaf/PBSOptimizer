@@ -383,7 +383,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 const user = await api.createOrUpdateUser({ seniorityNumber: parseInt(seniorityNumber), base, aircraft });
                 await api.addFavorite(user.id, pairingId);
                 setIsFavorited(true);
-                queryClient.invalidateQueries({ queryKey: ["favorites", seniorityNumber] });
+                queryClient.invalidateQueries({ queryKey: ["favorites", user.id] });
               } catch (error) {
                 setIsFavorited(false);
               } finally {
