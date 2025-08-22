@@ -41,6 +41,26 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  
+  // In development, explicitly serve only static assets that are not handled by Vite
+  // so that Vite can still inject its preamble into index.html.
+  const clientPath = path.resolve(import.meta.dirname, "..", "client");
+  
+  // PWA assets
+  app.get(["/manifest.webmanifest"], (_req, res) => {
+    res.sendFile(path.resolve(clientPath, "manifest.webmanifest"));
+  });
+  app.get(["/favicon.ico"], (_req, res) => {
+    res.sendFile(path.resolve(clientPath, "favicon.ico"));
+  });
+  app.get(["/sw.js"], (_req, res) => {
+    res.sendFile(path.resolve(clientPath, "sw.js"));
+  });
+  
+  // Icons and screenshots directories
+  app.use("/icons", express.static(path.resolve(clientPath, "icons")));
+  app.use("/screenshots", express.static(path.resolve(clientPath, "screenshots")));
+  
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
