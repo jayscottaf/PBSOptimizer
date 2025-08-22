@@ -1230,40 +1230,31 @@ export default function Dashboard() {
       {showMobileAI && (
         <div className="fixed inset-0 z-50 bg-white lg:hidden">
           <div className="h-full flex flex-col">
-            {/* Header with close button */}
-            <div className="flex-shrink-0 p-4 border-b bg-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-green-600" />
-                  <h1 className="text-lg font-semibold">PBS AI Assistant</h1>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setShowMobileAI(false)}
-                  className="p-2"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                Ask questions about your pairings, get bidding recommendations, and analyze your options
-              </p>
+            {/* Minimal header with just close button */}
+            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b bg-white">
+              <h1 className="text-base font-medium">AI Assistant</h1>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowMobileAI(false)}
+                className="p-1 h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
             
-            {/* Chat content */}
-            <div className="flex-1 overflow-hidden min-h-0 bg-gray-50">
+            {/* Chat content - takes full remaining space */}
+            <div className="flex-1 overflow-hidden">
               {currentUser && latestBidPackage ? (
-                <div className="h-full">
-                  <PairingChat 
-                    bidPackageId={bidPackageId}
-                  />
-                </div>
+                <PairingChat 
+                  bidPackageId={bidPackageId}
+                  compact={true}
+                />
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="flex items-center justify-center h-full text-gray-500 p-4">
                   <div className="text-center">
-                    <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <p>Upload a bid package to start using the AI assistant</p>
+                    <Bot className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">Upload a bid package to start</p>
                   </div>
                 </div>
               )}

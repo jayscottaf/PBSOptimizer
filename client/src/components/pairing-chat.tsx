@@ -26,9 +26,10 @@ interface ConversationSummary {
 
 interface PairingChatProps {
   bidPackageId?: number;
+  compact?: boolean; // For mobile optimization
 }
 
-export function PairingChat({ bidPackageId }: PairingChatProps) {
+export function PairingChat({ bidPackageId, compact = false }: PairingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -433,8 +434,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   return (
     <div className="flex h-full">
-      {/* Conversation Sidebar */}
-      {showConversations && (
+      {/* Conversation Sidebar - Hidden in compact mode */}
+      {!compact && showConversations && (
         <Card className="w-80 mr-4 flex flex-col">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
@@ -494,22 +495,25 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               )}
             </div>
             <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowConversations(!showConversations)}
-                title="Show conversations"
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
+              {!compact && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowConversations(!showConversations)}
+                  title="Show conversations"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={startNewConversation}
                 title="Start a new conversation"
+                className={compact ? "px-2" : ""}
               >
                 <Plus className="h-4 w-4" />
-                New Conversation
+                {!compact && "New Conversation"}
               </Button>
             </div>
           </CardTitle>
@@ -517,7 +521,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
         <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 space-y-4 pb-4">
+          <div className={`flex-1 overflow-y-auto space-y-4 pb-4 ${compact ? 'px-2' : 'px-4'}`}>
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -571,7 +575,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           </div>
 
           {/* Input */}
-          <div className="border-t p-4 flex-shrink-0">
+          <div className={`border-t flex-shrink-0 ${compact ? 'p-2' : 'p-4'}`}>
             <form onSubmit={handleSubmit} className="flex space-x-2">
               <Input
                 value={input}
@@ -590,7 +594,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
             </form>
 
             {!currentBidPackage && (
-              <div className="mt-2 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+              <div className={`text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded ${compact ? 'mt-1' : 'mt-2'}`}>
                 Upload a bid package to enable full analysis capabilities
               </div>
             )}
