@@ -11,7 +11,7 @@ export class OpenAIAssistantService {
   async askPBSAssistant(question: string): Promise<string> {
     try {
       console.log('Starting PBS Assistant chat completion...');
-      
+
       // Validate API key exists
       if (!process.env.OPENAI_API_KEY) {
         throw new Error('OPENAI_API_KEY environment variable is not set');
@@ -19,10 +19,10 @@ export class OpenAIAssistantService {
 
       // Use chat completion instead of Assistant API
       const completion = await openai.chat.completions.create({
-        model: "gpt-4",
+        model: 'gpt-4',
         messages: [
           {
-            role: "system",
+            role: 'system',
             content: `You are an expert Delta Airlines pilot bid analysis assistant specializing in PBS (Preferential Bidding System). You help pilots understand their bid packages, analyze pairings, and make informed bidding decisions.
 
 TERMINOLOGY:
@@ -43,15 +43,15 @@ ANALYSIS CAPABILITIES:
 - Identify high-value vs efficient pairings
 - Explain bidding strategies
 
-Provide helpful, conversational responses with clear explanations. When discussing specific pairings, reference their key metrics (credit hours, block time, TAFB, layovers).`
+Provide helpful, conversational responses with clear explanations. When discussing specific pairings, reference their key metrics (credit hours, block time, TAFB, layovers).`,
           },
           {
-            role: "user",
-            content: question
-          }
+            role: 'user',
+            content: question,
+          },
         ],
         max_tokens: 1000,
-        temperature: 0.7
+        temperature: 0.7,
       });
 
       const response = completion.choices[0]?.message?.content;
@@ -59,18 +59,29 @@ Provide helpful, conversational responses with clear explanations. When discussi
         throw new Error('No response from OpenAI');
       }
 
-      console.log('Chat completion response received:', response.substring(0, 100) + '...');
+      console.log(
+        'Chat completion response received:',
+        response.substring(0, 100) + '...'
+      );
       return response;
-
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('OpenAI Chat Completion error:', error);
       // Return a more helpful error message
-      if (error.message.includes('API key')) {
-        throw new Error('OpenAI API key is missing or invalid. Please check your configuration.');
-      } else if (error.message.includes('rate limit')) {
-        throw new Error('OpenAI rate limit exceeded. Please try again in a moment.');
+      if (error instanceof Error && error.message.includes('API key')) {
+        throw new Error(
+          'OpenAI API key is missing or invalid. Please check your configuration.'
+        );
+      } else if (
+        error instanceof Error &&
+        error.message.includes('rate limit')
+      ) {
+        throw new Error(
+          'OpenAI rate limit exceeded. Please try again in a moment.'
+        );
       } else {
-        throw new Error(`Failed to get response from PBS Assistant: ${error.message}`);
+        throw new Error(
+          `Failed to get response from PBS Assistant: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
   }

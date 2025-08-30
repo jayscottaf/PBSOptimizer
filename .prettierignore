@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+uploads/
+migrations/
+package-lock.json
+*.min.js
+*.min.css
+CLAUDE.md
+README.md

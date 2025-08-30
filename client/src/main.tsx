@@ -1,7 +1,12 @@
-import { createRoot } from "react-dom/client";
-import App from "./App";
-import "./index.css";
-import { queryClient, clearAllCache, clearPairingCache, refreshAllData } from "./lib/queryClient";
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+import {
+  queryClient,
+  clearAllCache,
+  clearPairingCache,
+  refreshAllData,
+} from './lib/queryClient';
 
 // Development utilities - available in browser console
 if (import.meta.env.DEV) {
@@ -13,15 +18,17 @@ if (import.meta.env.DEV) {
       const cache = queryClient.getQueryCache().getAll();
       console.log('🔍 Cache inspection:', {
         totalQueries: cache.length,
-        queries: cache.map(q => ({ 
-          key: q.queryKey, 
+        queries: cache.map(q => ({
+          key: q.queryKey,
           state: q.state.status,
-          lastUpdated: q.state.dataUpdatedAt ? new Date(q.state.dataUpdatedAt).toLocaleTimeString() : 'never'
-        }))
+          lastUpdated: q.state.dataUpdatedAt
+            ? new Date(q.state.dataUpdatedAt).toLocaleTimeString()
+            : 'never',
+        })),
       });
-    }
+    },
   };
   console.log('🛠️ Cache utilities available: window.debugCache');
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById('root')!).render(<App />);

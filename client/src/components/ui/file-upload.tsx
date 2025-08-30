@@ -1,8 +1,8 @@
-import { useState, useRef } from "react";
-import { Button } from "./button";
-import { CloudUpload } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/api";
+import { useState, useRef } from 'react';
+import { Button } from './button';
+import { CloudUpload } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 interface FileUploadProps {
   onUpload: (file: File) => void;
@@ -27,7 +27,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       handleFile(files[0]);
@@ -44,39 +44,39 @@ export function FileUpload({ onUpload }: FileUploadProps) {
   const handleFile = async (file: File) => {
     if (file.type !== 'application/pdf' && file.type !== 'text/plain') {
       toast({
-        title: "Invalid file type",
-        description: "Please upload a PDF or TXT file.",
-        variant: "destructive",
+        title: 'Invalid file type',
+        description: 'Please upload a PDF or TXT file.',
+        variant: 'destructive',
       });
       return;
     }
 
     setIsUploading(true);
-    
+
     try {
       await api.uploadBidPackage(file, {
         name: file.name,
-        month: "August", // Would be dynamically determined
+        month: 'August', // Would be dynamically determined
         year: 2025,
-        base: "NYC",
-        aircraft: "A220",
+        base: 'NYC',
+        aircraft: 'A220',
       });
-      
+
       toast({
-        title: "Upload successful",
-        description: "Bid package uploaded and processing has begun.",
+        title: 'Upload successful',
+        description: 'Bid package uploaded and processing has begun.',
       });
-      
+
       // Wait a moment for processing to begin, then trigger refresh
       setTimeout(() => {
         onUpload(file);
       }, 1000);
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error('Upload error:', error);
       toast({
-        title: "Upload failed",
-        description: "Failed to upload bid package. Please try again.",
-        variant: "destructive",
+        title: 'Upload failed',
+        description: 'Failed to upload bid package. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsUploading(false);
@@ -90,8 +90,8 @@ export function FileUpload({ onUpload }: FileUploadProps) {
   return (
     <div
       className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-        isDragging 
-          ? 'border-blue-500 bg-blue-50' 
+        isDragging
+          ? 'border-blue-500 bg-blue-50'
           : 'border-gray-300 hover:border-blue-500'
       } ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
       onDragOver={handleDragOver}
@@ -101,10 +101,12 @@ export function FileUpload({ onUpload }: FileUploadProps) {
     >
       <CloudUpload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
       <p className="text-sm text-gray-600 mb-2">
-        {isUploading ? 'Uploading...' : 'Drop PDF or TXT file here or click to browse'}
+        {isUploading
+          ? 'Uploading...'
+          : 'Drop PDF or TXT file here or click to browse'}
       </p>
-      <Button 
-        variant="link" 
+      <Button
+        variant="link"
         className="text-blue-600 hover:text-blue-700 font-medium p-0"
         disabled={isUploading}
       >

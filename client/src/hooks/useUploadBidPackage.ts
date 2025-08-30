@@ -1,6 +1,5 @@
-
-import { useMutation } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useMutation } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 
 interface UploadBidPackageParams {
   file: File;
@@ -27,10 +26,10 @@ export const useUploadBidPackage = (options: UploadBidPackageOptions = {}) => {
 
       const result = await api.uploadBidPackage(file, {
         name: file.name,
-        month: "September", // Would be dynamically determined
+        month: 'September', // Would be dynamically determined
         year: 2025,
-        base: "NYC",
-        aircraft: "A220",
+        base: 'NYC',
+        aircraft: 'A220',
       });
 
       if (onUploadProgress) {
@@ -39,12 +38,12 @@ export const useUploadBidPackage = (options: UploadBidPackageOptions = {}) => {
 
       return result;
     },
-    onSuccess: (data) => {
+    onSuccess: data => {
       if (onSuccess) {
         onSuccess(data);
       }
     },
-    onError: (error) => {
+    onError: error => {
       if (onError) {
         onError(error);
       }

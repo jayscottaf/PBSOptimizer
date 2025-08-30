@@ -1,4 +1,4 @@
-import { apiRequest } from "./queryClient";
+import { apiRequest } from './queryClient';
 
 export interface BidPackage {
   id: number;
@@ -73,46 +73,56 @@ interface PaginatedResponse<T> {
   };
 }
 
-const API_BASE = ""; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
+const API_BASE = ''; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
 
 export const api = {
   // Bid packages
   getBidPackages: async (): Promise<BidPackage[]> => {
-    const response = await apiRequest("GET", "/api/bid-packages");
+    const response = await apiRequest('GET', '/api/bid-packages');
     return response.json();
   },
 
   // Progress stream (SSE)
-  openProgressStream: (bidPackageId: number, onMessage: (data: any) => void): EventSource => {
-    const es = new EventSource(`/api/progress/stream?bidPackageId=${bidPackageId}`);
-    es.onmessage = (e) => {
+  openProgressStream: (
+    bidPackageId: number,
+    onMessage: (data: any) => void
+  ): EventSource => {
+    const es = new EventSource(
+      `/api/progress/stream?bidPackageId=${bidPackageId}`
+    );
+    es.onmessage = e => {
       try {
         const data = JSON.parse(e.data);
         onMessage(data);
-      } catch {}
+      } catch {
+        // Ignore JSON parsing errors
+      }
     };
     return es;
   },
 
-  uploadBidPackage: async (file: File, data: {
-    name: string;
-    month: string;
-    year: number;
-    base: string;
-    aircraft: string;
-  }) => {
+  uploadBidPackage: async (
+    file: File,
+    data: {
+      name: string;
+      month: string;
+      year: number;
+      base: string;
+      aircraft: string;
+    }
+  ) => {
     const formData = new FormData();
-    formData.append("bidPackage", file);
-    formData.append("name", data.name);
-    formData.append("month", data.month);
-    formData.append("year", data.year.toString());
-    formData.append("base", data.base);
-    formData.append("aircraft", data.aircraft);
+    formData.append('bidPackage', file);
+    formData.append('name', data.name);
+    formData.append('month', data.month);
+    formData.append('year', data.year.toString());
+    formData.append('base', data.base);
+    formData.append('aircraft', data.aircraft);
 
-    const response = await fetch("/api/upload", {
-      method: "POST",
+    const response = await fetch('/api/upload', {
+      method: 'POST',
       body: formData,
-      credentials: "include",
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -126,17 +136,21 @@ export const api = {
   // Pairings
   getPairings: async (bidPackageId?: number): Promise<Pairing[]> => {
     try {
-      const url = bidPackageId ? `/api/pairings?bidPackageId=${bidPackageId}` : "/api/pairings";
-      const response = await apiRequest("GET", url);
+      const url = bidPackageId
+        ? `/api/pairings?bidPackageId=${bidPackageId}`
+        : '/api/pairings';
+      const response = await apiRequest('GET', url);
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error("Error fetching pairings:", error);
+      console.error('Error fetching pairings:', error);
       return [];
     }
   },
 
-  searchPairings: async (filters: SearchFilters): Promise<PaginatedResponse<Pairing>> => {
+  searchPairings: async (
+    filters: SearchFilters
+  ): Promise<PaginatedResponse<Pairing>> => {
     try {
       const response = await fetch('/api/pairings/search', {
         method: 'POST',
@@ -150,12 +164,12 @@ export const api = {
         throw new Error('Failed to search pairings');
       }
       const data = await response.json();
-      
+
       // Handle new paginated response format
       if (data && data.pairings && data.pagination) {
         return data;
       }
-      
+
       // Fallback for old format (array)
       return {
         pairings: Array.isArray(data) ? data : [],
@@ -165,11 +179,11 @@ export const api = {
           total: data.length || 0,
           totalPages: 1,
           hasNext: false,
-          hasPrev: false
-        }
+          hasPrev: false,
+        },
       };
     } catch (error) {
-      console.error("Error searching pairings:", error);
+      console.error('Error searching pairings:', error);
       return {
         pairings: [],
         pagination: {
@@ -178,15 +192,14 @@ export const api = {
           total: 0,
           totalPages: 0,
           hasNext: false,
-          hasPrev: false
-        }
+          hasPrev: false,
+        },
       };
     }
   },
 
-
   getPairing: async (id: number): Promise<Pairing> => {
-    const response = await apiRequest("GET", `/api/pairings/${id}`);
+    const response = await apiRequest('GET', `/api/pairings/${id}`);
     return response.json();
   },
 
@@ -197,7 +210,7 @@ export const api = {
     base: string;
     aircraft: string;
   }) => {
-    const response = await apiRequest("POST", "/api/user", data);
+    const response = await apiRequest('POST', '/api/user', data);
     return response.json();
   },
 
@@ -208,7 +221,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, pairingId }),
     });
-    if (!response.ok) throw new Error('Failed to add favorite');
+    if (!response.ok) {
+      throw new Error('Failed to add favorite');
+    }
     return response.json();
   },
 
@@ -218,16 +233,23 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, pairingId }),
     });
-    if (!response.ok) throw new Error('Failed to remove favorite');
+    if (!response.ok) {
+      throw new Error('Failed to remove favorite');
+    }
     return response.json();
   },
 
-  addToCalendar: async (userId: number, pairingId: number, startDate: Date, endDate: Date) => {
+  addToCalendar: async (
+    userId: number,
+    pairingId: number,
+    startDate: Date,
+    endDate: Date
+  ) => {
     console.log('API: Adding to calendar with params:', {
       userId,
       pairingId,
       startDate: startDate.toISOString(),
-      endDate: endDate.toISOString()
+      endDate: endDate.toISOString(),
     });
 
     const response = await fetch('/api/calendar', {
@@ -237,7 +259,7 @@ export const api = {
         userId,
         pairingId,
         startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
+        endDate: endDate.toISOString(),
       }),
     });
 
@@ -268,13 +290,13 @@ export const api = {
   },
 
   getFavorites: async (userId: number): Promise<Pairing[]> => {
-    const response = await apiRequest("GET", `/api/favorites/${userId}`);
+    const response = await apiRequest('GET', `/api/favorites/${userId}`);
     return response.json();
   },
 
   // History
   getBidHistory: async (pairingNumber: string) => {
-    const response = await apiRequest("GET", `/api/history/${pairingNumber}`);
+    const response = await apiRequest('GET', `/api/history/${pairingNumber}`);
     return response.json();
   },
 
@@ -300,13 +322,13 @@ export const api = {
     const result = await response.json();
     return {
       response: result.reply,
-      data: result.data || null
+      data: result.data || null,
     };
   },
 
   // Chat History
   async getChatHistory(sessionId: string) {
-    const response = await apiRequest("GET", `/api/chat-history/${sessionId}`);
+    const response = await apiRequest('GET', `/api/chat-history/${sessionId}`);
     return response.json();
   },
 
@@ -317,12 +339,15 @@ export const api = {
     content: string;
     messageData?: any;
   }) {
-    const response = await apiRequest("POST", "/api/chat-history", data);
+    const response = await apiRequest('POST', '/api/chat-history', data);
     return response.json();
   },
 
   async clearChatHistory(sessionId: string) {
-    const response = await apiRequest("DELETE", `/api/chat-history/${sessionId}`);
+    const response = await apiRequest(
+      'DELETE',
+      `/api/chat-history/${sessionId}`
+    );
     return response.json();
   },
 };

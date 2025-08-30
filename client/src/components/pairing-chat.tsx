@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
-import { api } from "@/lib/api";
-import type { BidPackage } from "@/lib/api";
-import { PairingDisplay } from "./pairing-display";
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from 'lucide-react';
+import { api } from '@/lib/api';
+import type { BidPackage } from '@/lib/api';
+import { PairingDisplay } from './pairing-display';
 
 interface ChatMessage {
   id: string;
@@ -35,7 +35,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const [sessionId, setSessionId] = useState<string>('');
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showConversations, setShowConversations] = useState(false);
-  const [currentBidPackage, setCurrentBidPackage] = useState<BidPackage | null>(null);
+  const [currentBidPackage, setCurrentBidPackage] = useState<BidPackage | null>(
+    null
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Generate or retrieve session ID
@@ -64,7 +66,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       if (bidPackageId) {
         try {
           const bidPackages = await api.getBidPackages();
-          const currentPackage = bidPackages.find(pkg => pkg.id === bidPackageId);
+          const currentPackage = bidPackages.find(
+            pkg => pkg.id === bidPackageId
+          );
           setCurrentBidPackage(currentPackage || null);
         } catch (error) {
           console.error('Failed to load current bid package:', error);
@@ -78,7 +82,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   const loadConversationList = async () => {
     try {
       // Get all stored session IDs from localStorage
-      const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
+      const storedSessions = JSON.parse(
+        localStorage.getItem('conversationSessions') || '[]'
+      );
       const conversationSummaries: ConversationSummary[] = [];
 
       for (const storedSessionId of storedSessions) {
@@ -86,25 +92,35 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           const history = await api.getChatHistory(storedSessionId);
           if (history.length > 0) {
             const lastMessage = history[history.length - 1];
-            const firstUserMessage = history.find(msg => msg.messageType === 'user');
+            const firstUserMessage = history.find(
+              (msg: any) => msg.messageType === 'user'
+            );
 
             conversationSummaries.push({
               sessionId: storedSessionId,
-              title: firstUserMessage ? 
-                firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '') :
-                'New Conversation',
-              lastMessage: lastMessage.content.substring(0, 100) + (lastMessage.content.length > 100 ? '...' : ''),
+              title: firstUserMessage
+                ? firstUserMessage.content.substring(0, 50) +
+                  (firstUserMessage.content.length > 50 ? '...' : '')
+                : 'New Conversation',
+              lastMessage:
+                lastMessage.content.substring(0, 100) +
+                (lastMessage.content.length > 100 ? '...' : ''),
               lastActivity: new Date(lastMessage.createdAt),
-              messageCount: history.length
+              messageCount: history.length,
             });
           }
         } catch (error) {
-          console.error(`Failed to load conversation ${storedSessionId}:`, error);
+          console.error(
+            `Failed to load conversation ${storedSessionId}:`,
+            error
+          );
         }
       }
 
       // Sort by last activity, most recent first
-      conversationSummaries.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+      conversationSummaries.sort(
+        (a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()
+      );
       setConversations(conversationSummaries);
     } catch (error) {
       console.error('Failed to load conversation list:', error);
@@ -112,12 +128,17 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   };
 
   const saveSessionToList = (sessionId: string) => {
-    const storedSessions = JSON.parse(localStorage.getItem('conversationSessions') || '[]');
+    const storedSessions = JSON.parse(
+      localStorage.getItem('conversationSessions') || '[]'
+    );
     if (!storedSessions.includes(sessionId)) {
       storedSessions.unshift(sessionId);
       // Keep only last 50 conversations
       const limitedSessions = storedSessions.slice(0, 50);
-      localStorage.setItem('conversationSessions', JSON.stringify(limitedSessions));
+      localStorage.setItem(
+        'conversationSessions',
+        JSON.stringify(limitedSessions)
+      );
     }
   };
 
@@ -132,8 +153,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         const welcomeMessage: ChatMessage = {
           id: '1',
           type: 'assistant',
-          content: 'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
-          timestamp: new Date()
+          content:
+            'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+          timestamp: new Date(),
         };
         setMessages([welcomeMessage]);
 
@@ -143,21 +165,24 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
             sessionId,
             bidPackageId,
             messageType: 'assistant',
-            content: welcomeMessage.content
+            content: welcomeMessage.content,
           });
           console.log('Welcome message saved successfully');
           saveSessionToList(sessionId);
-        } catch (saveError) {
-          console.error('Failed to save welcome message:', saveError);
+        } catch (saveError: unknown) {
+          console.error(
+            'Failed to save welcome message:',
+            saveError instanceof Error ? saveError.message : String(saveError)
+          );
         }
       } else {
         // Convert database history to chat messages
-        const chatMessages: ChatMessage[] = history.map((msg) => ({
+        const chatMessages: ChatMessage[] = history.map((msg: any) => ({
           id: msg.id.toString(),
           type: msg.messageType as 'user' | 'assistant',
           content: msg.content,
           timestamp: new Date(msg.createdAt),
-          data: msg.messageData
+          data: msg.messageData,
         }));
         setMessages(chatMessages);
         console.log('Chat messages loaded and set in state');
@@ -172,8 +197,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       const welcomeMessage: ChatMessage = {
         id: '1',
         type: 'assistant',
-        content: 'Chat history temporarily unavailable. Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
-        timestamp: new Date()
+        content:
+          'Chat history temporarily unavailable. Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+        timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
     }
@@ -210,7 +236,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -219,13 +245,15 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !sessionId) return;
+    if (!input.trim() || isLoading || !sessionId) {
+      return;
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
       content: input.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -238,12 +266,16 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         sessionId,
         bidPackageId,
         messageType: 'user',
-        content: userMessage.content
+        content: userMessage.content,
       });
       console.log('User message saved successfully');
       saveSessionToList(sessionId);
-    } catch (error) {
-      console.error('Failed to save user message:', error, error.message || error);
+    } catch (error: unknown) {
+      console.error(
+        'Failed to save user message:',
+        error,
+        error instanceof Error ? error.message : String(error)
+      );
     }
 
     try {
@@ -254,7 +286,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         type: 'assistant',
         content: result.response,
         timestamp: new Date(),
-        data: result.data
+        data: result.data,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -266,21 +298,26 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           bidPackageId,
           messageType: 'assistant',
           content: assistantMessage.content,
-          messageData: assistantMessage.data
+          messageData: assistantMessage.data,
         });
         console.log('Assistant message saved successfully');
         // Reload conversation list to update the last message
         await loadConversationList();
-      } catch (saveError) {
-        console.error('Failed to save assistant message:', saveError, saveError.message || saveError);
+      } catch (saveError: unknown) {
+        console.error(
+          'Failed to save assistant message:',
+          saveError,
+          saveError instanceof Error ? saveError.message : String(saveError)
+        );
       }
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: 'Sorry, I encountered an error while analyzing your request. Please make sure you have uploaded a bid package and try again.',
-        timestamp: new Date()
+        content:
+          'Sorry, I encountered an error while analyzing your request. Please make sure you have uploaded a bid package and try again.',
+        timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
 
@@ -290,11 +327,15 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           sessionId,
           bidPackageId,
           messageType: 'assistant',
-          content: errorMessage.content
+          content: errorMessage.content,
         });
         console.log('Error message saved successfully');
-      } catch (saveError) {
-        console.error('Failed to save error message:', saveError, saveError.message || saveError);
+      } catch (saveError: unknown) {
+        console.error(
+          'Failed to save error message:',
+          saveError,
+          saveError instanceof Error ? saveError.message : String(saveError)
+        );
       }
     } finally {
       setIsLoading(false);
@@ -302,9 +343,9 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
   };
 
   const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -326,12 +367,12 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
-    
+
     // Extract pairings from various locations in message data
     if (messageData?.pairings && Array.isArray(messageData.pairings)) {
       pairings.push(...messageData.pairings);
     }
-    
+
     if (messageData?.pairing) {
       pairings.push(messageData.pairing);
     }
@@ -359,13 +400,17 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
       effectiveDates: pairing.effectiveDates || pairing.effective_dates,
       payHours: pairing.payHours || pairing.pay_hours,
       fullText: pairing.fullText || pairing.full_text,
-      fullTextBlock: pairing.fullTextBlock || pairing.full_text_block || pairing.fullText || pairing.full_text
+      fullTextBlock:
+        pairing.fullTextBlock ||
+        pairing.full_text_block ||
+        pairing.fullText ||
+        pairing.full_text,
     }));
   };
 
   const formatMessageWithPairings = (content: string, messageData?: any) => {
     const pairings = parsePairingsFromMessage(content, messageData);
-    
+
     if (pairings.length === 0) {
       return <span className="whitespace-pre-wrap text-sm">{content}</span>;
     }
@@ -380,7 +425,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
 
     // Split content and replace pairing numbers with interactive elements
     const parts = [];
-    let remainingContent = content;
+    const remainingContent = content;
     let keyCounter = 0;
 
     // Find all pairing number patterns in the text
@@ -418,9 +463,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
     // Add remaining text
     if (lastIndex < content.length) {
       parts.push(
-        <span key={`text-${keyCounter++}`}>
-          {content.substring(lastIndex)}
-        </span>
+        <span key={`text-${keyCounter++}`}>{content.substring(lastIndex)}</span>
       );
     }
 
@@ -450,10 +493,10 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-2">
             <div className="space-y-2">
-              {conversations.map((conv) => (
+              {conversations.map(conv => (
                 <Button
                   key={conv.sessionId}
-                  variant={conv.sessionId === sessionId ? "secondary" : "ghost"}
+                  variant={conv.sessionId === sessionId ? 'secondary' : 'ghost'}
                   className="w-full justify-start h-auto p-3 text-left"
                   onClick={() => loadConversation(conv.sessionId)}
                 >
@@ -465,7 +508,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
                       {conv.lastMessage}
                     </div>
                     <div className="text-xs text-gray-400">
-                      {formatRelativeTime(conv.lastActivity)} • {conv.messageCount} messages
+                      {formatRelativeTime(conv.lastActivity)} •{' '}
+                      {conv.messageCount} messages
                     </div>
                   </div>
                 </Button>
@@ -489,7 +533,8 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
               <span>Pairing Analysis Assistant</span>
               {currentBidPackage && (
                 <Badge variant="secondary" className="text-xs">
-                  {currentBidPackage.base} {currentBidPackage.aircraft} {currentBidPackage.month} Bid Package
+                  {currentBidPackage.base} {currentBidPackage.aircraft}{' '}
+                  {currentBidPackage.month} Bid Package
                 </Badge>
               )}
             </div>
@@ -518,7 +563,7 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
         <CardContent className="flex-1 flex flex-col p-0">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 space-y-4">
-            {messages.map((message) => (
+            {messages.map(message => (
               <div
                 key={message.id}
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -539,14 +584,24 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
                     )}
                     <div className="flex-1">
                       <div>
-                        {message.type === 'assistant' 
-                          ? formatMessageWithPairings(message.content, message.data)
-                          : <span className="whitespace-pre-wrap text-sm">{message.content}</span>
-                        }
+                        {message.type === 'assistant' ? (
+                          formatMessageWithPairings(
+                            message.content,
+                            message.data
+                          )
+                        ) : (
+                          <span className="whitespace-pre-wrap text-sm">
+                            {message.content}
+                          </span>
+                        )}
                       </div>
-                      <div className={`text-xs mt-1 ${
-                        message.type === 'user' ? 'text-blue-200' : 'text-gray-500'
-                      }`}>
+                      <div
+                        className={`text-xs mt-1 ${
+                          message.type === 'user'
+                            ? 'text-blue-200'
+                            : 'text-gray-500'
+                        }`}
+                      >
                         {formatTimestamp(message.timestamp)}
                       </div>
                     </div>
@@ -575,13 +630,13 @@ export function PairingChat({ bidPackageId }: PairingChatProps) {
             <form onSubmit={handleSubmit} className="flex space-x-2">
               <Input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={e => setInput(e.target.value)}
                 placeholder="Ask about your pairings..."
                 className="flex-1"
                 disabled={isLoading}
               />
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={isLoading || !input.trim()}
                 size="icon"
               >

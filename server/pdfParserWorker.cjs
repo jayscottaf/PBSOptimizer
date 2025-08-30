@@ -5,17 +5,19 @@ const pdfParse = require('pdf-parse');
 async function extractPDFText(filePath) {
   try {
     console.log(`Worker: Extracting text from ${filePath}`);
-    
+
     if (!fs.existsSync(filePath)) {
       throw new Error(`PDF file not found: ${filePath}`);
     }
-    
+
     const buffer = fs.readFileSync(filePath);
     console.log(`Worker: PDF buffer loaded: ${buffer.length} bytes`);
-    
+
     const data = await pdfParse(buffer);
-    console.log(`Worker: PDF parsed successfully: ${data.text.length} characters extracted`);
-    
+    console.log(
+      `Worker: PDF parsed successfully: ${data.text.length} characters extracted`
+    );
+
     return data.text;
   } catch (error) {
     console.error('Worker: Error extracting text from PDF:', error);
@@ -30,7 +32,7 @@ if (require.main === module) {
     console.error('Usage: node pdfParserWorker.js <filepath>');
     process.exit(1);
   }
-  
+
   extractPDFText(filePath)
     .then(text => {
       console.log('SUCCESS');

@@ -1,9 +1,14 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from '@/hooks/use-toast';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -11,18 +16,18 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-  const [seniorityNumber, setSeniorityNumber] = useState("");
-  const [seniorityPercentile, setSeniorityPercentile] = useState("");
-  const [base, setBase] = useState("");
-  const [aircraft, setAircraft] = useState("");
+  const [seniorityNumber, setSeniorityNumber] = useState('');
+  const [seniorityPercentile, setSeniorityPercentile] = useState('');
+  const [base, setBase] = useState('');
+  const [aircraft, setAircraft] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       // Load current values from localStorage
-      setSeniorityNumber(localStorage.getItem('seniorityNumber') || "");
-      setSeniorityPercentile(localStorage.getItem('seniorityPercentile') || "");
-      setBase(localStorage.getItem('base') || "");
-      setAircraft(localStorage.getItem('aircraft') || "");
+      setSeniorityNumber(localStorage.getItem('seniorityNumber') || '');
+      setSeniorityPercentile(localStorage.getItem('seniorityPercentile') || '');
+      setBase(localStorage.getItem('base') || '');
+      setAircraft(localStorage.getItem('aircraft') || '');
     }
   }, [isOpen]);
 
@@ -30,9 +35,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     // Validate inputs
     if (!seniorityNumber || !seniorityPercentile || !base || !aircraft) {
       toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Please fill in all fields',
+        variant: 'destructive',
       });
       return;
     }
@@ -40,9 +45,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     const percentile = parseFloat(seniorityPercentile);
     if (isNaN(percentile) || percentile < 0 || percentile > 100) {
       toast({
-        title: "Error",
-        description: "Seniority percentile must be between 0 and 100",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Seniority percentile must be between 0 and 100',
+        variant: 'destructive',
       });
       return;
     }
@@ -54,20 +59,23 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     localStorage.setItem('aircraft', aircraft);
 
     // Trigger storage event for seniority update
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'seniorityPercentile',
-      newValue: seniorityPercentile,
-      oldValue: localStorage.getItem('seniorityPercentile')
-    }));
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'seniorityPercentile',
+        newValue: seniorityPercentile,
+        oldValue: localStorage.getItem('seniorityPercentile'),
+      })
+    );
 
     toast({
-      title: "Success",
-      description: "Profile updated successfully! Hold probabilities will be recalculated."
+      title: 'Success',
+      description:
+        'Profile updated successfully! Hold probabilities will be recalculated.',
     });
 
     // Close modal and refresh data without full page reload
     onClose();
-    
+
     // Trigger a data refresh to recalculate hold probabilities
     setTimeout(() => {
       window.location.reload();
@@ -87,13 +95,15 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <Input
               id="seniorityNumber"
               value={seniorityNumber}
-              onChange={(e) => setSeniorityNumber(e.target.value)}
+              onChange={e => setSeniorityNumber(e.target.value)}
               placeholder="e.g., 15860"
             />
           </div>
 
           <div>
-            <Label htmlFor="seniorityPercentile">Seniority Percentile (%)</Label>
+            <Label htmlFor="seniorityPercentile">
+              Seniority Percentile (%)
+            </Label>
             <Input
               id="seniorityPercentile"
               type="number"
@@ -101,7 +111,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               max="100"
               step="0.1"
               value={seniorityPercentile}
-              onChange={(e) => setSeniorityPercentile(e.target.value)}
+              onChange={e => setSeniorityPercentile(e.target.value)}
               placeholder="e.g., 3.5 for top 3.5%"
             />
             <div className="text-xs text-gray-500 mt-1">
@@ -114,7 +124,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <Input
               id="base"
               value={base}
-              onChange={(e) => setBase(e.target.value)}
+              onChange={e => setBase(e.target.value)}
               placeholder="e.g., NYC"
             />
           </div>
@@ -124,7 +134,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <Input
               id="aircraft"
               value={aircraft}
-              onChange={(e) => setAircraft(e.target.value)}
+              onChange={e => setAircraft(e.target.value)}
               placeholder="e.g., A220"
             />
           </div>
@@ -133,9 +143,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
-              Save Profile
-            </Button>
+            <Button onClick={handleSave}>Save Profile</Button>
           </div>
         </div>
       </DialogContent>

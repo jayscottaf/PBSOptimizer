@@ -20,19 +20,36 @@ import {
   type InsertChatHistory,
   type ChatHistory,
   type UserCalendarEvent,
-  type InsertUserCalendarEvent
-} from "@shared/schema";
-import { db } from "./db";
-import { eq, and, desc, asc, like, gte, lte, or, sql, inArray } from "drizzle-orm";
+  type InsertUserCalendarEvent,
+} from '@shared/schema';
+import { db } from './db';
+import {
+  eq,
+  and,
+  desc,
+  asc,
+  like,
+  gte,
+  lte,
+  or,
+  sql,
+  inArray,
+} from 'drizzle-orm';
 // Helper functions for decimal field parsing
 const parseDecimal = (value: any): number => parseFloat(String(value)) || 0;
-const parseNullable = (value: any): number => value !== null && value !== undefined ? parseFloat(String(value)) || 0 : 0;
+const parseNullable = (value: any): number =>
+  value !== null && value !== undefined ? parseFloat(String(value)) || 0 : 0;
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  createOrUpdateUser(userData: { seniorityNumber: number; seniorityPercentile?: number; base: string; aircraft: string }): Promise<User>;
+  createOrUpdateUser(userData: {
+    seniorityNumber: number;
+    seniorityPercentile?: number;
+    base: string;
+    aircraft: string;
+  }): Promise<User>;
   getUserBySeniority(seniorityNumber: number): Promise<User | undefined>;
 
   // Bid Package operations
@@ -40,7 +57,16 @@ export interface IStorage {
   getBidPackages(): Promise<BidPackage[]>;
   getBidPackage(id: number): Promise<BidPackage | undefined>;
   updateBidPackageStatus(id: number, status: string): Promise<void>;
-  updateBidPackageInfo(id: number, data: { name?: string; month?: string; year?: number; base?: string; aircraft?: string }): Promise<void>;
+  updateBidPackageInfo(
+    id: number,
+    data: {
+      name?: string;
+      month?: string;
+      year?: number;
+      base?: string;
+      aircraft?: string;
+    }
+  ): Promise<void>;
   deleteBidPackage(id: number): Promise<void>;
   clearAllData(): Promise<void>;
 
@@ -48,7 +74,10 @@ export interface IStorage {
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
-  getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined>;
+  getPairingByNumber(
+    pairingNumber: string,
+    bidPackageId?: number
+  ): Promise<Pairing | undefined>;
   searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
@@ -60,10 +89,10 @@ export interface IStorage {
     tafbMin?: number;
     tafbMax?: number;
     holdProbabilityMin?: number;
-        pairingDays?: number;
-        pairingDaysMin?: number;
-        pairingDaysMax?: number;
-        efficiency?: number; // Added for efficiency filter
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]>;
 
   searchPairingsWithPagination(filters: {
@@ -122,11 +151,23 @@ export interface IStorage {
   clearChatHistory(sessionId: string): Promise<void>;
 
   // Calendar events
-  addUserCalendarEvent(event: InsertUserCalendarEvent): Promise<UserCalendarEvent>;
+  addUserCalendarEvent(
+    event: InsertUserCalendarEvent
+  ): Promise<UserCalendarEvent>;
   removeUserCalendarEvent(userId: number, pairingId: number): Promise<void>;
-  getUserCalendarEvents(userId: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
-  getUserCalendarEventsForMonth(userId: number, month: number, year: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
-  getUserCalendarEventsInRange(userId: number, startDate: Date, endDate: Date): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  getUserCalendarEvents(
+    userId: number
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  getUserCalendarEventsForMonth(
+    userId: number,
+    month: number,
+    year: number
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  getUserCalendarEventsInRange(
+    userId: number,
+    startDate: Date,
+    endDate: Date
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -141,15 +182,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
-  async createOrUpdateUser(userData: { seniorityNumber: number; seniorityPercentile?: number; base: string; aircraft: string }): Promise<User> {
-    const existingUser = await this.getUserBySeniority(userData.seniorityNumber);
+  async createOrUpdateUser(userData: {
+    seniorityNumber: number;
+    seniorityPercentile?: number;
+    base: string;
+    aircraft: string;
+  }): Promise<User> {
+    const existingUser = await this.getUserBySeniority(
+      userData.seniorityNumber
+    );
 
     if (existingUser) {
       // Update existing user
@@ -158,8 +203,9 @@ export class DatabaseStorage implements IStorage {
         .set({
           base: userData.base,
           aircraft: userData.aircraft,
-          seniorityPercentile: userData.seniorityPercentile || existingUser.seniorityPercentile,
-          updatedAt: new Date()
+          seniorityPercentile:
+            userData.seniorityPercentile || existingUser.seniorityPercentile,
+          updatedAt: new Date(),
         })
         .where(eq(users.seniorityNumber, userData.seniorityNumber))
         .returning();
@@ -170,13 +216,16 @@ export class DatabaseStorage implements IStorage {
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
         aircraft: userData.aircraft,
-        seniorityPercentile: userData.seniorityPercentile || 50 // Default to 50 if not provided
+        seniorityPercentile: userData.seniorityPercentile || 50, // Default to 50 if not provided
       });
     }
   }
 
   async getUserBySeniority(seniorityNumber: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.seniorityNumber, seniorityNumber));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.seniorityNumber, seniorityNumber));
     return user || undefined;
   }
 
@@ -189,48 +238,78 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBidPackages(): Promise<BidPackage[]> {
-    return await db.select().from(bidPackages).orderBy(desc(bidPackages.uploadedAt));
+    return await db
+      .select()
+      .from(bidPackages)
+      .orderBy(desc(bidPackages.uploadedAt));
   }
 
   async getBidPackage(id: number): Promise<BidPackage | undefined> {
-    const [bidPackage] = await db.select().from(bidPackages).where(eq(bidPackages.id, id));
+    const [bidPackage] = await db
+      .select()
+      .from(bidPackages)
+      .where(eq(bidPackages.id, id));
     return bidPackage || undefined;
   }
 
   async updateBidPackageStatus(id: number, status: string): Promise<void> {
-    await db.update(bidPackages)
-      .set({ status })
-      .where(eq(bidPackages.id, id));
+    await db.update(bidPackages).set({ status }).where(eq(bidPackages.id, id));
   }
 
-  async updateBidPackageInfo(id: number, data: { name?: string; month?: string; year?: number; base?: string; aircraft?: string }): Promise<void> {
+  async updateBidPackageInfo(
+    id: number,
+    data: {
+      name?: string;
+      month?: string;
+      year?: number;
+      base?: string;
+      aircraft?: string;
+    }
+  ): Promise<void> {
     const updateData: any = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.month !== undefined) updateData.month = data.month;
-    if (data.year !== undefined) updateData.year = data.year;
-    if (data.base !== undefined) updateData.base = data.base;
-    if (data.aircraft !== undefined) updateData.aircraft = data.aircraft;
-    if (Object.keys(updateData).length === 0) return;
-    await db.update(bidPackages)
-      .set(updateData)
-      .where(eq(bidPackages.id, id));
+    if (data.name !== undefined) {
+      updateData.name = data.name;
+    }
+    if (data.month !== undefined) {
+      updateData.month = data.month;
+    }
+    if (data.year !== undefined) {
+      updateData.year = data.year;
+    }
+    if (data.base !== undefined) {
+      updateData.base = data.base;
+    }
+    if (data.aircraft !== undefined) {
+      updateData.aircraft = data.aircraft;
+    }
+    if (Object.keys(updateData).length === 0) {
+      return;
+    }
+    await db.update(bidPackages).set(updateData).where(eq(bidPackages.id, id));
   }
 
   async deleteBidPackage(id: number): Promise<void> {
     // Delete associated data in the correct order (foreign key constraints)
     await db.delete(chatHistory).where(eq(chatHistory.bidPackageId, id));
-    
+
     // Get all pairing IDs for this bid package
-    const pairingIds = await db.select({ id: pairings.id }).from(pairings).where(eq(pairings.bidPackageId, id));
+    const pairingIds = await db
+      .select({ id: pairings.id })
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, id));
     const pairingIdArray = pairingIds.map(p => p.id);
-    
+
     // Delete user favorites that reference any of these pairings
     if (pairingIdArray.length > 0) {
-      await db.delete(userFavorites).where(inArray(userFavorites.pairingId, pairingIdArray));
+      await db
+        .delete(userFavorites)
+        .where(inArray(userFavorites.pairingId, pairingIdArray));
       // Delete user calendar events that reference any of these pairings
-      await db.delete(userCalendarEvents).where(inArray(userCalendarEvents.pairingId, pairingIdArray));
+      await db
+        .delete(userCalendarEvents)
+        .where(inArray(userCalendarEvents.pairingId, pairingIdArray));
     }
-    
+
     await db.delete(pairings).where(eq(pairings.bidPackageId, id));
     await db.delete(bidPackages).where(eq(bidPackages.id, id));
     console.log(`Deleted bid package ${id} and all associated data`);
@@ -247,35 +326,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPairing(pairing: InsertPairing): Promise<Pairing> {
-    const [newPairing] = await db
-      .insert(pairings)
-      .values(pairing)
-      .returning();
+    const [newPairing] = await db.insert(pairings).values(pairing).returning();
     return newPairing;
   }
 
   async getPairings(bidPackageId?: number): Promise<Pairing[]> {
     if (bidPackageId) {
-      return await db.select().from(pairings)
+      return await db
+        .select()
+        .from(pairings)
         .where(eq(pairings.bidPackageId, bidPackageId))
         .orderBy(asc(pairings.pairingNumber));
     }
-    return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+    return await db
+      .select()
+      .from(pairings)
+      .orderBy(asc(pairings.pairingNumber));
   }
 
   async getPairing(id: number): Promise<Pairing | undefined> {
-    const [pairing] = await db.select().from(pairings).where(eq(pairings.id, id));
+    const [pairing] = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.id, id));
     return pairing || undefined;
   }
 
-  async getPairingByNumber(pairingNumber: string, bidPackageId?: number): Promise<Pairing | undefined> {
-    let whereConditions = [eq(pairings.pairingNumber, pairingNumber)];
+  async getPairingByNumber(
+    pairingNumber: string,
+    bidPackageId?: number
+  ): Promise<Pairing | undefined> {
+    const whereConditions = [eq(pairings.pairingNumber, pairingNumber)];
 
     if (bidPackageId) {
       whereConditions.push(eq(pairings.bidPackageId, bidPackageId));
     }
 
-    const [pairing] = await db.select().from(pairings).where(and(...whereConditions));
+    const [pairing] = await db
+      .select()
+      .from(pairings)
+      .where(and(...whereConditions));
     return pairing || undefined;
   }
 
@@ -290,69 +380,79 @@ export class DatabaseStorage implements IStorage {
     tafbMin?: number;
     tafbMax?: number;
     holdProbabilityMin?: number;
-        pairingDays?: number;
-        pairingDaysMin?: number;
-        pairingDaysMax?: number;
-        efficiency?: number; // Added for efficiency filter
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]> {
     try {
       const conditions = [];
 
       // Always require bidPackageId for safety
       if (!filters.bidPackageId) {
-        console.error("Bid package ID is required for pairing search");
+        console.error('Bid package ID is required for pairing search');
         return [];
       }
 
       conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
-    if (filters.search) {
-      conditions.push(
-        or(
-          like(pairings.route, `%${filters.search}%`),
-          like(pairings.pairingNumber, `%${filters.search}%`),
-          like(pairings.effectiveDates, `%${filters.search}%`),
-          like(pairings.fullTextBlock, `%${filters.search}%`)
-        )
-      );
-    }
+      if (filters.search) {
+        conditions.push(
+          or(
+            like(pairings.route, `%${filters.search}%`),
+            like(pairings.pairingNumber, `%${filters.search}%`),
+            like(pairings.effectiveDates, `%${filters.search}%`),
+            like(pairings.fullTextBlock, `%${filters.search}%`)
+          )
+        );
+      }
 
-    if (filters.creditMin !== undefined) {
-      conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`);
-    }
+      if (filters.creditMin !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`
+        );
+      }
 
-    if (filters.creditMax !== undefined) {
-      conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`);
-    }
+      if (filters.creditMax !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`
+        );
+      }
 
-    if (filters.blockMin !== undefined) {
-      conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`);
-    }
-    if (filters.blockMax !== undefined) {
-      conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`);
-    }
+      if (filters.blockMin !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`
+        );
+      }
+      if (filters.blockMax !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`
+        );
+      }
 
-    if (filters.holdProbabilityMin !== undefined) {
-      conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
-    }
+      if (filters.holdProbabilityMin !== undefined) {
+        conditions.push(
+          gte(pairings.holdProbability, filters.holdProbabilityMin)
+        );
+      }
 
-    if (filters.pairingDays !== undefined) {
-      conditions.push(eq(pairings.pairingDays, filters.pairingDays));
-    }
+      if (filters.pairingDays !== undefined) {
+        conditions.push(eq(pairings.pairingDays, filters.pairingDays));
+      }
 
-    if (filters.pairingDaysMin !== undefined) {
-      conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
-    }
+      if (filters.pairingDaysMin !== undefined) {
+        conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
+      }
 
-    if (filters.pairingDaysMax !== undefined) {
-      conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
-    }
+      if (filters.pairingDaysMax !== undefined) {
+        conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+      }
 
-    // TAFB filter: compare as minutes (handles 'HH:MM' format)
-// TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
-if (filters.tafbMin !== undefined) {
-	const minMins = filters.tafbMin * 60;
-	conditions.push(sql`
+      // TAFB filter: compare as minutes (handles 'HH:MM' format)
+      // TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
+      if (filters.tafbMin !== undefined) {
+        const minMins = filters.tafbMin * 60;
+        conditions.push(sql`
 		(
 			CASE
 				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
@@ -363,10 +463,10 @@ if (filters.tafbMin !== undefined) {
 			END
 		) >= ${minMins}
 	`);
-}
-if (filters.tafbMax !== undefined) {
-	const maxMins = filters.tafbMax * 60;
-	conditions.push(sql`
+      }
+      if (filters.tafbMax !== undefined) {
+        const maxMins = filters.tafbMax * 60;
+        conditions.push(sql`
 		(
 			CASE
 				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
@@ -377,10 +477,12 @@ if (filters.tafbMax !== undefined) {
 			END
 		) <= ${maxMins}
 	`);
-}
+      }
 
-    if (conditions.length > 0) {
-        let results = await db.select().from(pairings)
+      if (conditions.length > 0) {
+        let results = await db
+          .select()
+          .from(pairings)
           .where(and(...conditions))
           .orderBy(asc(pairings.pairingNumber));
 
@@ -397,9 +499,12 @@ if (filters.tafbMax !== undefined) {
         return results;
       }
 
-      return await db.select().from(pairings).orderBy(asc(pairings.pairingNumber));
+      return await db
+        .select()
+        .from(pairings)
+        .orderBy(asc(pairings.pairingNumber));
     } catch (error) {
-      console.error("Error in searchPairings:", error);
+      console.error('Error in searchPairings:', error);
       return [];
     }
   }
@@ -452,15 +557,22 @@ if (filters.tafbMax !== undefined) {
 
       // Always require bidPackageId for safety
       if (!filters.bidPackageId) {
-        console.error("Bid package ID is required for pairing search");
+        console.error('Bid package ID is required for pairing search');
         return {
           pairings: [],
-          pagination: { page, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
           statistics: {
             likelyToHold: 0,
             highCredit: 0,
-            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 }
-          }
+            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
+          },
         };
       }
 
@@ -479,22 +591,32 @@ if (filters.tafbMax !== undefined) {
       }
 
       if (filters.creditMin !== undefined) {
-        conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`);
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`
+        );
       }
 
       if (filters.creditMax !== undefined) {
-        conditions.push(sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`);
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`
+        );
       }
 
       if (filters.blockMin !== undefined) {
-        conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`);
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`
+        );
       }
       if (filters.blockMax !== undefined) {
-        conditions.push(sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`);
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`
+        );
       }
 
       if (filters.holdProbabilityMin !== undefined) {
-        conditions.push(gte(pairings.holdProbability, filters.holdProbabilityMin));
+        conditions.push(
+          gte(pairings.holdProbability, filters.holdProbabilityMin)
+        );
       }
 
       if (filters.pairingDays !== undefined) {
@@ -542,24 +664,25 @@ if (filters.tafbMax !== undefined) {
       // We will compute total rows using a window function in the main select
 
       // Calculate statistics for the entire filtered dataset
-      const statsQuery = db.select({
-        likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
-        highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
-        totalCount: sql<number>`cast(count(*) as integer)`,
-        excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
-        good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
-        average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
-        poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`
-      })
-      .from(pairings)
-      .where(and(...conditions));
+      const statsQuery = db
+        .select({
+          likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
+          highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
+          totalCount: sql<number>`cast(count(*) as integer)`,
+          excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
+          good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
+          average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
+          poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`,
+        })
+        .from(pairings)
+        .where(and(...conditions));
 
       const [stats] = await statsQuery.execute();
 
       // Build the main query with pagination and sorting
       const sortColumn = filters.sortBy || 'pairingNumber';
       const sortDirection = filters.sortOrder === 'desc' ? desc : asc;
-      
+
       // Map sortBy to actual column names
       const sortColumnMap: Record<string, any> = {
         pairingNumber: pairings.pairingNumber,
@@ -567,7 +690,7 @@ if (filters.tafbMax !== undefined) {
         blockHours: pairings.blockHours,
         holdProbability: pairings.holdProbability,
         pairingDays: pairings.pairingDays,
-        route: pairings.route
+        route: pairings.route,
       };
 
       // Computed SQL expressions
@@ -590,11 +713,12 @@ if (filters.tafbMax !== undefined) {
         conditions.push(sql`${efficiencyExpr} >= ${filters.efficiency}`);
       }
 
-      const sortColumnField = sortColumn === 'creditBlockRatio'
-        ? efficiencyExpr
-        : sortColumn === 'tafb'
-          ? tafbMinutesExpr
-          : (sortColumnMap[sortColumn] || pairings.pairingNumber);
+      const sortColumnField =
+        sortColumn === 'creditBlockRatio'
+          ? efficiencyExpr
+          : sortColumn === 'tafb'
+            ? tafbMinutesExpr
+            : sortColumnMap[sortColumn] || pairings.pairingNumber;
 
       // Build the complete query in one chain with a lean projection (exclude large JSON/text fields)
       const pairingsResult = await db
@@ -610,7 +734,7 @@ if (filters.tafbMax !== undefined) {
           holdProbability: pairings.holdProbability,
           pairingDays: pairings.pairingDays,
           fullTextBlock: pairings.fullTextBlock,
-          totalCount: sql<number>`count(*) over()`
+          totalCount: sql<number>`count(*) over()`,
         })
         .from(pairings)
         .where(and(...conditions))
@@ -621,7 +745,10 @@ if (filters.tafbMax !== undefined) {
 
       // Apply efficiency filter (credit/block ratio) after database query if needed
       // Derive total from window function (0 if no rows)
-      const total = pairingsResult.length > 0 ? (pairingsResult[0] as any).totalCount as number : 0;
+      const total =
+        pairingsResult.length > 0
+          ? ((pairingsResult[0] as any).totalCount as number)
+          : 0;
       const totalPages = Math.ceil(total / limit);
 
       // Strip totalCount from rows to satisfy Pairing shape
@@ -646,7 +773,7 @@ if (filters.tafbMax !== undefined) {
           total,
           totalPages,
           hasNext: page < totalPages,
-          hasPrev: page > 1
+          hasPrev: page > 1,
         },
         statistics: {
           likelyToHold: stats.likelyToHold,
@@ -655,21 +782,34 @@ if (filters.tafbMax !== undefined) {
             excellent: stats.excellent,
             good: stats.good,
             average: stats.average,
-            poor: stats.poor
-          }
-        }
+            poor: stats.poor,
+          },
+        },
       };
     } catch (error) {
       console.error('Error in searchPairingsWithPagination:', error);
       return {
         pairings: [],
-        pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
-        statistics: { likelyToHold: 0, highCredit: 0, ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 } }
+        pagination: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        },
+        statistics: {
+          likelyToHold: 0,
+          highCredit: 0,
+          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
+        },
       };
     }
   }
 
-  async createBidHistory(bidHistoryData: InsertBidHistory): Promise<BidHistory> {
+  async createBidHistory(
+    bidHistoryData: InsertBidHistory
+  ): Promise<BidHistory> {
     const [newBidHistory] = await db
       .insert(bidHistory)
       .values(bidHistoryData)
@@ -678,7 +818,9 @@ if (filters.tafbMax !== undefined) {
   }
 
   async getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]> {
-    return await db.select().from(bidHistory)
+    return await db
+      .select()
+      .from(bidHistory)
       .where(eq(bidHistory.pairingNumber, pairingNumber))
       .orderBy(desc(bidHistory.awardedAt));
   }
@@ -692,7 +834,8 @@ if (filters.tafbMax !== undefined) {
   }
 
   async removeUserFavorite(userId: number, pairingId: number): Promise<void> {
-    await db.delete(userFavorites)
+    await db
+      .delete(userFavorites)
       .where(
         and(
           eq(userFavorites.userId, userId),
@@ -715,7 +858,10 @@ if (filters.tafbMax !== undefined) {
 
   // Chat history methods
   async saveChatMessage(message: InsertChatHistory): Promise<ChatMessage> {
-    const [savedMessage] = await db.insert(chatHistory).values(message).returning();
+    const [savedMessage] = await db
+      .insert(chatHistory)
+      .values(message)
+      .returning();
     return savedMessage;
   }
 
@@ -732,7 +878,10 @@ if (filters.tafbMax !== undefined) {
   }
 
   // Enhanced analytics operations for OpenAI token optimization
-  async getTopEfficientPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+  async getTopEfficientPairings(
+    bidPackageId: number,
+    limit: number = 20
+  ): Promise<{ pairings: Pairing[]; stats: any }> {
     const allPairings = await db
       .select()
       .from(pairings)
@@ -740,7 +889,9 @@ if (filters.tafbMax !== undefined) {
 
     // Helper function to parse Delta PBS hours format (handles both string and number)
     const parseHours = (hours: any): number => {
-      if (typeof hours === 'number') return hours;
+      if (typeof hours === 'number') {
+        return hours;
+      }
       if (typeof hours === 'string') {
         // Handle Delta PBS format like "5.28" or "21.49"
         return parseFloat(hours) || 0;
@@ -755,7 +906,7 @@ if (filters.tafbMax !== undefined) {
       const blockHours = parseHours(p.blockHours);
       return {
         ...p,
-        efficiency: blockHours > 0 ? creditHours / blockHours : 0
+        efficiency: blockHours > 0 ? creditHours / blockHours : 0,
       };
     });
 
@@ -766,16 +917,38 @@ if (filters.tafbMax !== undefined) {
 
     const stats = {
       totalPairings: allPairings.length,
-      avgEfficiency: Number((pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) / pairingsWithEfficiency.length).toFixed(2)),
+      avgEfficiency: Number(
+        (
+          pairingsWithEfficiency.reduce((sum, p) => sum + p.efficiency, 0) /
+          pairingsWithEfficiency.length
+        ).toFixed(2)
+      ),
       topEfficiency: Number((topPairings[0]?.efficiency || 0).toFixed(2)),
-      avgCredit: Number((pairingsWithEfficiency.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / pairingsWithEfficiency.length).toFixed(2)),
-      avgBlock: Number((pairingsWithEfficiency.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0) / pairingsWithEfficiency.length).toFixed(2))
+      avgCredit: Number(
+        (
+          pairingsWithEfficiency.reduce(
+            (sum, p) => sum + parseDecimal(p.creditHours),
+            0
+          ) / pairingsWithEfficiency.length
+        ).toFixed(2)
+      ),
+      avgBlock: Number(
+        (
+          pairingsWithEfficiency.reduce(
+            (sum, p) => sum + parseDecimal(p.blockHours),
+            0
+          ) / pairingsWithEfficiency.length
+        ).toFixed(2)
+      ),
     };
 
     return { pairings: topPairings, stats };
   }
 
-  async getTopCreditPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+  async getTopCreditPairings(
+    bidPackageId: number,
+    limit: number = 20
+  ): Promise<{ pairings: Pairing[]; stats: any }> {
     const topPairings = await db
       .select()
       .from(pairings)
@@ -791,8 +964,10 @@ if (filters.tafbMax !== undefined) {
     const stats = {
       totalPairings: allPairings.length,
       maxCredit: topPairings[0]?.creditHours || 0,
-      avgCreditHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / allPairings.length,
-      minCredit: Math.min(...allPairings.map(p => parseDecimal(p.creditHours)))
+      avgCreditHours:
+        allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) /
+        allPairings.length,
+      minCredit: Math.min(...allPairings.map(p => parseDecimal(p.creditHours))),
     };
 
     return { pairings: topPairings, stats };
@@ -826,7 +1001,7 @@ if (filters.tafbMax !== undefined) {
         totalPairings: 0,
         creditBlockRatios: { min: 1.0, max: 1.0, average: 1.0 },
         creditHours: { min: 0, max: 0, average: 0 },
-        blockHours: { min: 0, max: 0, average: 0 }
+        blockHours: { min: 0, max: 0, average: 0 },
       };
     }
 
@@ -835,30 +1010,36 @@ if (filters.tafbMax !== undefined) {
       .filter(p => parseDecimal(p.blockHours) > 0) // Avoid division by zero
       .map(p => parseDecimal(p.creditHours) / parseDecimal(p.blockHours));
 
-      const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
-      const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
+    const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
+    const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
 
     return {
       totalPairings: allPairings.length,
       creditBlockRatios: {
         min: Math.min(...ratios),
         max: Math.max(...ratios),
-        average: ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length
+        average: ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length,
       },
       creditHours: {
         min: Math.min(...creditHours),
         max: Math.max(...creditHours),
-        average: creditHours.reduce((sum, hours) => sum + hours, 0) / creditHours.length
+        average:
+          creditHours.reduce((sum, hours) => sum + hours, 0) /
+          creditHours.length,
       },
       blockHours: {
         min: Math.min(...blockHours),
         max: Math.max(...blockHours),
-        average: blockHours.reduce((sum, hours) => sum + hours, 0) / blockHours.length
-      }
+        average:
+          blockHours.reduce((sum, hours) => sum + hours, 0) / blockHours.length,
+      },
     };
   }
 
-  async getTopHoldProbabilityPairings(bidPackageId: number, limit: number = 20): Promise<{ pairings: Pairing[], stats: any }> {
+  async getTopHoldProbabilityPairings(
+    bidPackageId: number,
+    limit: number = 20
+  ): Promise<{ pairings: Pairing[]; stats: any }> {
     const topPairings = await db
       .select()
       .from(pairings)
@@ -874,8 +1055,11 @@ if (filters.tafbMax !== undefined) {
     const stats = {
       totalPairings: allPairings.length,
       maxHold: topPairings[0]?.holdProbability || 0,
-      avgHold: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
-      highHoldCount: allPairings.filter(p => (p.holdProbability || 0) >= 80).length
+      avgHold:
+        allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) /
+        allPairings.length,
+      highHoldCount: allPairings.filter(p => (p.holdProbability || 0) >= 80)
+        .length,
     };
 
     return { pairings: topPairings, stats };
@@ -887,37 +1071,65 @@ if (filters.tafbMax !== undefined) {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-      const turnCount = allPairings.filter(p => parseNullable(p.pairingDays) === 1).length;
-      const multiDayCount = allPairings.filter(p => parseNullable(p.pairingDays) > 1).length;
-    const deadheadCount = allPairings.filter(p =>
-      p.fullTextBlock?.includes('DH') ||
-      (p.flightSegments && Array.isArray(p.flightSegments) &&
-       p.flightSegments.some((seg: any) => seg.isDeadhead === true))
+    const turnCount = allPairings.filter(
+      p => parseNullable(p.pairingDays) === 1
+    ).length;
+    const multiDayCount = allPairings.filter(
+      p => parseNullable(p.pairingDays) > 1
+    ).length;
+    const deadheadCount = allPairings.filter(
+      p =>
+        p.fullTextBlock?.includes('DH') ||
+        (p.flightSegments &&
+          Array.isArray(p.flightSegments) &&
+          p.flightSegments.some((seg: any) => seg.isDeadhead === true))
     ).length;
 
     return {
       totalPairings: allPairings.length,
-      avgCreditHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / allPairings.length,
-      avgBlockHours: allPairings.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0) / allPairings.length,
-      avgPairingDays: allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) / allPairings.length,
-      avgHoldProbability: allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) / allPairings.length,
-      maxCreditHours: Math.max(...allPairings.map(p => parseDecimal(p.creditHours))),
-      minCreditHours: Math.min(...allPairings.map(p => parseDecimal(p.creditHours))),
-      maxBlockHours: Math.max(...allPairings.map(p => parseDecimal(p.blockHours))),
+      avgCreditHours:
+        allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) /
+        allPairings.length,
+      avgBlockHours:
+        allPairings.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0) /
+        allPairings.length,
+      avgPairingDays:
+        allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) /
+        allPairings.length,
+      avgHoldProbability:
+        allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) /
+        allPairings.length,
+      maxCreditHours: Math.max(
+        ...allPairings.map(p => parseDecimal(p.creditHours))
+      ),
+      minCreditHours: Math.min(
+        ...allPairings.map(p => parseDecimal(p.creditHours))
+      ),
+      maxBlockHours: Math.max(
+        ...allPairings.map(p => parseDecimal(p.blockHours))
+      ),
       turnCount,
       multiDayCount,
       deadheadCount,
       dayDistribution: {
-        '1day': allPairings.filter(p => parseNullable(p.pairingDays) === 1).length,
-        '2day': allPairings.filter(p => parseNullable(p.pairingDays) === 2).length,
-        '3day': allPairings.filter(p => parseNullable(p.pairingDays) === 3).length,
-        '4day': allPairings.filter(p => parseNullable(p.pairingDays) === 4).length,
-        '5day+': allPairings.filter(p => parseNullable(p.pairingDays) >= 5).length,
-      }
+        '1day': allPairings.filter(p => parseNullable(p.pairingDays) === 1)
+          .length,
+        '2day': allPairings.filter(p => parseNullable(p.pairingDays) === 2)
+          .length,
+        '3day': allPairings.filter(p => parseNullable(p.pairingDays) === 3)
+          .length,
+        '4day': allPairings.filter(p => parseNullable(p.pairingDays) === 4)
+          .length,
+        '5day+': allPairings.filter(p => parseNullable(p.pairingDays) >= 5)
+          .length,
+      },
     };
   }
 
-  async analyzePairingsByLayoverSummary(bidPackageId: number, city?: string): Promise<any> {
+  async analyzePairingsByLayoverSummary(
+    bidPackageId: number,
+    city?: string
+  ): Promise<any> {
     const allPairings = await db
       .select()
       .from(pairings)
@@ -940,18 +1152,23 @@ if (filters.tafbMax !== undefined) {
     }, {} as any);
 
     // Convert to summary format
-    const summary = Object.entries(layoverAnalysis).map(([city, data]: [string, any]) => ({
-      city,
-      count: data.count,
-      avgDuration: data.totalDuration / data.count,
-      pairings: data.pairings.slice(0, 10) // Limit to first 10 pairings
-    })).sort((a, b) => b.count - a.count);
+    const summary = Object.entries(layoverAnalysis)
+      .map(([city, data]: [string, any]) => ({
+        city,
+        count: data.count,
+        avgDuration: data.totalDuration / data.count,
+        pairings: data.pairings.slice(0, 10), // Limit to first 10 pairings
+      }))
+      .sort((a, b) => b.count - a.count);
 
     return {
-      totalLayovers: Object.values(layoverAnalysis).reduce((sum: number, data: any) => sum + data.count, 0),
+      totalLayovers: Object.values(layoverAnalysis).reduce(
+        (sum: number, data: any) => sum + data.count,
+        0
+      ),
       uniqueCities: Object.keys(layoverAnalysis).length,
       topCities: summary.slice(0, 10),
-      requestedCity: city ? layoverAnalysis[city] : null
+      requestedCity: city ? layoverAnalysis[city] : null,
     };
   }
 
@@ -961,27 +1178,48 @@ if (filters.tafbMax !== undefined) {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
-    const deadheadPairings = allPairings.filter(p =>
-      p.fullTextBlock?.includes('DH') ||
-      (p.flightSegments && Array.isArray(p.flightSegments) &&
-       p.flightSegments.some((seg: any) => seg.isDeadhead === true))
+    const deadheadPairings = allPairings.filter(
+      p =>
+        p.fullTextBlock?.includes('DH') ||
+        (p.flightSegments &&
+          Array.isArray(p.flightSegments) &&
+          p.flightSegments.some((seg: any) => seg.isDeadhead === true))
     );
-    const nonDeadheadPairings = allPairings.filter(p =>
-      !(p.fullTextBlock?.includes('DH') ||
-        (p.flightSegments && Array.isArray(p.flightSegments) &&
-         p.flightSegments.some((seg: any) => seg.isDeadhead === true)))
+    const nonDeadheadPairings = allPairings.filter(
+      p =>
+        !(
+          p.fullTextBlock?.includes('DH') ||
+          (p.flightSegments &&
+            Array.isArray(p.flightSegments) &&
+            p.flightSegments.some((seg: any) => seg.isDeadhead === true))
+        )
     );
 
     return {
       totalPairings: allPairings.length,
       deadheadCount: deadheadPairings.length,
       deadheadPercentage: (deadheadPairings.length / allPairings.length) * 100,
-      avgCreditWithDeadhead: deadheadPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / deadheadPairings.length,
-      avgCreditWithoutDeadhead: nonDeadheadPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) / nonDeadheadPairings.length,
+      avgCreditWithDeadhead:
+        deadheadPairings.reduce(
+          (sum, p) => sum + parseDecimal(p.creditHours),
+          0
+        ) / deadheadPairings.length,
+      avgCreditWithoutDeadhead:
+        nonDeadheadPairings.reduce(
+          (sum, p) => sum + parseDecimal(p.creditHours),
+          0
+        ) / nonDeadheadPairings.length,
       topDeadheadPairings: deadheadPairings
-      .sort((a:any, b:any) => parseDecimal(b.creditHours) - parseDecimal(a.creditHours))
+        .sort(
+          (a: any, b: any) =>
+            parseDecimal(b.creditHours) - parseDecimal(a.creditHours)
+        )
         .slice(0, 10)
-        .map(p => ({ pairingNumber: p.pairingNumber, creditHours: p.creditHours, blockHours: p.blockHours }))
+        .map(p => ({
+          pairingNumber: p.pairingNumber,
+          creditHours: p.creditHours,
+          blockHours: p.blockHours,
+        })),
     };
   }
 
@@ -1003,7 +1241,7 @@ if (filters.tafbMax !== undefined) {
         pairingNumber: p.pairingNumber,
         creditHours: p.creditHours,
         blockHours: p.blockHours,
-        holdProbability: p.holdProbability
+        holdProbability: p.holdProbability,
       });
       return acc;
     }, {} as any);
@@ -1012,19 +1250,31 @@ if (filters.tafbMax !== undefined) {
     Object.values(durationGroups).forEach((group: any) => {
       group.avgCredit = group.totalCredit / group.count;
       group.avgBlock = group.totalBlock / group.count;
-      group.pairings = group.pairings.sort((a: any, b: any) => b.creditHours - a.creditHours).slice(0, 10);
+      group.pairings = group.pairings
+        .sort((a: any, b: any) => b.creditHours - a.creditHours)
+        .slice(0, 10);
     });
 
     return {
       totalPairings: allPairings.length,
       durationBreakdown: durationGroups,
-      mostCommonDuration: Object.entries(durationGroups).sort(([,a]: [string, any], [,b]: [string, any]) => b.count - a.count)[0]?.[0],
-      avgDuration: allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) / allPairings.length
+      mostCommonDuration: Object.entries(durationGroups).sort(
+        ([, a]: [string, any], [, b]: [string, any]) => b.count - a.count
+      )[0]?.[0],
+      avgDuration:
+        allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) /
+        allPairings.length,
     };
   }
 
   // Calendar event methods
-  async addUserCalendarEvent(data: { userId: number; pairingId: number; startDate: Date; endDate: Date; notes?: string }): Promise<UserCalendarEvent> {
+  async addUserCalendarEvent(data: {
+    userId: number;
+    pairingId: number;
+    startDate: Date;
+    endDate: Date;
+    notes?: string;
+  }): Promise<UserCalendarEvent> {
     // Check if this user already has a calendar event for this pairing
     const existing = await db
       .select()
@@ -1037,7 +1287,10 @@ if (filters.tafbMax !== undefined) {
       );
 
     if (existing.length > 0) {
-      console.log('Calendar event already exists, returning existing:', existing[0]);
+      console.log(
+        'Calendar event already exists, returning existing:',
+        existing[0]
+      );
       return existing[0];
     }
 
@@ -1050,8 +1303,12 @@ if (filters.tafbMax !== undefined) {
     return result;
   }
 
-  async removeUserCalendarEvent(userId: number, pairingId: number): Promise<void> {
-    await db.delete(userCalendarEvents)
+  async removeUserCalendarEvent(
+    userId: number,
+    pairingId: number
+  ): Promise<void> {
+    await db
+      .delete(userCalendarEvents)
       .where(
         and(
           eq(userCalendarEvents.userId, userId),
@@ -1060,7 +1317,9 @@ if (filters.tafbMax !== undefined) {
       );
   }
 
-  async getUserCalendarEvents(userId: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  async getUserCalendarEvents(
+    userId: number
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
@@ -1074,7 +1333,11 @@ if (filters.tafbMax !== undefined) {
     return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
   }
 
-  async getUserCalendarEventsForMonth(userId: number, month: number, year: number): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  async getUserCalendarEventsForMonth(
+    userId: number,
+    month: number,
+    year: number
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
     const startDate = new Date(year, month - 1, 1); // month is 1-based, Date constructor expects 0-based
     const endDate = new Date(year, month, 0, 23, 59, 59); // Last day of month
 
@@ -1099,7 +1362,11 @@ if (filters.tafbMax !== undefined) {
     return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
   }
 
-  async getUserCalendarEventsInRange(userId: number, startDate: Date, endDate: Date): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  async getUserCalendarEventsInRange(
+    userId: number,
+    startDate: Date,
+    endDate: Date
+  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
