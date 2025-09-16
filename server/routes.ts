@@ -32,14 +32,6 @@ async function recalculateHoldProbabilitiesOptimized(
     const updates: Array<{ id: number; holdProbability: number }> = [];
 
     for (const pairing of allPairings) {
-      const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
-      const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
-        pairing.pairingNumber,
-        allPairings
-      );
-      const startsOnWeekend = HoldProbabilityCalculator.startsOnWeekend(pairing);
-      const includesWeekendOff = HoldProbabilityCalculator.includesWeekendOff(pairing);
-    for (const pairing of allPairings) {
       const desirabilityScore =
         HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
       const pairingFrequency =
@@ -1088,8 +1080,8 @@ export async function registerRoutes(app: Express) {
         .where(
           and(
             eq(userCalendarEvents.userId, userId),
-            startDate ? gte(userCalendarEvents.endDate, startDate as string) : undefined,
-            endDate ? lte(userCalendarEvents.startDate, endDate as string) : undefined
+            startDate ? gte(userCalendarEvents.endDate, new Date(startDate as string)) : undefined,
+            endDate ? lte(userCalendarEvents.startDate, new Date(endDate as string)) : undefined
           )
         );
 
