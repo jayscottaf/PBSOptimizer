@@ -1,4 +1,10 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Calendar as CalendarIcon, X } from "lucide-react";
+import { format } from "date-fns";
+import { useState } from "react";
 import type { SearchFilters } from "@/lib/api";
 
 interface FiltersPanelProps {
@@ -7,13 +13,39 @@ interface FiltersPanelProps {
 }
 
 export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanelProps) {
+  const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
     const numericValue = key.includes('Min') || key.includes('Max') ? parseFloat(value) : value;
     onFiltersChange({ [key]: numericValue });
   };
 
+  const handleDayOffSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    const newDaysOff = selectedDaysOff.some(d => d.getTime() === date.getTime())
+      ? selectedDaysOff.filter(d => d.getTime() !== date.getTime())
+      : [...selectedDaysOff, date];
+    
+    setSelectedDaysOff(newDaysOff);
+    onFiltersChange({ preferredDaysOff: newDaysOff });
+  };
+
+  const removeDayOff = (dateToRemove: Date) => {
+    const newDaysOff = selectedDaysOff.filter(d => d.getTime() !== dateToRemove.getTime());
+    setSelectedDaysOff(newDaysOff);
+    onFiltersChange({ preferredDaysOff: newDaysOff });
+  };
+
+  const clearAllDaysOff = () => {
+    setSelectedDaysOff([]);
+    onFiltersChange({ preferredDaysOff: [] });
+  };
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
         <Select onValueChange={(value) => {
@@ -102,6 +134,71 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
             <SelectItem value="low">Low (&lt;50%)</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      
+      {/* Preferred Days Off Filter */}
+      <div className="border-t pt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Days Off</label>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 px-3">
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                Select Days Off
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="multiple"
+                selected={selectedDaysOff}
+                onSelect={(dates) => {
+                  if (dates) {
+                    setSelectedDaysOff(dates);
+                    onFiltersChange({ preferredDaysOff: dates });
+                  }
+                }}
+                initialFocus
+              />
+              <div className="p-3 border-t flex justify-between">
+                <Button variant="outline" size="sm" onClick={clearAllDaysOff}>
+                  Clear All
+                </Button>
+                <Button size="sm" onClick={() => setIsCalendarOpen(false)}>
+                  Done
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Display selected days */}
+          {selectedDaysOff.map((date, index) => (
+            <div key={index} className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs">
+              <span>{format(date, 'MMM dd')}</span>
+              <button
+                onClick={() => removeDayOff(date)}
+                className="hover:bg-blue-200 rounded-full p-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          
+          {selectedDaysOff.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAllDaysOff}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              Clear All
+            </Button>
+          )}
+        </div>
+        {selectedDaysOff.length > 0 && (
+          <p className="text-xs text-gray-500 mt-1">
+            {selectedDaysOff.length} day{selectedDaysOff.length !== 1 ? 's' : ''} selected for days off
+          </p>
+        )}
       </div>
     </div>
   );

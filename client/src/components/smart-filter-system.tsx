@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Calendar as CalendarIcon } from "lucide-react";
 import { SearchFilters } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 interface FilterOption {
   key: string;
   label: string;
@@ -80,6 +83,7 @@ const filterOptions: FilterOption[] = [
       { value: 120, label: "Extended (5+ days)", filterKey: "tafbMin" },
     ]
   },
+  
   {
     key: "efficiency",
     label: "Credit/Block Ratio",
@@ -93,12 +97,16 @@ const filterOptions: FilterOption[] = [
   }
 ];
 
-export function SmartFilterSystem({ 
-  pairings, 
-  onFiltersChange, 
-  activeFilters, 
-  onClearFilters 
+export function SmartFilterSystem({
+  pairings,
+  onFiltersChange,
+  activeFilters,
+  onClearFilters
 }: SmartFilterSystemProps) {
+
+  // Preferred days off state
+  const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Helper functions to handle filter changes
   const onFilterApply = (filterKey: string, filterValue: any, displayLabel: string) => {
@@ -113,10 +121,41 @@ export function SmartFilterSystem({
     onFiltersChange(newFilters);
   };
 
+  // Handle preferred days off
+  const handleDayOffSelect = (dates: Date[] | undefined) => {
+    if (!dates) {
+      setSelectedDaysOff([]);
+      onFilterClear("preferredDaysOff");
+      return;
+    }
+    
+    setSelectedDaysOff(dates);
+    if (dates.length === 0) {
+      onFilterClear("preferredDaysOff");
+    } else {
+      onFilterApply("preferredDaysOff", dates, `Days Off: ${dates.length} selected`);
+    }
+  };
+
+  const removeDayOff = (dateToRemove: Date) => {
+    const newDaysOff = selectedDaysOff.filter(d => d.getTime() !== dateToRemove.getTime());
+    setSelectedDaysOff(newDaysOff);
+    if (newDaysOff.length === 0) {
+      onFilterClear("preferredDaysOff");
+    } else {
+      onFilterApply("preferredDaysOff", newDaysOff, `Days Off: ${newDaysOff.length} selected`);
+    }
+  };
+
+  const clearAllDaysOff = () => {
+    setSelectedDaysOff([]);
+    onFilterClear("preferredDaysOff");
+  };
+
   const [selectedFunction, setSelectedFunction] = useState<string>("");
   const [selectedData, setSelectedData] = useState<string>("");
 
-  const currentFunctionOptions = selectedFunction 
+  const currentFunctionOptions = selectedFunction
     ? filterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
     : [];
 
@@ -153,8 +192,8 @@ export function SmartFilterSystem({
         [dataOption.additionalFilter.key]: dataOption.additionalFilter.value
       };
       // Determine the range filter key based on the function
-      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' : 
-                      functionOption.key === 'blockHours' ? 'blockRange' : 
+      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' :
+                      functionOption.key === 'blockHours' ? 'blockRange' :
                       functionOption.key + 'Range';
       onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
     } else {
@@ -198,8 +237,8 @@ export function SmartFilterSystem({
         [dataOption.filterKey || functionOption.key]: dataOption.value,
         [dataOption.additionalFilter.key]: dataOption.additionalFilter.value
       };
-      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' : 
-                      functionOption.key === 'blockHours' ? 'blockRange' : 
+      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' :
+                      functionOption.key === 'blockHours' ? 'blockRange' :
                       functionOption.key + 'Range';
       onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
     } else {
@@ -275,8 +314,8 @@ export function SmartFilterSystem({
         {/* Function Selector */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Filter By</label>
-          <select 
-            value={selectedFunction} 
+          <select
+            value={selectedFunction}
             onChange={(e) => {
               setSelectedFunction(e.target.value);
               setSelectedData(""); // Reset data selection when function changes
@@ -295,8 +334,8 @@ export function SmartFilterSystem({
         {/* Data Selector */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Value</label>
-          <select 
-            value={selectedData} 
+          <select
+            value={selectedData}
             onChange={(e) => {
               handleSelectValueAndApply(e.target.value);
             }}
@@ -313,7 +352,7 @@ export function SmartFilterSystem({
         </div>
 
         {/* Add Filter Button (hidden; auto-applies on selection) */}
-        <Button 
+        <Button
           onClick={handleAddFilter}
           disabled
           className="hidden items-center gap-2"
@@ -328,20 +367,20 @@ export function SmartFilterSystem({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Active Filters:</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onClearFilters}
               className="text-xs text-red-600 hover:text-red-700"
             >
               Clear All
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             {activeFilters.map((filter, index) => (
-              <Badge 
-                key={index} 
-                variant="secondary" 
+              <Badge
+                key={index}
+                variant="secondary"
                 className="flex items-center gap-1 pr-1"
               >
                 <span className="text-xs">{filter.label}</span>
@@ -357,6 +396,64 @@ export function SmartFilterSystem({
           </div>
         </div>
       )}
+
+      {/* Preferred Days Off Calendar Button */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-gray-700">Preferred Days Off:</span>
+          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-2"
+              >
+                <CalendarIcon className="h-4 w-4" />
+                {selectedDaysOff.length === 0 ? 'Select dates' : `${selectedDaysOff.length} selected`}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 z-[60]" align="start" side="bottom" sideOffset={4}>
+              <Calendar
+                mode="multiple"
+                selected={selectedDaysOff}
+                onSelect={handleDayOffSelect}
+                initialFocus
+                className="rounded-md border"
+              />
+              <div className="p-3 border-t flex justify-between">
+                <Button variant="outline" size="sm" onClick={clearAllDaysOff}>
+                  Clear All
+                </Button>
+                <Button size="sm" onClick={() => setIsCalendarOpen(false)}>
+                  Done
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Display selected days */}
+        {selectedDaysOff.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {selectedDaysOff.map((date, index) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="flex items-center gap-1 pr-1"
+              >
+                <span className="text-xs">{format(date, 'MMM dd')}</span>
+                <button
+                  onClick={() => removeDayOff(date)}
+                  className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                  title="Remove date"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Quick Filter Buttons */}
       <div className="space-y-2">

@@ -31,8 +31,42 @@ type CalendarViewProps = {
 };
 
 export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
-  // Set to September 2025 for the bid month (even though bid period starts Aug 31)
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // September 1, 2025 (month is 0-indexed)
+  // Get latest bid package info for dynamic date initialization
+  const { data: bidPackages = [] } = useQuery({
+    queryKey: ["bidPackages"],
+    queryFn: async () => {
+      const response = await fetch('/api/bid-packages');
+      if (!response.ok) throw new Error('Failed to fetch bid packages');
+      return response.json();
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+
+  const latestBidPackage = React.useMemo(() => {
+    if (!bidPackages || bidPackages.length === 0) return null;
+    const packagesArray = (bidPackages as any[]).slice();
+    packagesArray.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    const mostRecentCompleted = packagesArray.find((pkg: any) => pkg.status === "completed");
+    return mostRecentCompleted || packagesArray[0];
+  }, [bidPackages]);
+  // Initialize to the bid package month/year dynamically
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (bidPackageId && latestBidPackage) {
+      // Use the bid package's month and year
+      const month = latestBidPackage.month || 'SEP';
+      const year = latestBidPackage.year || 2025;
+
+      const monthMap: { [key: string]: number } = {
+        'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+        'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+      };
+
+      const monthIndex = monthMap[month] || 8; // Default to September if unknown
+      return new Date(year, monthIndex, 1);
+    }
+    // Fallback to current date
+    return new Date();
+  });
   const queryClient = useQueryClient();
 
   const monthStart = startOfMonth(currentDate);
@@ -49,9 +83,18 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       const startOfCalendarView = calendarStart;
       const endOfCalendarView = calendarEnd;
 
-      const response = await fetch(`/api/calendar/${userId}?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`);
+      console.log('Fetching calendar events for date range:', {
+        start: startOfCalendarView.toISOString(),
+        end: endOfCalendarView.toISOString(),
+        month: currentDate.getMonth() + 1,
+        year: currentDate.getFullYear()
+      });
+
+      const response = await fetch(`/api/users/${userId}/calendar?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`);
       if (!response.ok) throw new Error('Failed to fetch calendar events');
-      return response.json();
+      const result = await response.json();
+      console.log('Calendar events fetched:', result);
+      return result;
     },
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true,
@@ -73,10 +116,9 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   // Remove from calendar mutation
   const removeFromCalendarMutation = useMutation({
     mutationFn: async ({ userId, pairingId }: { userId: number; pairingId: number }) => {
-      const response = await fetch('/api/calendar', {
+      const response = await fetch(`/api/users/${userId}/calendar/${pairingId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, pairingId }),
       });
       if (!response.ok) throw new Error('Failed to remove from calendar');
       return response.json();
@@ -205,7 +247,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
               {format(currentDate, 'MMMM yyyy')}
             </h2>
             <p className="text-sm text-gray-600">
-              Bid Period: Aug 31 - Sep 30, 2025
+              {bidPackageId && latestBidPackage ? 
+                `Bid Package: ${latestBidPackage.month} ${latestBidPackage.year}` : 
+                'Calendar View'
+              }
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
@@ -554,7 +599,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   <div className="text-sm text-blue-600 font-medium">{hasStats ? ratioLabel : 'Insufficient data'}</div>
                 </div>
               </div>
-              
+
               {hasStats && (
                 <div className="text-xs text-gray-600 space-y-1">
                   <div className="flex justify-between">

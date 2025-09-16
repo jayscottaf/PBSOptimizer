@@ -613,28 +613,34 @@ export class PDFParser {
       }
     }
 
-    // Calculate pairing days from unique day letters in flight segments
-    const uniqueDays = Array.from(new Set(flightSegments.map(seg => seg.date))).sort();
-    let pairingDays = uniqueDays.length;
+    // Calculate pairing days based on the last (highest) day letter
+    // This handles cases where there are long overnight layovers without flights
+    // For example: A->C (skipping B due to long layover) should be 3 days, not 2
+    let pairingDays = 1; // Default to 1 day minimum
 
-    // Enhanced validation: check for day patterns in the full text block
-    // Some pairings might have days mentioned that don't have flight segments
+    // Find all day letters mentioned in the full text block
     const dayPatternMatches = block.match(/^([A-E])\s/gm);
     if (dayPatternMatches) {
-      const textDays = Array.from(new Set(dayPatternMatches.map(match => match.trim().charAt(0))));
-      const textDayCount = textDays.length;
-
-      // Use the higher count between flight segments and text patterns
-      if (textDayCount > pairingDays) {
-        pairingDays = textDayCount;
+      const allDayLetters = dayPatternMatches.map(match => match.trim().charAt(0));
+      const uniqueDayLetters = Array.from(new Set(allDayLetters)).sort();
+      
+      if (uniqueDayLetters.length > 0) {
+        // Get the last (highest) day letter
+        const lastDayLetter = uniqueDayLetters[uniqueDayLetters.length - 1];
+        
+        // Convert letter to number (A=1, B=2, C=3, D=4, E=5)
+        pairingDays = lastDayLetter.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
+        
+        console.log(`Pairing ${pairingNumber}: Day letters found: ${uniqueDayLetters.join(', ')}, Last day: ${lastDayLetter}, Pairing days: ${pairingDays}`);
       }
     }
 
-    // Additional validation for complex routes
-    if (pairingDays <= 2 && flightSegments.length >= 6) {
-      const routeSegments = route.split('-').length;
-      if (routeSegments >= 7) {
-        pairingDays = Math.max(pairingDays, 4);
+    // Fallback: if no day patterns found, try to get from flight segments
+    if (pairingDays === 1 && flightSegments.length > 0) {
+      const flightDays = Array.from(new Set(flightSegments.map(seg => seg.date))).sort();
+      if (flightDays.length > 0) {
+        const lastFlightDay = flightDays[flightDays.length - 1];
+        pairingDays = Math.max(pairingDays, lastFlightDay.charCodeAt(0) - 'A'.charCodeAt(0) + 1);
       }
     }
 

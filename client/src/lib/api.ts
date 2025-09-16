@@ -50,6 +50,7 @@ export interface SearchFilters {
   pairingDaysMax?: number;
   efficiency?: number;
   seniorityPercentage?: number;
+  preferredDaysOff?: Date[]; // Added preferredDaysOff
   // Pagination and sorting
   page?: number;
   limit?: number;
@@ -86,20 +87,20 @@ export const api = {
   // Prefetch entire dataset for current filters and cache for offline/global sorting
   prefetchAllPairings: async (filters: SearchFilters & { bidPackageId: number }, userId?: string | number) => {
     console.log('Starting prefetch for filters:', filters, 'userId:', userId);
-    
+
     // Use cache key WITHOUT sortBy/sortOrder to enable global sorting on one dataset
     const { sortBy, sortOrder, page, limit: _, ...filtersForCache } = filters;
     const key = cacheKeyForPairings(filters.bidPackageId, filtersForCache, userId);
-    
+
     console.log('Prefetch cache key:', key);
-    
+
     // Check if already cached
     const existing = await loadFullPairingsCache(key);
     if (existing && existing.length > 0) {
       console.log('Full cache already exists, skipping prefetch');
       return { total: existing.length, cached: true };
     }
-    
+
     // First page to determine total
     const first = await fetch('/api/pairings/search', {
       method: 'POST',
@@ -225,7 +226,7 @@ export const api = {
       if (data && data.pairings && data.pagination) {
         return data;
       }
-      
+
       // Fallback for old format (array)
       return {
         pairings: list,
@@ -331,28 +332,34 @@ export const api = {
       endDate: endDate.toISOString()
     });
 
-    const response = await fetch('/api/calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        pairingId,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
-      }),
-    });
+    try {
+      const response = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          pairingId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
+        }),
+      });
 
-    console.log('API: Response status:', response.status);
+      console.log('API: Response status:', response.status);
+      console.log('API: Response headers:', Object.fromEntries(response.headers.entries()));
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API: Error response:', errorText);
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API: Error response:', errorText);
+        throw new Error(`Failed to add to calendar (HTTP ${response.status}): ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('API: Success response:', result);
+      return result;
+    } catch (error) {
+      console.error('API: Network or parsing error:', error);
+      throw error;
     }
-
-    const result = await response.json();
-    console.log('API: Success response:', result);
-    return result;
   },
 
   removeFromCalendar: async (userId: number, pairingId: number) => {

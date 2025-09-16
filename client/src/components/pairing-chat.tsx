@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Loader2, Plus, MessageSquare, X } from "lucide-react";
+import { Send, Bot, User, Loader2, Plus, MessageSquare, X, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BidPackage } from "@/lib/api";
 import { PairingDisplay } from "./pairing-display";
+import { useQuery } from "@tanstack/react-query";
 
 interface ChatMessage {
   id: string;
@@ -38,6 +39,17 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
   const [showConversations, setShowConversations] = useState(false);
   const [currentBidPackage, setCurrentBidPackage] = useState<BidPackage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check if we have any bid packages available
+  const { data: bidPackages = [] } = useQuery({
+    queryKey: ["/api/bid-packages"],
+    queryFn: () => api.getBidPackages(),
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true,
+  });
+
+  const hasBidPackages = bidPackages.length > 0;
+  const hasCompletedBidPackages = bidPackages.some(pkg => pkg.status === 'completed');
 
   // Generate or retrieve session ID
   useEffect(() => {
@@ -327,12 +339,12 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
 
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
-    
+
     // Extract pairings from various locations in message data
     if (messageData?.pairings && Array.isArray(messageData.pairings)) {
       pairings.push(...messageData.pairings);
     }
-    
+
     if (messageData?.pairing) {
       pairings.push(messageData.pairing);
     }
@@ -366,7 +378,7 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
 
   const formatMessageWithPairings = (content: string, messageData?: any) => {
     const pairings = parsePairingsFromMessage(content, messageData);
-    
+
     if (pairings.length === 0) {
       return <span className="whitespace-pre-wrap text-sm">{content}</span>;
     }
@@ -593,11 +605,14 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
               </Button>
             </form>
 
-            {!currentBidPackage && (
+            {!hasCompletedBidPackages ? (
               <div className={`text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded ${compact ? 'mt-1' : 'mt-2'}`}>
-                Upload a bid package to enable full analysis capabilities
+                {bidPackages.length === 0 
+                  ? "Upload a bid package to start using the AI assistant"
+                  : "Processing bid package... AI assistant will be available once processing is complete"
+                }
               </div>
-            )}
+            ) : null}
           </div>
         </CardContent>
       </Card>

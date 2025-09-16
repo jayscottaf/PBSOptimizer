@@ -51,38 +51,27 @@ async function recalculatePairingDays() {
 function calculatePairingDaysFromText(fullTextBlock: string): number {
   if (!fullTextBlock) return 1;
 
-  // Extract flight segments to get unique days
-  const flightSegments: string[] = [];
-  const lines = fullTextBlock.split('\n');
-  
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    
-    // Match day patterns: "A    417    LGA 1300  BOS 1944  1.44"
-    const dayFlightMatch = trimmedLine.match(/^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/);
-    if (dayFlightMatch) {
-      flightSegments.push(dayFlightMatch[1]); // Day letter
-    }
-  }
+  // Calculate pairing days based on the last (highest) day letter
+  // This handles cases where there are long overnight layovers without flights
+  let pairingDays = 1; // Default to 1 day minimum
 
-  // Get unique days from flight segments
-  const uniqueDaysFromSegments = [...new Set(flightSegments)].sort();
-  let calculatedDays = uniqueDaysFromSegments.length;
-
-  // Also check for day patterns in the full text (some days might not have flights)
+  // Find all day letters mentioned in the full text block
   const dayPatternMatches = fullTextBlock.match(/^([A-E])\s/gm);
   if (dayPatternMatches) {
-    const textDays = [...new Set(dayPatternMatches.map(match => match.trim().charAt(0)))];
-    const textDayCount = textDays.length;
+    const allDayLetters = dayPatternMatches.map(match => match.trim().charAt(0));
+    const uniqueDayLetters = Array.from(new Set(allDayLetters)).sort();
     
-    // Use the higher count
-    if (textDayCount > calculatedDays) {
-      calculatedDays = textDayCount;
+    if (uniqueDayLetters.length > 0) {
+      // Get the last (highest) day letter
+      const lastDayLetter = uniqueDayLetters[uniqueDayLetters.length - 1];
+      
+      // Convert letter to number (A=1, B=2, C=3, D=4, E=5)
+      pairingDays = lastDayLetter.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
     }
   }
 
   // Ensure minimum of 1 day
-  return Math.max(calculatedDays, 1);
+  return Math.max(pairingDays, 1);
 }
 
 // Add missing import

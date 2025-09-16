@@ -70,19 +70,22 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
       startDate: Date;
       endDate: Date;
     }) => {
-      return api.addToCalendar(userId, pairingId, startDate, endDate);
+      console.log('Mutation function called with:', { userId, pairingId, startDate, endDate });
+      const result = await api.addToCalendar(userId, pairingId, startDate, endDate);
+      console.log('Mutation result:', result);
+      return result;
     },
     onSuccess: (data) => {
       console.log('Calendar mutation success:', data);
-      setIsAddedToCalendar(true);
-      // Invalidate all calendar queries to refresh the view
+      toast({ title: 'Success', description: 'Pairing added to calendar successfully' });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.refetchQueries({ queryKey: ['calendar'] });
-      toast({ title: 'Success', description: 'Pairing added to calendar successfully!' });
+      setIsAddedToCalendar(true);
     },
     onError: (error: any) => {
       console.error('Calendar mutation error:', error);
-      toast({ title: 'Error', description: error.message || 'Failed to add pairing to calendar', variant: 'destructive' });
+      const errorMessage = error?.message || 'Unknown error occurred while adding to calendar';
+      toast({ title: 'Error', description: `Failed to add to calendar: ${errorMessage}`, variant: 'destructive' });
     },
   });
 
@@ -216,8 +219,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
         <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
           <Button variant="outline" size="sm" className="w-full sm:w-auto">Export Details</Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             className="w-full sm:w-auto"
             disabled={addToCalendarMutation.isPending}
@@ -239,127 +242,117 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   aircraft
                 });
 
-                // Parse effective dates and extract possible start dates
-                const effectiveDateStr = (pairing.effectiveDates || '').toUpperCase();
-                const currentYear = new Date().getFullYear();
+                // Parse effective dates to get possible start dates
+                const effectiveDateStr = pairing.effectiveDates;
+                console.log('Parsing effective dates:', effectiveDateStr);
+
+                const currentYear = new Date().getFullYear(); // Use the current year
                 const monthMap: { [key: string]: number } = {
                   'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
                   'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
                 };
-                const weekdayMap: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
+                // Function to parse a single date like "SEP10" or "31AUG" or "10SEP"
                 const parseSingleDate = (dateStr: string) => {
-                  const clean = dateStr.replace(/\./g, '').trim();
-                  const m = clean.match(/(?:(\d{1,2})([A-Z]{3}))|(?:([A-Z]{3})(\d{1,2}))/);
-                  if (!m) return null;
-                  const day = parseInt((m[1] || m[4]) as string);
-                  const mon = (m[2] || m[3]) as string;
-                  if (!monthMap.hasOwnProperty(mon)) return null;
-                  return new Date(currentYear, monthMap[mon], day);
-                };
+                  console.log('Parsing single date:', dateStr);
 
-                const extractDatesFromRange = (text: string) => {
-                  // Remove periods but preserve the original for debugging
-                  const t = text.replace(/\./g, '');
-                  console.log('Extracting dates from range:', text, 'cleaned:', t);
-                  
-                  // Day-first range, e.g., 22SEP-25SEP
-                  let m = t.match(/(\d{1,2})([A-Z]{3})\s*-\s*(\d{1,2})([A-Z]{3})/);
-                  let start: Date | null = null;
-                  let end: Date | null = null;
-                  if (m) {
-                    const [, sd, sm, ed, em] = m;
-                    start = new Date(currentYear, monthMap[sm], parseInt(sd));
-                    end = new Date(currentYear, monthMap[em], parseInt(ed));
-                    console.log('Day-first match:', sd, sm, '-', ed, em);
-                  } else {
-                    // Month-first range, e.g., SEP22-SEP25 or SEP21-SEP 28
-                    m = t.match(/([A-Z]{3})(\d{1,2})\s*-\s*([A-Z]{3})\s*(\d{1,2})/);
-                    if (m) {
-                      const [, sm2, sd2, em2, ed2] = m;
-                      start = new Date(currentYear, monthMap[sm2], parseInt(sd2));
-                      end = new Date(currentYear, monthMap[em2], parseInt(ed2));
-                      console.log('Month-first match:', sm2, sd2, '-', em2, ed2);
-                    }
-                  }
-                  if (!start || !end) {
-                    console.log('No range match found');
-                    return [] as Date[];
-                  }
-                  
-                  // Extract weekday qualifiers if present
-                  const weekdayTokens = Array.from(t.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)).map(x => x[1]);
-                  console.log('Weekday tokens:', weekdayTokens);
-                  
-                  // In modal, when weekdays present, present endpoints only to avoid accidental mid-range dates
-                  if (weekdayTokens.length > 0) {
-                    console.log('Returning endpoints only due to weekday qualifiers');
-                    return [start, end];
-                  }
-                  
-                  const out: Date[] = [];
-                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                    out.push(new Date(d));
-                  }
-                  console.log('Date range results:', out.map(d => d.toLocaleDateString()));
-                  return out;
-                };
+                  // Try different patterns
+                  const patterns = [
+                    /(\d{1,2})([A-Z]{3})/,  // "10SEP"
+                    /([A-Z]{3})(\d{1,2})/,  // "SEP10"
+                    /(\d{1,2})\s*([A-Z]{3})/,  // "10 SEP"
+                    /([A-Z]{3})\s*(\d{1,2})/   // "SEP 10"
+                  ];
 
-                let possibleStartDates: Date[] = [];
-                const cleaned = effectiveDateStr.replace(/EFFECTIVE/g, '').replace(/ONLY/g, '').trim();
-                
-                console.log('Parsing effective dates:', effectiveDateStr);
-                console.log('Cleaned:', cleaned);
-                
-                // Check for comma-separated dates first
-                if (cleaned.includes(',')) {
-                  // Example: SEP17, SEP24
-                  for (const part of cleaned.split(',')) {
-                    const d = parseSingleDate(part);
-                    if (d) possibleStartDates.push(d);
-                  }
-                } else {
-                  // Check if it's a range pattern
-                  const rangeDates = extractDatesFromRange(cleaned);
-                  if (rangeDates.length > 0) {
-                    possibleStartDates = rangeDates;
-                  }
-                }
-                
-                // Single explicit date fallback
-                if (possibleStartDates.length === 0) {
-                  const single = parseSingleDate(cleaned);
-                  if (single) possibleStartDates.push(single);
-                }
+                  for (const pattern of patterns) {
+                    const match = dateStr.match(pattern);
+                    if (match) {
+                      const [, first, second] = match;
+                      let day, month;
 
-                // Fallback 2: Try parsing from full text block EFFECTIVE line if we still have <= 1 date
-                if (possibleStartDates.length <= 1) {
-                  const full = (pairing.fullTextBlock || '').toUpperCase();
-                  const effLine = full.split(/\n/).find(l => l.includes('EFFECTIVE')) || '';
-                  if (effLine) {
-                    console.log('Fallback using fullText EFFECTIVE line:', effLine);
-                    const cleanedEff = effLine.replace(/EFFECTIVE\s*/g, '').trim();
-                    // Re-run both parsers on this richer text
-                    let extra: Date[] = [];
-                    if (cleanedEff.includes(',')) {
-                      for (const part of cleanedEff.split(',')) {
-                        const d = parseSingleDate(part);
-                        if (d) extra.push(d);
+                      // Determine if first part is day or month
+                      if (first in monthMap) {
+                        month = first;
+                        day = second;
+                      } else if (second in monthMap) {
+                        day = first;
+                        month = second;
+                      }
+
+                      if (month && day && month in monthMap) {
+                        const parsedDate = new Date(currentYear, monthMap[month], parseInt(day));
+                        console.log('Parsed date:', parsedDate);
+                        return parsedDate;
                       }
                     }
-                    if (extra.length === 0) {
-                      extra = extractDatesFromRange(cleanedEff);
-                    }
-                    if (extra.length === 0) {
-                      const single2 = parseSingleDate(cleanedEff);
-                      if (single2) extra.push(single2);
-                    }
-                    if (extra.length > possibleStartDates.length) {
-                      possibleStartDates = extra;
+                  }
+                  return null;
+                };
+
+                const possibleStartDates: Date[] = [];
+
+                // Check for date range format "01SEP-30SEP" or "SEP01-SEP30"
+                const rangePatterns = [
+                  /(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/,  // "01SEP-30SEP"
+                  /([A-Z]{3})(\d{1,2})-([A-Z]{3})(\d{1,2})/   // "SEP01-SEP30"
+                ];
+
+                let rangeMatch = null;
+                for (const pattern of rangePatterns) {
+                  rangeMatch = effectiveDateStr.match(pattern);
+                  if (rangeMatch) break;
+                }
+
+                if (rangeMatch) {
+                  console.log('Found range match:', rangeMatch);
+                  const [, first, second, third, fourth] = rangeMatch;
+                  let startDay, startMonth, endDay, endMonth;
+
+                  // Determine format
+                  if (first in monthMap) {
+                    // Format: SEP01-SEP30
+                    startMonth = first;
+                    startDay = second;
+                    endMonth = third;
+                    endDay = fourth;
+                  } else {
+                    // Format: 01SEP-30SEP
+                    startDay = first;
+                    startMonth = second;
+                    endDay = third;
+                    endMonth = fourth;
+                  }
+
+                  if (startMonth in monthMap && endMonth in monthMap) {
+                    const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
+                    const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+
+                    console.log('Parsed range:', startDate, 'to', endDate);
+
+                    // For range, just use the start date as the primary option
+                    possibleStartDates.push(startDate);
+                  }
+                } else {
+                  // Try parsing as single date
+                  const singleDate = parseSingleDate(effectiveDateStr);
+                  if (singleDate) {
+                    possibleStartDates.push(singleDate);
+                  } else {
+                    // Fallback: try to extract any date-like pattern
+                    const fallbackMatch = effectiveDateStr.match(/(\d{1,2})|([A-Z]{3})/g);
+                    if (fallbackMatch && fallbackMatch.length >= 2) {
+                      const day = fallbackMatch.find(m => /^\d{1,2}$/.test(m));
+                      const month = fallbackMatch.find(m => /^[A-Z]{3}$/.test(m));
+
+                      if (day && month && month in monthMap) {
+                        const fallbackDate = new Date(currentYear, monthMap[month], parseInt(day));
+                        console.log('Fallback parsed date:', fallbackDate);
+                        possibleStartDates.push(fallbackDate);
+                      }
                     }
                   }
                 }
-                
+
                 console.log('Possible start dates found:', possibleStartDates.length, possibleStartDates.map(d => d.toLocaleDateString()));
 
                 if (possibleStartDates.length === 0) {
@@ -394,14 +387,14 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             <Calendar className={`h-4 w-4 mr-2 ${isAddedToCalendar ? 'text-green-500' : ''}`} />
             {addToCalendarMutation.isPending ? 'Adding...' : isAddedToCalendar ? 'Added to Calendar' : 'Add to Calendar'}
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             className="w-full sm:w-auto"
             disabled={isAddingFavorite || isFavorited}
             onClick={async () => {
               if (isFavorited) return; // Prevent double-adding
-              
+
               try {
                 setIsAddingFavorite(true);
                 const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";

@@ -5,15 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Plane, 
-  Search, 
-  X, 
-  CloudUpload, 
-  BarChart2, 
-  User, 
-  RefreshCw, 
-  Trash2, 
+import {
+  Plane,
+  Search,
+  X,
+  CloudUpload,
+  BarChart2,
+  User,
+  RefreshCw,
+  Trash2,
   Settings,
   Info,
   Star,
@@ -186,6 +186,9 @@ export default function Dashboard() {
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
 
+  // Check if we have any completed bid packages
+  const hasCompletedBidPackages = bidPackages.some((pkg: any) => pkg.status === 'completed');
+
   // Removed redundant initial query to prevent duplicate API calls
 
   // Query for user data with enhanced caching
@@ -257,25 +260,25 @@ export default function Dashboard() {
         setFullLocal(null);
         return;
       }
-      
+
       // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
       console.log('Dashboard: debouncedFilters =', debouncedFilters);
       const userId = currentUser?.seniorityNumber || currentUser?.id;
       const cacheKey = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
       console.log('Dashboard: Generated cache key =', cacheKey, 'for user:', userId);
-      
+
       // Check if full cache exists
       const hasFull = await hasFullPairingsCache(cacheKey);
       console.log('Dashboard: Cache check result for key', cacheKey, ':', hasFull);
       setIsFullCacheReady(hasFull);
-      
+
       if (hasFull) {
         // Load existing full cache
         console.log('Dashboard: Loading existing full cache');
         const full = await loadFullPairingsCache<any[]>(cacheKey);
         console.log('Dashboard: Loaded full cache, length:', full?.length || 0);
         setFullLocal(full || null);
-        
+
         // Hide status indicator after 3 seconds when cache already exists
         setTimeout(() => setShowInitialStatus(false), 3000);
       } else if (navigator.onLine) {
@@ -286,15 +289,15 @@ export default function Dashboard() {
             bidPackageId,
             ...debouncedFilters
           } as any, userId);
-          
+
           // Re-check and load after prefetch
           const newHasFull = await hasFullPairingsCache(cacheKey);
           setIsFullCacheReady(newHasFull);
-          
+
           if (newHasFull) {
             const full = await loadFullPairingsCache<any[]>(cacheKey);
             setFullLocal(full || null);
-            
+
             // Hide status indicator after 3 seconds when cache is ready
             setTimeout(() => setShowInitialStatus(false), 3000);
           }
@@ -333,7 +336,7 @@ export default function Dashboard() {
   // Prefer full local cache whenever it exists (online or offline); fallback to server page
   const pairings = pairingsResponse?.pairings || [];
   const pagination = pairingsResponse?.pagination;
-  
+
   // Create custom pagination when using full cache sorting (online or offline)
   const effectivePagination = React.useMemo(() => {
     if (isFullCacheReady && fullLocal && sortColumn) {
@@ -361,7 +364,7 @@ export default function Dashboard() {
         return 0;
       };
 
-      const getHoldProb = (value: any): number => 
+      const getHoldProb = (value: any): number =>
         typeof value === 'number' ? value : parseFloat(String(value)) || 0;
 
       // Calculate stats from full dataset
@@ -392,7 +395,7 @@ export default function Dashboard() {
         ratioBreakdown
       };
     }
-    
+
     // Fall back to server statistics when not using full cache
     return pairingsResponse?.statistics as any;
   }, [isFullCacheReady, fullLocal, pairingsResponse?.statistics]);
@@ -467,9 +470,9 @@ export default function Dashboard() {
       if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
         // Handle range filters specially
         setActiveFilters(prev => [
-          ...prev.filter(f => 
-            isCreditFilter ? !f.key.match(/^credit/) : 
-            isBlockFilter ? !f.key.match(/^block/) : 
+          ...prev.filter(f =>
+            isCreditFilter ? !f.key.match(/^credit/) :
+            isBlockFilter ? !f.key.match(/^block/) :
             f.key !== key
           ),
           { key, label, value }
@@ -490,9 +493,9 @@ export default function Dashboard() {
       } else {
         // Handle single filters - remove existing filters of the same category
         setActiveFilters(prev => [
-          ...prev.filter(f => 
-            isCreditFilter ? !f.key.match(/^credit/) : 
-            isBlockFilter ? !f.key.match(/^block/) : 
+          ...prev.filter(f =>
+            isCreditFilter ? !f.key.match(/^credit/) :
+            isBlockFilter ? !f.key.match(/^block/) :
             isPairingDaysFilter ? !f.key.match(/^pairingDays/) :
             f.key !== key
           ),
@@ -536,7 +539,7 @@ export default function Dashboard() {
 
     // Process the new filters to handle range objects
     const processedFilters: SearchFilters = {};
-    
+
     Object.entries(newFilters).forEach(([key, value]) => {
       if (key === 'creditRange' && typeof value === 'object' && value !== null) {
         // Flatten credit range object
@@ -553,7 +556,7 @@ export default function Dashboard() {
         processedFilters[key as keyof SearchFilters] = value;
       }
     });
-    
+
     let mergedAfter: any = {};
     setFilters(prev => {
       const merged: any = { ...prev, ...processedFilters };
@@ -568,7 +571,7 @@ export default function Dashboard() {
       return merged;
     });
     setCurrentPage(1);
-    
+
     // Update activeFilters to reflect the FULL merged filter set
     const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
     const sourceForLabels = mergedAfter && Object.keys(mergedAfter).length ? mergedAfter : processedFilters;
@@ -576,7 +579,7 @@ export default function Dashboard() {
     Object.entries(sourceForLabels).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         let label = '';
-        
+
         // Generate appropriate labels for different filter types
         switch (key) {
           case 'creditMin':
@@ -612,11 +615,11 @@ export default function Dashboard() {
           default:
             label = `${key}: ${value}`;
         }
-        
+
         updatedActiveFilters.push({ key, label, value });
       }
     });
-    
+
     setActiveFilters(updatedActiveFilters);
   };
 
@@ -626,70 +629,73 @@ export default function Dashboard() {
   };
 
 
-  // Sorting logic
-  // Remove the sortedPairings calculation and use pairings directly
-  // const sortedPairings = React.useMemo(() => { ... }); // DELETE THIS
+  // Client-side sorting from full cache when available
+  const sortedPairings = React.useMemo(() => {
+    if (!isFullCacheReady || !fullLocal || fullLocal.length === 0) {
+      return pairings;
+    }
 
-  // Use pairings directly since backend will sort them, but prefer full cache for offline sorting
-  const displayPairings = React.useMemo(() => {
-    // If we have full cache, always use it for sorting with pagination (online or offline)
-    // This is more efficient than repeated server calls for sorting/pagination
-    if (isFullCacheReady && fullLocal && sortColumn) {
-      console.log(`Full cache: Sorting dataset (${fullLocal.length} items) by ${sortColumn} ${sortDirection}`);
-      const dataToSort = [...fullLocal];
-      const sorted = dataToSort.sort((a: any, b: any) => {
-        const getVal = (p: any, col: string) => {
-          switch (col) {
-            case 'creditBlockRatio': {
-              const ca = parseFloat(p.creditHours?.toString() || '0');
-              const ba = parseFloat(p.blockHours?.toString() || '1');
-              return ba > 0 ? ca / ba : 0;
+    console.log(`Sorting ${fullLocal.length} pairings from full cache`);
+
+    // Use full local cache for sorting - DON'T re-apply filters since they're already applied in the cache
+    let sorted = [...fullLocal];
+
+    // Apply sorting only - filters are already applied when the cache was created
+    sorted.sort((a, b) => {
+      let aVal: any, bVal: any;
+
+      switch (sortColumn) {
+        case 'creditHours':
+          aVal = parseFloat(a.creditHours?.toString() || '0');
+          bVal = parseFloat(b.creditHours?.toString() || '0');
+          break;
+        case 'blockHours':
+          aVal = parseFloat(a.blockHours?.toString() || '0');
+          bVal = parseFloat(b.blockHours?.toString() || '0');
+          break;
+        case 'holdProbability':
+          aVal = a.holdProbability || 0;
+          bVal = b.holdProbability || 0;
+          break;
+        case 'pairingDays':
+          aVal = a.pairingDays || 0;
+          bVal = b.pairingDays || 0;
+          break;
+        case 'creditBlockRatio':
+          aVal = parseFloat(a.creditHours?.toString() || '0') / (parseFloat(a.blockHours?.toString() || '0') || 1);
+          bVal = parseFloat(b.creditHours?.toString() || '0') / (parseFloat(b.blockHours?.toString() || '0') || 1);
+          break;
+        case 'tafb':
+          // Convert TAFB to minutes for proper sorting
+          const parseTimeTafb = (tafb: string) => {
+            if (!tafb) return 0;
+            if (tafb.includes(':')) {
+              const [hours, minutes] = tafb.split(':').map(Number);
+              return hours * 60 + minutes;
             }
-            case 'creditHours': return parseFloat(p.creditHours?.toString() || '0');
-            case 'blockHours': return parseFloat(p.blockHours?.toString() || '0');
-            case 'tafb': {
-              const s = (p.tafb || '0').toString();
-              if (s.includes(':')) { const [h,m] = s.split(':').map(Number); return h*60+m; }
-              if (s.includes('.')) { const [h,m]=s.split('.').map(Number); return h*60+(m||0); }
-              return parseFloat(s)*60;
-            }
-            case 'pairingDays': return p.pairingDays || 0;
-            case 'holdProbability': return p.holdProbability || 0;
-            case 'pairingNumber': default: return (p.pairingNumber || '').toString();
-          }
-        };
-        const va = getVal(a, sortColumn);
-        const vb = getVal(b, sortColumn);
-        return sortDirection === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
-      });
-      
-      // Apply pagination to sorted results
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const paginatedSorted = sorted.slice(startIndex, endIndex);
-      console.log(`Local pagination: showing ${startIndex + 1}-${Math.min(endIndex, sorted.length)} of ${sorted.length}`);
-      return paginatedSorted;
-    }
-    
-    if (!pairings || pairings.length === 0) return [];
-    
-    // For credit/block ratio, always sort locally since it's computed
-    if (sortColumn === 'creditBlockRatio') {
-      const sorted = [...pairings].sort((a, b) => {
-        const creditA = parseFloat(a.creditHours?.toString() || '0');
-        const blockA = parseFloat(a.blockHours?.toString() || '1');
-        const creditB = parseFloat(b.creditHours?.toString() || '0');
-        const blockB = parseFloat(b.blockHours?.toString() || '1');
-        const ratioA = blockA > 0 ? creditA / blockA : 0;
-        const ratioB = blockB > 0 ? creditB / blockB : 0;
-        return sortDirection === 'asc' ? ratioA - ratioB : ratioB - ratioA;
-      });
-      return sorted;
-    }
-    
-    // Otherwise use server-sorted results (already paginated)
-    return pairings;
-  }, [pairings, fullLocal, isFullCacheReady, sortColumn, sortDirection, currentPage, pageSize]);
+            return parseFloat(tafb) * 60;
+          };
+          aVal = parseTimeTafb(a.tafb?.toString() || '0');
+          bVal = parseTimeTafb(b.tafb?.toString() || '0');
+          break;
+        default:
+          aVal = a.pairingNumber || '';
+          bVal = b.pairingNumber || '';
+      }
+
+      if (sortDirection === 'asc') {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      }
+    });
+
+    console.log(`After filtering and sorting: ${sorted.length} pairings`);
+    return sorted;
+  }, [fullLocal, isFullCacheReady, filters, sortColumn, sortDirection]);
+
+  // Use sorted pairings if available, otherwise use regular pairings
+  const displayPairings = isFullCacheReady && sortedPairings.length > 0 ? sortedPairings : pairings;
 
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
@@ -702,16 +708,16 @@ export default function Dashboard() {
 
     // Use pagination total if available, otherwise fall back to current page count
     const totalPairings = effectivePagination && effectivePagination.total ? effectivePagination.total : pairings.length;
-    
+
     // Use backend statistics if available, otherwise calculate from current page
-    const likelyToHold = pairingsResponse?.statistics?.likelyToHold 
+    const likelyToHold = pairingsResponse?.statistics?.likelyToHold
       ? Number(pairingsResponse.statistics.likelyToHold)
       : pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
-    
-    const highCredit = pairingsResponse?.statistics?.highCredit 
+
+    const highCredit = pairingsResponse?.statistics?.highCredit
       ? Number(pairingsResponse.statistics.highCredit)
       : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
-    
+
     return {
       totalPairings,
       likelyToHold,
@@ -727,8 +733,8 @@ export default function Dashboard() {
       } flex-shrink-0 flex-col`}>
         {/* Toggle button */}
         <div className="p-4 border-b flex justify-end">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           >
@@ -772,9 +778,9 @@ export default function Dashboard() {
               ) : (
                 // Expanded view - show full stats panel
                 <div className="space-y-6">
-                  <StatsPanel 
-                    pairings={displayPairings || []} 
-                    bidPackage={latestBidPackage} 
+                  <StatsPanel
+                    pairings={displayPairings || []}
+                    bidPackage={latestBidPackage}
                     pagination={effectivePagination}
                     statistics={effectiveStatistics}
                   />
@@ -808,8 +814,8 @@ export default function Dashboard() {
                   <TabsList className="grid grid-cols-1 sm:w-auto">
                     <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                   </TabsList>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => {
                       // Toggle between showing all pairings and favorites
@@ -823,16 +829,16 @@ export default function Dashboard() {
                   >
                     <Star className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setActiveTab("calendar")}
                     className={`${activeTab === "calendar" ? "bg-blue-50 text-blue-700" : "text-gray-600"}`}
                   >
                     <Calendar className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       // On mobile: show full-screen AI view
@@ -851,8 +857,8 @@ export default function Dashboard() {
                     <Bot className="h-4 w-4 hover:text-green-700" />
                   </Button>
 
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => setShowProfileModal(true)}
                     className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 hover:scale-105"
@@ -861,8 +867,8 @@ export default function Dashboard() {
                     <User className="h-4 w-4" />
                   </Button>
                   <div className="flex items-center gap-3">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => setShowUploadModal(true)}
                       className="flex items-center gap-2"
@@ -870,7 +876,7 @@ export default function Dashboard() {
                       <CloudUpload className="h-4 w-4" />
                       <span className="hidden sm:inline">Upload</span>
                     </Button>
-                    
+
                     {/* Network Status - Inline WiFi icon */}
                     <div className="relative">
                       <NetworkStatus />
@@ -896,8 +902,8 @@ export default function Dashboard() {
                     </CardHeader>
                     {showQuickStats && (
                       <CardContent>
-                        <StatsPanel 
-                          pairings={displayPairings || []} 
+                        <StatsPanel
+                          pairings={displayPairings || []}
                           bidPackage={latestBidPackage}
                           pagination={effectivePagination}
                           statistics={effectiveStatistics}
@@ -914,134 +920,129 @@ export default function Dashboard() {
 
                 {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
-                {/* Smart Filters - Always visible above pairing results */}
-                {bidPackageId && (
-                  <Card className="mb-4">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Settings className="h-5 w-5" />
-                        Smart Filters
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                {/* Horizontal Filters Bar */}
+                <div className="flex flex-col h-full bg-white">
+                  <div className="w-full bg-white border-b p-4">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
                       <SmartFilterSystem
-                        pairings={displayPairings || []}
+                        pairings={pairings || []}
                         onFiltersChange={handleFiltersChange}
                         activeFilters={activeFilters}
                         onClearFilters={clearAllFilters}
                       />
-                    </CardContent>
-                  </Card>
-                )}
+                    </div>
+                  </div>
 
-                {/* Pairing Results Section */}
-                {bidPackageId && (
-                  <Card className="h-full flex flex-col">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-lg font-medium flex items-center gap-2">
-                        <Search className="h-5 w-5 text-muted-foreground" />
-                        Pairing Results
-                      </CardTitle>
-                      <div className="flex items-center space-x-2">
-                        {/* Only show cache status when it's actually useful */}
-                        {(isPrefetching || !isFullCacheReady || showInitialStatus) && (
-                          <>
-                            {isPrefetching ? (
-                              <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
-                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
-                              </span>
-                            ) : isFullCacheReady ? (
-                              <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
-                                Available offline: Yes
-                              </span>
-                            ) : (
-                              <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
-                                    onClick={async () => {
-                                      console.log('Manual prefetch triggered');
-                                      setShowInitialStatus(true); // Show status during manual prefetch
-                                      console.log('Clearing old cache entries first...');
-                                      // Clear old cache entries
-                                      try {
-                                        const request = indexedDB.open('pbs-cache', 1);
-                                        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                                          request.onsuccess = () => resolve(request.result);
-                                          request.onerror = () => reject(request.error);
-                                        });
-                                        const tx = db.transaction(['pairings'], 'readwrite');
-                                        const store = tx.objectStore('pairings');
-                                        await new Promise<void>((resolve, reject) => {
-                                          const clearReq = store.clear();
-                                          clearReq.onsuccess = () => resolve();
-                                          clearReq.onerror = () => reject(clearReq.error);
-                                        });
-                                        console.log('Cache cleared');
-                                      } catch (e) {
-                                        console.log('Failed to clear cache:', e);
-                                      }
-                                      
-                                      setIsPrefetching(true);
-                                      try {
-                                        const userId = currentUser?.seniorityNumber || currentUser?.id;
-                                        await api.prefetchAllPairings({
-                                          bidPackageId,
-                                          ...debouncedFilters
-                                        } as any, userId);
-                                        
-                                        const key = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
-                                        const exists = await hasFullPairingsCache(key);
-                                        console.log('Manual prefetch - final check:', exists);
-                                        
-                                        if (exists) {
-                                          const data = await loadFullPairingsCache(key);
-                                          console.log('Manual prefetch - data length:', data?.length);
-                                          setIsFullCacheReady(true);
-                                          setFullLocal(data || null);
-                                          // Hide after manual prefetch completes
-                                          setTimeout(() => setShowInitialStatus(false), 3000);
+                  {/* Pairing Results Section */}
+                  <div className="flex-1 overflow-auto p-4 lg:p-0"> {/* Ensure results section takes remaining space */}
+                    <Card className="h-full flex flex-col">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-lg font-medium flex items-center gap-2">
+                          <Search className="h-5 w-5 text-muted-foreground" />
+                          Pairing Results
+                        </CardTitle>
+                        <div className="flex items-center space-x-2">
+                          {/* Only show cache status when it's actually useful */}
+                          {(isPrefetching || !isFullCacheReady || showInitialStatus) && (
+                            <>
+                              {isPrefetching ? (
+                                <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
+                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
+                                </span>
+                              ) : isFullCacheReady ? (
+                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
+                                  Available offline: Yes
+                                </span>
+                              ) : (
+                                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
+                                      onClick={async () => {
+                                        console.log('Manual prefetch triggered');
+                                        setShowInitialStatus(true); // Show status during manual prefetch
+                                        console.log('Clearing old cache entries first...');
+                                        // Clear old cache entries
+                                        try {
+                                          const request = indexedDB.open('pbs-cache', 1);
+                                          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                                            request.onsuccess = () => resolve(request.result);
+                                            request.onerror = () => reject(request.error);
+                                          });
+                                          const tx = db.transaction(['pairings'], 'readwrite');
+                                          const store = tx.objectStore('pairings');
+                                          await new Promise<void>((resolve, reject) => {
+                                            const clearReq = store.clear();
+                                            clearReq.onsuccess = () => resolve();
+                                            clearReq.onerror = () => reject(clearReq.error);
+                                          });
+                                          console.log('Cache cleared');
+                                        } catch (e) {
+                                          console.log('Failed to clear cache:', e);
                                         }
-                                      } catch (error) {
-                                        console.error('Manual prefetch failed:', error);
-                                      } finally {
-                                        setIsPrefetching(false);
-                                      }
-                                    }}>
-                                Available offline: No (click to cache)
-                              </span>
-                            )}
-                          </>
-                        )}
-                        {isUpdatingSeniority && (
-                          <span className="flex items-center text-orange-600 text-sm">
-                            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                            Updating...
+
+                                        setIsPrefetching(true);
+                                        try {
+                                          const userId = currentUser?.seniorityNumber || currentUser?.id;
+                                          await api.prefetchAllPairings({
+                                            bidPackageId,
+                                            ...debouncedFilters
+                                          } as any, userId);
+
+                                          const key = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
+                                          const exists = await hasFullPairingsCache(key);
+                                          console.log('Manual prefetch - final check:', exists);
+
+                                          if (exists) {
+                                            const data = await loadFullPairingsCache(key);
+                                            console.log('Manual prefetch - data length:', data?.length);
+                                            setIsFullCacheReady(true);
+                                            setFullLocal(data || null);
+                                            // Hide after manual prefetch completes
+                                            setTimeout(() => setShowInitialStatus(false), 3000);
+                                          }
+                                        } catch (error) {
+                                          console.error('Manual prefetch failed:', error);
+                                        } finally {
+                                          setIsPrefetching(false);
+                                        }
+                                      }}>
+                                  Available offline: No (click to cache)
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {isUpdatingSeniority && (
+                            <span className="flex items-center text-orange-600 text-sm">
+                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                              Updating...
+                            </span>
+                          )}
+                          <span className="text-sm text-gray-500">
+                            {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} - ` : ''}{effectivePagination?.total || displayPairings.length} pairings
                           </span>
-                        )}
-                        <span className="text-sm text-gray-500">
-                          {latestBidPackage.month} {latestBidPackage.year} - {effectivePagination?.total || displayPairings.length} pairings
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-auto p-0">
-                      {isUpdatingSeniority && (
-                        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                          <div className="flex items-center space-x-2 text-orange-600">
-                            <RefreshCw className="h-6 w-6 animate-spin" />
-                            <span className="text-lg font-medium">Updating hold probabilities...</span>
-                          </div>
                         </div>
-                      )}
-                      <PairingTable 
-                        pairings={displayPairings || []} 
-                        onSort={handleSort}
-                        sortColumn={sortColumn || ''}
-                        sortDirection={sortDirection}
-                        onPairingClick={handlePairingClick}
-                        pagination={effectivePagination as any}
-                        onPageChange={(page) => setCurrentPage(page)}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
+                      </CardHeader>
+                      <CardContent className="flex-1 overflow-auto p-0">
+                        {isUpdatingSeniority && (
+                          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                            <div className="flex items-center space-x-2 text-orange-600">
+                              <RefreshCw className="h-6 w-6 animate-spin" />
+                              <span className="text-lg font-medium">Updating hold probabilities...</span>
+                            </div>
+                          </div>
+                        )}
+                        <PairingTable
+                          pairings={displayPairings || []}
+                          onSort={handleSort}
+                          sortColumn={sortColumn || ''}
+                          sortDirection={sortDirection}
+                          onPairingClick={handlePairingClick}
+                          pagination={effectivePagination as any}
+                          onPageChange={(page) => setCurrentPage(page)}
+                        />
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
@@ -1060,8 +1061,8 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="flex-1 overflow-auto p-0">
                     {favorites.length > 0 ? (
-                      <PairingTable 
-                        pairings={favorites} 
+                      <PairingTable
+                        pairings={favorites}
                         onSort={handleSort}
                         sortColumn={sortColumn || ''}
                         sortDirection={sortDirection}
@@ -1107,9 +1108,9 @@ export default function Dashboard() {
 
       {/* Pairing Modal */}
       {selectedPairing && (
-        <PairingModal 
-          pairingId={selectedPairing.id} 
-          onClose={() => setSelectedPairing(null)} 
+        <PairingModal
+          pairingId={selectedPairing.id}
+          onClose={() => setSelectedPairing(null)}
         />
       )}
 
@@ -1126,7 +1127,7 @@ export default function Dashboard() {
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
               <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
               <div className="mt-4">
-                <FileUpload 
+                <FileUpload
                   onUpload={(file) => {
                     console.log("File uploaded:", file);
                     setShowUploadModal(false);
@@ -1201,14 +1202,19 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="flex-1 overflow-hidden min-h-0">
             {currentUser && latestBidPackage ? (
-              <PairingChat 
+              <PairingChat
                 bidPackageId={bidPackageId}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p>Upload a bid package to start using the AI assistant</p>
+                  <p>
+                    {bidPackages.length === 0
+                      ? "Upload a bid package to start using the AI assistant"
+                      : "Processing bid package... AI assistant will be available once processing is complete"
+                    }
+                  </p>
                 </div>
               </div>
             )}
@@ -1223,8 +1229,8 @@ export default function Dashboard() {
             {/* Minimal header with just close button */}
             <div className="flex-shrink-0 flex items-center justify-between p-3 border-b bg-white">
               <h1 className="text-base font-medium">AI Assistant</h1>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => setShowMobileAI(false)}
                 className="p-1 h-8 w-8"
@@ -1232,11 +1238,11 @@ export default function Dashboard() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            
+
             {/* Chat content - takes full remaining space */}
             <div className="flex-1 overflow-hidden">
               {currentUser && latestBidPackage ? (
-                <PairingChat 
+                <PairingChat
                   bidPackageId={bidPackageId}
                   compact={true}
                 />
@@ -1310,8 +1316,8 @@ export default function Dashboard() {
             <div className="border-t pt-4 mt-4">
               <div className="text-sm font-medium text-gray-700 mb-2">Cache Management</div>
               <div className="flex gap-2 mb-4">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={async () => {
                     const userId = currentUser?.seniorityNumber || currentUser?.id;
@@ -1329,8 +1335,8 @@ export default function Dashboard() {
                 >
                   Clear My Cache
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     // Clear localStorage
@@ -1342,8 +1348,8 @@ export default function Dashboard() {
                   Reset App Data
                 </Button>
                 {import.meta.env.DEV && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={async () => {
                       try {
