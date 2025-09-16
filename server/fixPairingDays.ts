@@ -1,4 +1,3 @@
-
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { pairings } from '../shared/schema';
@@ -12,7 +11,7 @@ async function fixPairingDays() {
   // List of pairings that should be 4-day but are incorrectly marked as 3-day
   const pairingsToFix = [
     { pairingNumber: '8083', correctDays: 4 },
-    { pairingNumber: '8161', correctDays: 4 }
+    { pairingNumber: '8161', correctDays: 4 },
   ];
 
   for (const pairing of pairingsToFix) {
@@ -22,9 +21,14 @@ async function fixPairingDays() {
         .set({ pairingDays: pairing.correctDays })
         .where(eq(pairings.pairingNumber, pairing.pairingNumber));
 
-      console.log(`✅ Updated pairing ${pairing.pairingNumber} to ${pairing.correctDays} days`);
+      console.log(
+        `✅ Updated pairing ${pairing.pairingNumber} to ${pairing.correctDays} days`
+      );
     } catch (error) {
-      console.error(`❌ Failed to update pairing ${pairing.pairingNumber}:`, error);
+      console.error(
+        `❌ Failed to update pairing ${pairing.pairingNumber}:`,
+        error
+      );
     }
   }
 

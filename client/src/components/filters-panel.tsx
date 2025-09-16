@@ -6,18 +6,23 @@ import { Calendar as CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 import type { SearchFilters } from "@/lib/api";
-
 interface FiltersPanelProps {
   onFiltersChange: (filters: SearchFilters) => void;
-  bidPackages?: Array<{id: number; name: string; month: string; year: number; status: string}>;
+  bidPackages?: Array<{
+    id: number;
+    name: string;
+    month: string;
+    year: number;
+    status: string;
+  }>;
 }
-
 export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanelProps) {
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
-    const numericValue = key.includes('Min') || key.includes('Max') ? parseFloat(value) : value;
+    const numericValue =
+      key.includes('Min') || key.includes('Max') ? parseFloat(value) : value;
     onFiltersChange({ [key]: numericValue });
   };
 
@@ -47,18 +52,22 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Credit Range</label>
-        <Select onValueChange={(value) => {
-          if (value === "5:00-5:30") {
-            onFiltersChange({ creditMin: 5.0, creditMax: 5.5 });
-          } else if (value === "5:30-6:00") {
-            onFiltersChange({ creditMin: 5.5, creditMax: 6.0 });
-          } else if (value === "6:00+") {
-            onFiltersChange({ creditMin: 6.0 });
-          } else {
-            onFiltersChange({ creditMin: undefined, creditMax: undefined });
-          }
-        }}>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Credit Range
+        </label>
+        <Select
+          onValueChange={value => {
+            if (value === '5:00-5:30') {
+              onFiltersChange({ creditMin: 5.0, creditMax: 5.5 });
+            } else if (value === '5:30-6:00') {
+              onFiltersChange({ creditMin: 5.5, creditMax: 6.0 });
+            } else if (value === '6:00+') {
+              onFiltersChange({ creditMin: 6.0 });
+            } else {
+              onFiltersChange({ creditMin: undefined, creditMax: undefined });
+            }
+          }}
+        >
           <SelectTrigger className="text-sm">
             <SelectValue placeholder="Any Credit" />
           </SelectTrigger>
@@ -70,20 +79,24 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Block Time</label>
-        <Select onValueChange={(value) => {
-          if (value === "<4:30") {
-            onFiltersChange({ blockMax: 4.5 });
-          } else if (value === "4:30-5:00") {
-            onFiltersChange({ blockMin: 4.5, blockMax: 5.0 });
-          } else if (value === "5:00+") {
-            onFiltersChange({ blockMin: 5.0 });
-          } else {
-            onFiltersChange({ blockMin: undefined, blockMax: undefined });
-          }
-        }}>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Block Time
+        </label>
+        <Select
+          onValueChange={value => {
+            if (value === '<4:30') {
+              onFiltersChange({ blockMax: 4.5 });
+            } else if (value === '4:30-5:00') {
+              onFiltersChange({ blockMin: 4.5, blockMax: 5.0 });
+            } else if (value === '5:00+') {
+              onFiltersChange({ blockMin: 5.0 });
+            } else {
+              onFiltersChange({ blockMin: undefined, blockMax: undefined });
+            }
+          }}
+        >
           <SelectTrigger className="text-sm">
             <SelectValue placeholder="Any Block" />
           </SelectTrigger>
@@ -95,10 +108,12 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">TAFB</label>
-        <Select onValueChange={(value) => handleFilterChange('tafb', value)}>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          TAFB
+        </label>
+        <Select onValueChange={value => handleFilterChange('tafb', value)}>
           <SelectTrigger className="text-sm">
             <SelectValue placeholder="Any TAFB" />
           </SelectTrigger>
@@ -110,20 +125,24 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Hold Probability</label>
-        <Select onValueChange={(value) => {
-          if (value === "high") {
-            onFiltersChange({ holdProbabilityMin: 80 });
-          } else if (value === "medium") {
-            onFiltersChange({ holdProbabilityMin: 50 });
-          } else if (value === "low") {
-            onFiltersChange({ holdProbabilityMin: 0 });
-          } else {
-            onFiltersChange({ holdProbabilityMin: undefined });
-          }
-        }}>
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Hold Probability
+        </label>
+        <Select
+          onValueChange={value => {
+            if (value === 'high') {
+              onFiltersChange({ holdProbabilityMin: 80 });
+            } else if (value === 'medium') {
+              onFiltersChange({ holdProbabilityMin: 50 });
+            } else if (value === 'low') {
+              onFiltersChange({ holdProbabilityMin: 0 });
+            } else {
+              onFiltersChange({ holdProbabilityMin: undefined });
+            }
+          }}
+        >
           <SelectTrigger className="text-sm">
             <SelectValue placeholder="Any Probability" />
           </SelectTrigger>

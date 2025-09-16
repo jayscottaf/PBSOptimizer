@@ -11,6 +11,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend Architecture
+
 - **Framework**: React with TypeScript using Vite as the build tool
 - **UI Framework**: Shadcn/ui components built on Radix UI primitives
 - **Styling**: Tailwind CSS with CSS variables for theming
@@ -19,6 +20,7 @@ Preferred communication style: Simple, everyday language.
 - **Design System**: Component-based architecture with reusable UI components
 
 ### Backend Architecture
+
 - **Runtime**: Node.js with Express.js framework
 - **Language**: TypeScript with ES modules
 - **API Structure**: RESTful API with structured route handlers
@@ -26,6 +28,7 @@ Preferred communication style: Simple, everyday language.
 - **Development Tools**: tsx for TypeScript execution in development
 
 ### Data Storage Solutions
+
 - **Database**: PostgreSQL with Neon serverless database
 - **ORM**: Drizzle ORM for type-safe database operations
 - **Schema Management**: Drizzle Kit for migrations and schema management
@@ -34,6 +37,7 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Database Schema
+
 The application uses a well-structured PostgreSQL schema with the following main entities:
 
 1. **Users Table**: Stores pilot information including seniority number, base, and aircraft type
@@ -47,6 +51,7 @@ The application uses a well-structured PostgreSQL schema with the following main
 5. **User Favorites Table**: Allows pilots to save preferred pairings
 
 ### PDF Processing System
+
 - **Upload Handling**: Secure PDF file uploads with type validation
 - **Text Extraction**: Custom parser for Delta bid package format with complete pairing text preservation
 - **Structured Parsing**: Extracts pairing numbers, effective dates, flight segments, layovers, credit hours, block hours, and total pay
@@ -56,11 +61,13 @@ The application uses a well-structured PostgreSQL schema with the following main
 - **Pay Hours Format**: Supports time-based pay hours format (e.g., 12:43 = 12 hours 43 minutes)
 
 ### Search and Filter System
+
 - **Advanced Filtering**: Multi-criteria search including credit hours, block time, TAFB
 - **Real-time Updates**: Live search results with debounced queries
 - **Hold Probability**: Integrated probability scoring for bid success prediction
 
 ### Analytics Dashboard
+
 - **Seniority Trends**: Visual representation of historical award patterns
 - **Statistics Panel**: Quick stats for total pairings, hold likelihood, and preferences
 - **Interactive Tables**: Sortable, filterable pairing displays with detailed views
@@ -76,6 +83,7 @@ The application uses a well-structured PostgreSQL schema with the following main
 ## External Dependencies
 
 ### Frontend Dependencies
+
 - **Radix UI**: Comprehensive set of accessible UI primitives
 - **Lucide React**: Icon library for consistent iconography
 - **React Hook Form**: Form state management with validation
@@ -83,12 +91,14 @@ The application uses a well-structured PostgreSQL schema with the following main
 - **Class Variance Authority**: Utility for managing component variants
 
 ### Backend Dependencies
+
 - **Drizzle ORM**: Type-safe database operations and migrations
 - **Zod**: Runtime type validation for API inputs
 - **Multer**: File upload handling middleware
 - **Connect-pg-simple**: PostgreSQL session store
 
 ### Database and Infrastructure
+
 - **Neon Database**: Serverless PostgreSQL with automatic scaling
 - **WebSocket Support**: Real-time connection capabilities
 - **Environment Configuration**: Secure credential management
@@ -96,18 +106,21 @@ The application uses a well-structured PostgreSQL schema with the following main
 ## Deployment Strategy
 
 ### Development Environment
+
 - **Hot Reloading**: Vite development server with fast refresh
 - **Type Checking**: Continuous TypeScript compilation
 - **Database Migrations**: Drizzle Kit for schema updates
 - **Error Handling**: Runtime error overlay for debugging
 
 ### Production Build
+
 - **Frontend**: Vite production build with optimized assets
 - **Backend**: ESBuild bundling for Node.js deployment
 - **Database**: Push migrations to production PostgreSQL
 - **Asset Serving**: Static file serving through Express
 
 ### Configuration Management
+
 - **Environment Variables**: DATABASE_URL and other sensitive configuration
 - **Path Aliases**: TypeScript path mapping for clean imports
 - **Build Optimization**: Tree shaking and code splitting for performance
@@ -119,16 +132,19 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **July 18, 2025**: Fixed Critical AI Assistant and Database Route Issues
 
 **AI Assistant Pairing Lookup**: Resolved specific pairing number queries (e.g., "show me pairing 7758")
+
 - Fixed `getPairingByNumber` database function to properly chain WHERE conditions using `and()` operator
 - Pairing lookups now return correct specific pairing data instead of random pairings
 
 **Database Route Field Completion**: Enhanced route generation to show complete journey paths
+
 - **Before**: Routes missing return segments (e.g., `JFK-MSP-CMH-MKE-SLC-SBA-ATL`)
 - **After**: Complete roundtrip routes (e.g., `JFK-MSP-CMH-MSP-MKE-SLC-SBA-ATL-JFK`)
 - Applied enhanced `parseRoute` function with chronological ordering to all 534 pairings
 - Routes now accurately reflect full pilot journey including intermediate returns
 
 **Hours Format Correction**: Fixed AI assistant time display to match Delta PBS format exactly
+
 - **Before**: Verbose format ("28 hours and 19 minutes of credit hours")
 - **After**: Authentic Delta PBS decimal format ("28.19 credit hours")
 - Updated data structure to pass raw decimal values (28.19, 16.58) to AI assistant
@@ -139,11 +155,13 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **July 19, 2025**: Fixed Critical AI Assistant Query Processing Issues
 
 **Pattern Matching Resolution**: Resolved AI assistant returning "no pairing data" for all queries
+
 - **Root Cause**: Regex pattern order was incorrectly parsing duration queries ("4-day pairings") as pairing number searches
 - **Solution**: Reordered preprocessing logic to prioritize duration detection before pairing number detection
 - **Impact**: All query types now function correctly (general questions, duration searches, specific pairings)
 
 **Query Processing Restored**: AI assistant now properly handles:
+
 - General questions: "what do you do?" → Returns proper introduction with authentic data summary
 - Duration searches: "Show me 4-day pairings" → Returns analysis of 143 four-day pairings
 - Specific pairings: "show me pairing 7758" → Returns detailed pairing information with Delta PBS formatting
@@ -153,12 +171,14 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **July 19, 2025**: Resolved Missing Flight Segment Issue in Parser
 
 **Flight Segment Extraction Fix**: Corrected parser to capture continuation flights without day prefixes
+
 - **Issue**: Flight 2608 (SLC-IDA) missing from pairing 7745 flight segments despite being in full text
 - **Root Cause**: Parser pattern didn't handle `.57` block time format (missing leading zero)
 - **Solution**: Enhanced regex pattern to handle `(\d{0,2}\.?\d{1,2})` format and normalize `.57` to `0.57`
 - **Database Update**: Applied fix to pairing 7745, now shows complete 7-segment journey
 
 **Route Completion**: Updated route generation to include all intermediate stops
+
 - **Before**: `JFK-DFW-SLC-SLC-MSP-DFW-JFK` (missing IDA)
 - **After**: `JFK-DFW-SLC-IDA-SLC-MSP-DFW-JFK` (complete journey)
 
@@ -167,16 +187,19 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **July 19, 2025**: Fixed Critical AI Assistant Hold Probability Filtering Bug
 
 **Root Cause Resolved**: Corrected flawed regex pattern in multi-criteria query processing
+
 - **Issue**: Complex queries with multiple numeric criteria incorrectly extracted wrong hold probability thresholds
 - **Example**: "at least 70% hold probability...layovers longer than 20 hours" extracted 20% instead of 70%
 - **Impact**: AI recommended pairings with 50% hold probability when user required 70% minimum
 
 **Technical Fix**: Enhanced `extractHoldProbabilityThreshold` function regex pattern
+
 - **Before**: `/hold.*?(\d+)/` - matched any number after "hold" keyword
 - **After**: `/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i` - matches specific percentage context
 - **Result**: Correctly extracts "at least 70% hold probability" → 70%, ignores "20 hours" → no false match
 
 **Data Integrity Restored**: AI assistant now provides accurate filtering recommendations
+
 - Complex multi-criteria queries work consistently across all processing paths
 - Maintains all existing fallback logic (junior=30%, senior=70%, default=75%)
 - No breaking changes to efficiency analysis or other query types
@@ -186,11 +209,13 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **Critical Issue Resolved**: Fixed OpenAI token limit errors that prevented AI assistant from processing large datasets (201,225 tokens → 8,000 limit)
 
 **Dependencies Fixed**: Resolved module import issues by installing missing packages:
+
 - `fast-safe-stringify` - Safe JSON serialization for large objects
 - `tiktoken` - Token counting and estimation for OpenAI models
 - Updated ES module import syntax for compatibility
 
 **Hybrid Analytics Engine Working**: System now efficiently processes 534 pairings with pre-processed summaries:
+
 - `getTopEfficientPairings()` - Returns credit-to-block ratio analysis with formatted hours
 - `getTopCreditPairings()` - Highest paying pairings with statistics
 - `getTopHoldProbabilityPairings()` - Best award likelihood analysis
@@ -198,11 +223,13 @@ The application follows a monorepo structure with shared TypeScript types betwee
 - Data compression: Raw datasets reduced from 19,670+ tokens to ~3,900 chars
 
 **Query Processing Examples Now Working**:
+
 - "Show me the top 3 most efficient pairings" → Returns specific pairing numbers (7717, 7726, 7719) with efficiency ratios (2.12, 1.90, 1.77)
 - "What are highest credit pairings?" → Returns detailed credit analysis with hold probabilities
 - Complex queries with multiple criteria processed efficiently
 
 **Production Features Operational**:
+
 - Automatic bid package ID detection (uses most recent when not specified)
 - Three-tier fallback system: Hybrid Service → Legacy Analysis → Basic Assistant
 - Real-time debug logging for token estimation and data processing
@@ -212,6 +239,7 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **July 17, 2025**: Resolved systematic parsing issue affecting 62% of pairings
 
 **Parser Enhancement**: Added comprehensive flight segment detection patterns:
+
 - Day D parsing with .58 format support (handles both ".58" and "0.58")
 - Standalone flight number detection for flights without day prefixes
 - Flight continuation parsing for multi-segment flights
@@ -223,8 +251,9 @@ The application follows a monorepo structure with shared TypeScript types betwee
 **Frontend Caching**: Fixed cache configuration to show fresh data (staleTime reduced from Infinity to 5 minutes)
 
 **Critical Fix**: All 4 missing segments from pairing 7713 now properly captured:
+
 - Flight 1482 (Day B): ATL 1246 IAD 1431 (1.45)
-- Flight 2275 (Day D): PDX 0715 SEA 0813 (0.58) 
+- Flight 2275 (Day D): PDX 0715 SEA 0813 (0.58)
 - Flight 595 (Day D): SEA 0935 DFW 1532 (3.57)
 - Flight 454 (Day E): DFW 0710 JFK 1200 (3.50)
 

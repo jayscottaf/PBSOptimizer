@@ -13,18 +13,21 @@ import { z } from "zod";
 import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
 
 // Optimized hold probability recalculation with batching
-async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, seniorityPercentile: number) {
+async function recalculateHoldProbabilitiesOptimized(
+  bidPackageId: number,
+  seniorityPercentile: number
+) {
   try {
     console.log(`Starting optimized hold probability recalculation for bid package ${bidPackageId} with seniority ${seniorityPercentile}%`);
 
     // Fetch all pairings in one query
     const allPairings = await db.select().from(pairings).where(eq(pairings.bidPackageId, bidPackageId));
 
+
     if (allPairings.length === 0) {
       console.log('No pairings found for recalculation');
       return;
     }
-
     // Calculate all hold probabilities in memory
     const updates: Array<{ id: number; holdProbability: number }> = [];
 
@@ -36,19 +39,32 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, senio
       );
       const startsOnWeekend = HoldProbabilityCalculator.startsOnWeekend(pairing);
       const includesWeekendOff = HoldProbabilityCalculator.includesWeekendOff(pairing);
+    for (const pairing of allPairings) {
+      const desirabilityScore =
+        HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+      const pairingFrequency =
+        HoldProbabilityCalculator.calculatePairingFrequency(
+          pairing.pairingNumber,
+          allPairings
+        );
+      const startsOnWeekend =
+        HoldProbabilityCalculator.startsOnWeekend(pairing);
+      const includesWeekendOff =
+        HoldProbabilityCalculator.includesWeekendOff(pairing);
 
-      const holdProbabilityResult = HoldProbabilityCalculator.calculateHoldProbability({
-        seniorityPercentile,
-        desirabilityScore,
-        pairingFrequency,
-        startsOnWeekend,
-        includesDeadheads: pairing.deadheads || 0,
-        includesWeekendOff
-      });
+      const holdProbabilityResult =
+        HoldProbabilityCalculator.calculateHoldProbability({
+          seniorityPercentile,
+          desirabilityScore,
+          pairingFrequency,
+          startsOnWeekend,
+          includesDeadheads: pairing.deadheads || 0,
+          includesWeekendOff,
+        });
 
       updates.push({
         id: pairing.id,
-        holdProbability: holdProbabilityResult.probability
+        holdProbability: holdProbabilityResult.probability,
       });
     }
 
@@ -65,7 +81,9 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, senio
       }
     }
 
-    console.log(`✅ Optimized recalculation completed: ${updates.length} pairings updated in ${Math.ceil(updates.length / batchSize)} batches`);
+    console.log(
+      `✅ Optimized recalculation completed: ${updates.length} pairings updated in ${Math.ceil(updates.length / batchSize)} batches`
+    );
   } catch (error) {
     console.error('Error in optimized hold probability recalculation:', error);
     throw error;
@@ -73,11 +91,17 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId: number, senio
 }
 
 // Background recalculation function (non-blocking)
-async function recalculateHoldProbabilitiesBackground(bidPackageId: number, seniorityPercentile: number) {
+async function recalculateHoldProbabilitiesBackground(
+  bidPackageId: number,
+  seniorityPercentile: number
+) {
   // Start recalculation in background without awaiting
   setImmediate(async () => {
     try {
-      await recalculateHoldProbabilitiesOptimized(bidPackageId, seniorityPercentile);
+      await recalculateHoldProbabilitiesOptimized(
+        bidPackageId,
+        seniorityPercentile
+      );
     } catch (error) {
       console.error('Background hold probability recalculation failed:', error);
     }
@@ -153,29 +177,31 @@ export async function registerRoutes(app: Express) {
   });
 
   // Seed database endpoint (development only)
-  app.post("/api/seed", async (req, res) => {
+  app.post('/api/seed', async (req, res) => {
     try {
       await seedDatabase();
-      res.json({ success: true, message: "Database seeded successfully" });
+      res.json({ success: true, message: 'Database seeded successfully' });
     } catch (error) {
-      console.error("Error seeding database:", error);
-      res.status(500).json({ message: "Failed to seed database" });
+      console.error('Error seeding database:', error);
+      res.status(500).json({ message: 'Failed to seed database' });
     }
   });
 
   // Get all bid packages
-  app.get("/api/bid-packages", async (req, res) => {
+  app.get('/api/bid-packages', async (req, res) => {
     try {
       // Add cache control headers to prevent browser caching
       res.set({
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+        Pragma: 'no-cache',
+        Expires: '0',
       });
+
 
       const packages = await withDatabaseRetry(async () => {
         return await storage.getBidPackages();
       });
+
       res.json(packages);
     } catch (error) {
       console.error('Error fetching bid packages:', error);
@@ -196,7 +222,9 @@ export async function registerRoutes(app: Express) {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders?.();
 
-      const { registerProgressClient, removeProgressClient } = await import('./progress');
+      const { registerProgressClient, removeProgressClient } = await import(
+        './progress'
+      );
       registerProgressClient(bidPackageId, res);
 
       req.on('close', () => {
@@ -221,10 +249,10 @@ export async function registerRoutes(app: Express) {
   });
 
   // Upload bid package PDF
-  app.post("/api/upload", upload.single('bidPackage'), async (req, res) => {
+  app.post('/api/upload', upload.single('bidPackage'), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
+        return res.status(400).json({ message: 'No file uploaded' });
       }
 
       const { name, month, year, base, aircraft } = req.body;
@@ -232,8 +260,12 @@ export async function registerRoutes(app: Express) {
       // Delete all existing bid packages and their associated data
       const existingPackages = await storage.getBidPackages();
       if (existingPackages.length > 0) {
-        console.log(`Removing ${existingPackages.length} existing bid packages before uploading new one`);
-        await Promise.all(existingPackages.map(pkg => storage.deleteBidPackage(pkg.id)));
+        console.log(
+          `Removing ${existingPackages.length} existing bid packages before uploading new one`
+        );
+        await Promise.all(
+          existingPackages.map(pkg => storage.deleteBidPackage(pkg.id))
+        );
       }
 
       const bidPackageData = insertBidPackageSchema.parse({
@@ -247,34 +279,41 @@ export async function registerRoutes(app: Express) {
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
       // Parse file asynchronously and update status
-      pdfParser.parseFile(req.file.path, bidPackage.id, req.file.mimetype)
+      pdfParser
+        .parseFile(req.file.path, bidPackage.id, req.file.mimetype)
         .then(async () => {
-          console.log(`File parsing completed for bid package ${bidPackage.id}`);
-          await storage.updateBidPackageStatus(bidPackage.id, "completed");
+          console.log(
+            `File parsing completed for bid package ${bidPackage.id}`
+          );
+          await storage.updateBidPackageStatus(bidPackage.id, 'completed');
         })
-        .catch(async (error) => {
-          console.error(`File parsing failed for bid package ${bidPackage.id}:`, error);
-          await storage.updateBidPackageStatus(bidPackage.id, "failed");
+        .catch(async error => {
+          console.error(
+            `File parsing failed for bid package ${bidPackage.id}:`,
+            error
+          );
+          await storage.updateBidPackageStatus(bidPackage.id, 'failed');
         });
 
       res.json({
         success: true,
         bidPackage,
-        message: "Bid package uploaded successfully. Processing has begun.",
+        message: 'Bid package uploaded successfully. Processing has begun.',
       });
-
     } catch (error) {
-      console.error("Error uploading bid package:", error);
+      console.error('Error uploading bid package:', error);
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid bid package data", errors: error.errors });
+        res
+          .status(400)
+          .json({ message: 'Invalid bid package data', errors: error.errors });
       } else {
-        res.status(500).json({ message: "Failed to upload bid package" });
+        res.status(500).json({ message: 'Failed to upload bid package' });
       }
     }
   });
 
   // Get pairings with optional filtering
-  app.get("/api/pairings", async (req, res) => {
+  app.get('/api/pairings', async (req, res) => {
     try {
       // Add cache control headers to prevent browser caching
       res.set({
@@ -298,11 +337,16 @@ export async function registerRoutes(app: Express) {
         pairingDaysMin,
         pairingDaysMax,
         efficiency,
-        seniorityPercentile
+        seniorityPercentile,
       } = req.query;
 
       console.log('GET /api/pairings query params:', {
-        creditMin, creditMax, blockMin, blockMax, search, bidPackageId
+        creditMin,
+        creditMax,
+        blockMin,
+        blockMax,
+        search,
+        bidPackageId,
       });
       console.log('All query params:', req.query);
 
@@ -313,7 +357,9 @@ export async function registerRoutes(app: Express) {
       // Do not mutate DB on seniority changes; compute per-request below
 
       // Build all conditions first, then apply with and()
-      const conditions = [eq(pairings.bidPackageId, parseInt(bidPackageId as string))];
+      const conditions = [
+        eq(pairings.bidPackageId, parseInt(bidPackageId as string)),
+      ];
 
       if (search) {
         conditions.push(sql`
@@ -323,19 +369,55 @@ export async function registerRoutes(app: Express) {
           notes ILIKE ${`%${search}%`}
         `);
       }
-      if (creditMin) conditions.push(gte(pairings.creditHours, creditMin as string));
-      if (creditMax) conditions.push(lte(pairings.creditHours, creditMax as string));
-      if (blockMin) conditions.push(gte(pairings.blockHours, blockMin as string));
-      if (blockMax) conditions.push(lte(pairings.blockHours, blockMax as string));
-      if (tafb) conditions.push(eq(pairings.tafb, tafb as string));
-      if (tafbMin) conditions.push(gte(pairings.tafb, tafbMin as string));
-      if (tafbMax) conditions.push(lte(pairings.tafb, tafbMax as string));
-      if (holdProbabilityMin) conditions.push(gte(pairings.holdProbability, parseFloat(holdProbabilityMin as string)));
-      if (pairingDays) conditions.push(eq(pairings.pairingDays, parseInt(pairingDays as string)));
-      if (pairingDaysMin) conditions.push(gte(pairings.pairingDays, parseInt(pairingDaysMin as string)));
-      if (pairingDaysMax) conditions.push(lte(pairings.pairingDays, parseInt(pairingDaysMax as string)));
+      if (creditMin) {
+        conditions.push(gte(pairings.creditHours, creditMin as string));
+      }
+      if (creditMax) {
+        conditions.push(lte(pairings.creditHours, creditMax as string));
+      }
+      if (blockMin) {
+        conditions.push(gte(pairings.blockHours, blockMin as string));
+      }
+      if (blockMax) {
+        conditions.push(lte(pairings.blockHours, blockMax as string));
+      }
+      if (tafb) {
+        conditions.push(eq(pairings.tafb, tafb as string));
+      }
+      if (tafbMin) {
+        conditions.push(gte(pairings.tafb, tafbMin as string));
+      }
+      if (tafbMax) {
+        conditions.push(lte(pairings.tafb, tafbMax as string));
+      }
+      if (holdProbabilityMin) {
+        conditions.push(
+          gte(
+            pairings.holdProbability,
+            parseFloat(holdProbabilityMin as string)
+          )
+        );
+      }
+      if (pairingDays) {
+        conditions.push(
+          eq(pairings.pairingDays, parseInt(pairingDays as string))
+        );
+      }
+      if (pairingDaysMin) {
+        conditions.push(
+          gte(pairings.pairingDays, parseInt(pairingDaysMin as string))
+        );
+      }
+      if (pairingDaysMax) {
+        conditions.push(
+          lte(pairings.pairingDays, parseInt(pairingDaysMax as string))
+        );
+      }
 
-      const query = db.select().from(pairings).where(and(...conditions));
+      const query = db
+        .select()
+        .from(pairings)
+        .where(and(...conditions));
       const pairingsResult = await query.execute();
 
       // If seniority provided, compute holdProbability per-request (no DB writes)
@@ -347,8 +429,12 @@ export async function registerRoutes(app: Express) {
 
         const seniorityValue = parseFloat(seniorityPercentile as string);
         for (const p of pairingsResult) {
-          const desirability = HoldProbabilityCalculator.calculateDesirabilityScore(p);
-          const freq = HoldProbabilityCalculator.calculatePairingFrequency(p.pairingNumber, allForPackage);
+          const desirability =
+            HoldProbabilityCalculator.calculateDesirabilityScore(p);
+          const freq = HoldProbabilityCalculator.calculatePairingFrequency(
+            p.pairingNumber,
+            allForPackage
+          );
           const hp = HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile: seniorityValue,
             desirabilityScore: desirability,
@@ -364,13 +450,13 @@ export async function registerRoutes(app: Express) {
 
       res.json(pairingsResult);
     } catch (error) {
-      console.error("Error fetching pairings:", error);
-      res.status(500).json({ message: "Failed to fetch pairings" });
+      console.error('Error fetching pairings:', error);
+      res.status(500).json({ message: 'Failed to fetch pairings' });
     }
   });
 
   // Pairing search endpoint
-  app.post("/api/pairings/search", async (req, res) => {
+  app.post('/api/pairings/search', async (req, res) => {
     try {
       // Add cache control headers to prevent browser caching
       res.set({
@@ -380,7 +466,9 @@ export async function registerRoutes(app: Express) {
       });
 
       // Minimal request log for debugging; avoid dumping large payloads
+
       console.log("POST /api/pairings/search", { path: req.path });
+
       const {
         bidPackageId,
         page = 1,
@@ -391,11 +479,20 @@ export async function registerRoutes(app: Express) {
       } = req.body;
 
       if (!bidPackageId) {
+
         console.log("No bid package ID provided in search request");
         return res.status(400).json({
           message: "Bid package ID is required",
+
           pairings: [],
-          pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false }
+          pagination: {
+            page: 1,
+            limit: 50,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
         });
       }
 
@@ -427,7 +524,9 @@ export async function registerRoutes(app: Express) {
       });
 
       // If seniority provided, compute holdProbability per-response
-      const seniorityValueRaw = (filters as any)?.seniorityPercentile || (filters as any)?.seniorityPercentage;
+      const seniorityValueRaw =
+        (filters as any)?.seniorityPercentile ||
+        (filters as any)?.seniorityPercentage;
       if (seniorityValueRaw) {
         const seniorityValue = parseFloat(seniorityValueRaw);
         const allForPackage = await db
@@ -436,8 +535,12 @@ export async function registerRoutes(app: Express) {
           .where(eq(pairings.bidPackageId, bidPackageId));
 
         for (const p of result.pairings) {
-          const desirability = HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
-          const freq = HoldProbabilityCalculator.calculatePairingFrequency((p as any).pairingNumber, allForPackage as any);
+          const desirability =
+            HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
+          const freq = HoldProbabilityCalculator.calculatePairingFrequency(
+            (p as any).pairingNumber,
+            allForPackage as any
+          );
           const hp = HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile: seniorityValue,
             desirabilityScore: desirability,
@@ -453,59 +556,73 @@ export async function registerRoutes(app: Express) {
 
       // Only log in debug mode to reduce noise
       if (process.env.LOG_LEVEL === 'debug') {
-        console.log(`Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`);
+        console.log(
+          `Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`
+        );
       }
       res.json(result);
     } catch (error) {
       console.error("Error searching pairings:", error);
       res.status(500).json({
         message: "Failed to search pairings",
+
         pairings: [],
-        pagination: { page: 1, limit: 50, total: 0, totalPages: 0, hasNext: false, hasPrev: false }
+        pagination: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        },
       });
     }
   });
 
   // Get specific pairing details
-  app.get("/api/pairings/:id", async (req, res) => {
+  app.get('/api/pairings/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const pairing = await storage.getPairing(id);
 
       if (!pairing) {
-        return res.status(404).json({ message: "Pairing not found" });
+        return res.status(404).json({ message: 'Pairing not found' });
       }
 
       res.json(pairing);
     } catch (error) {
-      console.error("Error fetching pairing:", error);
-      res.status(500).json({ message: "Failed to fetch pairing" });
+      console.error('Error fetching pairing:', error);
+      res.status(500).json({ message: 'Failed to fetch pairing' });
     }
   });
 
   // Verify pairing by number endpoint
-  app.get("/api/verify-pairing/:pairingNumber", async (req, res) => {
+  app.get('/api/verify-pairing/:pairingNumber', async (req, res) => {
     try {
       const { pairingNumber } = req.params;
-      const bidPackageId = req.query.bidPackageId ? parseInt(req.query.bidPackageId as string) : undefined;
+      const bidPackageId = req.query.bidPackageId
+        ? parseInt(req.query.bidPackageId as string)
+        : undefined;
 
       if (!bidPackageId) {
         const bidPackages = await storage.getBidPackages();
         if (bidPackages.length === 0) {
-          return res.status(404).json({ message: "No bid packages found" });
+          return res.status(404).json({ message: 'No bid packages found' });
         }
         // Use most recent bid package
         const recentBidPackage = bidPackages[0];
         const allPairings = await storage.getPairings(recentBidPackage.id);
-        const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
+        const pairing = allPairings.find(
+          p => p.pairingNumber === pairingNumber
+        );
 
         if (!pairing) {
           return res.status(404).json({
-            message: "Pairing not found",
+            message: 'Pairing not found',
             pairingNumber,
             bidPackageId: recentBidPackage.id,
             totalPairings: allPairings.length,
-            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
+            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber),
           });
         }
 
@@ -513,19 +630,21 @@ export async function registerRoutes(app: Express) {
           found: true,
           pairing,
           bidPackageId: recentBidPackage.id,
-          verified: true
+          verified: true,
         });
       } else {
         const allPairings = await storage.getPairings(bidPackageId);
-        const pairing = allPairings.find(p => p.pairingNumber === pairingNumber);
+        const pairing = allPairings.find(
+          p => p.pairingNumber === pairingNumber
+        );
 
         if (!pairing) {
           return res.status(404).json({
-            message: "Pairing not found",
+            message: 'Pairing not found',
             pairingNumber,
             bidPackageId,
             totalPairings: allPairings.length,
-            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber)
+            samplePairings: allPairings.slice(0, 10).map(p => p.pairingNumber),
           });
         }
 
@@ -533,24 +652,24 @@ export async function registerRoutes(app: Express) {
           found: true,
           pairing,
           bidPackageId,
-          verified: true
+          verified: true,
         });
       }
     } catch (error) {
-      console.error("Error verifying pairing:", error);
-      res.status(500).json({ message: "Failed to verify pairing" });
+      console.error('Error verifying pairing:', error);
+      res.status(500).json({ message: 'Failed to verify pairing' });
     }
   });
 
   // Get bid history for a pairing
-  app.get("/api/history/:pairingNumber", async (req, res) => {
+  app.get('/api/history/:pairingNumber', async (req, res) => {
     try {
       const { pairingNumber } = req.params;
       const history = await storage.getBidHistoryForPairing(pairingNumber);
       res.json(history);
     } catch (error) {
-      console.error("Error fetching bid history:", error);
-      res.status(500).json({ message: "Failed to fetch bid history" });
+      console.error('Error fetching bid history:', error);
+      res.status(500).json({ message: 'Failed to fetch bid history' });
     }
   });
 
@@ -565,9 +684,11 @@ export async function registerRoutes(app: Express) {
 
       const user = await storage.createOrUpdateUser({
         seniorityNumber: parseInt(seniorityNumber),
-        seniorityPercentile: seniorityPercentile ? parseFloat(seniorityPercentile) : 50,
+        seniorityPercentile: seniorityPercentile
+          ? parseFloat(seniorityPercentile)
+          : 50,
         base,
-        aircraft
+        aircraft,
       });
 
       res.json(user);
@@ -578,43 +699,43 @@ export async function registerRoutes(app: Express) {
   });
 
   // Add pairing to favorites
-  app.post("/api/favorites", async (req, res) => {
+  app.post('/api/favorites', async (req, res) => {
     try {
       const { userId, pairingId } = req.body;
       const favorite = await storage.addUserFavorite({ userId, pairingId });
       res.json(favorite);
     } catch (error) {
-      console.error("Error adding favorite:", error);
-      res.status(500).json({ message: "Failed to add favorite" });
+      console.error('Error adding favorite:', error);
+      res.status(500).json({ message: 'Failed to add favorite' });
     }
   });
 
   // Remove pairing from favorites
-  app.delete("/api/favorites", async (req, res) => {
+  app.delete('/api/favorites', async (req, res) => {
     try {
       const { userId, pairingId } = req.body;
       await storage.removeUserFavorite(userId, pairingId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error removing favorite:", error);
-      res.status(500).json({ message: "Failed to remove favorite" });
+      console.error('Error removing favorite:', error);
+      res.status(500).json({ message: 'Failed to remove favorite' });
     }
   });
 
   // Get user favorites
-  app.get("/api/favorites/:userId", async (req, res) => {
+  app.get('/api/favorites/:userId', async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
       const favorites = await storage.getUserFavorites(userId);
       res.json(favorites);
     } catch (error) {
-      console.error("Error fetching favorites:", error);
-      res.status(500).json({ message: "Failed to fetch favorites" });
+      console.error('Error fetching favorites:', error);
+      res.status(500).json({ message: 'Failed to fetch favorites' });
     }
   });
 
   // Calendar event endpoints
-  app.post("/api/calendar", async (req, res) => {
+  app.post('/api/calendar', async (req, res) => {
     try {
       const { userId, pairingId, startDate, endDate, notes } = req.body;
 
@@ -630,31 +751,33 @@ export async function registerRoutes(app: Express) {
         pairingId: parseInt(pairingId),
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        notes
+        notes,
       });
 
       console.log('Calendar event created:', event);
       res.json(event);
     } catch (error) {
+
       console.error("Error adding calendar event:", error);
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to add calendar event" });
+
     }
   });
 
   // Remove pairing from calendar
-  app.delete("/api/calendar", async (req, res) => {
+  app.delete('/api/calendar', async (req, res) => {
     try {
       const { userId, pairingId } = req.body;
       await storage.removeUserCalendarEvent(userId, pairingId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error removing calendar event:", error);
-      res.status(500).json({ message: "Failed to remove calendar event" });
+      console.error('Error removing calendar event:', error);
+      res.status(500).json({ message: 'Failed to remove calendar event' });
     }
   });
 
   // Get user calendar events
-  app.get("/api/calendar/:userId", async (req, res) => {
+  app.get('/api/calendar/:userId', async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
       const { startDate, endDate } = req.query;
@@ -673,77 +796,86 @@ export async function registerRoutes(app: Express) {
         res.json(events);
       }
     } catch (error) {
-      console.error("Error fetching calendar events:", error);
-      res.status(500).json({ message: "Failed to fetch calendar events" });
+      console.error('Error fetching calendar events:', error);
+      res.status(500).json({ message: 'Failed to fetch calendar events' });
     }
   });
 
   // Get user calendar events for specific month/year
-  app.get("/api/calendar/:userId/:month/:year", async (req, res) => {
+  app.get('/api/calendar/:userId/:month/:year', async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
       const month = parseInt(req.params.month);
       const year = parseInt(req.params.year);
-      const events = await storage.getUserCalendarEventsForMonth(userId, month, year);
+      const events = await storage.getUserCalendarEventsForMonth(
+        userId,
+        month,
+        year
+      );
       res.json(events);
     } catch (error) {
-      console.error("Error fetching calendar events for month:", error);
-      res.status(500).json({ message: "Failed to fetch calendar events for month" });
+      console.error('Error fetching calendar events for month:', error);
+      res
+        .status(500)
+        .json({ message: 'Failed to fetch calendar events for month' });
     }
   });
 
   // Chat history endpoints
-  app.get("/api/chat-history/:sessionId", async (req, res) => {
+  app.get('/api/chat-history/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
       const history = await storage.getChatHistory(sessionId);
       res.json(history);
     } catch (error) {
-      console.error("Error fetching chat history:", error);
-      res.status(500).json({ message: "Failed to fetch chat history" });
+      console.error('Error fetching chat history:', error);
+      res.status(500).json({ message: 'Failed to fetch chat history' });
     }
   });
 
-  app.post("/api/chat-history", async (req, res) => {
+  app.post('/api/chat-history', async (req, res) => {
     try {
-      const { sessionId, bidPackageId, messageType, content, messageData } = req.body;
+      const { sessionId, bidPackageId, messageType, content, messageData } =
+        req.body;
       const savedMessage = await storage.saveChatMessage({
         sessionId,
         bidPackageId,
         messageType,
         content,
-        messageData
+        messageData,
       });
       res.json(savedMessage);
     } catch (error) {
-      console.error("Error saving chat message:", error);
-      res.status(500).json({ message: "Failed to save chat message" });
+      console.error('Error saving chat message:', error);
+      res.status(500).json({ message: 'Failed to save chat message' });
     }
   });
 
-  app.delete("/api/chat-history/:sessionId", async (req, res) => {
+  app.delete('/api/chat-history/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
       await storage.clearChatHistory(sessionId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error clearing chat history:", error);
-      res.status(500).json({ message: "Failed to clear chat history" });
+      console.error('Error clearing chat history:', error);
+      res.status(500).json({ message: 'Failed to clear chat history' });
     }
   });
 
   // OpenAI Assistant API endpoint with hybrid token optimization
-  app.post("/api/askAssistant", async (req, res) => {
+  app.post('/api/askAssistant', async (req, res) => {
     try {
       const { question, bidPackageId, seniorityPercentile } = req.body;
 
       if (!question) {
-        return res.status(400).json({ message: "Question is required" });
+        return res.status(400).json({ message: 'Question is required' });
       }
 
       // Extract bidPackageId from question if it contains "bid package #25" pattern
       const bidPackageMatch = question.match(/bid package #(\d+)/);
-      let finalBidPackageId = bidPackageId || (bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined);
+      let finalBidPackageId =
+        bidPackageId ||
+        (bidPackageMatch ? parseInt(bidPackageMatch[1]) : undefined);
 
       // If no bid package ID found, try to get the most recent one
       if (!finalBidPackageId) {
@@ -756,6 +888,7 @@ export async function registerRoutes(app: Express) {
 
       // Route based on intent; ensure DB-backed results for "best/top" queries
       if (finalBidPackageId) {
+
         // Prepend seniority context for analysis if provided
         const enrichedQuestion = typeof seniorityPercentile === 'number'
           ? `User seniority: ${seniorityPercentile}%. ${question}`
@@ -825,15 +958,16 @@ export async function registerRoutes(app: Express) {
       // Final fallback to basic assistant
       const reply = await openaiAssistant.askPBSAssistant(question);
       res.json({ reply });
-
     } catch (error) {
-      console.error("Error asking PBS Assistant:", error);
-      res.status(500).json({ message: "Failed to get response from PBS Assistant" });
+      console.error('Error asking PBS Assistant:', error);
+      res
+        .status(500)
+        .json({ message: 'Failed to get response from PBS Assistant' });
     }
   });
 
   // Endpoint for bulk pairing creation (used by PDF parser)
-  app.post("/api/pairings/bulk", async (req, res) => {
+  app.post('/api/pairings/bulk', async (req, res) => {
     try {
       const { bidPackageId, pairings } = req.body;
 
@@ -847,7 +981,7 @@ export async function registerRoutes(app: Express) {
       }
 
       // Update bid package status to completed
-      await storage.updateBidPackageStatus(bidPackageId, "completed");
+      await storage.updateBidPackageStatus(bidPackageId, 'completed');
 
       res.json({
         success: true,
@@ -855,18 +989,16 @@ export async function registerRoutes(app: Express) {
         pairings: createdPairings,
       });
     } catch (error) {
-      console.error("Error creating bulk pairings:", error);
-      res.status(500).json({ message: "Failed to create pairings" });
+      console.error('Error creating bulk pairings:', error);
+      res.status(500).json({ message: 'Failed to create pairings' });
     }
   });
 
-
   // Database verification endpoint
-  app.get("/api/verify-data", async (req, res) => {
+  app.get('/api/verify-data', async (req, res) => {
     try {
       const verification = {} as Record<number, any>;
       const bidPackages = await storage.getBidPackages();
-
 
       for (const bidPackage of bidPackages) {
         const pairings = await storage.getPairings(bidPackage.id);
@@ -878,7 +1010,7 @@ export async function registerRoutes(app: Express) {
             name: bidPackage.name,
             month: bidPackage.month,
             year: bidPackage.year,
-            status: bidPackage.status
+            status: bidPackage.status,
           },
           pairings: {
             total: pairings.length,
@@ -887,34 +1019,42 @@ export async function registerRoutes(app: Express) {
               creditHours: p.creditHours,
               blockHours: p.blockHours,
               pairingDays: p.pairingDays,
-              holdProbability: p.holdProbability
-            }))
+              holdProbability: p.holdProbability,
+            })),
           },
           stats: {
             totalPairings: stats.totalPairings,
             avgCreditHours: stats.avgCreditHours.toFixed(2),
             avgBlockHours: stats.avgBlockHours.toFixed(2),
             avgPairingDays: stats.avgPairingDays.toFixed(1),
-            dayDistribution: stats.dayDistribution
+            dayDistribution: stats.dayDistribution,
           },
           dataIntegrity: {
             hasPairings: pairings.length > 0,
-            hasValidCreditHours: pairings.filter(p => parseFloat(String(p.creditHours)) > 0).length,
-            hasValidBlockHours: pairings.filter(p => parseFloat(String(p.blockHours)) > 0).length,
-            hasValidPairingNumbers: pairings.filter(p => p.pairingNumber && p.pairingNumber.length > 0).length,
-            hasHoldProbabilities: pairings.filter(p => p.holdProbability !== null && p.holdProbability !== undefined).length
-          }
+            hasValidCreditHours: pairings.filter(
+              p => parseFloat(String(p.creditHours)) > 0
+            ).length,
+            hasValidBlockHours: pairings.filter(
+              p => parseFloat(String(p.blockHours)) > 0
+            ).length,
+            hasValidPairingNumbers: pairings.filter(
+              p => p.pairingNumber && p.pairingNumber.length > 0
+            ).length,
+            hasHoldProbabilities: pairings.filter(
+              p => p.holdProbability !== null && p.holdProbability !== undefined
+            ).length,
+          },
         };
       }
 
       res.json({
         success: true,
         totalBidPackages: bidPackages.length,
-        verification
+        verification,
       });
     } catch (error) {
-      console.error("Error verifying data:", error);
-      res.status(500).json({ message: "Failed to verify data" });
+      console.error('Error verifying data:', error);
+      res.status(500).json({ message: 'Failed to verify data' });
     }
   });
 

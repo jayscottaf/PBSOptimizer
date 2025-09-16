@@ -35,18 +35,28 @@ export class HybridOpenAIService {
   /**
    * Analyze pilot queries using pre-processed summaries to avoid token limits
    */
-  async analyzeQuery(query: HybridAnalysisQuery): Promise<HybridAnalysisResponse> {
+  async analyzeQuery(
+    query: HybridAnalysisQuery
+  ): Promise<HybridAnalysisResponse> {
     try {
-      console.log('Starting hybrid analysis for query:', query.message.substring(0, 100));
+      console.log(
+        'Starting hybrid analysis for query:',
+        query.message.substring(0, 100)
+      );
 
       // Get bid package information for proper formatting
       let bidPackageInfo = null;
       if (query.bidPackageId) {
         try {
           const bidPackages = await this.storage.getBidPackages();
-          bidPackageInfo = bidPackages.find(pkg => pkg.id === query.bidPackageId);
-        } catch (error) {
-          console.log('Could not fetch bid package info:', error);
+          bidPackageInfo = bidPackages.find(
+            pkg => pkg.id === query.bidPackageId
+          );
+        } catch (error: unknown) {
+          console.log(
+            'Could not fetch bid package info:',
+            error instanceof Error ? error.message : String(error)
+          );
         }
       }
 
@@ -67,7 +77,9 @@ export class HybridOpenAIService {
       // Estimate token count
       const estimatedTokens = this.estimateTokens(processedData);
       if (estimatedTokens > this.TOKEN_LIMIT) {
-        console.log(`Data too large (${estimatedTokens} tokens), using summary approach`);
+        console.log(
+          `Data too large (${estimatedTokens} tokens), using summary approach`
+        );
         return await this.handleWithSummaryOnly(query);
       }
 
@@ -98,22 +110,29 @@ export class HybridOpenAIService {
 
       // Call OpenAI with tool_calls (replaces deprecated function_call)
       const completion = await openai.chat.completions.create({
-        model: "gpt-4",
+        model: 'gpt-4',
         messages: [
-          { role: "system", content: this.getSystemPrompt(bidPackageInfo) },
-          { role: "user", content: `${query.message}\n\nAvailable Data Summary:\n${dataString}` }
+          { role: 'system', content: this.getSystemPrompt(bidPackageInfo) },
+          {
+            role: 'user',
+            content: `${query.message}\n\nAvailable Data Summary:\n${dataString}`,
+          },
         ],
         tools: this.getAvailableFunctions(),
         max_tokens: 1000,
-        temperature: 0.7
+        temperature: 0.7,
       });
 
       const response = completion.choices[0]?.message?.content;
-      const toolCall = completion.choices[0]?.message?.tool_calls?.[0]?.function;
+      const toolCall =
+        completion.choices[0]?.message?.tool_calls?.[0]?.function;
 
       if (toolCall) {
         console.log('Tool call requested:', toolCall.name);
-        const functionResult = await this.handleFunctionCall(toolCall, query.bidPackageId);
+        const functionResult = await this.handleFunctionCall(
+          toolCall,
+          query.bidPackageId
+        );
         return functionResult;
       }
 
@@ -124,18 +143,27 @@ export class HybridOpenAIService {
       return {
         response,
         data: processedData,
-        truncated: processedData.truncated
+        truncated: processedData.truncated,
       };
-
     } catch (error: unknown) {
       console.error('Hybrid analysis error:', error);
 
-      if (error instanceof Error && error.message.includes('rate_limit_exceeded')) {
-        throw new Error('OpenAI rate limit exceeded. Please try again shortly.');
+      if (
+        error instanceof Error &&
+        error.message.includes('rate_limit_exceeded')
+      ) {
+        throw new Error(
+          'OpenAI rate limit exceeded. Please try again shortly.'
+        );
       }
 
-      if (error instanceof Error && error.message.includes('context_length_exceeded')) {
-        console.log('Context length exceeded, falling back to summary approach');
+      if (
+        error instanceof Error &&
+        error.message.includes('context_length_exceeded')
+      ) {
+        console.log(
+          'Context length exceeded, falling back to summary approach'
+        );
         return await this.handleWithSummaryOnly(query);
       }
 
@@ -143,18 +171,24 @@ export class HybridOpenAIService {
     }
   }
 
-  private async preprocessDataForQuery(query: HybridAnalysisQuery): Promise<any> {
+  private async preprocessDataForQuery(
+    query: HybridAnalysisQuery
+  ): Promise<any> {
     const message = query.message.toLowerCase();
 
     // Handle check-in time queries FIRST before other patterns
-    const checkInMatch = message.match(/check.?in\s+(?:after|>=|>\s*)?(\d{1,2})[:.;](\d{2})/i) ||
-                        message.match(/after\s+(\d{1,2})[:.;](\d{2})/i);
-    
-    if (checkInMatch && (message.includes('pairing') || message.includes('how many'))) {
+    const checkInMatch =
+      message.match(/check.?in\s+(?:after|>=|>\s*)?(\d{1,2})[:.;](\d{2})/i) ||
+      message.match(/after\s+(\d{1,2})[:.;](\d{2})/i);
+
+    if (
+      checkInMatch &&
+      (message.includes('pairing') || message.includes('how many'))
+    ) {
       const hours = checkInMatch[1];
       const minutes = checkInMatch[2];
       const timeDecimal = parseFloat(`${hours}.${minutes}`);
-      
+
       return await this.handleCheckInTimeQuery(query, timeDecimal, message);
     }
 
@@ -164,17 +198,27 @@ export class HybridOpenAIService {
 
     // Handle specific duration requests (1-day, 2-day, 3-day, 4-day, 5-day, etc.)
     if (requestedDays) {
-      return await this.handleDurationSpecificQuery(query, requestedDays, message);
+      return await this.handleDurationSpecificQuery(
+        query,
+        requestedDays,
+        message
+      );
     }
 
     // Check for specific pairing number requests (only very explicit pairing requests)
-    const pairingMatch = message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) ||
-                         message.match(/#(\d{4,5})/i) ||
-                         (message.match(/\b(\d{4,5})\b/) && (message.includes('pairing') || message.match(/^(?:show\s+me\s+)?(\d{4,5})$/)));
+    const pairingMatch =
+      message.match(/(?:pairing|show\s+me\s+pairing)\s+#?(\d{4,5})/i) ||
+      message.match(/#(\d{4,5})/i) ||
+      (message.match(/\b(\d{4,5})\b/) &&
+        (message.includes('pairing') ||
+          message.match(/^(?:show\s+me\s+)?(\d{4,5})$/)));
 
-    if (pairingMatch) {
+    if (pairingMatch && Array.isArray(pairingMatch)) {
       const pairingNumber = pairingMatch[1];
-      const pairing = await this.storage.getPairingByNumber(pairingNumber, query.bidPackageId);
+      const pairing = await this.storage.getPairingByNumber(
+        pairingNumber,
+        query.bidPackageId
+      );
 
       if (pairing) {
         return {
@@ -191,16 +235,16 @@ export class HybridOpenAIService {
             effectiveDates: pairing.effectiveDates,
             flightSegments: pairing.flightSegments,
             layovers: pairing.layovers,
-            fullTextBlock: pairing.fullText,
-            checkInTime: pairing.checkInTime // Added checkInTime
+            fullTextBlock: pairing.fullTextBlock,
+            checkInTime: pairing.checkInTime, // Added checkInTime
           },
-          truncated: false
+          truncated: false,
         };
       } else {
         return {
           type: 'pairing_not_found',
           pairingNumber,
-          truncated: false
+          truncated: false,
         };
       }
     }
@@ -226,43 +270,61 @@ export class HybridOpenAIService {
     }
 
     if (message.includes('efficient') || message.includes('credit per block')) {
-      const result = await this.storage.getTopEfficientPairings(query.bidPackageId, this.MAX_PAIRINGS_TO_SEND);
+      const result = await this.storage.getTopEfficientPairings(
+        query.bidPackageId,
+        this.MAX_PAIRINGS_TO_SEND
+      );
       return {
         type: 'efficiency_analysis',
         topPairings: result.pairings.map(p => ({
           pairingNumber: p.pairingNumber,
           creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
           blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-          efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-          holdProbability: p.holdProbability,
-          pairingDays: p.pairingDays
+          efficiency: (
+            parseFloat(p.creditHours.toString()) /
+            parseFloat(p.blockHours.toString())
+          ).toFixed(2),
+          holdProbability: p.holdProbability || 0,
+          pairingDays: p.pairingDays || 1,
         })),
         summaryStats: {
           totalPairings: result.stats.totalPairings,
           avgEfficiency: result.stats.avgEfficiency.toFixed(2),
           topEfficiency: result.stats.topEfficiency.toFixed(2),
-          avgCredit: this.formatHours(parseFloat(result.stats.avgCredit.toString())),
-          avgBlock: this.formatHours(parseFloat(result.stats.avgBlock.toString()))
+          avgCredit: this.formatHours(
+            parseFloat(result.stats.avgCredit.toString())
+          ),
+          avgBlock: this.formatHours(
+            parseFloat(result.stats.avgBlock.toString())
+          ),
         },
-        truncated: result.pairings.length < result.stats.totalPairings
+        truncated: result.pairings.length < result.stats.totalPairings,
       };
     }
 
-    const result = await this.storage.getPairingStatsSummary(query.bidPackageId);
+    const result = await this.storage.getPairingStatsSummary(
+      query.bidPackageId
+    );
     return {
       type: 'general_stats',
       summary: result,
-      truncated: false
+      truncated: false,
     };
   }
 
-  private async handleCheckInTimeQuery(query: HybridAnalysisQuery, afterTime: number, message: string): Promise<any> {
+  private async handleCheckInTimeQuery(
+    query: HybridAnalysisQuery,
+    afterTime: number,
+    message: string
+  ): Promise<any> {
     try {
       const allPairings = await this.storage.getPairings(query.bidPackageId);
-      
+
       // Filter pairings with check-in times after the specified time
       const filteredPairings = allPairings.filter(p => {
-        if (!p.checkInTime) return false;
+        if (!p.checkInTime) {
+          return false;
+        }
         const checkInDecimal = parseFloat(p.checkInTime.toString());
         return checkInDecimal >= afterTime;
       });
@@ -272,12 +334,33 @@ export class HybridOpenAIService {
         totalWithCheckInData: allPairings.filter(p => p.checkInTime).length,
         matchingCheckInCriteria: filteredPairings.length,
         afterTime: afterTime,
-        avgCreditHours: filteredPairings.length > 0 ? 
-          (filteredPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / filteredPairings.length).toFixed(2) : null,
-        avgBlockHours: filteredPairings.length > 0 ? 
-          (filteredPairings.reduce((sum, p) => sum + parseFloat(p.blockHours.toString()), 0) / filteredPairings.length).toFixed(2) : null,
-        avgHoldProbability: filteredPairings.length > 0 ?
-          (filteredPairings.reduce((sum, p) => sum + p.holdProbability, 0) / filteredPairings.length).toFixed(1) : null
+        avgCreditHours:
+          filteredPairings.length > 0
+            ? (
+                filteredPairings.reduce(
+                  (sum, p) => sum + parseFloat(p.creditHours.toString()),
+                  0
+                ) / filteredPairings.length
+              ).toFixed(2)
+            : null,
+        avgBlockHours:
+          filteredPairings.length > 0
+            ? (
+                filteredPairings.reduce(
+                  (sum, p) => sum + parseFloat(p.blockHours.toString()),
+                  0
+                ) / filteredPairings.length
+              ).toFixed(2)
+            : null,
+        avgHoldProbability:
+          filteredPairings.length > 0
+            ? (
+                filteredPairings.reduce(
+                  (sum, p) => sum + (p.holdProbability || 0),
+                  0
+                ) / filteredPairings.length
+              ).toFixed(1)
+            : null,
       };
 
       return {
@@ -289,25 +372,32 @@ export class HybridOpenAIService {
           checkInTime: p.checkInTime,
           creditHours: p.creditHours.toString(),
           blockHours: p.blockHours.toString(),
-          pairingDays: p.pairingDays,
-          holdProbability: p.holdProbability,
-          route: p.route
+          pairingDays: p.pairingDays || 1,
+          holdProbability: p.holdProbability || 0,
+          route: p.route,
         })),
         totalMatching: filteredPairings.length,
         totalSearched: allPairings.length,
-        truncated: false
+        truncated: false,
       };
-    } catch (error) {
-      console.error('Error in handleCheckInTimeQuery:', error);
+    } catch (error: unknown) {
+      console.error(
+        'Error in handleCheckInTimeQuery:',
+        error instanceof Error ? error.message : String(error)
+      );
       return {
         type: 'error',
-        message: `Error processing check-in time query: ${error.message}`,
-        truncated: false
+        message: `Error processing check-in time query: ${error instanceof Error ? error.message : String(error)}`,
+        truncated: false,
       };
     }
   }
 
-  private async handleDurationSpecificQuery(query: HybridAnalysisQuery, days: number, message: string): Promise<any> {
+  private async handleDurationSpecificQuery(
+    query: HybridAnalysisQuery,
+    days: number,
+    message: string
+  ): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
 
     // Filter for specific duration pairings
@@ -330,7 +420,11 @@ export class HybridOpenAIService {
     }
 
     // Apply hold probability filter if mentioned
-    if (message.includes('hold prob') || message.includes('senior') || message.includes('junior')) {
+    if (
+      message.includes('hold prob') ||
+      message.includes('senior') ||
+      message.includes('junior')
+    ) {
       const minHoldProb = this.extractHoldProbabilityThreshold(message);
       filteredPairings = filteredPairings.filter(p => {
         const holdProb = parseInt(p.holdProbability?.toString() || '0');
@@ -343,11 +437,18 @@ export class HybridOpenAIService {
     const sortedPairings = filteredPairings
       .sort((a, b) => {
         if (filterCriteria.minEfficiency) {
-          const effA = parseFloat(a.creditHours.toString()) / parseFloat(a.blockHours.toString());
-          const effB = parseFloat(b.creditHours.toString()) / parseFloat(b.blockHours.toString());
+          const effA =
+            parseFloat(a.creditHours.toString()) /
+            parseFloat(a.blockHours.toString());
+          const effB =
+            parseFloat(b.creditHours.toString()) /
+            parseFloat(b.blockHours.toString());
           return effB - effA;
         }
-        return parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString());
+        return (
+          parseFloat(b.creditHours.toString()) -
+          parseFloat(a.creditHours.toString())
+        );
       })
       .slice(0, this.MAX_PAIRINGS_TO_SEND);
 
@@ -357,62 +458,84 @@ export class HybridOpenAIService {
         pairingNumber: p.pairingNumber,
         creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
         blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-        efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-        holdProbability: p.holdProbability,
-        pairingDays: p.pairingDays,
+        efficiency: (
+          parseFloat(p.creditHours.toString()) /
+          parseFloat(p.blockHours.toString())
+        ).toFixed(2),
+        holdProbability: p.holdProbability || 0,
+        pairingDays: p.pairingDays || 1,
         route: p.route,
         tafb: p.tafb,
         layovers: p.layovers,
-        checkInTime: p.checkInTime // Added checkInTime
+        checkInTime: p.checkInTime, // Added checkInTime
       })),
       filterCriteria,
       totalMatching: filteredPairings.length,
       totalSearched: allPairings.length,
-      truncated: sortedPairings.length < filteredPairings.length
+      truncated: sortedPairings.length < filteredPairings.length,
     };
   }
 
-  private async handleMultiDayQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+  private async handleMultiDayQuery(
+    query: HybridAnalysisQuery,
+    message: string
+  ): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
 
     // Filter for multi-day pairings (2+ days)
-    const multiDayPairings = allPairings.filter(p => p.pairingDays >= 2);
+    const multiDayPairings = allPairings.filter(p => (p.pairingDays || 1) >= 2);
 
     // Group by duration
     const groupedByDuration = multiDayPairings.reduce((acc, p) => {
       const key = `${p.pairingDays}day`;
-      if (!acc[key]) acc[key] = [];
+      if (!acc[key]) {
+        acc[key] = [];
+      }
       acc[key].push(p);
       return acc;
     }, {} as any);
 
     // Get top pairings from each duration group
-    const topFromEachDuration = Object.entries(groupedByDuration)
-      .map(([duration, pairings]: [string, any]) => ({
+    const topFromEachDuration = Object.entries(groupedByDuration).map(
+      ([duration, pairings]: [string, any]) => ({
         duration,
         count: pairings.length,
         topPairings: pairings
-          .sort((a: any, b: any) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
-          .slice(0, 5)
-      }));
+          .sort(
+            (a: any, b: any) =>
+              parseFloat(b.creditHours.toString()) -
+              parseFloat(a.creditHours.toString())
+          )
+          .slice(0, 5),
+      })
+    );
 
     return {
       type: 'multi_day_analysis',
       durationBreakdown: topFromEachDuration,
       totalMultiDay: multiDayPairings.length,
       totalSearched: allPairings.length,
-      truncated: false
+      truncated: false,
     };
   }
 
-  private async handleShortTripQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+  private async handleShortTripQuery(
+    query: HybridAnalysisQuery,
+    message: string
+  ): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
 
     // Filter for short trips (1-2 days)
-    const shortTripPairings = allPairings.filter(p => p.pairingDays <= 2);
+    const shortTripPairings = allPairings.filter(
+      p => (p.pairingDays || 1) <= 2
+    );
 
     const sortedPairings = shortTripPairings
-      .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+      .sort(
+        (a, b) =>
+          parseFloat(b.creditHours.toString()) -
+          parseFloat(a.creditHours.toString())
+      )
       .slice(0, this.MAX_PAIRINGS_TO_SEND);
 
     return {
@@ -421,20 +544,26 @@ export class HybridOpenAIService {
         pairingNumber: p.pairingNumber,
         creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
         blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-        efficiency: (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2),
-        holdProbability: p.holdProbability,
-        pairingDays: p.pairingDays,
+        efficiency: (
+          parseFloat(p.creditHours.toString()) /
+          parseFloat(p.blockHours.toString())
+        ).toFixed(2),
+        holdProbability: p.holdProbability || 0,
+        pairingDays: p.pairingDays || 1,
         route: p.route,
-        tafb: p.tafb
+        tafb: p.tafb,
       })),
       filterCriteria: { maxPairingDays: 2 },
       totalMatching: shortTripPairings.length,
       totalSearched: allPairings.length,
-      truncated: sortedPairings.length < shortTripPairings.length
+      truncated: sortedPairings.length < shortTripPairings.length,
     };
   }
 
-  private async handleLayoverQuery(query: HybridAnalysisQuery, message: string): Promise<any> {
+  private async handleLayoverQuery(
+    query: HybridAnalysisQuery,
+    message: string
+  ): Promise<any> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
 
     // Extract city from query (DFW, ATL, etc.)
@@ -446,29 +575,36 @@ export class HybridOpenAIService {
     const requestedCount = numberMatch ? parseInt(numberMatch[1]) : 10;
 
     // Extract minimum duration if specified
-    const durationMatch = message.match(/(?:over|longer than|above)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/);
+    const durationMatch = message.match(
+      /(?:over|longer than|above)\s+(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/
+    );
     const minDuration = durationMatch ? parseFloat(durationMatch[1]) : 0;
 
     // Collect layovers from all pairings, filtering by city FIRST if specified
     const allLayovers: any[] = [];
-    let debugInfo: any[] = [];
+    const debugInfo: any[] = [];
 
     allPairings.forEach(pairing => {
       // Debug: Check for specific pairing 8053
-      if (pairing.pairingNumber === "8053") {
+      if (pairing.pairingNumber === '8053') {
         debugInfo.push({
           pairingNumber: pairing.pairingNumber,
           hasLayovers: !!pairing.layovers,
           layoversArray: pairing.layovers,
           isArray: Array.isArray(pairing.layovers),
-          layoverCount: pairing.layovers ? pairing.layovers.length : 0
+          layoverCount:
+            pairing.layovers && Array.isArray(pairing.layovers)
+              ? pairing.layovers.length
+              : 0,
         });
       }
 
       if (pairing.layovers && Array.isArray(pairing.layovers)) {
         pairing.layovers.forEach((layover: any) => {
           // STRICT city filtering - only include layovers in the specified city
-          if (targetCity && layover.city !== targetCity) return;
+          if (targetCity && layover.city !== targetCity) {
+            return;
+          }
 
           // Parse duration (handle both "18.43" and "18:43" formats)
           const durationStr = layover.duration?.toString() || '0';
@@ -477,11 +613,11 @@ export class HybridOpenAIService {
           if (durationStr.includes(':')) {
             // Handle "18:43" format
             const [hours, minutes] = durationStr.split(':').map(Number);
-            durationHours = hours + (minutes / 60);
+            durationHours = hours + minutes / 60;
           } else if (durationStr.includes('.')) {
             // Handle "18.43" format (PBS format where .43 = 43 minutes)
             const [hours, minutes] = durationStr.split('.').map(Number);
-            durationHours = hours + (minutes / 60);
+            durationHours = hours + minutes / 60;
           } else {
             // Handle whole hours
             durationHours = parseFloat(durationStr);
@@ -497,7 +633,7 @@ export class HybridOpenAIService {
               pairingNumber: pairing.pairingNumber,
               creditHours: pairing.creditHours,
               holdProbability: pairing.holdProbability,
-              route: pairing.route
+              route: pairing.route,
             });
           }
         });
@@ -521,7 +657,8 @@ export class HybridOpenAIService {
 
     // Calculate averages
     Object.keys(cityStats).forEach(city => {
-      cityStats[city].avgDuration = cityStats[city].totalDuration / cityStats[city].count;
+      cityStats[city].avgDuration =
+        cityStats[city].totalDuration / cityStats[city].count;
     });
 
     // Format the response with actual layover details
@@ -551,14 +688,16 @@ export class HybridOpenAIService {
           duration: layover.duration,
           durationHours: layover.durationHours.toFixed(2),
           pairingNumber: layover.pairingNumber,
-          creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
+          creditHours: this.formatHours(
+            parseFloat(layover.creditHours.toString())
+          ),
           holdProbability: layover.holdProbability,
-          route: layover.route
+          route: layover.route,
         })),
         totalLayovers: allLayovers.length,
-        debugInfo: debugInfo // Include debug info for troubleshooting
+        debugInfo: debugInfo, // Include debug info for troubleshooting
       },
-      truncated: sortedLayovers.length < allLayovers.length
+      truncated: sortedLayovers.length < allLayovers.length,
     };
   }
 
@@ -575,8 +714,12 @@ export class HybridOpenAIService {
     console.log('Analyzing check-in times for', pairings.length, 'pairings');
 
     // Filter pairings with check-in times
-    const pairingsWithCheckIn = pairings.filter(p => p.checkInTime && p.checkInTime.trim() !== '');
-    console.log(`Found ${pairingsWithCheckIn.length} pairings with check-in times`);
+    const pairingsWithCheckIn = pairings.filter(
+      p => p.checkInTime && p.checkInTime.trim() !== ''
+    );
+    console.log(
+      `Found ${pairingsWithCheckIn.length} pairings with check-in times`
+    );
 
     if (pairingsWithCheckIn.length === 0) {
       return {
@@ -584,12 +727,14 @@ export class HybridOpenAIService {
         response: 'No check-in time data available in the current bid package.',
         count: 0,
         totalWithCheckIn: 0,
-        totalSearched: pairings.length
+        totalSearched: pairings.length,
       };
     }
 
     // Parse time threshold from message (e.g., "after 10:59 am")
-    const timeMatch = message.match(/(?:after|before)\s+(\d{1,2})[:.:](\d{2})/i);
+    const timeMatch = message.match(
+      /(?:after|before)\s+(\d{1,2})[:.:](\d{2})/i
+    );
     let targetHour = null;
     let targetMinute = null;
     let isAfter = true;
@@ -598,7 +743,9 @@ export class HybridOpenAIService {
       targetHour = parseInt(timeMatch[1]);
       targetMinute = parseInt(timeMatch[2]);
       isAfter = message.toLowerCase().includes('after');
-      console.log(`Looking for pairings ${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}`);
+      console.log(
+        `Looking for pairings ${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}`
+      );
     }
 
     let filteredPairings = pairingsWithCheckIn;
@@ -607,24 +754,35 @@ export class HybridOpenAIService {
       filteredPairings = pairingsWithCheckIn.filter(p => {
         const checkIn = p.checkInTime.toString();
         // Handle both "10.35" and "10:35" formats
-        const parts = checkIn.split(/[.:]/).map(s => parseInt(s.trim()));
-        if (parts.length < 2) return false;
-        
+        const parts = checkIn
+          .split(/[.:]/)
+          .map((s: string) => parseInt(s.trim()));
+        if (parts.length < 2) {
+          return false;
+        }
+
         const hours = parts[0];
         const minutes = parts[1];
         const checkInMinutes = hours * 60 + minutes;
-        const targetMinutes = targetHour * 60 + targetMinute;
+        const targetMinutes = targetHour * 60 + (targetMinute || 0);
 
-        console.log(`Pairing ${p.pairingNumber}: ${checkIn} (${checkInMinutes} min) vs target (${targetMinutes} min)`);
-        return isAfter ? checkInMinutes > targetMinutes : checkInMinutes < targetMinutes;
+        console.log(
+          `Pairing ${p.pairingNumber}: ${checkIn} (${checkInMinutes} min) vs target (${targetMinutes} min)`
+        );
+        return isAfter
+          ? checkInMinutes > targetMinutes
+          : checkInMinutes < targetMinutes;
       });
-      
-      console.log(`Filtered to ${filteredPairings.length} pairings matching time criteria`);
+
+      console.log(
+        `Filtered to ${filteredPairings.length} pairings matching time criteria`
+      );
     }
 
-    const responseText = targetHour !== null && targetMinute !== null 
-      ? `Found ${filteredPairings.length} pairings that check in ${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')} out of ${pairingsWithCheckIn.length} pairings with check-in times.`
-      : `Found ${pairingsWithCheckIn.length} pairings with check-in time data.`;
+    const responseText =
+      targetHour !== null && targetMinute !== null
+        ? `Found ${filteredPairings.length} pairings that check in ${isAfter ? 'after' : 'before'} ${targetHour}:${(targetMinute || 0).toString().padStart(2, '0')} out of ${pairingsWithCheckIn.length} pairings with check-in times.`
+        : `Found ${pairingsWithCheckIn.length} pairings with check-in time data.`;
 
     return {
       type: 'check_in_analysis',
@@ -632,33 +790,45 @@ export class HybridOpenAIService {
       count: filteredPairings.length,
       totalWithCheckIn: pairingsWithCheckIn.length,
       totalSearched: pairings.length,
-      criteria: timeMatch ? `${isAfter ? 'after' : 'before'} ${targetHour}:${targetMinute.toString().padStart(2, '0')}` : 'all',
+      criteria: timeMatch
+        ? `${isAfter ? 'after' : 'before'} ${targetHour}:${(targetMinute || 0).toString().padStart(2, '0')}`
+        : 'all',
       pairings: filteredPairings.slice(0, 20).map(p => ({
         pairingNumber: p.pairingNumber,
         checkInTime: p.checkInTime,
         route: p.route?.substring(0, 80) || '',
         creditHours: this.formatHours(parseFloat(p.creditHours.toString())),
         blockHours: this.formatHours(parseFloat(p.blockHours.toString())),
-        pairingDays: p.pairingDays,
-        holdProbability: p.holdProbability
-      }))
+        pairingDays: p.pairingDays || 1,
+        holdProbability: p.holdProbability,
+      })),
     };
   }
 
-
   private extractHoldProbabilityThreshold(message: string): number {
     // Look for explicit hold probability percentages with proper context
-    const holdMatch = message.match(/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i);
-    if (holdMatch) return parseInt(holdMatch[1]);
+    const holdMatch = message.match(
+      /(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i
+    );
+    if (holdMatch) {
+      return parseInt(holdMatch[1]);
+    }
 
     // Fallback to seniority-based defaults
-    if (message.includes('senior')) return 70;
-    if (message.includes('junior')) return 30;
+    if (message.includes('senior')) {
+      return 70;
+    }
+    if (message.includes('junior')) {
+      return 30;
+    }
 
     return 75; // Default threshold
   }
 
-  private async handleGeneralQuestion(query: HybridAnalysisQuery, message: string): Promise<any> {
+  private async handleGeneralQuestion(
+    query: HybridAnalysisQuery,
+    message: string
+  ): Promise<any> {
     console.log('Handling general question:', message);
 
     const allPairings = await this.storage.getPairings(query.bidPackageId);
@@ -670,46 +840,61 @@ export class HybridOpenAIService {
     }
 
     // Default response if no specific handler matches
-    const result = await this.storage.getPairingStatsSummary(query.bidPackageId);
+    const result = await this.storage.getPairingStatsSummary(
+      query.bidPackageId
+    );
     return {
       type: 'general_stats',
       summary: result,
-      truncated: false
+      truncated: false,
     };
   }
 
-  private async handleLargeDatasetRequest(query: HybridAnalysisQuery): Promise<HybridAnalysisResponse> {
+  private async handleLargeDatasetRequest(
+    query: HybridAnalysisQuery
+  ): Promise<HybridAnalysisResponse> {
     const allPairings = await this.storage.getPairings(query.bidPackageId);
     return {
       response: `Here are all ${allPairings.length} pairings directly from the DB.`,
       data: allPairings,
-      truncated: false
+      truncated: false,
     };
   }
 
-  private async handleWithSummaryOnly(query: HybridAnalysisQuery): Promise<HybridAnalysisResponse> {
+  private async handleWithSummaryOnly(
+    query: HybridAnalysisQuery
+  ): Promise<HybridAnalysisResponse> {
     const stats = await this.storage.getPairingStatsSummary(query.bidPackageId);
     return {
       response: `This dataset is large (${stats.totalPairings} pairings). Here's a summary:\n- Avg Credit: ${this.formatHours(+stats.avgCredit)}\n- Avg Block: ${this.formatHours(+stats.avgBlock)}\n- Avg Hold Probability: ${stats.avgHoldProbability.toFixed(1)}%`,
       data: stats,
-      truncated: true
+      truncated: true,
     };
   }
 
-  private async handleFunctionCall(functionCall: any, bidPackageId: number): Promise<HybridAnalysisResponse> {
+  private async handleFunctionCall(
+    functionCall: any,
+    bidPackageId: number
+  ): Promise<HybridAnalysisResponse> {
     const functionName: string = functionCall.name;
     const args = JSON.parse(functionCall.arguments || '{}');
 
     switch (functionName) {
       case 'getTopEfficientPairings':
-        const efficientResult = await this.storage.getTopEfficientPairings(bidPackageId, args.limit || 20);
+        const efficientResult = await this.storage.getTopEfficientPairings(
+          bidPackageId,
+          args.limit || 20
+        );
 
         // Generate detailed response with actual pairing data
         const topPairings = efficientResult.pairings.slice(0, 5);
         let response = `**Top 5 Most Efficient Pairings (Credit-to-Block Ratio):**\n\n`;
 
         topPairings.forEach((p: any, i: number) => {
-          const efficiency = (parseFloat(p.creditHours.toString()) / parseFloat(p.blockHours.toString())).toFixed(2);
+          const efficiency = (
+            parseFloat(p.creditHours.toString()) /
+            parseFloat(p.blockHours.toString())
+          ).toFixed(2);
           response += `${i + 1}. **Pairing ${p.pairingNumber}** - ${efficiency} ratio\n`;
           response += `   • Credit: ${this.formatHoursDeltaPBS(parseFloat(p.creditHours.toString()))} | Block: ${this.formatHoursDeltaPBS(parseFloat(p.blockHours.toString()))}\n`;
           response += `   • ${p.pairingDays} days | Hold: ${p.holdProbability}% | Route: ${p.route?.substring(0, 50)}...\n\n`;
@@ -724,12 +909,16 @@ export class HybridOpenAIService {
         return {
           response: response,
           data: efficientResult,
-          truncated: efficientResult.pairings.length < efficientResult.stats.totalPairings
+          truncated:
+            efficientResult.pairings.length <
+            efficientResult.stats.totalPairings,
         };
 
       case 'getPairingsByDuration':
         const allPairings = await this.storage.getPairings(bidPackageId);
-        let durationPairings = allPairings.filter(p => p.pairingDays === args.days);
+        let durationPairings = allPairings.filter(
+          p => p.pairingDays === args.days
+        );
 
         // Apply additional filters if provided
         if (args.minEfficiency) {
@@ -750,7 +939,11 @@ export class HybridOpenAIService {
 
         // Sort by credit hours descending
         const sortedPairings = durationPairings
-          .sort((a, b) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
+          .sort(
+            (a, b) =>
+              parseFloat(b.creditHours.toString()) -
+              parseFloat(a.creditHours.toString())
+          )
           .slice(0, args.limit || 20);
 
         return {
@@ -760,20 +953,31 @@ export class HybridOpenAIService {
             stats: {
               totalFound: durationPairings.length,
               totalSearched: allPairings.length,
-              avgCredit: durationPairings.length > 0 ? durationPairings.reduce((sum, p) => sum + parseFloat(p.creditHours.toString()), 0) / durationPairings.length : 0
-            }
+              avgCredit:
+                durationPairings.length > 0
+                  ? durationPairings.reduce(
+                      (sum, p) => sum + parseFloat(p.creditHours.toString()),
+                      0
+                    ) / durationPairings.length
+                  : 0,
+            },
           },
-          truncated: sortedPairings.length < durationPairings.length
+          truncated: sortedPairings.length < durationPairings.length,
         };
 
       case 'getMultiDayAnalysis':
-        const allPairingsForMulti = await this.storage.getPairings(bidPackageId);
-        const multiDayPairings = allPairingsForMulti.filter(p => p.pairingDays >= 2);
+        const allPairingsForMulti =
+          await this.storage.getPairings(bidPackageId);
+        const multiDayPairings = allPairingsForMulti.filter(
+          p => (p.pairingDays || 1) >= 2
+        );
 
         // Group by duration
         const groupedByDuration = multiDayPairings.reduce((acc, p) => {
-          const key = p.pairingDays;
-          if (!acc[key]) acc[key] = [];
+          const key = p.pairingDays || 1;
+          if (!acc[key]) {
+            acc[key] = [];
+          }
           acc[key].push(p);
           return acc;
         }, {} as any);
@@ -783,10 +987,19 @@ export class HybridOpenAIService {
           .map(([duration, pairings]: [string, any]) => ({
             duration: parseInt(duration),
             count: pairings.length,
-            avgCredit: pairings.reduce((sum: number, p: any) => sum + parseFloat(p.creditHours.toString()), 0) / pairings.length,
+            avgCredit:
+              pairings.reduce(
+                (sum: number, p: any) =>
+                  sum + parseFloat(p.creditHours.toString()),
+                0
+              ) / pairings.length,
             topPairings: pairings
-              .sort((a: any, b: any) => parseFloat(b.creditHours.toString()) - parseFloat(a.creditHours.toString()))
-              .slice(0, args.limit || 5)
+              .sort(
+                (a: any, b: any) =>
+                  parseFloat(b.creditHours.toString()) -
+                  parseFloat(a.creditHours.toString())
+              )
+              .slice(0, args.limit || 5),
           }))
           .sort((a, b) => b.count - a.count);
 
@@ -795,9 +1008,9 @@ export class HybridOpenAIService {
           data: {
             durationBreakdown: analysisResults,
             totalMultiDay: multiDayPairings.length,
-            totalSearched: allPairingsForMulti.length
+            totalSearched: allPairingsForMulti.length,
           },
-          truncated: false
+          truncated: false,
         };
 
       case 'findBestPairings':
@@ -894,7 +1107,8 @@ export class HybridOpenAIService {
         };
 
       case 'getLayoverAnalysis':
-        const allPairingsForLayover = await this.storage.getPairings(bidPackageId);
+        const allPairingsForLayover =
+          await this.storage.getPairings(bidPackageId);
         const targetCity = args.city;
         const requestedCount = args.count || 10;
         const minDuration = args.minDuration || 0;
@@ -906,7 +1120,9 @@ export class HybridOpenAIService {
           if (pairing.layovers && Array.isArray(pairing.layovers)) {
             pairing.layovers.forEach((layover: any) => {
               // Filter by city if specified
-              if (targetCity && layover.city !== targetCity) return;
+              if (targetCity && layover.city !== targetCity) {
+                return;
+              }
 
               // Parse duration
               const durationStr = layover.duration?.toString() || '0';
@@ -914,10 +1130,10 @@ export class HybridOpenAIService {
 
               if (durationStr.includes(':')) {
                 const [hours, minutes] = durationStr.split(':').map(Number);
-                durationHours = hours + (minutes / 60);
+                durationHours = hours + minutes / 60;
               } else if (durationStr.includes('.')) {
                 const [hours, minutes] = durationStr.split('.').map(Number);
-                durationHours = hours + (minutes / 60);
+                durationHours = hours + minutes / 60;
               } else {
                 durationHours = parseFloat(durationStr);
               }
@@ -931,7 +1147,7 @@ export class HybridOpenAIService {
                   pairingNumber: pairing.pairingNumber,
                   creditHours: pairing.creditHours,
                   holdProbability: pairing.holdProbability,
-                  route: pairing.route
+                  route: pairing.route,
                 });
               }
             });
@@ -954,7 +1170,8 @@ export class HybridOpenAIService {
 
         // Calculate averages
         Object.keys(cityStats).forEach(city => {
-          cityStats[city].avgDuration = cityStats[city].totalDuration / cityStats[city].count;
+          cityStats[city].avgDuration =
+            cityStats[city].totalDuration / cityStats[city].count;
         });
 
         // Format the response with actual layover details
@@ -979,13 +1196,15 @@ export class HybridOpenAIService {
               duration: layover.duration,
               durationHours: layover.durationHours.toFixed(2),
               pairingNumber: layover.pairingNumber,
-              creditHours: this.formatHours(parseFloat(layover.creditHours.toString())),
+              creditHours: this.formatHours(
+                parseFloat(layover.creditHours.toString())
+              ),
               holdProbability: layover.holdProbability,
-              route: layover.route
+              route: layover.route,
             })),
-            totalLayovers: allLayovers.length
+            totalLayovers: allLayovers.length,
           },
-          truncated: sortedLayovers.length < allLayovers.length
+          truncated: sortedLayovers.length < allLayovers.length,
         };
 
       default:
@@ -994,7 +1213,9 @@ export class HybridOpenAIService {
   }
 
   private shouldSkipOpenAI(message: string): boolean {
-    return ['all pairings', 'full dataset', 'complete list'].some(pattern => message.toLowerCase().includes(pattern));
+    return ['all pairings', 'full dataset', 'complete list'].some(pattern =>
+      message.toLowerCase().includes(pattern)
+    );
   }
 
   private estimateTokens(data: any): number {
@@ -1022,9 +1243,9 @@ export class HybridOpenAIService {
   }
 
   private getSystemPrompt(bidPackageInfo?: any): string {
-    const bidPackageDisplay = bidPackageInfo ?
-      `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package` :
-      'the current bid package';
+    const bidPackageDisplay = bidPackageInfo
+      ? `${bidPackageInfo.base} ${bidPackageInfo.aircraft} ${bidPackageInfo.month} ${bidPackageInfo.year} Bid Package`
+      : 'the current bid package';
 
     return `You are a Delta PBS Bid Optimization Assistant. Analyze pilot pairing data and provide specific, actionable insights.
 
@@ -1066,54 +1287,69 @@ Use the backend-processed summaries to provide accurate analysis within token li
   private getAvailableFunctions(): any[] {
     return [
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "getTopEfficientPairings",
-          description: "Get top efficient pairings (credit-to-block ratio)",
+          name: 'getTopEfficientPairings',
+          description: 'Get top efficient pairings (credit-to-block ratio)',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              limit: { type: "number", description: "Max pairings to return" }
-            }
-          }
-        }
+              limit: { type: 'number', description: 'Max pairings to return' },
+            },
+          },
+        },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "getPairingsByDuration",
-          description: "Get pairings by specific duration (1-day, 2-day, 3-day, 4-day, 5-day, etc.)",
+          name: 'getPairingsByDuration',
+          description:
+            'Get pairings by specific duration (1-day, 2-day, 3-day, 4-day, 5-day, etc.)',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              days: { type: "number", description: "Number of days (1, 2, 3, 4, 5, etc.)" },
-              limit: { type: "number", description: "Max pairings to return" },
-              minEfficiency: { type: "number", description: "Minimum credit-to-block ratio" },
-              minHoldProb: { type: "number", description: "Minimum hold probability" }
-            }
-          }
-        }
+              days: {
+                type: 'number',
+                description: 'Number of days (1, 2, 3, 4, 5, etc.)',
+              },
+              limit: { type: 'number', description: 'Max pairings to return' },
+              minEfficiency: {
+                type: 'number',
+                description: 'Minimum credit-to-block ratio',
+              },
+              minHoldProb: {
+                type: 'number',
+                description: 'Minimum hold probability',
+              },
+            },
+          },
+        },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "getMultiDayAnalysis",
-          description: "Get analysis of all multi-day pairings (2+ days) grouped by duration",
+          name: 'getMultiDayAnalysis',
+          description:
+            'Get analysis of all multi-day pairings (2+ days) grouped by duration',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              limit: { type: "number", description: "Max pairings per duration group" }
-            }
-          }
-        }
+              limit: {
+                type: 'number',
+                description: 'Max pairings per duration group',
+              },
+            },
+          },
+        },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "getLayoverAnalysis",
-          description: "Analyze layovers by city, duration, or find longest layovers",
+          name: 'getLayoverAnalysis',
+          description:
+            'Analyze layovers by city, duration, or find longest layovers',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
               city: { type: "string", description: "3-letter airport code (e.g., DFW, ATL)" },
               count: { type: "number", description: "Number of layovers to return (default 10)" },

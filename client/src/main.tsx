@@ -5,7 +5,6 @@ import "./index.css";
 import { queryClient, clearAllCache, clearPairingCache, refreshAllData } from "./lib/queryClient";
 import { migrateOldCacheFormat, getCacheInfo } from "./lib/offlineCache";
 import { addTestingUtilities } from "./lib/offlineTestSuite";
-
 // Development utilities - available in browser console
 if (import.meta.env.DEV) {
   (window as any).debugCache = {
@@ -18,20 +17,21 @@ if (import.meta.env.DEV) {
       const cache = queryClient.getQueryCache().getAll();
       console.log('🔍 Cache inspection:', {
         totalQueries: cache.length,
-        queries: cache.map(q => ({ 
-          key: q.queryKey, 
+        queries: cache.map(q => ({
+          key: q.queryKey,
           state: q.state.status,
-          lastUpdated: q.state.dataUpdatedAt ? new Date(q.state.dataUpdatedAt).toLocaleTimeString() : 'never'
-        }))
+          lastUpdated: q.state.dataUpdatedAt
+            ? new Date(q.state.dataUpdatedAt).toLocaleTimeString()
+            : 'never',
+        })),
       });
-    }
+    },
   };
   console.log('🛠️ Cache utilities available: window.debugCache');
   
   // Add offline testing utilities
   addTestingUtilities();
 }
-
 // Initialize app with migration checks
 (async () => {
   // Render the app first to prevent startup delays

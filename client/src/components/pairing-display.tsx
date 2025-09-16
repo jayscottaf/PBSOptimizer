@@ -1,9 +1,18 @@
-
 import React, { useState } from 'react';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface PairingInfo {
   pairingNumber: string;
@@ -31,55 +40,68 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
   const hoverContent = (
     <div className="space-y-2 max-w-96">
       <div className="font-semibold">{pairing.pairingNumber}</div>
-      {(pairing.fullTextBlock || pairing.fullText) ? (
+      {pairing.fullTextBlock || pairing.fullText ? (
         <div className="text-sm">
           <span className="text-gray-600">Full Pairing Text Preview:</span>
           <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-2 rounded border mt-1 max-h-32 overflow-y-auto">
-            {(pairing.fullTextBlock || pairing.fullText || '').substring(0, 300)}
-            {(pairing.fullTextBlock || pairing.fullText || '').length > 300 && '...'}
+            {(pairing.fullTextBlock || pairing.fullText || '').substring(
+              0,
+              300
+            )}
+            {(pairing.fullTextBlock || pairing.fullText || '').length > 300 &&
+              '...'}
           </pre>
         </div>
       ) : (
         <>
           {pairing.route && (
             <div className="text-sm">
-              <span className="text-gray-600">Route:</span> {String(pairing.route).substring(0, 100)}
+              <span className="text-gray-600">Route:</span>{' '}
+              {String(pairing.route).substring(0, 100)}
               {String(pairing.route).length > 100 && '...'}
             </div>
           )}
           {pairing.creditHours && (
             <div className="text-sm">
-              <span className="text-gray-600">Credit:</span> {String(pairing.creditHours)}
+              <span className="text-gray-600">Credit:</span>{' '}
+              {String(pairing.creditHours)}
             </div>
           )}
           {pairing.blockHours && (
             <div className="text-sm">
-              <span className="text-gray-600">Block:</span> {String(pairing.blockHours)}
+              <span className="text-gray-600">Block:</span>{' '}
+              {String(pairing.blockHours)}
             </div>
           )}
           {pairing.tafb && (
             <div className="text-sm">
-              <span className="text-gray-600">TAFB:</span> {String(pairing.tafb)}
+              <span className="text-gray-600">TAFB:</span>{' '}
+              {String(pairing.tafb)}
             </div>
           )}
           {pairing.holdProbability !== undefined && (
             <div className="text-sm">
-              <span className="text-gray-600">Hold %:</span> 
-              <Badge 
-                variant="secondary" 
+              <span className="text-gray-600">Hold %:</span>
+              <Badge
+                variant="secondary"
                 className={`ml-1 ${
-                  pairing.holdProbability === 100 ? 'bg-green-100 text-green-800' :
-                  pairing.holdProbability === 75 ? 'bg-blue-100 text-blue-800' :
-                  pairing.holdProbability === 50 ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
+                  pairing.holdProbability === 100
+                    ? 'bg-green-100 text-green-800'
+                    : pairing.holdProbability === 75
+                      ? 'bg-blue-100 text-blue-800'
+                      : pairing.holdProbability === 50
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
                 }`}
               >
-                {pairing.holdProbability}% - {
-                  pairing.holdProbability === 100 ? 'Very Likely' :
-                  pairing.holdProbability === 75 ? 'Likely' :
-                  pairing.holdProbability === 50 ? 'Unlikely' :
-                  'Very Unlikely'
-                }
+                {pairing.holdProbability}% -{' '}
+                {pairing.holdProbability === 100
+                  ? 'Very Likely'
+                  : pairing.holdProbability === 75
+                    ? 'Likely'
+                    : pairing.holdProbability === 50
+                      ? 'Unlikely'
+                      : 'Very Unlikely'}
               </Badge>
             </div>
           )}
@@ -95,51 +117,76 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <div><span className="font-medium">Pairing:</span> {String(pairing.pairingNumber || '')}</div>
+          <div>
+            <span className="font-medium">Pairing:</span>{' '}
+            {String(pairing.pairingNumber || '')}
+          </div>
           {pairing.effectiveDates && (
-            <div><span className="font-medium">Effective:</span> {String(pairing.effectiveDates)}</div>
+            <div>
+              <span className="font-medium">Effective:</span>{' '}
+              {String(pairing.effectiveDates)}
+            </div>
           )}
           {pairing.creditHours && (
-            <div><span className="font-medium">Credit:</span> {String(pairing.creditHours)}</div>
+            <div>
+              <span className="font-medium">Credit:</span>{' '}
+              {String(pairing.creditHours)}
+            </div>
           )}
           {pairing.blockHours && (
-            <div><span className="font-medium">Block:</span> {String(pairing.blockHours)}</div>
+            <div>
+              <span className="font-medium">Block:</span>{' '}
+              {String(pairing.blockHours)}
+            </div>
           )}
           {pairing.payHours && (
-            <div><span className="font-medium">Pay:</span> {String(pairing.payHours)}</div>
+            <div>
+              <span className="font-medium">Pay:</span>{' '}
+              {String(pairing.payHours)}
+            </div>
           )}
         </div>
         <div className="space-y-2">
           {pairing.tafb && (
-            <div><span className="font-medium">TAFB:</span> {String(pairing.tafb)}</div>
+            <div>
+              <span className="font-medium">TAFB:</span> {String(pairing.tafb)}
+            </div>
           )}
           {pairing.pairingDays && (
-            <div><span className="font-medium">Days:</span> {String(pairing.pairingDays)}</div>
+            <div>
+              <span className="font-medium">Days:</span>{' '}
+              {String(pairing.pairingDays)}
+            </div>
           )}
           {pairing.holdProbability !== undefined && (
             <div>
-              <span className="font-medium">Hold Probability:</span> 
-              <Badge 
-                variant="secondary" 
+              <span className="font-medium">Hold Probability:</span>
+              <Badge
+                variant="secondary"
                 className={`ml-2 ${
-                  pairing.holdProbability === 100 ? 'bg-green-100 text-green-800' :
-                  pairing.holdProbability === 75 ? 'bg-blue-100 text-blue-800' :
-                  pairing.holdProbability === 50 ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
+                  pairing.holdProbability === 100
+                    ? 'bg-green-100 text-green-800'
+                    : pairing.holdProbability === 75
+                      ? 'bg-blue-100 text-blue-800'
+                      : pairing.holdProbability === 50
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
                 }`}
               >
-                {pairing.holdProbability}% - {
-                  pairing.holdProbability === 100 ? 'Very Likely' :
-                  pairing.holdProbability === 75 ? 'Likely' :
-                  pairing.holdProbability === 50 ? 'Unlikely' :
-                  'Very Unlikely'
-                }
+                {pairing.holdProbability}% -{' '}
+                {pairing.holdProbability === 100
+                  ? 'Very Likely'
+                  : pairing.holdProbability === 75
+                    ? 'Likely'
+                    : pairing.holdProbability === 50
+                      ? 'Unlikely'
+                      : 'Very Unlikely'}
               </Badge>
             </div>
           )}
         </div>
       </div>
-      
+
       {pairing.route && (
         <div>
           <div className="font-medium mb-2">Route:</div>
@@ -151,16 +198,20 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
         </div>
       )}
 
-      {pairing.layovers && Array.isArray(pairing.layovers) && pairing.layovers.length > 0 && (
-        <div>
-          <div className="font-medium mb-2">Layovers:</div>
-          <div className="flex flex-wrap gap-2">
-            {pairing.layovers.map((layover, index) => (
-              <Badge key={index} variant="outline">{String(layover)}</Badge>
-            ))}
+      {pairing.layovers &&
+        Array.isArray(pairing.layovers) &&
+        pairing.layovers.length > 0 && (
+          <div>
+            <div className="font-medium mb-2">Layovers:</div>
+            <div className="flex flex-wrap gap-2">
+              {pairing.layovers.map((layover, index) => (
+                <Badge key={index} variant="outline">
+                  {String(layover)}
+                </Badge>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {(pairing.fullText || pairing.fullTextBlock) && (
         <div>
@@ -188,9 +239,7 @@ export function PairingDisplay({ pairing, displayText }: PairingDisplayProps) {
             {displayText || pairing.pairingNumber}
           </span>
         </HoverCardTrigger>
-        <HoverCardContent className="w-80">
-          {hoverContent}
-        </HoverCardContent>
+        <HoverCardContent className="w-80">{hoverContent}</HoverCardContent>
       </HoverCard>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>

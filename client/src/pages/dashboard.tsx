@@ -40,7 +40,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ProfileModal } from "@/components/profile-modal";
 import { useUploadBidPackage } from "@/hooks/useUploadBidPackage"; // Assuming this hook exists
-
 interface SearchFilters {
   search?: string;
   creditMin?: number;
@@ -55,8 +54,8 @@ interface SearchFilters {
   pairingDaysMin?: number;
   pairingDaysMax?: number;
   efficiency?: number;
-  sortBy?: string;        // Add this line
-  sortOrder?: 'asc' | 'desc';  // Add this line
+  sortBy?: string; // Add this line
+  sortOrder?: 'asc' | 'desc'; // Add this line
 }
 
 // Placeholder for Pairing type if not defined elsewhere
@@ -73,8 +72,10 @@ interface Pairing {
 export default function Dashboard() {
   const [filters, setFilters] = useState<SearchFilters>({});
   const [debouncedFilters, setDebouncedFilters] = useState<SearchFilters>({});
-  const [activeFilters, setActiveFilters] = useState<Array<{key: string, label: string, value: any}>>([]);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeFilters, setActiveFilters] = useState<
+    Array<{ key: string; label: string; value: any }>
+  >([]);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [showFilters, setShowFilters] = useState(false);
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -97,6 +98,7 @@ export default function Dashboard() {
   });
   const [isUpdatingSeniority, setIsUpdatingSeniority] = useState(false);
   const [base, setBase] = useState(() => {
+
     return localStorage.getItem('base') || '';
   });
   const [aircraft, setAircraft] = useState(() => {
@@ -123,14 +125,13 @@ export default function Dashboard() {
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize] = useState<number>(50);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showMobileAI, setShowMobileAI] = useState(false);
-
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -143,19 +144,21 @@ export default function Dashboard() {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
-  const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage({
-    onUploadProgress: setUploadProgress,
-    onSuccess: (data) => {
-      // Optionally, trigger a refetch of pairings or other relevant data
-    },
-  });
+  const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage(
+    {
+      onUploadProgress: setUploadProgress,
+      onSuccess: data => {
+        // Optionally, trigger a refetch of pairings or other relevant data
+      },
+    }
+  );
 
   const handleFileUpload = (file: File) => {
     uploadMutation({ file });
   };
 
   const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
-    queryKey: ["bidPackages"],
+    queryKey: ['bidPackages'],
     queryFn: api.getBidPackages,
     staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
     gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes
@@ -168,15 +171,24 @@ export default function Dashboard() {
 
   // Find the latest bid package (prefer completed, fall back to most recent by uploadedAt if none are completed)
   const latestBidPackage = React.useMemo(() => {
-    if (!bidPackages || bidPackages.length === 0) return null;
+    if (!bidPackages || bidPackages.length === 0) {
+      return null;
+    }
 
     const packagesArray = (bidPackages as any[]).slice();
     // Sort by uploadedAt descending
-    packagesArray.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    packagesArray.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
 
     // Try to find the most recent completed package first
-    const mostRecentCompleted = packagesArray.find((pkg: any) => pkg.status === "completed");
-    if (mostRecentCompleted) return mostRecentCompleted;
+    const mostRecentCompleted = packagesArray.find(
+      (pkg: any) => pkg.status === 'completed'
+    );
+    if (mostRecentCompleted) {
+      return mostRecentCompleted;
+    }
 
     // Fallback: return the most recent package regardless of status
     return packagesArray[0];
@@ -185,7 +197,6 @@ export default function Dashboard() {
 
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
-
   // Check if we have any completed bid packages
   const hasCompletedBidPackages = bidPackages.some((pkg: any) => pkg.status === 'completed');
 
@@ -244,7 +255,7 @@ export default function Dashboard() {
     refetchOnWindowFocus: false, // Prevent refetch on window focus
     refetchOnReconnect: false, // Prevent refetch on reconnect
     // Add optimistic updates for better perceived performance
-    placeholderData: (previousData) => previousData,
+    placeholderData: previousData => previousData,
   });
 
   // State for offline cache status
@@ -315,8 +326,12 @@ export default function Dashboard() {
   // When the bid package transitions to completed, invalidate and refetch pairings
   React.useEffect(() => {
     if (latestBidPackage?.id && latestBidPackage.status === 'completed') {
-      queryClient.invalidateQueries({ queryKey: ["pairings", latestBidPackage.id] });
-      queryClient.invalidateQueries({ queryKey: ["initial-pairings", latestBidPackage.id] });
+      queryClient.invalidateQueries({
+        queryKey: ['pairings', latestBidPackage.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['initial-pairings', latestBidPackage.id],
+      });
       refetchPairings();
     }
   }, [latestBidPackage?.status, latestBidPackage?.id]);
@@ -404,9 +419,11 @@ export default function Dashboard() {
 
   // Query for user's favorites with enhanced caching
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
-    queryKey: ["favorites", currentUser?.id],
+    queryKey: ['favorites', currentUser?.id],
     queryFn: async () => {
-      if (!currentUser) return [];
+      if (!currentUser) {
+        return [];
+      }
       try {
         return await api.getFavorites(currentUser.id);
       } catch (error) {
@@ -424,7 +441,9 @@ export default function Dashboard() {
 
   const handleDeleteFavorite = async (pairingId: number) => {
     try {
-      if (!currentUser) return;
+      if (!currentUser) {
+        return;
+      }
 
       // Remove from favorites
       await api.removeFavorite(currentUser.id, pairingId);
@@ -448,7 +467,11 @@ export default function Dashboard() {
         // Remove both min and max for block range
         delete newFilters.blockMin;
         delete newFilters.blockMax;
-      } else if (keyToRemove === 'pairingDays' || keyToRemove === 'pairingDaysMin' || keyToRemove === 'pairingDaysMax') {
+      } else if (
+        keyToRemove === 'pairingDays' ||
+        keyToRemove === 'pairingDaysMin' ||
+        keyToRemove === 'pairingDaysMax'
+      ) {
         // Remove all related pairingDays filters to ensure unfiltered state
         delete newFilters.pairingDays;
         delete newFilters.pairingDaysMin;
@@ -463,11 +486,19 @@ export default function Dashboard() {
   const addFilter = (key: string, label: string, value: any) => {
     if (value !== undefined && value !== null && value !== '') {
       // Determine the filter category for replacement logic
-      const isCreditFilter = key === 'creditRange' || key === 'creditMin' || key === 'creditMax';
-      const isBlockFilter = key === 'blockRange' || key === 'blockMin' || key === 'blockMax';
-      const isPairingDaysFilter = key === 'pairingDays' || key === 'pairingDaysMin' || key === 'pairingDaysMax';
+      const isCreditFilter =
+        key === 'creditRange' || key === 'creditMin' || key === 'creditMax';
+      const isBlockFilter =
+        key === 'blockRange' || key === 'blockMin' || key === 'blockMax';
+      const isPairingDaysFilter =
+        key === 'pairingDays' ||
+        key === 'pairingDaysMin' ||
+        key === 'pairingDaysMax';
 
-      if ((key === 'creditRange' || key === 'blockRange') && typeof value === 'object') {
+      if (
+        (key === 'creditRange' || key === 'blockRange') &&
+        typeof value === 'object'
+      ) {
         // Handle range filters specially
         setActiveFilters(prev => [
           ...prev.filter(f =>
@@ -475,7 +506,7 @@ export default function Dashboard() {
             isBlockFilter ? !f.key.match(/^block/) :
             f.key !== key
           ),
-          { key, label, value }
+          { key, label, value },
         ]);
         setFilters(prev => {
           const newFilters = { ...prev };
@@ -499,7 +530,7 @@ export default function Dashboard() {
             isPairingDaysFilter ? !f.key.match(/^pairingDays/) :
             f.key !== key
           ),
-          { key, label, value }
+          { key, label, value },
         ]);
         setFilters(prev => {
           const newFilters = { ...prev };
@@ -527,10 +558,10 @@ export default function Dashboard() {
 
   const handleSort = (column: string) => {
     if (column === sortColumn) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
-      setSortDirection("desc");
+      setSortDirection('desc');
     }
     setCurrentPage(1);
   };
@@ -541,16 +572,32 @@ export default function Dashboard() {
     const processedFilters: SearchFilters = {};
 
     Object.entries(newFilters).forEach(([key, value]) => {
-      if (key === 'creditRange' && typeof value === 'object' && value !== null) {
+      if (
+        key === 'creditRange' &&
+        typeof value === 'object' &&
+        value !== null
+      ) {
         // Flatten credit range object
         const rangeObj = value as any;
-        if (rangeObj.creditMin !== undefined) processedFilters.creditMin = rangeObj.creditMin;
-        if (rangeObj.creditMax !== undefined) processedFilters.creditMax = rangeObj.creditMax;
-      } else if (key === 'blockRange' && typeof value === 'object' && value !== null) {
+        if (rangeObj.creditMin !== undefined) {
+          processedFilters.creditMin = rangeObj.creditMin;
+        }
+        if (rangeObj.creditMax !== undefined) {
+          processedFilters.creditMax = rangeObj.creditMax;
+        }
+      } else if (
+        key === 'blockRange' &&
+        typeof value === 'object' &&
+        value !== null
+      ) {
         // Flatten block range object
         const rangeObj = value as any;
-        if (rangeObj.blockMin !== undefined) processedFilters.blockMin = rangeObj.blockMin;
-        if (rangeObj.blockMax !== undefined) processedFilters.blockMax = rangeObj.blockMax;
+        if (rangeObj.blockMin !== undefined) {
+          processedFilters.blockMin = rangeObj.blockMin;
+        }
+        if (rangeObj.blockMax !== undefined) {
+          processedFilters.blockMax = rangeObj.blockMax;
+        }
       } else {
         // Regular filter
         processedFilters[key as keyof SearchFilters] = value;
@@ -561,8 +608,8 @@ export default function Dashboard() {
     setFilters(prev => {
       const merged: any = { ...prev, ...processedFilters };
       // drop cleared keys so they don't persist silently
-      Object.keys(merged).forEach((k) => {
-        if (merged[k] === undefined || merged[k] === null || merged[k] === "") {
+      Object.keys(merged).forEach(k => {
+        if (merged[k] === undefined || merged[k] === null || merged[k] === '') {
           delete merged[k];
         }
       });
@@ -573,8 +620,15 @@ export default function Dashboard() {
     setCurrentPage(1);
 
     // Update activeFilters to reflect the FULL merged filter set
-    const updatedActiveFilters: Array<{key: string, label: string, value: any}> = [];
-    const sourceForLabels = mergedAfter && Object.keys(mergedAfter).length ? mergedAfter : processedFilters;
+    const updatedActiveFilters: Array<{
+      key: string;
+      label: string;
+      value: any;
+    }> = [];
+    const sourceForLabels =
+      mergedAfter && Object.keys(mergedAfter).length
+        ? mergedAfter
+        : processedFilters;
 
     Object.entries(sourceForLabels).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -627,8 +681,6 @@ export default function Dashboard() {
     setFilters({});
     setActiveFilters([]);
   };
-
-
   // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
     if (!isFullCacheReady || !fullLocal || fullLocal.length === 0) {
@@ -696,9 +748,10 @@ export default function Dashboard() {
 
   // Use sorted pairings if available, otherwise use regular pairings
   const displayPairings = isFullCacheReady && sortedPairings.length > 0 ? sortedPairings : pairings;
-
   // Mocking selectedBidPackageId for the polling logic in the modal
-  const [selectedBidPackageId, setSelectedBidPackageId] = useState<string | null>(null);
+  const [selectedBidPackageId, setSelectedBidPackageId] = useState<
+    string | null
+  >(null);
 
   // Update the quick stats to use backend statistics
   const quickStats = React.useMemo(() => {
@@ -708,7 +761,6 @@ export default function Dashboard() {
 
     // Use pagination total if available, otherwise fall back to current page count
     const totalPairings = effectivePagination && effectivePagination.total ? effectivePagination.total : pairings.length;
-
     // Use backend statistics if available, otherwise calculate from current page
     const likelyToHold = pairingsResponse?.statistics?.likelyToHold
       ? Number(pairingsResponse.statistics.likelyToHold)
@@ -717,20 +769,21 @@ export default function Dashboard() {
     const highCredit = pairingsResponse?.statistics?.highCredit
       ? Number(pairingsResponse.statistics.highCredit)
       : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
-
     return {
       totalPairings,
       likelyToHold,
-      highCredit
+      highCredit,
     };
   }, [pairings, pagination, pairingsResponse?.statistics]);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Left Sidebar - Hidden on mobile */}
-      <div className={`hidden lg:flex bg-white border-r transition-all duration-300 ${
-        sidebarCollapsed ? 'w-16' : 'w-80'
-      } flex-shrink-0 flex-col`}>
+      <div
+        className={`hidden lg:flex bg-white border-r transition-all duration-300 ${
+          sidebarCollapsed ? 'w-16' : 'w-80'
+        } flex-shrink-0 flex-col`}
+      >
         {/* Toggle button */}
         <div className="p-4 border-b flex justify-end">
           <Button
@@ -738,7 +791,11 @@ export default function Dashboard() {
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </Button>
         </div>
 
@@ -751,9 +808,12 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-8">
                 <CloudUpload className="mx-auto h-12 w-12 text-gray-300" />
-                <h3 className="mt-4 text-lg font-medium text-gray-900">No Bid Package</h3>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  No Bid Package
+                </h3>
                 <p className="mt-2 text-sm text-gray-500">
-                  Upload a PDF bid package to get started with analyzing pairings.
+                  Upload a PDF bid package to get started with analyzing
+                  pairings.
                 </p>
               </div>
             )
@@ -763,15 +823,21 @@ export default function Dashboard() {
                 // Collapsed view - show essential numbers only
                 <div className="space-y-4">
                   <div className="text-center">
-                    <div className="text-lg font-bold text-blue-600">{quickStats.totalPairings}</div>
+                    <div className="text-lg font-bold text-blue-600">
+                      {quickStats.totalPairings}
+                    </div>
                     <div className="text-xs text-gray-600">Total</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">{quickStats.likelyToHold}</div>
+                    <div className="text-lg font-bold text-green-600">
+                      {quickStats.likelyToHold}
+                    </div>
                     <div className="text-xs text-gray-600">Hold</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-bold text-purple-600">{quickStats.highCredit}</div>
+                    <div className="text-lg font-bold text-purple-600">
+                      {quickStats.highCredit}
+                    </div>
                     <div className="text-xs text-gray-600">HC</div>
                   </div>
                 </div>
@@ -796,17 +862,24 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         <div className="p-3 sm:p-6 h-full">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="h-full flex flex-col"
+          >
             <div className="flex flex-col gap-4 mb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <Plane className="h-6 w-6 text-blue-600" />
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">PBS Bid Optimizer</h1>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                      PBS Bid Optimizer
+                    </h1>
                   </div>
                   {currentUser && (
                     <Badge variant="outline" className="text-xs">
-                      Seniority #{currentUser.seniorityNumber} ({seniorityPercentile}%)
+                      Seniority #{currentUser.seniorityNumber} (
+                      {seniorityPercentile}%)
                     </Badge>
                   )}
                 </div>
@@ -819,13 +892,13 @@ export default function Dashboard() {
                     size="sm"
                     onClick={() => {
                       // Toggle between showing all pairings and favorites
-                      if (activeTab === "favorites") {
-                        setActiveTab("dashboard");
+                      if (activeTab === 'favorites') {
+                        setActiveTab('dashboard');
                       } else {
-                        setActiveTab("favorites");
+                        setActiveTab('favorites');
                       }
                     }}
-                    className={`${activeTab === "favorites" ? "bg-yellow-50 text-yellow-700" : "text-gray-600"}`}
+                    className={`${activeTab === 'favorites' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600'}`}
                   >
                     <Star className="h-4 w-4" />
                   </Button>
@@ -895,7 +968,11 @@ export default function Dashboard() {
                           <BarChart2 className="h-5 w-5" />
                           Quick Stats
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => setShowQuickStats(!showQuickStats)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowQuickStats(!showQuickStats)}
+                        >
                           {showQuickStats ? 'Hide' : 'Show'}
                         </Button>
                       </CardTitle>
@@ -917,7 +994,6 @@ export default function Dashboard() {
 
             <TabsContent value="dashboard" className="flex-1 overflow-hidden">
               <div className="space-y-6 h-full">
-
                 {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
                 {/* Horizontal Filters Bar */}
@@ -1075,9 +1151,12 @@ export default function Dashboard() {
                     ) : (
                       <div className="text-center py-8">
                         <Star className="mx-auto h-16 w-16 text-gray-300" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">No Favorites Yet</h3>
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">
+                          No Favorites Yet
+                        </h3>
                         <p className="mt-2 text-sm text-gray-500">
-                          Click the star icon on any pairing to add it to your favorites.
+                          Click the star icon on any pairing to add it to your
+                          favorites.
                         </p>
                       </div>
                     )}
@@ -1089,11 +1168,16 @@ export default function Dashboard() {
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
               {currentUser ? (
-                <CalendarView userId={currentUser.id} bidPackageId={bidPackageId} />
+                <CalendarView
+                  userId={currentUser.id}
+                  bidPackageId={bidPackageId}
+                />
               ) : (
                 <div className="text-center py-8">
                   <Calendar className="mx-auto h-16 w-16 text-gray-300" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">Calendar Loading</h3>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                    Calendar Loading
+                  </h3>
                   <p className="mt-2 text-sm text-gray-500">
                     Setting up your calendar view...
                   </p>
@@ -1142,15 +1226,25 @@ export default function Dashboard() {
                         attempts++;
                         try {
                           const packages = await api.getBidPackages();
-                          const latestPackage = packages.reduce((latest: any, pkg: any) => {
-                            if (pkg.status === 'completed' && (!latest || new Date(pkg.uploadedAt) > new Date(latest.uploadedAt))) {
-                              return pkg;
-                            }
-                            return latest;
-                          }, null);
+                          const latestPackage = packages.reduce(
+                            (latest: any, pkg: any) => {
+                              if (
+                                pkg.status === 'completed' &&
+                                (!latest ||
+                                  new Date(pkg.uploadedAt) >
+                                    new Date(latest.uploadedAt))
+                              ) {
+                                return pkg;
+                              }
+                              return latest;
+                            },
+                            null
+                          );
 
                           if (latestPackage) {
-                            console.log("Bid package processing completed, refreshing data...");
+                            console.log(
+                              'Bid package processing completed, refreshing data...'
+                            );
                             // Refresh all data
                             refetchBidPackages();
                             if (latestPackage.id !== selectedBidPackageId) {
@@ -1162,10 +1256,13 @@ export default function Dashboard() {
                           if (attempts < maxAttempts) {
                             setTimeout(checkStatus, 1000); // Check again in 1 second
                           } else {
-                            console.log("Polling timeout reached");
+                            console.log('Polling timeout reached');
                           }
                         } catch (error) {
-                          console.error("Error checking bid package status:", error);
+                          console.error(
+                            'Error checking bid package status:',
+                            error
+                          );
                           if (attempts < maxAttempts) {
                             setTimeout(checkStatus, 1000);
                           }
@@ -1197,7 +1294,8 @@ export default function Dashboard() {
               PBS AI Assistant
             </DialogTitle>
             <DialogDescription>
-              Ask questions about your pairings, get bidding recommendations, and analyze your options
+              Ask questions about your pairings, get bidding recommendations,
+              and analyze your options
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-hidden min-h-0">
@@ -1221,7 +1319,6 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Mobile AI Assistant Full Screen - Only on Mobile */}
       {showMobileAI && (
         <div className="fixed inset-0 z-50 bg-white lg:hidden">
@@ -1270,23 +1367,29 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Seniority Number</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Seniority Number
+              </label>
               <Input
                 value={seniorityNumber}
-                onChange={(e) => setSeniorityNumber(e.target.value)}
+                onChange={e => setSeniorityNumber(e.target.value)}
                 placeholder="Enter seniority number"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Category Seniority %</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Category Seniority %
+              </label>
               <Input
                 value={seniorityPercentile}
-                onChange={(e) => setSeniorityPercentile(e.target.value)}
+                onChange={e => setSeniorityPercentile(e.target.value)}
                 placeholder="Enter seniority percentile"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Base</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Base
+              </label>
               <Select value={base} onValueChange={setBase}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select base" />
@@ -1300,7 +1403,9 @@ export default function Dashboard() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Aircraft</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Aircraft
+              </label>
               <Select value={aircraft} onValueChange={setAircraft}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select aircraft" />

@@ -1,4 +1,3 @@
-
 import { db } from './db';
 import { pairings } from '../shared/schema';
 
@@ -20,19 +19,24 @@ async function recalculatePairingDays() {
       try {
         // Calculate correct pairing days from full text block
         const correctDays = calculatePairingDaysFromText(pairing.fullTextBlock);
-        
+
         if (correctDays !== pairing.pairingDays) {
-          console.log(`Updating pairing ${pairing.pairingNumber}: ${pairing.pairingDays} → ${correctDays} days`);
-          
+          console.log(
+            `Updating pairing ${pairing.pairingNumber}: ${pairing.pairingDays} → ${correctDays} days`
+          );
+
           await db
             .update(pairings)
             .set({ pairingDays: correctDays })
             .where(eq(pairings.id, pairing.id));
-          
+
           updatedCount++;
         }
       } catch (error) {
-        console.error(`Error processing pairing ${pairing.pairingNumber}:`, error);
+        console.error(
+          `Error processing pairing ${pairing.pairingNumber}:`,
+          error
+        );
         errorCount++;
       }
     }
@@ -41,16 +45,18 @@ async function recalculatePairingDays() {
     console.log(`  - Total processed: ${allPairings.length}`);
     console.log(`  - Updated: ${updatedCount}`);
     console.log(`  - Errors: ${errorCount}`);
-    console.log(`  - Unchanged: ${allPairings.length - updatedCount - errorCount}`);
-
+    console.log(
+      `  - Unchanged: ${allPairings.length - updatedCount - errorCount}`
+    );
   } catch (error) {
     console.error('Error during recalculation:', error);
   }
 }
 
 function calculatePairingDaysFromText(fullTextBlock: string): number {
-  if (!fullTextBlock) return 1;
-
+  if (!fullTextBlock) {
+    return 1;
+  }
   // Calculate pairing days based on the last (highest) day letter
   // This handles cases where there are long overnight layovers without flights
   let pairingDays = 1; // Default to 1 day minimum

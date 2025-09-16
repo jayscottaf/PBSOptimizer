@@ -1,7 +1,6 @@
-
 interface HoldProbabilityParams {
   seniorityPercentile: number; // 0-100 (lower is more senior)
-  desirabilityScore: number; // 0-100 
+  desirabilityScore: number; // 0-100
   pairingFrequency: number; // number of times trip appears
   startsOnWeekend: boolean;
   includesDeadheads: number;
@@ -15,23 +14,24 @@ interface HoldProbabilityResult {
 }
 
 export class HoldProbabilityCalculator {
-  
   /**
    * Calculate hold probability using seniority-based logic
    */
-  static calculateHoldProbability(params: HoldProbabilityParams): HoldProbabilityResult {
+  static calculateHoldProbability(
+    params: HoldProbabilityParams
+  ): HoldProbabilityResult {
     const {
       seniorityPercentile,
       desirabilityScore,
       pairingFrequency,
       startsOnWeekend,
       includesDeadheads,
-      includesWeekendOff
+      includesWeekendOff,
     } = params;
 
     const reasoning: string[] = [];
     let baseProbability = 50;
-    let label = "Unlikely";
+    let label = 'Unlikely';
     // Floors ensure senior pilots never drop below a minimum threshold
     // e.g., 1-2% => ~100%, 3-5% => >=95%, 6-10% => >=90%
     let seniorityFloor = 0;
@@ -40,114 +40,143 @@ export class HoldProbabilityCalculator {
     // Senior pilots (top 10%) - Very high hold probability for most pairings
     if (seniorityPercentile <= 10) {
       // Define floors for very senior pilots
-      if (seniorityPercentile <= 2) seniorityFloor = 98; // rounds to 100
-      else if (seniorityPercentile <= 5) seniorityFloor = 95;
-      else seniorityFloor = 90;
+      if (seniorityPercentile <= 2) {
+        seniorityFloor = 98;
+      } // rounds to 100
+      else if (seniorityPercentile <= 5) {
+        seniorityFloor = 95;
+      } else {
+        seniorityFloor = 90;
+      }
 
       baseProbability = Math.max(90, seniorityFloor);
-      label = "Very Likely";
-      reasoning.push(`✅ Very senior pilot (top ${seniorityPercentile.toFixed(1)}%) - high hold probability`);
-      
+      label = 'Very Likely';
+      reasoning.push(
+        `✅ Very senior pilot (top ${seniorityPercentile.toFixed(1)}%) - high hold probability`
+      );
+
       // Only reduce for extremely desirable trips
       if (desirabilityScore > 90) {
         // Even for extremely desirable trips, do not go below the senior floor
         baseProbability = Math.max(seniorityFloor, 90);
-        reasoning.push("⚠️ Extremely desirable pairing (senior floor applied)");
+        reasoning.push('⚠️ Extremely desirable pairing (senior floor applied)');
       }
     }
     // Mid-senior pilots (10-25%) - High hold probability for most pairings
     else if (seniorityPercentile <= 25) {
       baseProbability = 75;
-      label = "Likely";
-      reasoning.push(`✅ Senior pilot (top ${seniorityPercentile.toFixed(1)}%) - good hold probability`);
-      
+      label = 'Likely';
+      reasoning.push(
+        `✅ Senior pilot (top ${seniorityPercentile.toFixed(1)}%) - good hold probability`
+      );
+
       // Reduce for very desirable trips
       if (desirabilityScore > 85) {
         baseProbability = 50;
-        label = "Unlikely";
-        reasoning.push("⚠️ Very desirable pairing - competition from more senior pilots");
+        label = 'Unlikely';
+        reasoning.push(
+          '⚠️ Very desirable pairing - competition from more senior pilots'
+        );
       }
     }
     // Mid-seniority pilots (25-50%) - Moderate hold probability
     else if (seniorityPercentile <= 50) {
       baseProbability = 50;
-      label = "Unlikely";
-      reasoning.push(`⚖️ Mid-seniority pilot (${seniorityPercentile.toFixed(1)}th percentile)`);
-      
+      label = 'Unlikely';
+      reasoning.push(
+        `⚖️ Mid-seniority pilot (${seniorityPercentile.toFixed(1)}th percentile)`
+      );
+
       // Higher chance for less desirable trips
       if (desirabilityScore < 50) {
         baseProbability = 75;
-        label = "Likely";
-        reasoning.push("✅ Less desirable pairing - better chance to hold");
+        label = 'Likely';
+        reasoning.push('✅ Less desirable pairing - better chance to hold');
       }
       // Lower chance for desirable trips
       else if (desirabilityScore > 75) {
         baseProbability = 25;
-        label = "Very Unlikely";
-        reasoning.push("❌ Desirable pairing - senior pilots will take it");
+        label = 'Very Unlikely';
+        reasoning.push('❌ Desirable pairing - senior pilots will take it');
       }
     }
     // Junior-mid pilots (50-75%) - Lower hold probability
     else if (seniorityPercentile <= 75) {
       baseProbability = 25;
-      label = "Very Unlikely";
-      reasoning.push(`❌ Junior-mid pilot (${seniorityPercentile.toFixed(1)}th percentile) - tough competition`);
-      
+      label = 'Very Unlikely';
+      reasoning.push(
+        `❌ Junior-mid pilot (${seniorityPercentile.toFixed(1)}th percentile) - tough competition`
+      );
+
       // Only good chance for undesirable trips
       if (desirabilityScore < 40 && pairingFrequency >= 3) {
         baseProbability = 75;
-        label = "Likely";
-        reasoning.push("✅ Undesirable pairing with multiple instances - good chance");
-      }
-      else if (desirabilityScore < 55) {
+        label = 'Likely';
+        reasoning.push(
+          '✅ Undesirable pairing with multiple instances - good chance'
+        );
+      } else if (desirabilityScore < 55) {
         baseProbability = 50;
-        label = "Unlikely";
-        reasoning.push("⚖️ Moderately undesirable pairing - some chance");
+        label = 'Unlikely';
+        reasoning.push('⚖️ Moderately undesirable pairing - some chance');
       }
     }
     // Very junior pilots (75%+) - Very low hold probability
     else {
       baseProbability = 10;
-      label = "Very Unlikely";
-      reasoning.push(`❌ Very junior pilot (${seniorityPercentile.toFixed(1)}th percentile) - extremely tough competition`);
-      
+      label = 'Very Unlikely';
+      reasoning.push(
+        `❌ Very junior pilot (${seniorityPercentile.toFixed(1)}th percentile) - extremely tough competition`
+      );
+
       // Only decent chance for very undesirable, frequent trips
-      if (desirabilityScore < 30 && pairingFrequency >= 4 && startsOnWeekend && includesDeadheads >= 2) {
+      if (
+        desirabilityScore < 30 &&
+        pairingFrequency >= 4 &&
+        startsOnWeekend &&
+        includesDeadheads >= 2
+      ) {
         baseProbability = 50;
-        label = "Unlikely";
-        reasoning.push("⚖️ Very undesirable frequent pairing - some hope");
-      }
-      else if (desirabilityScore < 40 && pairingFrequency >= 3) {
+        label = 'Unlikely';
+        reasoning.push('⚖️ Very undesirable frequent pairing - some hope');
+      } else if (desirabilityScore < 40 && pairingFrequency >= 3) {
         baseProbability = 25;
-        label = "Very Unlikely";
-        reasoning.push("⚠️ Undesirable frequent pairing - slight chance");
+        label = 'Very Unlikely';
+        reasoning.push('⚠️ Undesirable frequent pairing - slight chance');
       }
     }
 
     // Minor adjustments for pairing characteristics (informational only for now)
     if (pairingFrequency >= 4) {
-      reasoning.push("• Frequent pairing (+5% boost)");
+      reasoning.push('• Frequent pairing (+5% boost)');
     }
     if (includesDeadheads >= 3) {
-      reasoning.push("• Many deadheads - less competition");
+      reasoning.push('• Many deadheads - less competition');
     }
     if (startsOnWeekend && seniorityPercentile > 50) {
-      reasoning.push("• Weekend start - less popular with senior pilots");
+      reasoning.push('• Weekend start - less popular with senior pilots');
     }
 
     // Add small randomization for realism only for non-senior cases
-    const randomAdjustment = seniorityPercentile <= 10 ? 0 : (Math.random() - 0.5) * 6; // -3 to +3
-    let finalProbability = Math.max(0, Math.min(100, baseProbability + randomAdjustment));
+    const randomAdjustment =
+      seniorityPercentile <= 10 ? 0 : (Math.random() - 0.5) * 6; // -3 to +3
+    let finalProbability = Math.max(
+      0,
+      Math.min(100, baseProbability + randomAdjustment)
+    );
 
     // Enforce seniority floor if applicable
     if (seniorityFloor > 0) {
       finalProbability = Math.max(finalProbability, seniorityFloor);
     }
-    
+
     // Round to nearest 5% for more granular display
     const roundedProbability = Math.round(finalProbability / 5) * 5;
 
-    if (process.env.NODE_ENV === 'development' && process.env.LOG_HOLD_DEBUG === '1') {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      process.env.LOG_HOLD_DEBUG === '1'
+    ) {
       console.log(`Hold Probability Calculation for pairing:`);
       console.log(`  Seniority Percentile: ${seniorityPercentile}%`);
       console.log(`  Desirability Score: ${desirabilityScore}`);
@@ -162,7 +191,7 @@ export class HoldProbabilityCalculator {
     return {
       probability: roundedProbability,
       label,
-      reasoning
+      reasoning,
     };
   }
 
@@ -178,26 +207,41 @@ export class HoldProbabilityCalculator {
     const deadheads = pairing.deadheads || 0;
 
     // Higher credit hours = more desirable
-    if (creditHours >= 25) score += 30;
-    else if (creditHours >= 20) score += 20;
-    else if (creditHours >= 15) score += 10;
-    else if (creditHours < 10) score -= 15;
+    if (creditHours >= 25) {
+      score += 30;
+    } else if (creditHours >= 20) {
+      score += 20;
+    } else if (creditHours >= 15) {
+      score += 10;
+    } else if (creditHours < 10) {
+      score -= 15;
+    }
 
     // Better credit/block ratio = more desirable
     const efficiency = creditHours / blockHours;
-    if (efficiency >= 1.5) score += 20;
-    else if (efficiency >= 1.3) score += 10;
-    else if (efficiency < 1.1) score -= 10;
+    if (efficiency >= 1.5) {
+      score += 20;
+    } else if (efficiency >= 1.3) {
+      score += 10;
+    } else if (efficiency < 1.1) {
+      score -= 10;
+    }
 
     // Shorter trips often more desirable for turns
-    if (pairingDays === 1 && creditHours >= 5) score += 15;
-    if (pairingDays >= 4) score -= 5;
+    if (pairingDays === 1 && creditHours >= 5) {
+      score += 15;
+    }
+    if (pairingDays >= 4) {
+      score -= 5;
+    }
 
     // Deadheads reduce desirability
-    score -= (deadheads * 8);
+    score -= deadheads * 8;
 
     // Weekend starts reduce desirability for most pilots
-    if (pairing.startsOnWeekend) score -= 10;
+    if (pairing.startsOnWeekend) {
+      score -= 10;
+    }
 
     // Clamp to 0-100 range
     return Math.max(0, Math.min(100, score));
@@ -224,7 +268,10 @@ export class HoldProbabilityCalculator {
   /**
    * Calculate pairing frequency in bid package
    */
-  static calculatePairingFrequency(pairingNumber: string, allPairings: any[]): number {
+  static calculatePairingFrequency(
+    pairingNumber: string,
+    allPairings: any[]
+  ): number {
     return allPairings.filter(p => p.pairingNumber === pairingNumber).length;
   }
 }
