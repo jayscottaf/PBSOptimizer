@@ -694,11 +694,28 @@ export async function registerRoutes(app: Express) {
   app.post('/api/favorites', async (req, res) => {
     try {
       const { userId, pairingId } = req.body;
+      console.log('Adding favorite - userId:', userId, 'pairingId:', pairingId);
+      
+      if (!userId || !pairingId) {
+        console.error('Missing required fields:', { userId, pairingId });
+        return res.status(400).json({ message: 'Missing userId or pairingId' });
+      }
+      
       const favorite = await storage.addUserFavorite({ userId, pairingId });
+      console.log('Favorite added successfully:', favorite);
       res.json(favorite);
     } catch (error) {
       console.error('Error adding favorite:', error);
-      res.status(500).json({ message: 'Failed to add favorite' });
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        userId: req.body?.userId,
+        pairingId: req.body?.pairingId
+      });
+      res.status(500).json({ 
+        message: 'Failed to add favorite',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
@@ -732,6 +749,7 @@ export async function registerRoutes(app: Express) {
       const { userId, pairingId, startDate, endDate, notes } = req.body;
 
       console.log('Calendar POST request:', { userId, pairingId, startDate, endDate, notes });
+      console.log('Database connection status:', db ? 'Connected' : 'Not connected');
 
       if (!userId || !pairingId || !startDate || !endDate) {
         console.error('Missing required fields:', { userId, pairingId, startDate, endDate });
@@ -746,13 +764,22 @@ export async function registerRoutes(app: Express) {
         notes,
       });
 
-      console.log('Calendar event created:', event);
+      console.log('Calendar event created successfully:', event);
       res.json(event);
     } catch (error) {
-
       console.error("Error adding calendar event:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to add calendar event" });
-
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        userId: req.body?.userId,
+        pairingId: req.body?.pairingId,
+        startDate: req.body?.startDate,
+        endDate: req.body?.endDate
+      });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to add calendar event",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
@@ -774,6 +801,14 @@ export async function registerRoutes(app: Express) {
       const userId = parseInt(req.params.userId);
       const { startDate, endDate } = req.query;
 
+      console.log('Fetching calendar events for userId:', userId, 'dateRange:', { startDate, endDate });
+      console.log('Database connection status:', db ? 'Connected' : 'Not connected');
+
+      if (isNaN(userId)) {
+        console.error('Invalid userId:', req.params.userId);
+        return res.status(400).json({ message: 'Invalid userId' });
+      }
+
       if (startDate && endDate) {
         // Use date range query
         const events = await storage.getUserCalendarEventsInRange(
@@ -781,15 +816,27 @@ export async function registerRoutes(app: Express) {
           new Date(startDate as string),
           new Date(endDate as string)
         );
+        console.log('Calendar events found (date range):', events.length);
         res.json(events);
       } else {
         // Default query for all events
         const events = await storage.getUserCalendarEvents(userId);
+        console.log('Calendar events found (all):', events.length);
         res.json(events);
       }
     } catch (error) {
       console.error('Error fetching calendar events:', error);
-      res.status(500).json({ message: 'Failed to fetch calendar events' });
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        userId: req.params.userId,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate
+      });
+      res.status(500).json({ 
+        message: 'Failed to fetch calendar events',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 

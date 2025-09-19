@@ -1,4 +1,3 @@
-
 import { config } from 'dotenv';
 config();
 
@@ -28,7 +27,7 @@ class DatabaseCircuitBreaker {
 
   canExecute(): boolean {
     if (this.state === 'CLOSED') return true;
-    
+
     if (this.state === 'OPEN') {
       if (Date.now() - this.lastFailureTime > this.recoveryTimeout) {
         this.state = 'HALF_OPEN';
@@ -36,7 +35,7 @@ class DatabaseCircuitBreaker {
       }
       return false;
     }
-    
+
     return this.state === 'HALF_OPEN';
   }
 
@@ -48,11 +47,11 @@ class DatabaseCircuitBreaker {
   onFailure(): void {
     this.failures++;
     this.lastFailureTime = Date.now();
-    
+
     if (this.failures >= this.failureThreshold) {
       this.state = 'OPEN';
       console.log(`Database circuit breaker OPEN - too many failures (${this.failures})`);
-      
+
       // Auto-reset after timeout
       setTimeout(() => {
         if (this.state === 'OPEN') {
@@ -72,7 +71,7 @@ const circuitBreaker = new DatabaseCircuitBreaker();
 
 // Enhanced pool configuration with connection management
 const createPool = () => {
-  return new Pool({ 
+  return new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 3, // Further reduced to prevent overload
     min: 0, // Allow pool to completely drain
@@ -90,36 +89,36 @@ export const db = drizzle({ client: pool, schema });
 export const reconnectDatabase = async (attempt = 1): Promise<typeof db> => {
   const maxAttempts = 5;
   const baseDelay = 1000;
-  
+
   try {
     console.log(`Database reconnection attempt ${attempt}/${maxAttempts}...`);
-    
+
     // Close existing pool gracefully
     try {
       await pool.end();
     } catch (endError) {
       console.warn('Error ending existing pool:', endError);
     }
-    
+
     // Wait before creating new pool
     const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 10000);
     await new Promise(resolve => setTimeout(resolve, delay));
-    
+
     // Create new pool
     pool = createPool();
     const newDb = drizzle({ client: pool, schema });
-    
+
     // Test the connection with a simple query
     await pool.query('SELECT 1 as test');
-    
+
     console.log(`✅ Database reconnection successful on attempt ${attempt}`);
     circuitBreaker.onSuccess();
     return newDb;
-    
+
   } catch (error) {
     console.error(`Database reconnection attempt ${attempt} failed:`, error);
     circuitBreaker.onFailure();
-    
+
     if (attempt < maxAttempts) {
       return await reconnectDatabase(attempt + 1);
     } else {
@@ -132,14 +131,14 @@ export const reconnectDatabase = async (attempt = 1): Promise<typeof db> => {
 pool.on('error', async (err) => {
   console.error('Database pool error:', err);
   circuitBreaker.onFailure();
-  
+
   // Auto-reconnect on specific errors
-  const shouldReconnect = 
+  const shouldReconnect =
     err.message.includes('Connection terminated') ||
     err.message.includes('WebSocket') ||
     err.message.includes('ECONNREFUSED') ||
     err.message.includes('connection closed');
-    
+
   if (shouldReconnect) {
     console.log('Triggering automatic reconnection due to pool error');
     setTimeout(async () => {
@@ -168,15 +167,15 @@ export const executeWithRetry = async <T>(
   } catch (error) {
     console.error(`${operationName} failed:`, error);
     circuitBreaker.onFailure();
-    
-    const isConnectionError = 
-      error instanceof Error && 
+
+    const isConnectionError =
+      error instanceof Error &&
       (error.message.includes('Connection terminated') ||
        error.message.includes('connection closed') ||
        error.message.includes('ECONNREFUSED') ||
        error.message.includes('WebSocket') ||
        error.message.includes('Pool is ending'));
-    
+
     if (isConnectionError && circuitBreaker.canExecute()) {
       console.log(`Attempting recovery for ${operationName}...`);
       try {
@@ -191,7 +190,7 @@ export const executeWithRetry = async <T>(
         throw retryError;
       }
     }
-    
+
     throw error;
   }
 };
