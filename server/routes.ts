@@ -153,7 +153,11 @@ export async function registerRoutes(app: Express) {
         environment: process.env.NODE_ENV || 'development',
         database: dbHealth.connected ? 'connected' : 'disconnected',
         circuitBreaker: dbHealth.circuitBreakerState,
-        poolInfo: dbHealth.poolInfo
+        poolInfo: dbHealth.poolInfo,
+        config: {
+          hasDatabaseUrl: !!process.env.DATABASE_URL,
+          port: process.env.PORT || '5000'
+        }
       });
     } catch (error) {
       res.status(503).json({

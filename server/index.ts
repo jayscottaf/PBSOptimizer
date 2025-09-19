@@ -81,5 +81,7 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen(port, '0.0.0.0', () => {
     logger('info', `Server started on port ${port}`);
+    logger('info', `Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger('info', `Database URL configured: ${!!process.env.DATABASE_URL}`);
   });
 })();

@@ -12,6 +12,11 @@ neonConfig.pipelineConnect = false;
 neonConfig.useSecureWebSocket = true;
 
 if (!process.env.DATABASE_URL) {
+  console.error('Environment variables:', {
+    NODE_ENV: process.env.NODE_ENV,
+    hasDbUrl: !!process.env.DATABASE_URL,
+    envKeys: Object.keys(process.env).filter(k => k.includes('DB') || k.includes('URL'))
+  });
   throw new Error(
     'DATABASE_URL must be set. Did you forget to provision a database?'
   );
