@@ -64,13 +64,15 @@ function calculatePairingDaysFromText(fullTextBlock: string): number {
   // Find all day letters mentioned in the full text block
   const dayPatternMatches = fullTextBlock.match(/^([A-E])\s/gm);
   if (dayPatternMatches) {
-    const allDayLetters = dayPatternMatches.map(match => match.trim().charAt(0));
+    const allDayLetters = dayPatternMatches.map(match =>
+      match.trim().charAt(0)
+    );
     const uniqueDayLetters = Array.from(new Set(allDayLetters)).sort();
-    
+
     if (uniqueDayLetters.length > 0) {
       // Get the last (highest) day letter
       const lastDayLetter = uniqueDayLetters[uniqueDayLetters.length - 1];
-      
+
       // Convert letter to number (A=1, B=2, C=3, D=4, E=5)
       pairingDays = lastDayLetter.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
     }

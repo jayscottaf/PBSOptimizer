@@ -1,14 +1,24 @@
-import React, { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, X, Calendar as CalendarIcon } from "lucide-react";
-import { SearchFilters } from "@/lib/api";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import React, { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Plus, X, Calendar as CalendarIcon } from 'lucide-react';
+import { SearchFilters } from '@/lib/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { format } from 'date-fns';
 interface FilterOption {
   key: string;
   label: string;
@@ -117,7 +127,7 @@ const filterOptions: FilterOption[] = [
       { value: 120, label: 'Extended (5+ days)', filterKey: 'tafbMin' },
     ],
   },
-  
+
   {
     key: 'efficiency',
     label: 'Credit/Block Ratio',
@@ -135,9 +145,8 @@ export function SmartFilterSystem({
   pairings,
   onFiltersChange,
   activeFilters,
-  onClearFilters
+  onClearFilters,
 }: SmartFilterSystemProps) {
-
   // Preferred days off state
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -161,35 +170,45 @@ export function SmartFilterSystem({
   const handleDayOffSelect = (dates: Date[] | undefined) => {
     if (!dates) {
       setSelectedDaysOff([]);
-      onFilterClear("preferredDaysOff");
+      onFilterClear('preferredDaysOff');
       return;
     }
-    
+
     setSelectedDaysOff(dates);
     if (dates.length === 0) {
-      onFilterClear("preferredDaysOff");
+      onFilterClear('preferredDaysOff');
     } else {
-      onFilterApply("preferredDaysOff", dates, `Days Off: ${dates.length} selected`);
+      onFilterApply(
+        'preferredDaysOff',
+        dates,
+        `Days Off: ${dates.length} selected`
+      );
     }
   };
 
   const removeDayOff = (dateToRemove: Date) => {
-    const newDaysOff = selectedDaysOff.filter(d => d.getTime() !== dateToRemove.getTime());
+    const newDaysOff = selectedDaysOff.filter(
+      d => d.getTime() !== dateToRemove.getTime()
+    );
     setSelectedDaysOff(newDaysOff);
     if (newDaysOff.length === 0) {
-      onFilterClear("preferredDaysOff");
+      onFilterClear('preferredDaysOff');
     } else {
-      onFilterApply("preferredDaysOff", newDaysOff, `Days Off: ${newDaysOff.length} selected`);
+      onFilterApply(
+        'preferredDaysOff',
+        newDaysOff,
+        `Days Off: ${newDaysOff.length} selected`
+      );
     }
   };
 
   const clearAllDaysOff = () => {
     setSelectedDaysOff([]);
-    onFilterClear("preferredDaysOff");
+    onFilterClear('preferredDaysOff');
   };
 
-  const [selectedFunction, setSelectedFunction] = useState<string>("");
-  const [selectedData, setSelectedData] = useState<string>("");
+  const [selectedFunction, setSelectedFunction] = useState<string>('');
+  const [selectedData, setSelectedData] = useState<string>('');
   const currentFunctionOptions = selectedFunction
     ? filterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
     : [];
@@ -232,10 +251,17 @@ export function SmartFilterSystem({
         [dataOption.additionalFilter.key]: dataOption.additionalFilter.value,
       };
       // Determine the range filter key based on the function
-      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' :
-                      functionOption.key === 'blockHours' ? 'blockRange' :
-                      functionOption.key + 'Range';
-      onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
+      const rangeKey =
+        functionOption.key === 'creditHours'
+          ? 'creditRange'
+          : functionOption.key === 'blockHours'
+            ? 'blockRange'
+            : functionOption.key + 'Range';
+      onFilterApply(
+        rangeKey,
+        rangeFilter,
+        `${functionOption.label}: ${dataOption.label}`
+      );
     } else {
       // Apply single filter
       const filterKey = dataOption.filterKey || functionOption.key;
@@ -285,10 +311,17 @@ export function SmartFilterSystem({
         [dataOption.filterKey || functionOption.key]: dataOption.value,
         [dataOption.additionalFilter.key]: dataOption.additionalFilter.value,
       };
-      const rangeKey = functionOption.key === 'creditHours' ? 'creditRange' :
-                      functionOption.key === 'blockHours' ? 'blockRange' :
-                      functionOption.key + 'Range';
-      onFilterApply(rangeKey, rangeFilter, `${functionOption.label}: ${dataOption.label}`);
+      const rangeKey =
+        functionOption.key === 'creditHours'
+          ? 'creditRange'
+          : functionOption.key === 'blockHours'
+            ? 'blockRange'
+            : functionOption.key + 'Range';
+      onFilterApply(
+        rangeKey,
+        rangeFilter,
+        `${functionOption.label}: ${dataOption.label}`
+      );
     } else {
       const filterKey = dataOption.filterKey || functionOption.key;
       onFilterApply(
@@ -379,14 +412,14 @@ export function SmartFilterSystem({
           <label className="text-sm font-medium text-gray-700">Filter By</label>
           <select
             value={selectedFunction}
-            onChange={(e) => {
+            onChange={e => {
               setSelectedFunction(e.target.value);
-              setSelectedData(""); // Reset data selection when function changes
+              setSelectedData(''); // Reset data selection when function changes
             }}
             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">Select function...</option>
-            {filterOptions.map((option) => (
+            {filterOptions.map(option => (
               <option key={option.key} value={option.key}>
                 {option.label}
               </option>
@@ -399,13 +432,15 @@ export function SmartFilterSystem({
           <label className="text-sm font-medium text-gray-700">Value</label>
           <select
             value={selectedData}
-            onChange={(e) => {
+            onChange={e => {
               handleSelectValueAndApply(e.target.value);
             }}
             disabled={!selectedFunction}
             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="">{selectedFunction ? "Select value..." : "Select function first"}</option>
+            <option value="">
+              {selectedFunction ? 'Select value...' : 'Select function first'}
+            </option>
             {currentFunctionOptions.map((option, index) => (
               <option key={index} value={option.value.toString()}>
                 {option.label}
@@ -429,7 +464,9 @@ export function SmartFilterSystem({
       {activeFilters.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Active Filters:</span>
+            <span className="text-sm font-medium text-gray-700">
+              Active Filters:
+            </span>
             <Button
               variant="ghost"
               size="sm"
@@ -463,19 +500,28 @@ export function SmartFilterSystem({
       {/* Preferred Days Off Calendar Button */}
       <div className="space-y-2">
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Preferred Days Off:</span>
+          <span className="text-sm font-medium text-gray-700">
+            Preferred Days Off:
+          </span>
           <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="flex items-center gap-2"
               >
                 <CalendarIcon className="h-4 w-4" />
-                {selectedDaysOff.length === 0 ? 'Select dates' : `${selectedDaysOff.length} selected`}
+                {selectedDaysOff.length === 0
+                  ? 'Select dates'
+                  : `${selectedDaysOff.length} selected`}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 z-[60]" align="start" side="bottom" sideOffset={4}>
+            <PopoverContent
+              className="w-auto p-0 z-[60]"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+            >
               <Calendar
                 mode="multiple"
                 selected={selectedDaysOff}

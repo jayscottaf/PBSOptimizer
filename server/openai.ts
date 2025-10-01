@@ -149,24 +149,45 @@ export class PairingAnalysisService {
           parameters: {
             type: 'object',
             properties: {
-              bidPackageId: { type: "number", description: "ID of the bid package" },
-              payType: { type: "string", description: "Type of pay analysis (credit, block, efficiency)" }
-            }
-          }
+              bidPackageId: {
+                type: 'number',
+                description: 'ID of the bid package',
+              },
+              payType: {
+                type: 'string',
+                description: 'Type of pay analysis (credit, block, efficiency)',
+              },
+            },
+          },
         },
         {
-          name: "findBestPairings",
-          description: "Find the best pairings based on multiple criteria like credit hours, efficiency, hold probability, and layover quality",
+          name: 'findBestPairings',
+          description:
+            'Find the best pairings based on multiple criteria like credit hours, efficiency, hold probability, and layover quality',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              bidPackageId: { type: "number", description: "ID of the bid package" },
-              pairingDays: { type: "number", description: "Filter by number of pairing days (1, 2, 3, 4, 5, etc.)" },
-              limit: { type: "number", description: "Number of top pairings to return (default: 5)" },
-              criteria: { type: "string", description: "Primary criteria for ranking: 'credit', 'efficiency', 'hold_probability', or 'overall'" }
-            }
-          }
-        }
+              bidPackageId: {
+                type: 'number',
+                description: 'ID of the bid package',
+              },
+              pairingDays: {
+                type: 'number',
+                description:
+                  'Filter by number of pairing days (1, 2, 3, 4, 5, etc.)',
+              },
+              limit: {
+                type: 'number',
+                description: 'Number of top pairings to return (default: 5)',
+              },
+              criteria: {
+                type: 'string',
+                description:
+                  "Primary criteria for ranking: 'credit', 'efficiency', 'hold_probability', or 'overall'",
+              },
+            },
+          },
+        },
       ];
 
       const completion = await openai.chat.completions.create({
@@ -280,7 +301,7 @@ export class PairingAnalysisService {
             functionResult = await this.getPayAnalysis(storage, functionArgs);
             break;
 
-          case "findBestPairings":
+          case 'findBestPairings':
             functionResult = await this.findBestPairings(storage, functionArgs);
             break;
 
@@ -296,7 +317,7 @@ export class PairingAnalysisService {
           model: 'gpt-4',
           messages: [
             {
-              role: "system",
+              role: 'system',
               content: `You are an expert airline pilot bid analysis assistant. Format your response in a helpful, conversational way. When presenting data, use clear formatting and highlight key insights.
 
 IMPORTANT ANALYSIS REQUIREMENTS:
@@ -305,7 +326,7 @@ IMPORTANT ANALYSIS REQUIREMENTS:
 - Provide specific reasoning for why each pairing is recommended
 - If asked for a specific number (e.g., "2 best"), limit your response to that number
 - Always explain the criteria used for ranking and recommendations
-- Be specific about what makes each pairing desirable or not`
+- Be specific about what makes each pairing desirable or not`,
             },
             {
               role: 'user',
@@ -782,37 +803,41 @@ IMPORTANT ANALYSIS REQUIREMENTS:
   }
 
   private async findBestPairings(storage: any, params: any) {
-    const pairings = await storage.searchPairings({ 
+    const pairings = await storage.searchPairings({
       bidPackageId: params.bidPackageId,
-      pairingDays: params.pairingDays 
+      pairingDays: params.pairingDays,
     });
 
     if (pairings.length === 0) {
-      return { error: "No pairings found matching the criteria" };
+      return { error: 'No pairings found matching the criteria' };
     }
 
     // Parse hours and calculate efficiency
     const parseHours = (timeStr: string) => {
-      if (!timeStr) return 0;
+      if (!timeStr) {
+        return 0;
+      }
       const [hours, minutes] = timeStr.split(':').map(Number);
       return hours + (minutes || 0) / 60;
     };
 
-    const analyzedPairings = pairings.map((p: any) => ({
-      pairingNumber: p.pairingNumber,
-      creditHours: parseHours(p.creditHours),
-      blockHours: parseHours(p.blockHours),
-      pairingDays: p.pairingDays || 1,
-      efficiency: parseHours(p.creditHours) / (parseHours(p.blockHours) || 1),
-      dailyPay: parseHours(p.creditHours) / (p.pairingDays || 1),
-      holdProbability: p.holdProbability || 0,
-      layovers: p.layovers || [],
-      route: p.route || 'N/A',
-      tafb: p.tafb || 'N/A'
-    })).filter(p => p.creditHours > 0);
+    const analyzedPairings = pairings
+      .map((p: any) => ({
+        pairingNumber: p.pairingNumber,
+        creditHours: parseHours(p.creditHours),
+        blockHours: parseHours(p.blockHours),
+        pairingDays: p.pairingDays || 1,
+        efficiency: parseHours(p.creditHours) / (parseHours(p.blockHours) || 1),
+        dailyPay: parseHours(p.creditHours) / (p.pairingDays || 1),
+        holdProbability: p.holdProbability || 0,
+        layovers: p.layovers || [],
+        route: p.route || 'N/A',
+        tafb: p.tafb || 'N/A',
+      }))
+      .filter(p => p.creditHours > 0);
 
     // Sort by different criteria
-    let sortedPairings = [...analyzedPairings];
+    const sortedPairings = [...analyzedPairings];
     const limit = params.limit || 5;
     const criteria = params.criteria || 'overall';
 
@@ -830,8 +855,16 @@ IMPORTANT ANALYSIS REQUIREMENTS:
       default:
         // Overall score: 40% credit, 30% efficiency, 20% hold probability, 10% daily pay
         sortedPairings.sort((a, b) => {
-          const scoreA = (a.creditHours * 0.4) + (a.efficiency * 0.3) + (a.holdProbability * 0.2) + (a.dailyPay * 0.1);
-          const scoreB = (b.creditHours * 0.4) + (b.efficiency * 0.3) + (b.holdProbability * 0.2) + (b.dailyPay * 0.1);
+          const scoreA =
+            a.creditHours * 0.4 +
+            a.efficiency * 0.3 +
+            a.holdProbability * 0.2 +
+            a.dailyPay * 0.1;
+          const scoreB =
+            b.creditHours * 0.4 +
+            b.efficiency * 0.3 +
+            b.holdProbability * 0.2 +
+            b.dailyPay * 0.1;
           return scoreB - scoreA;
         });
         break;
@@ -842,7 +875,7 @@ IMPORTANT ANALYSIS REQUIREMENTS:
       totalFound: analyzedPairings.length,
       criteria: criteria,
       pairingDays: params.pairingDays,
-      analysisType: 'Best Pairings Analysis'
+      analysisType: 'Best Pairings Analysis',
     };
   }
 }

@@ -1,16 +1,38 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { seedDatabase } from "./seedData";
-import { pdfParser } from "./pdfParser";
-import { db, reconnectDatabase, executeWithRetry, getDatabaseHealth } from "./db";
-import { eq, gte, lte, sql, and, or, like, asc, desc, inArray } from "drizzle-orm";
-import { pairings, bidPackages, users, userFavorites, userCalendarEvents } from '../shared/schema';
-import { HoldProbabilityCalculator } from "./holdProbabilityCalculator";
-import { openaiAssistant } from "./openaiAssistant";
-import multer from "multer";
-import { z } from "zod";
-import { insertBidPackageSchema, insertPairingSchema } from "@shared/schema";
+import type { Express } from 'express';
+import { createServer, type Server } from 'http';
+import { storage } from './storage';
+import { seedDatabase } from './seedData';
+import { pdfParser } from './pdfParser';
+import {
+  db,
+  reconnectDatabase,
+  executeWithRetry,
+  getDatabaseHealth,
+} from './db';
+import {
+  eq,
+  gte,
+  lte,
+  sql,
+  and,
+  or,
+  like,
+  asc,
+  desc,
+  inArray,
+} from 'drizzle-orm';
+import {
+  pairings,
+  bidPackages,
+  users,
+  userFavorites,
+  userCalendarEvents,
+} from '../shared/schema';
+import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
+import { openaiAssistant } from './openaiAssistant';
+import multer from 'multer';
+import { z } from 'zod';
+import { insertBidPackageSchema, insertPairingSchema } from '@shared/schema';
 
 // Optimized hold probability recalculation with batching
 async function recalculateHoldProbabilitiesOptimized(
@@ -18,11 +40,15 @@ async function recalculateHoldProbabilitiesOptimized(
   seniorityPercentile: number
 ) {
   try {
-    console.log(`Starting optimized hold probability recalculation for bid package ${bidPackageId} with seniority ${seniorityPercentile}%`);
+    console.log(
+      `Starting optimized hold probability recalculation for bid package ${bidPackageId} with seniority ${seniorityPercentile}%`
+    );
 
     // Fetch all pairings in one query
-    const allPairings = await db.select().from(pairings).where(eq(pairings.bidPackageId, bidPackageId));
-
+    const allPairings = await db
+      .select()
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
 
     if (allPairings.length === 0) {
       console.log('No pairings found for recalculation');
@@ -156,8 +182,8 @@ export async function registerRoutes(app: Express) {
         poolInfo: dbHealth.poolInfo,
         config: {
           hasDatabaseUrl: !!process.env.DATABASE_URL,
-          port: process.env.PORT || '5000'
-        }
+          port: process.env.PORT || '5000',
+        },
       });
     } catch (error) {
       res.status(503).json({
@@ -167,7 +193,7 @@ export async function registerRoutes(app: Express) {
         version: '1.2.0',
         environment: process.env.NODE_ENV || 'development',
         database: 'disconnected',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
@@ -192,7 +218,6 @@ export async function registerRoutes(app: Express) {
         Pragma: 'no-cache',
         Expires: '0',
       });
-
 
       const packages = await withDatabaseRetry(async () => {
         return await storage.getBidPackages();
@@ -314,8 +339,8 @@ export async function registerRoutes(app: Express) {
       // Add cache control headers to prevent browser caching
       res.set({
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+        Pragma: 'no-cache',
+        Expires: '0',
       });
 
       const {
@@ -457,13 +482,13 @@ export async function registerRoutes(app: Express) {
       // Add cache control headers to prevent browser caching
       res.set({
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+        Pragma: 'no-cache',
+        Expires: '0',
       });
 
       // Minimal request log for debugging; avoid dumping large payloads
 
-      console.log("POST /api/pairings/search", { path: req.path });
+      console.log('POST /api/pairings/search', { path: req.path });
 
       const {
         bidPackageId,
@@ -475,10 +500,9 @@ export async function registerRoutes(app: Express) {
       } = req.body;
 
       if (!bidPackageId) {
-
-        console.log("No bid package ID provided in search request");
+        console.log('No bid package ID provided in search request');
         return res.status(400).json({
-          message: "Bid package ID is required",
+          message: 'Bid package ID is required',
 
           pairings: [],
           pagination: {
@@ -516,7 +540,7 @@ export async function registerRoutes(app: Express) {
         limit: parseInt(limit),
         sortBy,
         sortOrder,
-        ...filters
+        ...filters,
       });
 
       // If seniority provided, compute holdProbability per-response
@@ -558,9 +582,9 @@ export async function registerRoutes(app: Express) {
       }
       res.json(result);
     } catch (error) {
-      console.error("Error searching pairings:", error);
+      console.error('Error searching pairings:', error);
       res.status(500).json({
-        message: "Failed to search pairings",
+        message: 'Failed to search pairings',
 
         pairings: [],
         pagination: {
@@ -699,12 +723,12 @@ export async function registerRoutes(app: Express) {
     try {
       const { userId, pairingId } = req.body;
       console.log('Adding favorite - userId:', userId, 'pairingId:', pairingId);
-      
+
       if (!userId || !pairingId) {
         console.error('Missing required fields:', { userId, pairingId });
         return res.status(400).json({ message: 'Missing userId or pairingId' });
       }
-      
+
       const favorite = await storage.addUserFavorite({ userId, pairingId });
       console.log('Favorite added successfully:', favorite);
       res.json(favorite);
@@ -714,11 +738,12 @@ export async function registerRoutes(app: Express) {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : 'No stack trace',
         userId: req.body?.userId,
-        pairingId: req.body?.pairingId
+        pairingId: req.body?.pairingId,
       });
-      res.status(500).json({ 
+      res.status(500).json({
         message: 'Failed to add favorite',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   });
@@ -752,12 +777,29 @@ export async function registerRoutes(app: Express) {
     try {
       const { userId, pairingId, startDate, endDate, notes } = req.body;
 
-      console.log('Calendar POST request:', { userId, pairingId, startDate, endDate, notes });
-      console.log('Database connection status:', db ? 'Connected' : 'Not connected');
+      console.log('Calendar POST request:', {
+        userId,
+        pairingId,
+        startDate,
+        endDate,
+        notes,
+      });
+      console.log(
+        'Database connection status:',
+        db ? 'Connected' : 'Not connected'
+      );
 
       if (!userId || !pairingId || !startDate || !endDate) {
-        console.error('Missing required fields:', { userId, pairingId, startDate, endDate });
-        return res.status(400).json({ message: "Missing required fields: userId, pairingId, startDate, endDate" });
+        console.error('Missing required fields:', {
+          userId,
+          pairingId,
+          startDate,
+          endDate,
+        });
+        return res.status(400).json({
+          message:
+            'Missing required fields: userId, pairingId, startDate, endDate',
+        });
       }
 
       const event = await storage.addUserCalendarEvent({
@@ -771,18 +813,22 @@ export async function registerRoutes(app: Express) {
       console.log('Calendar event created successfully:', event);
       res.json(event);
     } catch (error) {
-      console.error("Error adding calendar event:", error);
+      console.error('Error adding calendar event:', error);
       console.error('Error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : 'No stack trace',
         userId: req.body?.userId,
         pairingId: req.body?.pairingId,
         startDate: req.body?.startDate,
-        endDate: req.body?.endDate
+        endDate: req.body?.endDate,
       });
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to add calendar event",
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      res.status(500).json({
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to add calendar event',
+        error:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   });
@@ -805,8 +851,16 @@ export async function registerRoutes(app: Express) {
       const userId = parseInt(req.params.userId);
       const { startDate, endDate } = req.query;
 
-      console.log('Fetching calendar events for userId:', userId, 'dateRange:', { startDate, endDate });
-      console.log('Database connection status:', db ? 'Connected' : 'Not connected');
+      console.log(
+        'Fetching calendar events for userId:',
+        userId,
+        'dateRange:',
+        { startDate, endDate }
+      );
+      console.log(
+        'Database connection status:',
+        db ? 'Connected' : 'Not connected'
+      );
 
       if (isNaN(userId)) {
         console.error('Invalid userId:', req.params.userId);
@@ -835,11 +889,12 @@ export async function registerRoutes(app: Express) {
         stack: error instanceof Error ? error.stack : 'No stack trace',
         userId: req.params.userId,
         startDate: req.query.startDate,
-        endDate: req.query.endDate
+        endDate: req.query.endDate,
       });
-      res.status(500).json({ 
+      res.status(500).json({
         message: 'Failed to fetch calendar events',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   });
@@ -931,66 +986,97 @@ export async function registerRoutes(app: Express) {
 
       // Route based on intent; ensure DB-backed results for "best/top" queries
       if (finalBidPackageId) {
-
         // Prepend seniority context for analysis if provided
-        const enrichedQuestion = typeof seniorityPercentile === 'number'
-          ? `User seniority: ${seniorityPercentile}%. ${question}`
-          : question;
+        const enrichedQuestion =
+          typeof seniorityPercentile === 'number'
+            ? `User seniority: ${seniorityPercentile}%. ${question}`
+            : question;
         const lowerQ = question.toLowerCase();
-        const isBestQuery = lowerQ.includes("best") || lowerQ.includes("top");
+        const isBestQuery = lowerQ.includes('best') || lowerQ.includes('top');
 
         // Prefer hybrid for "best/top" to guarantee real pairing numbers
         if (isBestQuery) {
           try {
-            const { HybridOpenAIService } = await import("./openaiHybrid");
+            const { HybridOpenAIService } = await import('./openaiHybrid');
             const hybridService = new HybridOpenAIService(storage);
             const result = await hybridService.analyzeQuery({
               message: enrichedQuestion,
-              bidPackageId: finalBidPackageId
+              bidPackageId: finalBidPackageId,
             });
 
-            res.json({ reply: result.response, data: result.data, truncated: result.truncated });
+            res.json({
+              reply: result.response,
+              data: result.data,
+              truncated: result.truncated,
+            });
             return;
           } catch (hybridError) {
-            console.log("Hybrid (best/top) failed, falling back to natural analysis:", hybridError);
+            console.log(
+              'Hybrid (best/top) failed, falling back to natural analysis:',
+              hybridError
+            );
           }
         }
 
         // Natural-language-first for everything else or as fallback
         try {
-          const { PairingAnalysisService } = await import("./openai");
+          const { PairingAnalysisService } = await import('./openai');
           const analysisService = new PairingAnalysisService();
-          const result = await analysisService.analyzeQuery({
-            message: enrichedQuestion,
-            bidPackageId: finalBidPackageId
-          }, storage);
+          const result = await analysisService.analyzeQuery(
+            {
+              message: enrichedQuestion,
+              bidPackageId: finalBidPackageId,
+            },
+            storage
+          );
 
           res.json({ reply: result.response, data: result.data });
           return;
         } catch (analysisError) {
-          console.log("Natural analysis failed, falling back to hybrid optimizer:", analysisError);
+          console.log(
+            'Natural analysis failed, falling back to hybrid optimizer:',
+            analysisError
+          );
 
           try {
-            const { HybridOpenAIService } = await import("./openaiHybrid");
+            const { HybridOpenAIService } = await import('./openaiHybrid');
             const hybridService = new HybridOpenAIService(storage);
             const result = await hybridService.analyzeQuery({
               message: enrichedQuestion,
-              bidPackageId: finalBidPackageId
+              bidPackageId: finalBidPackageId,
             });
 
-            res.json({ reply: result.response, data: result.data, truncated: result.truncated });
+            res.json({
+              reply: result.response,
+              data: result.data,
+              truncated: result.truncated,
+            });
             return;
           } catch (hybridError) {
-            console.log("Hybrid optimizer also failed, providing guidance:", hybridError);
+            console.log(
+              'Hybrid optimizer also failed, providing guidance:',
+              hybridError
+            );
 
-            if (hybridError && typeof hybridError === 'object' && 'message' in hybridError && typeof (hybridError as any).message === 'string') {
+            if (
+              hybridError &&
+              typeof hybridError === 'object' &&
+              'message' in hybridError &&
+              typeof (hybridError as any).message === 'string'
+            ) {
               const msg = (hybridError as any).message as string;
               if (msg.includes('rate_limit_exceeded')) {
-                res.json({ reply: "I'm experiencing high demand right now. Please try again in a moment." });
+                res.json({
+                  reply:
+                    "I'm experiencing high demand right now. Please try again in a moment.",
+                });
                 return;
               }
               if (msg.includes('context_length_exceeded')) {
-                res.json({ reply: "This request is very large. Try narrowing your question (e.g., by day count or destination) and I'll go deeper." });
+                res.json({
+                  reply:
+                    "This request is very large. Try narrowing your question (e.g., by day count or destination) and I'll go deeper.",
+                });
                 return;
               }
             }
@@ -1124,15 +1210,19 @@ export async function registerRoutes(app: Express) {
             tafb: pairings.tafb,
             checkInTime: pairings.checkInTime,
             pairingDays: pairings.pairingDays,
-          }
+          },
         })
         .from(userCalendarEvents)
         .leftJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
         .where(
           and(
             eq(userCalendarEvents.userId, userId),
-            startDate ? gte(userCalendarEvents.endDate, new Date(startDate as string)) : undefined,
-            endDate ? lte(userCalendarEvents.startDate, new Date(endDate as string)) : undefined
+            startDate
+              ? gte(userCalendarEvents.endDate, new Date(startDate as string))
+              : undefined,
+            endDate
+              ? lte(userCalendarEvents.startDate, new Date(endDate as string))
+              : undefined
           )
         );
 
@@ -1175,7 +1265,6 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ error: 'Failed to fetch favorites' });
     }
   });
-
 
   const httpServer = createServer(app);
   return httpServer;

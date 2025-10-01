@@ -1,10 +1,15 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import App from "./App";
-import "./index.css";
-import { queryClient, clearAllCache, clearPairingCache, refreshAllData } from "./lib/queryClient";
-import { migrateOldCacheFormat, getCacheInfo } from "./lib/offlineCache";
-import { addTestingUtilities } from "./lib/offlineTestSuite";
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+import {
+  queryClient,
+  clearAllCache,
+  clearPairingCache,
+  refreshAllData,
+} from './lib/queryClient';
+import { migrateOldCacheFormat, getCacheInfo } from './lib/offlineCache';
+import { addTestingUtilities } from './lib/offlineTestSuite';
 // Development utilities - available in browser console
 if (import.meta.env.DEV) {
   (window as any).debugCache = {
@@ -28,15 +33,15 @@ if (import.meta.env.DEV) {
     },
   };
   console.log('🛠️ Cache utilities available: window.debugCache');
-  
+
   // Add offline testing utilities
   addTestingUtilities();
 }
 // Initialize app with migration checks
 (async () => {
   // Render the app first to prevent startup delays
-  createRoot(document.getElementById("root")!).render(<App />);
-  
+  createRoot(document.getElementById('root')!).render(<App />);
+
   // Run cache migration check in background
   try {
     setTimeout(async () => {
@@ -50,26 +55,33 @@ if (import.meta.env.DEV) {
 // Enhanced Service Worker registration with update handling (Stage 6)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker
+      .register('/sw.js')
       .then(registration => {
         // console.log('SW registered: ', registration); // Reduced logging
-        
+
         // Check for updates every 10 minutes
-        setInterval(() => {
-          registration.update();
-        }, 10 * 60 * 1000);
-        
+        setInterval(
+          () => {
+            registration.update();
+          },
+          10 * 60 * 1000
+        );
+
         // Handle waiting service worker (update available)
         if (registration.waiting) {
           showUpdateAvailable(registration);
         }
-        
+
         // Listen for new service worker installation
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              if (
+                newWorker.state === 'installed' &&
+                navigator.serviceWorker.controller
+              ) {
                 showUpdateAvailable(registration);
               }
             });
@@ -82,9 +94,9 @@ if ('serviceWorker' in navigator) {
   });
 
   // Listen for messages from service worker
-  navigator.serviceWorker.addEventListener('message', (event) => {
+  navigator.serviceWorker.addEventListener('message', event => {
     const { type, version, timestamp } = event.data || {};
-    
+
     switch (type) {
       case 'SW_UPDATED':
         console.log(`Service Worker updated to version ${version}`);
@@ -98,25 +110,27 @@ if ('serviceWorker' in navigator) {
     // Remove common offline banner selectors
     const selectors = [
       '.chrome-offline-banner',
-      '.browser-offline-bar', 
+      '.browser-offline-bar',
       '.offline-notification',
       'div[style*="You are offline"]',
       'div[style*="background"][style*="red"]',
-      'div[style*="position: fixed"][style*="top: 0"]'
+      'div[style*="position: fixed"][style*="top: 0"]',
     ];
-    
+
     selectors.forEach(selector => {
       document.querySelectorAll(selector).forEach(el => {
         (el as HTMLElement).remove();
       });
     });
-    
+
     // Remove any element containing "You are offline" text
     const allElements = document.querySelectorAll('*');
     allElements.forEach(el => {
-      if (el.textContent?.includes('You are offline') && 
-          el !== document.body && 
-          el !== document.documentElement) {
+      if (
+        el.textContent?.includes('You are offline') &&
+        el !== document.body &&
+        el !== document.documentElement
+      ) {
         const styles = getComputedStyle(el);
         if (styles.position === 'fixed' || styles.position === 'absolute') {
           (el as HTMLElement).remove();
@@ -130,7 +144,7 @@ if ('serviceWorker' in navigator) {
     document.body.classList.remove('offline');
     removeOfflineBanners();
   });
-  
+
   window.addEventListener('offline', () => {
     document.body.classList.add('offline');
     // Aggressively remove offline banners
@@ -188,15 +202,15 @@ function showUpdateAvailable(registration: ServiceWorkerRegistration) {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(toast);
-  
+
   // Handle update now
   toast.querySelector('#update-now')?.addEventListener('click', () => {
     if (registration.waiting) {
       // Send skip waiting message
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      
+
       // Listen for the controlling change
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         window.location.reload();
@@ -204,15 +218,17 @@ function showUpdateAvailable(registration: ServiceWorkerRegistration) {
     }
     toast.remove();
   });
-  
+
   // Handle update later
   toast.querySelector('#update-later')?.addEventListener('click', () => {
     toast.remove();
   });
-  
+
   // Auto-remove after 30 seconds
   setTimeout(() => {
-    if (toast.parentNode) toast.remove();
+    if (toast.parentNode) {
+      toast.remove();
+    }
   }, 30000);
 }
 

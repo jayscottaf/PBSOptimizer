@@ -15,7 +15,9 @@ if (!process.env.DATABASE_URL) {
   console.error('Environment variables:', {
     NODE_ENV: process.env.NODE_ENV,
     hasDbUrl: !!process.env.DATABASE_URL,
-    envKeys: Object.keys(process.env).filter(k => k.includes('DB') || k.includes('URL'))
+    envKeys: Object.keys(process.env).filter(
+      k => k.includes('DB') || k.includes('URL')
+    ),
   });
   throw new Error(
     'DATABASE_URL must be set. Did you forget to provision a database?'
@@ -31,7 +33,9 @@ class DatabaseCircuitBreaker {
   private readonly resetTimeout = 60000; // 1 minute
 
   canExecute(): boolean {
-    if (this.state === 'CLOSED') return true;
+    if (this.state === 'CLOSED') {
+      return true;
+    }
 
     if (this.state === 'OPEN') {
       if (Date.now() - this.lastFailureTime > this.recoveryTimeout) {
@@ -55,7 +59,9 @@ class DatabaseCircuitBreaker {
 
     if (this.failures >= this.failureThreshold) {
       this.state = 'OPEN';
-      console.log(`Database circuit breaker OPEN - too many failures (${this.failures})`);
+      console.log(
+        `Database circuit breaker OPEN - too many failures (${this.failures})`
+      );
 
       // Auto-reset after timeout
       setTimeout(() => {
@@ -119,7 +125,6 @@ export const reconnectDatabase = async (attempt = 1): Promise<typeof db> => {
     console.log(`✅ Database reconnection successful on attempt ${attempt}`);
     circuitBreaker.onSuccess();
     return newDb;
-
   } catch (error) {
     console.error(`Database reconnection attempt ${attempt} failed:`, error);
     circuitBreaker.onFailure();
@@ -127,13 +132,15 @@ export const reconnectDatabase = async (attempt = 1): Promise<typeof db> => {
     if (attempt < maxAttempts) {
       return await reconnectDatabase(attempt + 1);
     } else {
-      throw new Error(`Database reconnection failed after ${maxAttempts} attempts: ${error}`);
+      throw new Error(
+        `Database reconnection failed after ${maxAttempts} attempts: ${error}`
+      );
     }
   }
 };
 
 // Enhanced error handling for pool
-pool.on('error', async (err) => {
+pool.on('error', async err => {
   console.error('Database pool error:', err);
   circuitBreaker.onFailure();
 
@@ -162,7 +169,9 @@ export const executeWithRetry = async <T>(
   operationName = 'database operation'
 ): Promise<T> => {
   if (!circuitBreaker.canExecute()) {
-    throw new Error(`Database circuit breaker is ${circuitBreaker.getState()} - operation blocked`);
+    throw new Error(
+      `Database circuit breaker is ${circuitBreaker.getState()} - operation blocked`
+    );
   }
 
   try {
@@ -176,10 +185,10 @@ export const executeWithRetry = async <T>(
     const isConnectionError =
       error instanceof Error &&
       (error.message.includes('Connection terminated') ||
-       error.message.includes('connection closed') ||
-       error.message.includes('ECONNREFUSED') ||
-       error.message.includes('WebSocket') ||
-       error.message.includes('Pool is ending'));
+        error.message.includes('connection closed') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('WebSocket') ||
+        error.message.includes('Pool is ending'));
 
     if (isConnectionError && circuitBreaker.canExecute()) {
       console.log(`Attempting recovery for ${operationName}...`);
@@ -190,7 +199,10 @@ export const executeWithRetry = async <T>(
         circuitBreaker.onSuccess();
         return result;
       } catch (retryError) {
-        console.error(`${operationName} retry after reconnection failed:`, retryError);
+        console.error(
+          `${operationName} retry after reconnection failed:`,
+          retryError
+        );
         circuitBreaker.onFailure();
         throw retryError;
       }
@@ -211,7 +223,7 @@ export const getDatabaseHealth = async (): Promise<{
       return {
         connected: false,
         circuitBreakerState: circuitBreaker.getState(),
-        poolInfo: { status: 'blocked by circuit breaker' }
+        poolInfo: { status: 'blocked by circuit breaker' },
       };
     }
 
@@ -222,14 +234,16 @@ export const getDatabaseHealth = async (): Promise<{
       poolInfo: {
         totalCount: pool.totalCount,
         idleCount: pool.idleCount,
-        waitingCount: pool.waitingCount
-      }
+        waitingCount: pool.waitingCount,
+      },
     };
   } catch (error) {
     return {
       connected: false,
       circuitBreakerState: circuitBreaker.getState(),
-      poolInfo: { error: error instanceof Error ? error.message : 'Unknown error' }
+      poolInfo: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
     };
   }
 };

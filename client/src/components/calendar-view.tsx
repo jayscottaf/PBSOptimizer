@@ -47,20 +47,29 @@ type CalendarViewProps = {
 export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   // Get latest bid package info for dynamic date initialization
   const { data: bidPackages = [] } = useQuery({
-    queryKey: ["bidPackages"],
+    queryKey: ['bidPackages'],
     queryFn: async () => {
       const response = await fetch('/api/bid-packages');
-      if (!response.ok) throw new Error('Failed to fetch bid packages');
+      if (!response.ok) {
+        throw new Error('Failed to fetch bid packages');
+      }
       return response.json();
     },
     staleTime: 15 * 60 * 1000,
   });
 
   const latestBidPackage = React.useMemo(() => {
-    if (!bidPackages || bidPackages.length === 0) return null;
+    if (!bidPackages || bidPackages.length === 0) {
+      return null;
+    }
     const packagesArray = (bidPackages as any[]).slice();
-    packagesArray.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
-    const mostRecentCompleted = packagesArray.find((pkg: any) => pkg.status === "completed");
+    packagesArray.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
+    const mostRecentCompleted = packagesArray.find(
+      (pkg: any) => pkg.status === 'completed'
+    );
     return mostRecentCompleted || packagesArray[0];
   }, [bidPackages]);
   // Initialize to the bid package month/year dynamically
@@ -71,8 +80,18 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       const year = latestBidPackage.year || 2025;
 
       const monthMap: { [key: string]: number } = {
-        'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
-        'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+        JAN: 0,
+        FEB: 1,
+        MAR: 2,
+        APR: 3,
+        MAY: 4,
+        JUN: 5,
+        JUL: 6,
+        AUG: 7,
+        SEP: 8,
+        OCT: 9,
+        NOV: 10,
+        DEC: 11,
       };
 
       const monthIndex = monthMap[month] || 8; // Default to September if unknown
@@ -108,11 +127,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
         start: startOfCalendarView.toISOString(),
         end: endOfCalendarView.toISOString(),
         month: currentDate.getMonth() + 1,
-        year: currentDate.getFullYear()
+        year: currentDate.getFullYear(),
       });
 
-      const response = await fetch(`/api/users/${userId}/calendar?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`);
-      if (!response.ok) throw new Error('Failed to fetch calendar events');
+      const response = await fetch(
+        `/api/users/${userId}/calendar?startDate=${startOfCalendarView.toISOString()}&endDate=${endOfCalendarView.toISOString()}`
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch calendar events');
+      }
       const result = await response.json();
       console.log('Calendar events fetched:', result);
       return result;
@@ -140,11 +163,20 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
   // Remove from calendar mutation
   const removeFromCalendarMutation = useMutation({
-    mutationFn: async ({ userId, pairingId }: { userId: number; pairingId: number }) => {
-      const response = await fetch(`/api/users/${userId}/calendar/${pairingId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
+    mutationFn: async ({
+      userId,
+      pairingId,
+    }: {
+      userId: number;
+      pairingId: number;
+    }) => {
+      const response = await fetch(
+        `/api/users/${userId}/calendar/${pairingId}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
       if (!response.ok) {
         throw new Error('Failed to remove from calendar');
       }
@@ -313,10 +345,9 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
               {format(currentDate, 'MMMM yyyy')}
             </h2>
             <p className="text-sm text-gray-600">
-              {bidPackageId && latestBidPackage ? 
-                `Bid Package: ${latestBidPackage.month} ${latestBidPackage.year}` : 
-                'Calendar View'
-              }
+              {bidPackageId && latestBidPackage
+                ? `Bid Package: ${latestBidPackage.month} ${latestBidPackage.year}`
+                : 'Calendar View'}
             </p>
           </div>
           <Button

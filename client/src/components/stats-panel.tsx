@@ -216,8 +216,12 @@ export function StatsPanel({
             {isFailed && <span className="text-xs text-red-600">Failed</span>}
           </div>
           <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
-            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold (≥70%)</div>
+            <div className="text-xl lg:text-2xl font-bold text-green-600">
+              {stats.likelyToHold}
+            </div>
+            <div className="text-xs lg:text-sm text-gray-600">
+              Likely to Hold (≥70%)
+            </div>
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">
@@ -359,8 +363,12 @@ export function StatsPanel({
             {isFailed && <span className="text-xs text-red-600">Failed</span>}
           </div>
           <div className="text-center">
-            <div className="text-xl lg:text-2xl font-bold text-green-600">{stats.likelyToHold}</div>
-            <div className="text-xs lg:text-sm text-gray-600">Likely to Hold (≥70%)</div>
+            <div className="text-xl lg:text-2xl font-bold text-green-600">
+              {stats.likelyToHold}
+            </div>
+            <div className="text-xs lg:text-sm text-gray-600">
+              Likely to Hold (≥70%)
+            </div>
           </div>
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-purple-600">

@@ -14,7 +14,7 @@ export function useNetworkStatus(): NetworkStatus {
     isSlowConnection: false,
     connectionType: 'unknown',
     lastOnlineTime: navigator.onLine ? new Date() : null,
-    reconnectAttempts: 0
+    reconnectAttempts: 0,
   });
 
   useEffect(() => {
@@ -24,24 +24,30 @@ export function useNetworkStatus(): NetworkStatus {
         setStatus(prev => ({
           ...prev,
           connectionType: 'offline',
-          isSlowConnection: false
+          isSlowConnection: false,
         }));
         return;
       }
 
-      const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+      const connection =
+        (navigator as any).connection ||
+        (navigator as any).mozConnection ||
+        (navigator as any).webkitConnection;
       if (connection) {
-        const isSlowConnection = connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g' || connection.downlink < 1;
+        const isSlowConnection =
+          connection.effectiveType === 'slow-2g' ||
+          connection.effectiveType === '2g' ||
+          connection.downlink < 1;
         setStatus(prev => ({
           ...prev,
           connectionType: connection.effectiveType || 'unknown',
-          isSlowConnection
+          isSlowConnection,
         }));
       } else {
         setStatus(prev => ({
           ...prev,
           connectionType: 'unknown',
-          isSlowConnection: false
+          isSlowConnection: false,
         }));
       }
     };
@@ -53,7 +59,7 @@ export function useNetworkStatus(): NetworkStatus {
         ...prev,
         isOnline: true,
         lastOnlineTime: new Date(),
-        reconnectAttempts: 0
+        reconnectAttempts: 0,
       }));
       detectConnectionType();
     };
@@ -63,7 +69,7 @@ export function useNetworkStatus(): NetworkStatus {
       setStatus(prev => ({
         ...prev,
         isOnline: false,
-        reconnectAttempts: prev.reconnectAttempts + 1
+        reconnectAttempts: prev.reconnectAttempts + 1,
       }));
     };
 
@@ -76,7 +82,7 @@ export function useNetworkStatus(): NetworkStatus {
     // Add event listeners
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     const connection = (navigator as any).connection;
     if (connection) {
       connection.addEventListener('change', handleConnectionChange);
@@ -104,7 +110,7 @@ export class NetworkHealthChecker {
   private healthCheckUrl = '/api/health';
   private checkInterval = 30000; // 30 seconds
   private retryDelays = [1000, 3000, 5000, 10000]; // Progressive backoff
-  
+
   static getInstance(): NetworkHealthChecker {
     if (!NetworkHealthChecker.instance) {
       NetworkHealthChecker.instance = new NetworkHealthChecker();
@@ -116,13 +122,13 @@ export class NetworkHealthChecker {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
+
       const response = await fetch(this.healthCheckUrl, {
         method: 'HEAD',
         cache: 'no-cache',
-        signal: controller.signal
+        signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
       return response.ok;
     } catch (error) {
@@ -137,7 +143,7 @@ export class NetworkHealthChecker {
     context = 'operation'
   ): Promise<T> {
     let lastError: Error;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await operation();
@@ -147,18 +153,24 @@ export class NetworkHealthChecker {
         return result;
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt === maxRetries) {
-          console.error(`❌ ${context} failed after ${maxRetries} retries:`, error);
+          console.error(
+            `❌ ${context} failed after ${maxRetries} retries:`,
+            error
+          );
           break;
         }
-        
-        const delay = this.retryDelays[Math.min(attempt, this.retryDelays.length - 1)];
-        console.log(`🔄 ${context} attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+
+        const delay =
+          this.retryDelays[Math.min(attempt, this.retryDelays.length - 1)];
+        console.log(
+          `🔄 ${context} attempt ${attempt + 1} failed, retrying in ${delay}ms...`
+        );
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
+
     throw lastError!;
   }
 }

@@ -1,14 +1,20 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { X, Heart, Calendar } from "lucide-react";
-import { api } from "@/lib/api";
-import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "@/hooks/use-toast";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { X, Heart, Calendar } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 interface PairingModalProps {
   pairingId: number;
   onClose: () => void;
@@ -41,13 +47,18 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
   // Check if this pairing is already in user's favorites
   const { data: userFavorites = [] } = useQuery({
-    queryKey: ["favorites"],
+    queryKey: ['favorites'],
     queryFn: async () => {
       try {
-        const seniorityNumber = localStorage.getItem('seniorityNumber') || "15860";
-        const base = localStorage.getItem('base') || "NYC";
-        const aircraft = localStorage.getItem('aircraft') || "A220";
-        const user = await api.createOrUpdateUser({ seniorityNumber: parseInt(seniorityNumber), base, aircraft });
+        const seniorityNumber =
+          localStorage.getItem('seniorityNumber') || '15860';
+        const base = localStorage.getItem('base') || 'NYC';
+        const aircraft = localStorage.getItem('aircraft') || 'A220';
+        const user = await api.createOrUpdateUser({
+          seniorityNumber: parseInt(seniorityNumber),
+          base,
+          aircraft,
+        });
         return await api.getFavorites(user.id);
       } catch (error) {
         return [];
@@ -59,7 +70,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   // Update isFavorited state when favorites data changes
   useEffect(() => {
     if (userFavorites && pairingId) {
-      const isAlreadyFavorited = userFavorites.some((fav: any) => fav.id === pairingId);
+      const isAlreadyFavorited = userFavorites.some(
+        (fav: any) => fav.id === pairingId
+      );
       setIsFavorited(isAlreadyFavorited);
     }
   }, [userFavorites, pairingId]);
@@ -77,22 +90,40 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
       startDate: Date;
       endDate: Date;
     }) => {
-      console.log('Mutation function called with:', { userId, pairingId, startDate, endDate });
-      const result = await api.addToCalendar(userId, pairingId, startDate, endDate);
+      console.log('Mutation function called with:', {
+        userId,
+        pairingId,
+        startDate,
+        endDate,
+      });
+      const result = await api.addToCalendar(
+        userId,
+        pairingId,
+        startDate,
+        endDate
+      );
       console.log('Mutation result:', result);
       return result;
     },
     onSuccess: data => {
       console.log('Calendar mutation success:', data);
-      toast({ title: 'Success', description: 'Pairing added to calendar successfully' });
+      toast({
+        title: 'Success',
+        description: 'Pairing added to calendar successfully',
+      });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
       queryClient.refetchQueries({ queryKey: ['calendar'] });
       setIsAddedToCalendar(true);
     },
     onError: (error: any) => {
       console.error('Calendar mutation error:', error);
-      const errorMessage = error?.message || 'Unknown error occurred while adding to calendar';
-      toast({ title: 'Error', description: `Failed to add to calendar: ${errorMessage}`, variant: 'destructive' });
+      const errorMessage =
+        error?.message || 'Unknown error occurred while adding to calendar';
+      toast({
+        title: 'Error',
+        description: `Failed to add to calendar: ${errorMessage}`,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -295,7 +326,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
         </div>
 
         <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">Export Details</Button>
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+            Export Details
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -358,10 +391,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                   // Try different patterns
                   const patterns = [
-                    /(\d{1,2})([A-Z]{3})/,  // "10SEP"
-                    /([A-Z]{3})(\d{1,2})/,  // "SEP10"
-                    /(\d{1,2})\s*([A-Z]{3})/,  // "10 SEP"
-                    /([A-Z]{3})\s*(\d{1,2})/   // "SEP 10"
+                    /(\d{1,2})([A-Z]{3})/, // "10SEP"
+                    /([A-Z]{3})(\d{1,2})/, // "SEP10"
+                    /(\d{1,2})\s*([A-Z]{3})/, // "10 SEP"
+                    /([A-Z]{3})\s*(\d{1,2})/, // "SEP 10"
                   ];
 
                   for (const pattern of patterns) {
@@ -380,7 +413,11 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                       }
 
                       if (month && day && month in monthMap) {
-                        const parsedDate = new Date(currentYear, monthMap[month], parseInt(day));
+                        const parsedDate = new Date(
+                          currentYear,
+                          monthMap[month],
+                          parseInt(day)
+                        );
                         console.log('Parsed date:', parsedDate);
                         return parsedDate;
                       }
@@ -393,14 +430,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                 // Check for date range format "01SEP-30SEP" or "SEP01-SEP30"
                 const rangePatterns = [
-                  /(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/,  // "01SEP-30SEP"
-                  /([A-Z]{3})(\d{1,2})-([A-Z]{3})(\d{1,2})/   // "SEP01-SEP30"
+                  /(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/, // "01SEP-30SEP"
+                  /([A-Z]{3})(\d{1,2})-([A-Z]{3})(\d{1,2})/, // "SEP01-SEP30"
                 ];
 
                 let rangeMatch = null;
                 for (const pattern of rangePatterns) {
                   rangeMatch = effectiveDateStr.match(pattern);
-                  if (rangeMatch) break;
+                  if (rangeMatch) {
+                    break;
+                  }
                 }
 
                 if (rangeMatch) {
@@ -424,8 +463,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   }
 
                   if (startMonth in monthMap && endMonth in monthMap) {
-                    const startDate = new Date(currentYear, monthMap[startMonth], parseInt(startDay));
-                    const endDate = new Date(currentYear, monthMap[endMonth], parseInt(endDay));
+                    const startDate = new Date(
+                      currentYear,
+                      monthMap[startMonth],
+                      parseInt(startDay)
+                    );
+                    const endDate = new Date(
+                      currentYear,
+                      monthMap[endMonth],
+                      parseInt(endDay)
+                    );
 
                     console.log('Parsed range:', startDate, 'to', endDate);
 
@@ -439,20 +486,31 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                     possibleStartDates.push(singleDate);
                   } else {
                     // Fallback: try to extract any date-like pattern
-                    const fallbackMatch = effectiveDateStr.match(/(\d{1,2})|([A-Z]{3})/g);
+                    const fallbackMatch =
+                      effectiveDateStr.match(/(\d{1,2})|([A-Z]{3})/g);
                     if (fallbackMatch && fallbackMatch.length >= 2) {
                       const day = fallbackMatch.find(m => /^\d{1,2}$/.test(m));
-                      const month = fallbackMatch.find(m => /^[A-Z]{3}$/.test(m));
+                      const month = fallbackMatch.find(m =>
+                        /^[A-Z]{3}$/.test(m)
+                      );
 
                       if (day && month && month in monthMap) {
-                        const fallbackDate = new Date(currentYear, monthMap[month], parseInt(day));
+                        const fallbackDate = new Date(
+                          currentYear,
+                          monthMap[month],
+                          parseInt(day)
+                        );
                         console.log('Fallback parsed date:', fallbackDate);
                         possibleStartDates.push(fallbackDate);
                       }
                     }
                   }
                 }
-                console.log('Possible start dates found:', possibleStartDates.length, possibleStartDates.map(d => d.toLocaleDateString()));
+                console.log(
+                  'Possible start dates found:',
+                  possibleStartDates.length,
+                  possibleStartDates.map(d => d.toLocaleDateString())
+                );
 
                 if (possibleStartDates.length === 0) {
                   toast({
@@ -518,7 +576,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             className="w-full sm:w-auto"
             disabled={isAddingFavorite || isFavorited}
             onClick={async () => {
-              if (isFavorited) return; // Prevent double-adding
+              if (isFavorited) {
+                return;
+              } // Prevent double-adding
 
               try {
                 setIsAddingFavorite(true);
@@ -533,8 +593,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 });
                 await api.addFavorite(user.id, pairingId);
                 setIsFavorited(true);
-                queryClient.invalidateQueries({ queryKey: ["favorites", user.id] });
-                queryClient.invalidateQueries({ queryKey: ["favorites"] }); // Also invalidate the modal's favorites query
+                queryClient.invalidateQueries({
+                  queryKey: ['favorites', user.id],
+                });
+                queryClient.invalidateQueries({ queryKey: ['favorites'] }); // Also invalidate the modal's favorites query
               } catch (error) {
                 console.error('Error adding favorite:', error);
                 setIsFavorited(false);

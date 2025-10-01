@@ -707,26 +707,35 @@ export class PDFParser {
     // Find all day letters mentioned in the full text block
     const dayPatternMatches = block.match(/^([A-E])\s/gm);
     if (dayPatternMatches) {
-      const allDayLetters = dayPatternMatches.map(match => match.trim().charAt(0));
+      const allDayLetters = dayPatternMatches.map(match =>
+        match.trim().charAt(0)
+      );
       const uniqueDayLetters = Array.from(new Set(allDayLetters)).sort();
-      
+
       if (uniqueDayLetters.length > 0) {
         // Get the last (highest) day letter
         const lastDayLetter = uniqueDayLetters[uniqueDayLetters.length - 1];
-        
+
         // Convert letter to number (A=1, B=2, C=3, D=4, E=5)
         pairingDays = lastDayLetter.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-        
-        console.log(`Pairing ${pairingNumber}: Day letters found: ${uniqueDayLetters.join(', ')}, Last day: ${lastDayLetter}, Pairing days: ${pairingDays}`);
+
+        console.log(
+          `Pairing ${pairingNumber}: Day letters found: ${uniqueDayLetters.join(', ')}, Last day: ${lastDayLetter}, Pairing days: ${pairingDays}`
+        );
       }
     }
 
     // Fallback: if no day patterns found, try to get from flight segments
     if (pairingDays === 1 && flightSegments.length > 0) {
-      const flightDays = Array.from(new Set(flightSegments.map(seg => seg.date))).sort();
+      const flightDays = Array.from(
+        new Set(flightSegments.map(seg => seg.date))
+      ).sort();
       if (flightDays.length > 0) {
         const lastFlightDay = flightDays[flightDays.length - 1];
-        pairingDays = Math.max(pairingDays, lastFlightDay.charCodeAt(0) - 'A'.charCodeAt(0) + 1);
+        pairingDays = Math.max(
+          pairingDays,
+          lastFlightDay.charCodeAt(0) - 'A'.charCodeAt(0) + 1
+        );
       }
     }
 
@@ -909,7 +918,9 @@ export class PDFParser {
               ? 0
               : Math.min(Math.round((processed / total) * 100), 100);
           emitProgress(bidPackageId, { status, processed, total, percent });
-        } catch {}
+        } catch {
+          // Ignore progress emit errors
+        }
       };
 
       await emit('processing');
@@ -965,7 +976,9 @@ export class PDFParser {
           total: 0,
           percent: 0,
         });
-      } catch {}
+      } catch {
+        // Ignore progress emit errors
+      }
       throw error;
     }
   }

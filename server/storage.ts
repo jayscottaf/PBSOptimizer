@@ -440,14 +440,14 @@ export class DatabaseStorage implements IStorage {
         conditions.push(eq(pairings.pairingDays, filters.pairingDays));
       }
 
-    // Note: preferredDaysOff filtering would need to be implemented 
-    // based on pairing start/end dates vs preferred days off
-    // This would require additional logic to check if pairings 
-    // conflict with requested days off
+      // Note: preferredDaysOff filtering would need to be implemented
+      // based on pairing start/end dates vs preferred days off
+      // This would require additional logic to check if pairings
+      // conflict with requested days off
 
-    if (filters.pairingDaysMin !== undefined) {
-      conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
-    }
+      if (filters.pairingDaysMin !== undefined) {
+        conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
+      }
 
       if (filters.pairingDaysMax !== undefined) {
         conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));

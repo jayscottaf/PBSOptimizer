@@ -1,13 +1,22 @@
-import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Send, Bot, User, Loader2, Plus, MessageSquare, X, Upload } from "lucide-react";
-import { api } from "@/lib/api";
-import type { BidPackage } from "@/lib/api";
-import { PairingDisplay } from "./pairing-display";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  Plus,
+  MessageSquare,
+  X,
+  Upload,
+} from 'lucide-react';
+import { api } from '@/lib/api';
+import type { BidPackage } from '@/lib/api';
+import { PairingDisplay } from './pairing-display';
+import { useQuery } from '@tanstack/react-query';
 interface ChatMessage {
   id: string;
   type: 'user' | 'assistant';
@@ -29,7 +38,10 @@ interface PairingChatProps {
   compact?: boolean; // For mobile optimization
 }
 
-export function PairingChat({ bidPackageId, compact = false }: PairingChatProps) {
+export function PairingChat({
+  bidPackageId,
+  compact = false,
+}: PairingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,14 +55,16 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
 
   // Check if we have any bid packages available
   const { data: bidPackages = [] } = useQuery({
-    queryKey: ["/api/bid-packages"],
+    queryKey: ['/api/bid-packages'],
     queryFn: () => api.getBidPackages(),
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true,
   });
 
   const hasBidPackages = bidPackages.length > 0;
-  const hasCompletedBidPackages = bidPackages.some(pkg => pkg.status === 'completed');
+  const hasCompletedBidPackages = bidPackages.some(
+    pkg => pkg.status === 'completed'
+  );
 
   // Generate or retrieve session ID
   useEffect(() => {
@@ -566,10 +580,10 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
                 size="sm"
                 onClick={startNewConversation}
                 title="Start a new conversation"
-                className={compact ? "px-2" : ""}
+                className={compact ? 'px-2' : ''}
               >
                 <Plus className="h-4 w-4" />
-                {!compact && "New Conversation"}
+                {!compact && 'New Conversation'}
               </Button>
             </div>
           </CardTitle>
@@ -577,8 +591,10 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
 
         <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className={`flex-1 overflow-y-auto space-y-4 pb-4 ${compact ? 'px-2' : 'px-4'}`}>
-            {messages.map((message) => (
+          <div
+            className={`flex-1 overflow-y-auto space-y-4 pb-4 ${compact ? 'px-2' : 'px-4'}`}
+          >
+            {messages.map(message => (
               <div
                 key={message.id}
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -660,11 +676,12 @@ export function PairingChat({ bidPackageId, compact = false }: PairingChatProps)
             </form>
 
             {!hasCompletedBidPackages ? (
-              <div className={`text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded ${compact ? 'mt-1' : 'mt-2'}`}>
-                {bidPackages.length === 0 
-                  ? "Upload a bid package to start using the AI assistant"
-                  : "Processing bid package... AI assistant will be available once processing is complete"
-                }
+              <div
+                className={`text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded ${compact ? 'mt-1' : 'mt-2'}`}
+              >
+                {bidPackages.length === 0
+                  ? 'Upload a bid package to start using the AI assistant'
+                  : 'Processing bid package... AI assistant will be available once processing is complete'}
               </div>
             ) : null}
           </div>

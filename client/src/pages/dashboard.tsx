@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Plane,
   Search,
@@ -22,24 +28,40 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
-  Bot
-} from "lucide-react";
-import { FileUpload } from "@/components/ui/file-upload";
-import { StatsPanel } from "@/components/stats-panel";
-import { PairingTable } from "@/components/pairing-table";
-import { PairingChat } from "@/components/pairing-chat";
-import { FiltersPanel } from "@/components/filters-panel";
-import { PairingModal } from "@/components/pairing-modal";
-import { CalendarView } from "@/components/calendar-view";
-import { SmartFilterSystem } from "@/components/smart-filter-system";
-import { NetworkStatus } from "@/components/network-status";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { cacheKeyForPairings, hasFullPairingsCache, loadFullPairingsCache, purgeUserCache, getCacheInfo } from "@/lib/offlineCache";
-import { api } from "@/lib/api";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ProfileModal } from "@/components/profile-modal";
-import { useUploadBidPackage } from "@/hooks/useUploadBidPackage"; // Assuming this hook exists
+  Bot,
+} from 'lucide-react';
+import { FileUpload } from '@/components/ui/file-upload';
+import { StatsPanel } from '@/components/stats-panel';
+import { PairingTable } from '@/components/pairing-table';
+import { PairingChat } from '@/components/pairing-chat';
+import { FiltersPanel } from '@/components/filters-panel';
+import { PairingModal } from '@/components/pairing-modal';
+import { CalendarView } from '@/components/calendar-view';
+import { SmartFilterSystem } from '@/components/smart-filter-system';
+import { NetworkStatus } from '@/components/network-status';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  cacheKeyForPairings,
+  hasFullPairingsCache,
+  loadFullPairingsCache,
+  purgeUserCache,
+  getCacheInfo,
+} from '@/lib/offlineCache';
+import { api } from '@/lib/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ProfileModal } from '@/components/profile-modal';
+import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming this hook exists
 interface SearchFilters {
   search?: string;
   creditMin?: number;
@@ -98,7 +120,6 @@ export default function Dashboard() {
   });
   const [isUpdatingSeniority, setIsUpdatingSeniority] = useState(false);
   const [base, setBase] = useState(() => {
-
     return localStorage.getItem('base') || '';
   });
   const [aircraft, setAircraft] = useState(() => {
@@ -167,8 +188,6 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
-
-
   // Find the latest bid package (prefer completed, fall back to most recent by uploadedAt if none are completed)
   const latestBidPackage = React.useMemo(() => {
     if (!bidPackages || bidPackages.length === 0) {
@@ -194,22 +213,22 @@ export default function Dashboard() {
     return packagesArray[0];
   }, [bidPackages]);
 
-
-
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
   // Check if we have any completed bid packages
-  const hasCompletedBidPackages = bidPackages.some((pkg: any) => pkg.status === 'completed');
+  const hasCompletedBidPackages = bidPackages.some(
+    (pkg: any) => pkg.status === 'completed'
+  );
 
   // Removed redundant initial query to prevent duplicate API calls
 
   // Query for user data with enhanced caching
   const { data: currentUser } = useQuery({
-    queryKey: ["user", seniorityNumber, base, aircraft],
+    queryKey: ['user', seniorityNumber, base, aircraft],
     queryFn: async () => {
       return await api.createOrUpdateUser({
         seniorityNumber: parseInt(seniorityNumber),
         base,
-        aircraft
+        aircraft,
       });
     },
     enabled: !!seniorityNumber,
@@ -237,17 +256,38 @@ export default function Dashboard() {
   }, []);
 
   // Optimized useQuery with enhanced caching and deduplication
-  const { data: pairingsResponse, isLoading: isLoadingPairings, refetch: refetchPairings } = useQuery({
-    queryKey: ["pairings", bidPackageId, debouncedFilters, seniorityPercentile, sortColumn, sortDirection, currentPage, pageSize, currentUser?.seniorityNumber, currentUser?.id],
-    queryFn: () => api.searchPairings({
-      bidPackageId: bidPackageId,
-      seniorityPercentage: seniorityPercentile ? parseFloat(seniorityPercentile) : undefined,
-      sortBy: sortColumn || 'pairingNumber',
-      sortOrder: sortDirection || 'asc',
-      page: currentPage,
-      limit: pageSize,
-      ...debouncedFilters
-    }, currentUser?.seniorityNumber || currentUser?.id),
+  const {
+    data: pairingsResponse,
+    isLoading: isLoadingPairings,
+    refetch: refetchPairings,
+  } = useQuery({
+    queryKey: [
+      'pairings',
+      bidPackageId,
+      debouncedFilters,
+      seniorityPercentile,
+      sortColumn,
+      sortDirection,
+      currentPage,
+      pageSize,
+      currentUser?.seniorityNumber,
+      currentUser?.id,
+    ],
+    queryFn: () =>
+      api.searchPairings(
+        {
+          bidPackageId: bidPackageId,
+          seniorityPercentage: seniorityPercentile
+            ? parseFloat(seniorityPercentile)
+            : undefined,
+          sortBy: sortColumn || 'pairingNumber',
+          sortOrder: sortDirection || 'asc',
+          page: currentPage,
+          limit: pageSize,
+          ...debouncedFilters,
+        },
+        currentUser?.seniorityNumber || currentUser?.id
+      ),
     enabled: !!bidPackageId,
     staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
@@ -275,31 +315,114 @@ export default function Dashboard() {
       // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
       console.log('Dashboard: debouncedFilters =', debouncedFilters);
       const userId = currentUser?.seniorityNumber || currentUser?.id;
-      const cacheKey = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
-      console.log('Dashboard: Generated cache key =', cacheKey, 'for user:', userId);
 
-      // Check if full cache exists
+      // Generate TWO cache keys: filtered and unfiltered
+      const cacheKey = cacheKeyForPairings(
+        bidPackageId,
+        debouncedFilters,
+        userId
+      );
+      const unfilteredCacheKey = cacheKeyForPairings(
+        bidPackageId,
+        undefined, // No filters for unfiltered cache
+        userId
+      );
+      console.log(
+        'Dashboard: Generated cache keys - filtered:',
+        cacheKey,
+        'unfiltered:',
+        unfilteredCacheKey,
+        'for user:',
+        userId
+      );
+
+      // Check if both caches exist
       const hasFull = await hasFullPairingsCache(cacheKey);
-      console.log('Dashboard: Cache check result for key', cacheKey, ':', hasFull);
+      const hasUnfiltered = await hasFullPairingsCache(unfilteredCacheKey);
+      console.log(
+        'Dashboard: Cache check - filtered:',
+        hasFull,
+        'unfiltered:',
+        hasUnfiltered
+      );
       setIsFullCacheReady(hasFull);
 
+      // Load filtered cache if it exists
+      let full: any[] | null = null;
       if (hasFull) {
-        // Load existing full cache
-        console.log('Dashboard: Loading existing full cache');
-        const full = await loadFullPairingsCache<any[]>(cacheKey);
-        console.log('Dashboard: Loaded full cache, length:', full?.length || 0);
+        // Load existing filtered cache
+        console.log('Dashboard: Loading existing filtered cache');
+        full = await loadFullPairingsCache<any[]>(cacheKey);
+        console.log('Dashboard: Loaded filtered cache, length:', full?.length || 0);
         setFullLocal(full || null);
 
         // Hide status indicator after 3 seconds when cache already exists
         setTimeout(() => setShowInitialStatus(false), 3000);
-      } else if (navigator.onLine) {
+      }
+
+      // Also load unfiltered cache for sorting
+      let needsUnfilteredRefetch = false;
+      if (hasUnfiltered) {
+        console.log('Dashboard: Loading unfiltered cache for sorting');
+        const unfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
+        console.log('Dashboard: Loaded unfiltered cache, length:', unfiltered?.length || 0);
+
+        // Validate unfiltered cache - it should have at least as many items as filtered cache
+        // and should have a reasonable minimum (e.g., > 400 for full bid packages)
+        const filteredLength = full?.length || 0;
+        const unfilteredLength = unfiltered?.length || 0;
+        const MINIMUM_EXPECTED_PAIRINGS = 400; // Reasonable minimum for a full bid package
+
+        if (unfilteredLength === 0 ||
+            (unfilteredLength > 0 && unfilteredLength < filteredLength) ||
+            unfilteredLength < MINIMUM_EXPECTED_PAIRINGS) {
+          console.warn(
+            `Dashboard: Invalid unfiltered cache detected (length: ${unfilteredLength}, filtered: ${filteredLength}, min expected: ${MINIMUM_EXPECTED_PAIRINGS}). Will re-fetch.`
+          );
+          needsUnfilteredRefetch = true;
+        } else {
+          setUnfilteredLocal(unfiltered || null);
+        }
+      } else {
+        needsUnfilteredRefetch = true;
+      }
+
+      // Fetch unfiltered cache if it doesn't exist or is invalid
+      if (needsUnfilteredRefetch && navigator.onLine && bidPackageId) {
+        try {
+          console.log('Dashboard: Prefetching unfiltered cache (all pairings, no filters)');
+          await api.prefetchAllPairings(
+            { bidPackageId } as any,
+            userId,
+            { force: true } // Force refetch to bypass stale cache
+          );
+          const newUnfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
+          console.log('Dashboard: Re-fetched unfiltered cache, length:', newUnfiltered?.length || 0);
+          setUnfilteredLocal(newUnfiltered || null);
+
+          // If filtered and unfiltered cache keys are the same (no active filters),
+          // update filtered cache too
+          if (cacheKey === unfilteredCacheKey && newUnfiltered) {
+            console.log('Dashboard: Updating filtered cache with new unfiltered data');
+            setFullLocal(newUnfiltered);
+            setIsFullCacheReady(true);
+          }
+        } catch (error) {
+          console.error('Unfiltered cache prefetch failed:', error);
+        }
+      }
+
+      if (!hasFull && navigator.onLine) {
         // Prefetch full dataset
         try {
           setIsPrefetching(true);
-          await api.prefetchAllPairings({
-            bidPackageId,
-            ...debouncedFilters
-          } as any, userId);
+          await api.prefetchAllPairings(
+            {
+              bidPackageId,
+              ...debouncedFilters,
+            } as any,
+            userId
+          );
 
           // Re-check and load after prefetch
           const newHasFull = await hasFullPairingsCache(cacheKey);
@@ -321,7 +444,12 @@ export default function Dashboard() {
       }
     };
     run();
-  }, [bidPackageId, JSON.stringify(debouncedFilters), currentUser?.seniorityNumber, currentUser?.id]);
+  }, [
+    bidPackageId,
+    JSON.stringify(debouncedFilters),
+    currentUser?.seniorityNumber,
+    currentUser?.id,
+  ]);
 
   // When the bid package transitions to completed, invalidate and refetch pairings
   React.useEffect(() => {
@@ -347,35 +475,28 @@ export default function Dashboard() {
   // Extract pairings and pagination from the response, with fallback to preloaded data
   // Store full local cache data
   const [fullLocal, setFullLocal] = useState<any[] | null>(null);
+  // Store unfiltered cache for sorting
+  const [unfilteredLocal, setUnfilteredLocal] = useState<any[] | null>(null);
 
   // Prefer full local cache whenever it exists (online or offline); fallback to server page
   const pairings = pairingsResponse?.pairings || [];
   const pagination = pairingsResponse?.pagination;
 
-  // Create custom pagination when using full cache sorting (online or offline)
-  const effectivePagination = React.useMemo(() => {
-    if (isFullCacheReady && fullLocal && sortColumn) {
-      const total = fullLocal.length;
-      const totalPages = Math.ceil(total / pageSize);
-      return {
-        page: currentPage,
-        limit: pageSize,
-        total: total,
-        totalPages: totalPages,
-        hasNext: currentPage < totalPages,
-        hasPrev: currentPage > 1
-      };
-    }
-    return pagination;
-  }, [isFullCacheReady, fullLocal, sortColumn, currentPage, pageSize, pagination]);
+  // Create custom pagination - will be updated after sortedPairings is computed
+  // This is a placeholder that will be overridden below
+  const effectivePagination = pagination;
 
   // Calculate full dataset statistics when using offline cache
   const effectiveStatistics = React.useMemo(() => {
     if (isFullCacheReady && fullLocal && fullLocal.length > 0) {
       // Helper function to parse hours safely
       const parseHours = (hours: any): number => {
-        if (typeof hours === 'number') return hours;
-        if (typeof hours === 'string') return parseFloat(hours) || 0;
+        if (typeof hours === 'number') {
+          return hours;
+        }
+        if (typeof hours === 'string') {
+          return parseFloat(hours) || 0;
+        }
         return 0;
       };
 
@@ -383,31 +504,38 @@ export default function Dashboard() {
         typeof value === 'number' ? value : parseFloat(String(value)) || 0;
 
       // Calculate stats from full dataset
-      const highCredit = fullLocal.filter(p => parseHours(p.creditHours) >= 18).length;
-      const likelyToHold = fullLocal.filter(p => getHoldProb(p.holdProbability) >= 70).length;
+      const highCredit = fullLocal.filter(
+        p => parseHours(p.creditHours) >= 18
+      ).length;
+      const likelyToHold = fullLocal.filter(
+        p => getHoldProb(p.holdProbability) >= 70
+      ).length;
 
       // Calculate ratio breakdown from full dataset
-      const ratioBreakdown = fullLocal.reduce((acc, pairing) => {
-        const credit = parseHours(pairing.creditHours);
-        const block = parseHours(pairing.blockHours);
-        const ratio = block > 0 ? credit / block : 0;
+      const ratioBreakdown = fullLocal.reduce(
+        (acc, pairing) => {
+          const credit = parseHours(pairing.creditHours);
+          const block = parseHours(pairing.blockHours);
+          const ratio = block > 0 ? credit / block : 0;
 
-        if (ratio >= 1.3) {
-          acc.excellent++;
-        } else if (ratio >= 1.2) {
-          acc.good++;
-        } else if (ratio >= 1.1) {
-          acc.average++;
-        } else {
-          acc.poor++;
-        }
-        return acc;
-      }, { excellent: 0, good: 0, average: 0, poor: 0 });
+          if (ratio >= 1.3) {
+            acc.excellent++;
+          } else if (ratio >= 1.2) {
+            acc.good++;
+          } else if (ratio >= 1.1) {
+            acc.average++;
+          } else {
+            acc.poor++;
+          }
+          return acc;
+        },
+        { excellent: 0, good: 0, average: 0, poor: 0 }
+      );
 
       return {
         highCredit,
         likelyToHold,
-        ratioBreakdown
+        ratioBreakdown,
       };
     }
 
@@ -502,9 +630,11 @@ export default function Dashboard() {
         // Handle range filters specially
         setActiveFilters(prev => [
           ...prev.filter(f =>
-            isCreditFilter ? !f.key.match(/^credit/) :
-            isBlockFilter ? !f.key.match(/^block/) :
-            f.key !== key
+            isCreditFilter
+              ? !f.key.match(/^credit/)
+              : isBlockFilter
+                ? !f.key.match(/^block/)
+                : f.key !== key
           ),
           { key, label, value },
         ]);
@@ -525,10 +655,13 @@ export default function Dashboard() {
         // Handle single filters - remove existing filters of the same category
         setActiveFilters(prev => [
           ...prev.filter(f =>
-            isCreditFilter ? !f.key.match(/^credit/) :
-            isBlockFilter ? !f.key.match(/^block/) :
-            isPairingDaysFilter ? !f.key.match(/^pairingDays/) :
-            f.key !== key
+            isCreditFilter
+              ? !f.key.match(/^credit/)
+              : isBlockFilter
+                ? !f.key.match(/^block/)
+                : isPairingDaysFilter
+                  ? !f.key.match(/^pairingDays/)
+                  : f.key !== key
           ),
           { key, label, value },
         ]);
@@ -567,7 +700,6 @@ export default function Dashboard() {
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
-
     // Process the new filters to handle range objects
     const processedFilters: SearchFilters = {};
 
@@ -683,14 +815,119 @@ export default function Dashboard() {
   };
   // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
-    if (!isFullCacheReady || !fullLocal || fullLocal.length === 0) {
+    // When sorting is active, use unfiltered cache and apply filters client-side
+    const useUnfiltered = sortColumn && unfilteredLocal && unfilteredLocal.length > 0;
+
+    if (!useUnfiltered && (!isFullCacheReady || !fullLocal || fullLocal.length === 0)) {
       return pairings;
     }
 
-    console.log(`Sorting ${fullLocal.length} pairings from full cache`);
+    const sourceData = useUnfiltered ? unfilteredLocal : fullLocal;
+    console.log(`Sorting ${sourceData.length} pairings from ${useUnfiltered ? 'unfiltered' : 'filtered'} cache`);
 
-    // Use full local cache for sorting - DON'T re-apply filters since they're already applied in the cache
-    let sorted = [...fullLocal];
+    // Apply filters client-side when using unfiltered cache
+    let filtered = [...sourceData];
+    if (useUnfiltered && filters && Object.keys(filters).length > 0) {
+      console.log('Applying filters client-side:', filters);
+      filtered = filtered.filter(pairing => {
+        // Credit hours filter
+        if (filters.creditMin !== undefined) {
+          const credit = parseFloat(pairing.creditHours?.toString() || '0');
+          if (credit < filters.creditMin) {
+            return false;
+          }
+        }
+        if (filters.creditMax !== undefined) {
+          const credit = parseFloat(pairing.creditHours?.toString() || '0');
+          if (credit > filters.creditMax) {
+            return false;
+          }
+        }
+
+        // Block hours filter
+        if (filters.blockMin !== undefined) {
+          const block = parseFloat(pairing.blockHours?.toString() || '0');
+          if (block < filters.blockMin) {
+            return false;
+          }
+        }
+        if (filters.blockMax !== undefined) {
+          const block = parseFloat(pairing.blockHours?.toString() || '0');
+          if (block > filters.blockMax) {
+            return false;
+          }
+        }
+
+        // Hold probability filter
+        if (filters.holdProbabilityMin !== undefined) {
+          const hold = parseFloat(pairing.holdProbability?.toString() || '0');
+          if (hold < filters.holdProbabilityMin) {
+            return false;
+          }
+        }
+
+        // Pairing days filter
+        if (filters.pairingDays !== undefined) {
+          if (pairing.pairingDays !== filters.pairingDays) {
+            return false;
+          }
+        }
+        if (filters.pairingDaysMin !== undefined) {
+          if ((pairing.pairingDays || 0) < filters.pairingDaysMin) {
+            return false;
+          }
+        }
+        if (filters.pairingDaysMax !== undefined) {
+          if ((pairing.pairingDays || 0) > filters.pairingDaysMax) {
+            return false;
+          }
+        }
+
+        // TAFB filter
+        if (filters.tafbMin !== undefined || filters.tafbMax !== undefined) {
+          const tafbStr = pairing.tafb?.toString() || '0';
+          let tafbHours = 0;
+          if (tafbStr.includes(':')) {
+            const [hours, minutes] = tafbStr.split(':').map(Number);
+            tafbHours = hours + (minutes || 0) / 60;
+          } else {
+            tafbHours = parseFloat(tafbStr);
+          }
+
+          if (filters.tafbMin !== undefined && tafbHours < filters.tafbMin) {
+            return false;
+          }
+          if (filters.tafbMax !== undefined && tafbHours > filters.tafbMax) {
+            return false;
+          }
+        }
+
+        // Efficiency filter (C/B ratio)
+        if (filters.efficiency !== undefined) {
+          const credit = parseFloat(pairing.creditHours?.toString() || '0');
+          const block = parseFloat(pairing.blockHours?.toString() || '0');
+          const efficiency = block > 0 ? credit / block : 0;
+          if (efficiency < filters.efficiency) {
+            return false;
+          }
+        }
+
+        // Search filter
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          const pairingNum = pairing.pairingNumber?.toString().toLowerCase() || '';
+          const route = pairing.route?.toString().toLowerCase() || '';
+          if (!pairingNum.includes(searchLower) && !route.includes(searchLower)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+      console.log(`After filtering: ${filtered.length} pairings`);
+    }
+
+    const sorted = filtered;
 
     // Apply sorting only - filters are already applied when the cache was created
     sorted.sort((a, b) => {
@@ -714,13 +951,19 @@ export default function Dashboard() {
           bVal = b.pairingDays || 0;
           break;
         case 'creditBlockRatio':
-          aVal = parseFloat(a.creditHours?.toString() || '0') / (parseFloat(a.blockHours?.toString() || '0') || 1);
-          bVal = parseFloat(b.creditHours?.toString() || '0') / (parseFloat(b.blockHours?.toString() || '0') || 1);
+          aVal =
+            parseFloat(a.creditHours?.toString() || '0') /
+            (parseFloat(a.blockHours?.toString() || '0') || 1);
+          bVal =
+            parseFloat(b.creditHours?.toString() || '0') /
+            (parseFloat(b.blockHours?.toString() || '0') || 1);
           break;
-        case 'tafb':
+        case 'tafb': {
           // Convert TAFB to minutes for proper sorting
           const parseTimeTafb = (tafb: string) => {
-            if (!tafb) return 0;
+            if (!tafb) {
+              return 0;
+            }
             if (tafb.includes(':')) {
               const [hours, minutes] = tafb.split(':').map(Number);
               return hours * 60 + minutes;
@@ -730,6 +973,7 @@ export default function Dashboard() {
           aVal = parseTimeTafb(a.tafb?.toString() || '0');
           bVal = parseTimeTafb(b.tafb?.toString() || '0');
           break;
+        }
         default:
           aVal = a.pairingNumber || '';
           bVal = b.pairingNumber || '';
@@ -744,10 +988,36 @@ export default function Dashboard() {
 
     console.log(`After filtering and sorting: ${sorted.length} pairings`);
     return sorted;
-  }, [fullLocal, isFullCacheReady, filters, sortColumn, sortDirection]);
+  }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings]);
+
+  // Update pagination based on sorted results
+  const actualEffectivePagination = React.useMemo(() => {
+    if (isFullCacheReady && sortedPairings.length > 0) {
+      const total = sortedPairings.length;
+      const totalPages = Math.ceil(total / pageSize);
+      return {
+        page: currentPage,
+        limit: pageSize,
+        total: total,
+        totalPages: totalPages,
+        hasNext: currentPage < totalPages,
+        hasPrev: currentPage > 1,
+      };
+    }
+    return effectivePagination;
+  }, [isFullCacheReady, sortedPairings, currentPage, pageSize, effectivePagination]);
 
   // Use sorted pairings if available, otherwise use regular pairings
-  const displayPairings = isFullCacheReady && sortedPairings.length > 0 ? sortedPairings : pairings;
+  // When using full cache with sorting, apply pagination slicing
+  const displayPairings = React.useMemo(() => {
+    if (isFullCacheReady && sortedPairings.length > 0) {
+      // Apply pagination to sorted results
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      return sortedPairings.slice(startIndex, endIndex);
+    }
+    return pairings;
+  }, [isFullCacheReady, sortedPairings, currentPage, pageSize, pairings]);
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<
     string | null
@@ -760,7 +1030,10 @@ export default function Dashboard() {
     }
 
     // Use pagination total if available, otherwise fall back to current page count
-    const totalPairings = effectivePagination && effectivePagination.total ? effectivePagination.total : pairings.length;
+    const totalPairings =
+      actualEffectivePagination && actualEffectivePagination.total
+        ? actualEffectivePagination.total
+        : pairings.length;
     // Use backend statistics if available, otherwise calculate from current page
     const likelyToHold = pairingsResponse?.statistics?.likelyToHold
       ? Number(pairingsResponse.statistics.likelyToHold)
@@ -768,7 +1041,8 @@ export default function Dashboard() {
 
     const highCredit = pairingsResponse?.statistics?.highCredit
       ? Number(pairingsResponse.statistics.highCredit)
-      : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
+      : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18)
+          .length;
     return {
       totalPairings,
       likelyToHold,
@@ -847,7 +1121,7 @@ export default function Dashboard() {
                   <StatsPanel
                     pairings={displayPairings || []}
                     bidPackage={latestBidPackage}
-                    pagination={effectivePagination}
+                    pagination={actualEffectivePagination}
                     statistics={effectiveStatistics}
                   />
                 </div>
@@ -856,8 +1130,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
-
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
@@ -905,8 +1177,8 @@ export default function Dashboard() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setActiveTab("calendar")}
-                    className={`${activeTab === "calendar" ? "bg-blue-50 text-blue-700" : "text-gray-600"}`}
+                    onClick={() => setActiveTab('calendar')}
+                    className={`${activeTab === 'calendar' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}
                   >
                     <Calendar className="h-4 w-4" />
                   </Button>
@@ -916,14 +1188,17 @@ export default function Dashboard() {
                     onClick={() => {
                       // On mobile: show full-screen AI view
                       // On desktop: open AI Assistant modal
-                      if (window.innerWidth < 1024) { // lg breakpoint
+                      if (window.innerWidth < 1024) {
+                        // lg breakpoint
                         setShowMobileAI(true);
                       } else {
                         setShowAIAssistant(true);
                       }
                     }}
                     className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md ${
-                      showMobileAI ? "bg-green-50 border-green-300 text-green-700" : "text-green-600"
+                      showMobileAI
+                        ? 'bg-green-50 border-green-300 text-green-700'
+                        : 'text-green-600'
                     }`}
                     title="AI Assistant"
                   >
@@ -982,7 +1257,7 @@ export default function Dashboard() {
                         <StatsPanel
                           pairings={displayPairings || []}
                           bidPackage={latestBidPackage}
-                          pagination={effectivePagination}
+                          pagination={actualEffectivePagination}
                           statistics={effectiveStatistics}
                         />
                       </CardContent>
@@ -1000,7 +1275,9 @@ export default function Dashboard() {
                 <div className="flex flex-col h-full bg-white">
                   <div className="w-full bg-white border-b p-4">
                     <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        Filters
+                      </h3>
                       <SmartFilterSystem
                         pairings={pairings || []}
                         onFiltersChange={handleFiltersChange}
@@ -1011,7 +1288,9 @@ export default function Dashboard() {
                   </div>
 
                   {/* Pairing Results Section */}
-                  <div className="flex-1 overflow-auto p-4 lg:p-0"> {/* Ensure results section takes remaining space */}
+                  <div className="flex-1 overflow-auto p-4 lg:p-0">
+                    {' '}
+                    {/* Ensure results section takes remaining space */}
                     <Card className="h-full flex flex-col">
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -1020,67 +1299,110 @@ export default function Dashboard() {
                         </CardTitle>
                         <div className="flex items-center space-x-2">
                           {/* Only show cache status when it's actually useful */}
-                          {(isPrefetching || !isFullCacheReady || showInitialStatus) && (
+                          {(isPrefetching ||
+                            !isFullCacheReady ||
+                            showInitialStatus) && (
                             <>
                               {isPrefetching ? (
                                 <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
-                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Preparing offline cache...
+                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />{' '}
+                                  Preparing offline cache...
                                 </span>
                               ) : isFullCacheReady ? (
                                 <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
                                   Available offline: Yes
                                 </span>
                               ) : (
-                                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
-                                      onClick={async () => {
-                                        console.log('Manual prefetch triggered');
-                                        setShowInitialStatus(true); // Show status during manual prefetch
-                                        console.log('Clearing old cache entries first...');
-                                        // Clear old cache entries
-                                        try {
-                                          const request = indexedDB.open('pbs-cache', 1);
-                                          const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                                            request.onsuccess = () => resolve(request.result);
-                                            request.onerror = () => reject(request.error);
-                                          });
-                                          const tx = db.transaction(['pairings'], 'readwrite');
-                                          const store = tx.objectStore('pairings');
-                                          await new Promise<void>((resolve, reject) => {
-                                            const clearReq = store.clear();
-                                            clearReq.onsuccess = () => resolve();
-                                            clearReq.onerror = () => reject(clearReq.error);
-                                          });
-                                          console.log('Cache cleared');
-                                        } catch (e) {
-                                          console.log('Failed to clear cache:', e);
+                                <span
+                                  className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
+                                  onClick={async () => {
+                                    console.log('Manual prefetch triggered');
+                                    setShowInitialStatus(true); // Show status during manual prefetch
+                                    console.log(
+                                      'Clearing old cache entries first...'
+                                    );
+                                    // Clear old cache entries
+                                    try {
+                                      const request = indexedDB.open(
+                                        'pbs-cache',
+                                        1
+                                      );
+                                      const db = await new Promise<IDBDatabase>(
+                                        (resolve, reject) => {
+                                          request.onsuccess = () =>
+                                            resolve(request.result);
+                                          request.onerror = () =>
+                                            reject(request.error);
                                         }
-
-                                        setIsPrefetching(true);
-                                        try {
-                                          const userId = currentUser?.seniorityNumber || currentUser?.id;
-                                          await api.prefetchAllPairings({
-                                            bidPackageId,
-                                            ...debouncedFilters
-                                          } as any, userId);
-
-                                          const key = cacheKeyForPairings(bidPackageId, debouncedFilters, userId);
-                                          const exists = await hasFullPairingsCache(key);
-                                          console.log('Manual prefetch - final check:', exists);
-
-                                          if (exists) {
-                                            const data = await loadFullPairingsCache(key);
-                                            console.log('Manual prefetch - data length:', data?.length);
-                                            setIsFullCacheReady(true);
-                                            setFullLocal(data || null);
-                                            // Hide after manual prefetch completes
-                                            setTimeout(() => setShowInitialStatus(false), 3000);
-                                          }
-                                        } catch (error) {
-                                          console.error('Manual prefetch failed:', error);
-                                        } finally {
-                                          setIsPrefetching(false);
+                                      );
+                                      const tx = db.transaction(
+                                        ['pairings'],
+                                        'readwrite'
+                                      );
+                                      const store = tx.objectStore('pairings');
+                                      await new Promise<void>(
+                                        (resolve, reject) => {
+                                          const clearReq = store.clear();
+                                          clearReq.onsuccess = () => resolve();
+                                          clearReq.onerror = () =>
+                                            reject(clearReq.error);
                                         }
-                                      }}>
+                                      );
+                                      console.log('Cache cleared');
+                                    } catch (e) {
+                                      console.log('Failed to clear cache:', e);
+                                    }
+
+                                    setIsPrefetching(true);
+                                    try {
+                                      const userId =
+                                        currentUser?.seniorityNumber ||
+                                        currentUser?.id;
+                                      await api.prefetchAllPairings(
+                                        {
+                                          bidPackageId,
+                                          ...debouncedFilters,
+                                        } as any,
+                                        userId
+                                      );
+
+                                      const key = cacheKeyForPairings(
+                                        bidPackageId,
+                                        debouncedFilters,
+                                        userId
+                                      );
+                                      const exists =
+                                        await hasFullPairingsCache(key);
+                                      console.log(
+                                        'Manual prefetch - final check:',
+                                        exists
+                                      );
+
+                                      if (exists) {
+                                        const data =
+                                          await loadFullPairingsCache(key);
+                                        console.log(
+                                          'Manual prefetch - data length:',
+                                          data?.length
+                                        );
+                                        setIsFullCacheReady(true);
+                                        setFullLocal(data || null);
+                                        // Hide after manual prefetch completes
+                                        setTimeout(
+                                          () => setShowInitialStatus(false),
+                                          3000
+                                        );
+                                      }
+                                    } catch (error) {
+                                      console.error(
+                                        'Manual prefetch failed:',
+                                        error
+                                      );
+                                    } finally {
+                                      setIsPrefetching(false);
+                                    }
+                                  }}
+                                >
                                   Available offline: No (click to cache)
                                 </span>
                               )}
@@ -1093,7 +1415,12 @@ export default function Dashboard() {
                             </span>
                           )}
                           <span className="text-sm text-gray-500">
-                            {latestBidPackage ? `${latestBidPackage.month} ${latestBidPackage.year} - ` : ''}{effectivePagination?.total || displayPairings.length} pairings
+                            {latestBidPackage
+                              ? `${latestBidPackage.month} ${latestBidPackage.year} - `
+                              : ''}
+                            {actualEffectivePagination?.total ||
+                              displayPairings.length}{' '}
+                            pairings
                           </span>
                         </div>
                       </CardHeader>
@@ -1102,7 +1429,9 @@ export default function Dashboard() {
                           <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
                             <div className="flex items-center space-x-2 text-orange-600">
                               <RefreshCw className="h-6 w-6 animate-spin" />
-                              <span className="text-lg font-medium">Updating hold probabilities...</span>
+                              <span className="text-lg font-medium">
+                                Updating hold probabilities...
+                              </span>
                             </div>
                           </div>
                         )}
@@ -1113,7 +1442,7 @@ export default function Dashboard() {
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
                           pagination={effectivePagination as any}
-                          onPageChange={(page) => setCurrentPage(page)}
+                          onPageChange={page => setCurrentPage(page)}
                         />
                       </CardContent>
                     </Card>
@@ -1184,8 +1513,6 @@ export default function Dashboard() {
                 </div>
               )}
             </TabsContent>
-
-
           </Tabs>
         </div>
       </div>
@@ -1212,8 +1539,8 @@ export default function Dashboard() {
               <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
               <div className="mt-4">
                 <FileUpload
-                  onUpload={(file) => {
-                    console.log("File uploaded:", file);
+                  onUpload={file => {
+                    console.log('File uploaded:', file);
                     setShowUploadModal(false);
                     refetchBidPackages();
 
@@ -1300,18 +1627,15 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="flex-1 overflow-hidden min-h-0">
             {currentUser && latestBidPackage ? (
-              <PairingChat
-                bidPackageId={bidPackageId}
-              />
+              <PairingChat bidPackageId={bidPackageId} />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p>
                     {bidPackages.length === 0
-                      ? "Upload a bid package to start using the AI assistant"
-                      : "Processing bid package... AI assistant will be available once processing is complete"
-                    }
+                      ? 'Upload a bid package to start using the AI assistant'
+                      : 'Processing bid package... AI assistant will be available once processing is complete'}
                   </p>
                 </div>
               </div>
@@ -1339,10 +1663,7 @@ export default function Dashboard() {
             {/* Chat content - takes full remaining space */}
             <div className="flex-1 overflow-hidden">
               {currentUser && latestBidPackage ? (
-                <PairingChat
-                  bidPackageId={bidPackageId}
-                  compact={true}
-                />
+                <PairingChat bidPackageId={bidPackageId} compact={true} />
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 p-4">
                   <div className="text-center">
@@ -1419,13 +1740,16 @@ export default function Dashboard() {
               </Select>
             </div>
             <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-gray-700 mb-2">Cache Management</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">
+                Cache Management
+              </div>
               <div className="flex gap-2 mb-4">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    const userId = currentUser?.seniorityNumber || currentUser?.id;
+                    const userId =
+                      currentUser?.seniorityNumber || currentUser?.id;
                     if (userId) {
                       try {
                         await purgeUserCache(userId);
@@ -1460,7 +1784,9 @@ export default function Dashboard() {
                       try {
                         const info = await getCacheInfo();
                         console.log('📊 Cache Diagnostics:', info);
-                        alert(`Cache Info:\n• Schema: ${info.schemaVersion}\n• Total: ${info.totalEntries} entries\n• Users: ${Object.keys(info.userCacheStats).join(', ')}\n• Updated: ${info.lastUpdated?.toLocaleString() || 'Never'}`);
+                        alert(
+                          `Cache Info:\n• Schema: ${info.schemaVersion}\n• Total: ${info.totalEntries} entries\n• Users: ${Object.keys(info.userCacheStats).join(', ')}\n• Updated: ${info.lastUpdated?.toLocaleString() || 'Never'}`
+                        );
                       } catch (error) {
                         console.error('Cache diagnostics failed:', error);
                         alert('Failed to get cache info - check console');

@@ -1,11 +1,21 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, X } from "lucide-react";
-import { format } from "date-fns";
-import { useState } from "react";
-import type { SearchFilters } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Calendar as CalendarIcon, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { useState } from 'react';
+import type { SearchFilters } from '@/lib/api';
 interface FiltersPanelProps {
   onFiltersChange: (filters: SearchFilters) => void;
   bidPackages?: Array<{
@@ -16,7 +26,10 @@ interface FiltersPanelProps {
     status: string;
   }>;
 }
-export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanelProps) {
+export function FiltersPanel({
+  onFiltersChange,
+  bidPackages = [],
+}: FiltersPanelProps) {
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
@@ -27,18 +40,22 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
   };
 
   const handleDayOffSelect = (date: Date | undefined) => {
-    if (!date) return;
-    
+    if (!date) {
+      return;
+    }
+
     const newDaysOff = selectedDaysOff.some(d => d.getTime() === date.getTime())
       ? selectedDaysOff.filter(d => d.getTime() !== date.getTime())
       : [...selectedDaysOff, date];
-    
+
     setSelectedDaysOff(newDaysOff);
     onFiltersChange({ preferredDaysOff: newDaysOff });
   };
 
   const removeDayOff = (dateToRemove: Date) => {
-    const newDaysOff = selectedDaysOff.filter(d => d.getTime() !== dateToRemove.getTime());
+    const newDaysOff = selectedDaysOff.filter(
+      d => d.getTime() !== dateToRemove.getTime()
+    );
     setSelectedDaysOff(newDaysOff);
     onFiltersChange({ preferredDaysOff: newDaysOff });
   };
@@ -154,10 +171,12 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
           </SelectContent>
         </Select>
       </div>
-      
+
       {/* Preferred Days Off Filter */}
       <div className="border-t pt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Days Off</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Preferred Days Off
+        </label>
         <div className="flex flex-wrap gap-2 items-center">
           <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <PopoverTrigger asChild>
@@ -170,7 +189,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
               <Calendar
                 mode="multiple"
                 selected={selectedDaysOff}
-                onSelect={(dates) => {
+                onSelect={dates => {
                   if (dates) {
                     setSelectedDaysOff(dates);
                     onFiltersChange({ preferredDaysOff: dates });
@@ -191,7 +210,10 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
 
           {/* Display selected days */}
           {selectedDaysOff.map((date, index) => (
-            <div key={index} className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs">
+            <div
+              key={index}
+              className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs"
+            >
               <span>{format(date, 'MMM dd')}</span>
               <button
                 onClick={() => removeDayOff(date)}
@@ -201,7 +223,7 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
               </button>
             </div>
           ))}
-          
+
           {selectedDaysOff.length > 0 && (
             <Button
               variant="ghost"
@@ -215,7 +237,8 @@ export function FiltersPanel({ onFiltersChange, bidPackages = [] }: FiltersPanel
         </div>
         {selectedDaysOff.length > 0 && (
           <p className="text-xs text-gray-500 mt-1">
-            {selectedDaysOff.length} day{selectedDaysOff.length !== 1 ? 's' : ''} selected for days off
+            {selectedDaysOff.length} day
+            {selectedDaysOff.length !== 1 ? 's' : ''} selected for days off
           </p>
         )}
       </div>

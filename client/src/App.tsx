@@ -1,11 +1,11 @@
-import React from "react";
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import Dashboard from "@/pages/dashboard";
-import NotFound from "@/pages/not-found";
+import React from 'react';
+import { Switch, Route } from 'wouter';
+import { queryClient } from './lib/queryClient';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import Dashboard from '@/pages/dashboard';
+import NotFound from '@/pages/not-found';
 function Router() {
   return (
     <Switch>
@@ -21,21 +21,35 @@ function App() {
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
       const el = document.getElementById('offline-banner');
-      if (el) el.style.display = 'none';
+      if (el) {
+        el.style.display = 'none';
+      }
     });
     window.addEventListener('offline', () => {
       const el = document.getElementById('offline-banner');
-      if (el) el.style.display = 'block';
+      if (el) {
+        el.style.display = 'block';
+      }
     });
   }
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div id="offline-banner" style={{
-          display: isOffline ? 'block' : 'none',
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
-          background: '#b91c1c', color: 'white', padding: '8px', textAlign: 'center'
-        }}>
+        <div
+          id="offline-banner"
+          style={{
+            display: isOffline ? 'block' : 'none',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            background: '#b91c1c',
+            color: 'white',
+            padding: '8px',
+            textAlign: 'center',
+          }}
+        >
           You are offline. Some data may be unavailable.
         </div>
         <Toaster />

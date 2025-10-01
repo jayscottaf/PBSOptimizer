@@ -1,5 +1,11 @@
-import { apiRequest } from "./queryClient";
-import { cacheKeyForPairings, savePairingsCache, loadPairingsCache, saveFullPairingsCache, loadFullPairingsCache } from "./offlineCache";
+import { apiRequest } from './queryClient';
+import {
+  cacheKeyForPairings,
+  savePairingsCache,
+  loadPairingsCache,
+  saveFullPairingsCache,
+  loadFullPairingsCache,
+} from './offlineCache';
 export interface BidPackage {
   id: number;
   name: string;
@@ -84,42 +90,73 @@ export const api = {
   },
 
   // Prefetch entire dataset for current filters and cache for offline/global sorting
-  prefetchAllPairings: async (filters: SearchFilters & { bidPackageId: number }, userId?: string | number) => {
-    console.log('Starting prefetch for filters:', filters, 'userId:', userId);
+  prefetchAllPairings: async (
+    filters: SearchFilters & { bidPackageId: number },
+    userId?: string | number,
+    options?: { force?: boolean }
+  ) => {
+    console.log('Starting prefetch for filters:', filters, 'userId:', userId, 'options:', options);
 
     // Use cache key WITHOUT sortBy/sortOrder to enable global sorting on one dataset
     const { sortBy, sortOrder, page, limit: _, ...filtersForCache } = filters;
-    const key = cacheKeyForPairings(filters.bidPackageId, filtersForCache, userId);
+    const key = cacheKeyForPairings(
+      filters.bidPackageId,
+      filtersForCache,
+      userId
+    );
 
     console.log('Prefetch cache key:', key);
 
-    // Check if already cached
-    const existing = await loadFullPairingsCache(key);
-    if (existing && existing.length > 0) {
-      console.log('Full cache already exists, skipping prefetch');
-      return { total: existing.length, cached: true };
+    // Check if already cached (unless force is true)
+    if (!options?.force) {
+      const existing = await loadFullPairingsCache(key);
+      if (existing && existing.length > 0) {
+        console.log('Full cache already exists, skipping prefetch');
+        return { total: existing.length, cached: true };
+      }
+    } else {
+      console.log('Force prefetch requested, bypassing cache check');
     }
 
     // First page to determine total
     const first = await fetch('/api/pairings/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...filters, page: 1, limit: 100, sortBy: 'pairingNumber', sortOrder: 'asc' })
+      body: JSON.stringify({
+        ...filters,
+        page: 1,
+        limit: 100,
+        sortBy: 'pairingNumber',
+        sortOrder: 'asc',
+      }),
     });
-    if (!first.ok) throw new Error('Prefetch failed');
+    if (!first.ok) {
+      throw new Error('Prefetch failed');
+    }
     const firstData = await first.json();
-    const total = firstData?.pagination?.total || (Array.isArray(firstData) ? firstData.length : 0);
+    const total =
+      firstData?.pagination?.total ||
+      (Array.isArray(firstData) ? firstData.length : 0);
     const limit = firstData?.pagination?.limit || 100;
-    let rows: Pairing[] = firstData?.pairings || (Array.isArray(firstData) ? firstData : []);
+    let rows: Pairing[] =
+      firstData?.pairings || (Array.isArray(firstData) ? firstData : []);
 
-    console.log(`Prefetch: Page 1 fetched, total=${total}, limit=${limit}, found=${rows.length}`);
+    console.log(
+      `Prefetch: Page 1 fetched, total=${total}, limit=${limit}, found=${rows.length}`
+    );
 
     const totalPages = Math.ceil(total / limit);
     for (let page = 2; page <= totalPages; page++) {
       const res = await fetch('/api/pairings/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...filters, page, limit, sortBy: 'pairingNumber', sortOrder: 'asc' })
+        body: JSON.stringify({
+          ...filters,
+          page,
+          limit,
+          sortBy: 'pairingNumber',
+          sortOrder: 'asc',
+        }),
       });
       if (!res.ok) {
         console.warn(`Prefetch: Failed to fetch page ${page}`);
@@ -128,7 +165,9 @@ export const api = {
       const data = await res.json();
       const part: Pairing[] = data?.pairings || [];
       rows = rows.concat(part);
-      console.log(`Prefetch: Page ${page}/${totalPages} fetched, total rows=${rows.length}`);
+      console.log(
+        `Prefetch: Page ${page}/${totalPages} fetched, total rows=${rows.length}`
+      );
     }
 
     console.log(`Prefetch: Caching ${rows.length} total rows with key: ${key}`);
@@ -189,7 +228,10 @@ export const api = {
   },
 
   // Pairings
-  getPairings: async (bidPackageId?: number, userId?: string | number): Promise<Pairing[]> => {
+  getPairings: async (
+    bidPackageId?: number,
+    userId?: string | number
+  ): Promise<Pairing[]> => {
     const key = cacheKeyForPairings(bidPackageId, undefined, userId);
     try {
       const url = bidPackageId
@@ -204,12 +246,17 @@ export const api = {
     } catch (error) {
       // Offline/read error → return cached if present
       const cached = await loadPairingsCache<Pairing[]>(key);
-      if (cached) return cached;
+      if (cached) {
+        return cached;
+      }
       return [];
     }
   },
 
-  searchPairings: async (filters: SearchFilters, userId?: string | number): Promise<PaginatedResponse<Pairing>> => {
+  searchPairings: async (
+    filters: SearchFilters,
+    userId?: string | number
+  ): Promise<PaginatedResponse<Pairing>> => {
     try {
       const response = await fetch('/api/pairings/search', {
         method: 'POST',
@@ -229,7 +276,10 @@ export const api = {
       savePairingsCache(key, list).catch(() => {});
 
       // If server returned total<=limit, treat as full dataset and cache fully
-      if (data?.pagination && data.pagination.total <= (data.pagination.limit || 50)) {
+      if (
+        data?.pagination &&
+        data.pagination.total <= (data.pagination.limit || 50)
+      ) {
         saveFullPairingsCache(key, list).catch(() => {});
       }
       // Handle new paginated response format
@@ -250,7 +300,7 @@ export const api = {
         },
       };
     } catch (error) {
-      console.error("Error searching pairings:", error);
+      console.error('Error searching pairings:', error);
       // Offline: try cached
       const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
       // Prefer full cache; fallback to last page cache
@@ -264,8 +314,8 @@ export const api = {
             total: full.length,
             totalPages: 1,
             hasNext: false,
-            hasPrev: false
-          }
+            hasPrev: false,
+          },
         };
       }
       const cached = await loadPairingsCache<Pairing[]>(key);
@@ -278,8 +328,8 @@ export const api = {
             total: cached.length,
             totalPages: 1,
             hasNext: false,
-            hasPrev: false
-          }
+            hasPrev: false,
+          },
         };
       }
       return {
@@ -357,16 +407,21 @@ export const api = {
           userId,
           pairingId,
           startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
+          endDate: endDate.toISOString(),
         }),
       });
       console.log('API: Response status:', response.status);
-      console.log('API: Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log(
+        'API: Response headers:',
+        Object.fromEntries(response.headers.entries())
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API: Error response:', errorText);
-        throw new Error(`Failed to add to calendar (HTTP ${response.status}): ${errorText}`);
+        throw new Error(
+          `Failed to add to calendar (HTTP ${response.status}): ${errorText}`
+        );
       }
 
       const result = await response.json();
@@ -410,11 +465,17 @@ export const api = {
       if (typeof window !== 'undefined') {
         seniorityFromLocal = localStorage.getItem('seniorityPercentile');
       }
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
 
     const prefixParts: string[] = [];
-    if (bidPackageId) prefixParts.push(`Bid package #${bidPackageId}`);
-    if (seniorityFromLocal) prefixParts.push(`User seniority ${seniorityFromLocal}%`);
+    if (bidPackageId) {
+      prefixParts.push(`Bid package #${bidPackageId}`);
+    }
+    if (seniorityFromLocal) {
+      prefixParts.push(`User seniority ${seniorityFromLocal}%`);
+    }
 
     const contextualQuestion = prefixParts.length
       ? `${prefixParts.join(' | ')}: ${question}`
@@ -425,7 +486,13 @@ export const api = {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ question: contextualQuestion, bidPackageId, seniorityPercentile: seniorityFromLocal ? parseFloat(seniorityFromLocal) : undefined }),
+      body: JSON.stringify({
+        question: contextualQuestion,
+        bidPackageId,
+        seniorityPercentile: seniorityFromLocal
+          ? parseFloat(seniorityFromLocal)
+          : undefined,
+      }),
     });
 
     if (!response.ok) {
