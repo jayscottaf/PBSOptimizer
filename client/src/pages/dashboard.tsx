@@ -62,6 +62,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ProfileModal } from '@/components/profile-modal';
 import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming this hook exists
+import { toast } from '@/hooks/use-toast';
 interface SearchFilters {
   search?: string;
   creditMin?: number;
@@ -164,6 +165,17 @@ export default function Dashboard() {
   React.useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  // Check if profile is complete on mount - show modal if not
+  React.useEffect(() => {
+    const checkProfile = () => {
+      const hasRequired = seniorityNumber && base && aircraft;
+      if (!hasRequired && hasInitialized) {
+        setShowProfileModal(true);
+      }
+    };
+    checkProfile();
+  }, [hasInitialized, seniorityNumber, base, aircraft]);
 
   const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage(
     {
@@ -1678,23 +1690,39 @@ export default function Dashboard() {
       )}
 
       {/* Profile Modal (moved inside the Profile tab content for better UX) */}
-      <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
+      <Dialog
+        open={showProfileModal}
+        onOpenChange={(open) => {
+          // Prevent closing if required fields are empty
+          if (!open && (!seniorityNumber || !base || !aircraft)) {
+            toast({
+              title: 'Profile Required',
+              description: 'Please complete your profile before continuing. All fields marked with * are required.',
+              variant: 'destructive',
+            });
+            return;
+          }
+          setShowProfileModal(open);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Your Profile</DialogTitle>
+            <DialogTitle>Complete Your Profile</DialogTitle>
             <DialogDescription>
-              Update your pilot information and preferences
+              Please fill in your pilot information to continue. All fields marked with * are required.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Seniority Number
+                Seniority Number <span className="text-red-500">*</span>
               </label>
               <Input
                 value={seniorityNumber}
                 onChange={e => setSeniorityNumber(e.target.value)}
-                placeholder="Enter seniority number"
+                placeholder="Enter seniority number (e.g., 15600)"
+                className={!seniorityNumber ? 'border-red-300 focus:border-red-500' : ''}
+                required
               />
             </div>
             <div>
@@ -1702,42 +1730,57 @@ export default function Dashboard() {
                 Category Seniority %
               </label>
               <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
                 value={seniorityPercentile}
                 onChange={e => setSeniorityPercentile(e.target.value)}
-                placeholder="Enter seniority percentile"
+                placeholder="e.g., 47.6 (optional)"
               />
+              <p className="text-xs text-gray-500 mt-1">Lower % = more senior</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Base
+                Base <span className="text-red-500">*</span>
               </label>
-              <Select value={base} onValueChange={setBase}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select base" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NYC">NYC</SelectItem>
-                  <SelectItem value="ATL">ATL</SelectItem>
-                  <SelectItem value="DFW">DFW</SelectItem>
-                  <SelectItem value="LAX">LAX</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={base}
+                onChange={e => setBase(e.target.value)}
+                className={`flex h-10 w-full rounded-md border ${!base ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                required
+              >
+                <option value="">Select your base</option>
+                <option value="NYC">NYC - New York</option>
+                <option value="ATL">ATL - Atlanta</option>
+                <option value="DFW">DFW - Dallas</option>
+                <option value="LAX">LAX - Los Angeles</option>
+                <option value="MSP">MSP - Minneapolis</option>
+                <option value="SEA">SEA - Seattle</option>
+                <option value="DTW">DTW - Detroit</option>
+                <option value="SLC">SLC - Salt Lake City</option>
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Aircraft
+                Aircraft <span className="text-red-500">*</span>
               </label>
-              <Select value={aircraft} onValueChange={setAircraft}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select aircraft" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="A220">A220</SelectItem>
-                  <SelectItem value="A320">A320</SelectItem>
-                  <SelectItem value="A350">A350</SelectItem>
-                  <SelectItem value="B737">B737</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={aircraft}
+                onChange={e => setAircraft(e.target.value)}
+                className={`flex h-10 w-full rounded-md border ${!aircraft ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                required
+              >
+                <option value="">Select your aircraft</option>
+                <option value="A220">A220</option>
+                <option value="A320">A320</option>
+                <option value="A321">A321</option>
+                <option value="A330">A330</option>
+                <option value="A350">A350</option>
+                <option value="B737">B737</option>
+                <option value="B757">B757</option>
+                <option value="B767">B767</option>
+              </select>
             </div>
             <div className="border-t pt-4 mt-4">
               <div className="text-sm font-medium text-gray-700 mb-2">
@@ -1755,9 +1798,16 @@ export default function Dashboard() {
                         await purgeUserCache(userId);
                         // Clear React Query cache as well
                         queryClient.clear();
-                        console.log('User cache purged successfully');
+                        toast({
+                          title: 'Success',
+                          description: 'Cache cleared successfully',
+                        });
                       } catch (error) {
-                        console.error('Failed to purge user cache:', error);
+                        toast({
+                          title: 'Error',
+                          description: 'Failed to clear cache',
+                          variant: 'destructive',
+                        });
                       }
                     }
                   }}
@@ -1799,8 +1849,48 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex justify-end pt-4">
-              <Button onClick={() => setShowProfileModal(false)}>
-                Save Changes
+              <Button
+                onClick={async () => {
+                  // Validate required fields
+                  if (!seniorityNumber || !base || !aircraft) {
+                    toast({
+                      title: 'Missing Required Fields',
+                      description: 'Please fill in Seniority Number, Base, and Aircraft',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  try {
+                    // Create or update user in database
+                    await api.createOrUpdateUser({
+                      seniorityNumber: parseInt(seniorityNumber),
+                      seniorityPercentile: seniorityPercentile
+                        ? Math.round(parseFloat(seniorityPercentile))
+                        : undefined,
+                      base,
+                      aircraft,
+                    });
+
+                    // Invalidate user query to refresh
+                    queryClient.invalidateQueries({ queryKey: ['user'] });
+
+                    toast({
+                      title: 'Profile Saved',
+                      description: 'Your profile has been saved successfully!',
+                    });
+
+                    setShowProfileModal(false);
+                  } catch (error: any) {
+                    toast({
+                      title: 'Error',
+                      description: error?.message || 'Failed to save profile. Please try again.',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+              >
+                Save Profile
               </Button>
             </div>
           </div>
