@@ -48,6 +48,7 @@ import {
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
+import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
 import {
   Dialog,
   DialogContent,
@@ -946,47 +947,71 @@ export default function Dashboard() {
 
         // Preferred Days Off filter - exclude pairings with flights on these dates
         if (filters.preferredDaysOff && filters.preferredDaysOff.length > 0) {
-          const normalizeDate = (date: Date) => {
-            const d = new Date(date);
-            d.setHours(0, 0, 0, 0);
-            return d.getTime();
-          };
+          const year = latestBidPackage?.year || new Date().getFullYear();
 
-          const daysOffTimestamps = filters.preferredDaysOff.map(normalizeDate);
+          // Try to extract better effectiveDates from fullTextBlock if available
+          let effectiveDates = pairing.effectiveDates || '';
+          let pairingDays = pairing.pairingDays || 1;
 
-          // Parse effectiveDates to get base date (e.g., "OCT12" -> Oct 12)
-          if (pairing.effectiveDates && typeof pairing.effectiveDates === 'string') {
-            const monthMap: { [key: string]: number } = {
-              'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
-              'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
-            };
+          // If fullTextBlock exists, try to extract the full EFFECTIVE date range
+          if (pairing.fullTextBlock) {
+            // Multi-pass parsing to capture all exception types
+            let dateRange = '';
+            let dayOfWeekExceptions = '';
+            let specificDateExceptions = '';
 
-            // Match pattern like "OCT12" or "OCT12 ONLY"
-            const effectiveDateMatch = pairing.effectiveDates.match(/([A-Z]{3})(\d{1,2})/);
+            // Extract the base date range
+            const effectiveMatch = pairing.fullTextBlock.match(/EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i);
+            if (effectiveMatch) {
+              dateRange = effectiveMatch[1].trim();
+            }
 
-            if (effectiveDateMatch && pairing.pairingDays) {
-              const monthStr = effectiveDateMatch[1];
-              const day = parseInt(effectiveDateMatch[2]);
-              const month = monthMap[monthStr];
+            // Extract day-of-week exceptions (can appear as "EXCPT MO SA SU" before EFFECTIVE)
+            const dayOfWeekMatch = pairing.fullTextBlock.match(/(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i);
+            if (dayOfWeekMatch) {
+              dayOfWeekExceptions = dayOfWeekMatch[1].trim();
+            }
 
-              if (month !== undefined) {
-                // Get year from bid package
-                const year = latestBidPackage?.year || new Date().getFullYear();
+            // Extract specific date exceptions (can appear anywhere in fullTextBlock as "EXCEPT OCT 16 OCT 21")
+            // Look for EXCEPT followed by month-day patterns
+            const specificDateMatch = pairing.fullTextBlock.match(/EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i);
+            if (specificDateMatch) {
+              specificDateExceptions = specificDateMatch[1].trim();
+            }
 
-                // Calculate base start date
-                const baseDate = new Date(year, month, day);
-
-                // Check each day of the pairing (Day 1, Day 2, ..., Day N)
-                for (let i = 0; i < pairing.pairingDays; i++) {
-                  const pairingDate = new Date(year, month, day + i);
-                  const pairingTimestamp = normalizeDate(pairingDate);
-
-                  if (daysOffTimestamps.includes(pairingTimestamp)) {
-                    // This pairing has a flight on a preferred day off - exclude it
-                    return false;
-                  }
-                }
+            // Combine all parts
+            if (dateRange) {
+              effectiveDates = dateRange;
+              if (dayOfWeekExceptions || specificDateExceptions) {
+                const allExceptions = [dayOfWeekExceptions, specificDateExceptions]
+                  .filter(Boolean)
+                  .join(' ');
+                effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
               }
+            }
+          }
+
+          // Debug: log pairing 8094 specifically
+          if (pairing.pairingNumber === '8094' && !window.__logged8094) {
+            console.log('Pairing 8094 after fullTextBlock parse:', {
+              pairingNumber: pairing.pairingNumber,
+              originalEffectiveDates: pairing.effectiveDates,
+              parsedEffectiveDates: effectiveDates,
+              pairingDays: pairingDays
+            });
+            window.__logged8094 = true;
+          }
+
+          if (effectiveDates && pairingDays) {
+            const hasConflict = pairingConflictsWithDaysOff(
+              effectiveDates,
+              year,
+              pairingDays,
+              filters.preferredDaysOff
+            );
+
+            if (hasConflict) {
+              return false;
             }
           }
         }
