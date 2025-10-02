@@ -686,7 +686,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Credit Hours</div>
-                      <div className="text-xs text-gray-500">Target: {userALV.toFixed(0)}h</div>
+                      <div className="text-xs text-gray-500">ALV: {userALV.toFixed(0)}h</div>
                     </div>
                   </div>
                   <div className="text-right">
