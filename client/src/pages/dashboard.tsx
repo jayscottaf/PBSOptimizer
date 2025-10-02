@@ -779,6 +779,11 @@ export default function Dashboard() {
         : processedFilters;
 
     Object.entries(sourceForLabels).forEach(([key, value]) => {
+      // Skip preferredDaysOff from active filters display
+      if (key === 'preferredDaysOff') {
+        return;
+      }
+
       if (value !== undefined && value !== null && value !== '') {
         let label = '';
 
@@ -831,8 +836,9 @@ export default function Dashboard() {
   };
   // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
-    // When sorting is active, use unfiltered cache and apply filters client-side
-    const useUnfiltered = sortColumn && unfilteredLocal && unfilteredLocal.length > 0;
+    // When sorting is active OR preferredDaysOff filter is set, use unfiltered cache and apply filters client-side
+    const hasPreferredDaysOff = filters.preferredDaysOff && filters.preferredDaysOff.length > 0;
+    const useUnfiltered = (sortColumn || hasPreferredDaysOff) && unfilteredLocal && unfilteredLocal.length > 0;
 
     if (!useUnfiltered && (!isFullCacheReady || !fullLocal || fullLocal.length === 0)) {
       return pairings;
@@ -841,9 +847,9 @@ export default function Dashboard() {
     const sourceData = useUnfiltered ? unfilteredLocal : fullLocal;
     console.log(`Sorting ${sourceData.length} pairings from ${useUnfiltered ? 'unfiltered' : 'filtered'} cache`);
 
-    // Apply filters client-side when using unfiltered cache
+    // Apply filters client-side when using unfiltered cache OR when preferredDaysOff is set
     let filtered = [...sourceData];
-    if (useUnfiltered && filters && Object.keys(filters).length > 0) {
+    if ((useUnfiltered || hasPreferredDaysOff) && filters && Object.keys(filters).length > 0) {
       console.log('Applying filters client-side:', filters);
       filtered = filtered.filter(pairing => {
         // Credit hours filter
@@ -938,9 +944,55 @@ export default function Dashboard() {
           }
         }
 
+        // Preferred Days Off filter - exclude pairings with flights on these dates
+        if (filters.preferredDaysOff && filters.preferredDaysOff.length > 0) {
+          const normalizeDate = (date: Date) => {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            return d.getTime();
+          };
+
+          const daysOffTimestamps = filters.preferredDaysOff.map(normalizeDate);
+
+          // Parse effectiveDates to get base date (e.g., "OCT12" -> Oct 12)
+          if (pairing.effectiveDates && typeof pairing.effectiveDates === 'string') {
+            const monthMap: { [key: string]: number } = {
+              'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+              'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+            };
+
+            // Match pattern like "OCT12" or "OCT12 ONLY"
+            const effectiveDateMatch = pairing.effectiveDates.match(/([A-Z]{3})(\d{1,2})/);
+
+            if (effectiveDateMatch && pairing.pairingDays) {
+              const monthStr = effectiveDateMatch[1];
+              const day = parseInt(effectiveDateMatch[2]);
+              const month = monthMap[monthStr];
+
+              if (month !== undefined) {
+                // Get year from bid package
+                const year = latestBidPackage?.year || new Date().getFullYear();
+
+                // Calculate base start date
+                const baseDate = new Date(year, month, day);
+
+                // Check each day of the pairing (Day 1, Day 2, ..., Day N)
+                for (let i = 0; i < pairing.pairingDays; i++) {
+                  const pairingDate = new Date(year, month, day + i);
+                  const pairingTimestamp = normalizeDate(pairingDate);
+
+                  if (daysOffTimestamps.includes(pairingTimestamp)) {
+                    // This pairing has a flight on a preferred day off - exclude it
+                    return false;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         return true;
       });
-      console.log(`After filtering: ${filtered.length} pairings`);
     }
 
     const sorted = filtered;

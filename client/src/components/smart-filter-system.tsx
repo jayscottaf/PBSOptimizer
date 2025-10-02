@@ -13,11 +13,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { format } from 'date-fns';
 interface FilterOption {
   key: string;
@@ -189,19 +184,16 @@ export function SmartFilterSystem({
   const handleDayOffSelect = (dates: Date[] | undefined) => {
     if (!dates) {
       setSelectedDaysOff([]);
-      onFilterClear('preferredDaysOff');
+      onFiltersChange({ preferredDaysOff: undefined });
       return;
     }
 
     setSelectedDaysOff(dates);
     if (dates.length === 0) {
-      onFilterClear('preferredDaysOff');
+      onFiltersChange({ preferredDaysOff: undefined });
     } else {
-      onFilterApply(
-        'preferredDaysOff',
-        dates,
-        `Days Off: ${dates.length} selected`
-      );
+      // Apply filter directly without adding to activeFilters
+      onFiltersChange({ preferredDaysOff: dates });
     }
   };
 
@@ -211,19 +203,15 @@ export function SmartFilterSystem({
     );
     setSelectedDaysOff(newDaysOff);
     if (newDaysOff.length === 0) {
-      onFilterClear('preferredDaysOff');
+      onFiltersChange({ preferredDaysOff: undefined });
     } else {
-      onFilterApply(
-        'preferredDaysOff',
-        newDaysOff,
-        `Days Off: ${newDaysOff.length} selected`
-      );
+      onFiltersChange({ preferredDaysOff: newDaysOff });
     }
   };
 
   const clearAllDaysOff = () => {
     setSelectedDaysOff([]);
-    onFilterClear('preferredDaysOff');
+    onFiltersChange({ preferredDaysOff: undefined });
   };
 
   const [selectedFunction, setSelectedFunction] = useState<string>('');
@@ -517,72 +505,72 @@ export function SmartFilterSystem({
       )}
 
       {/* Preferred Days Off Calendar Button */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">
-            Preferred Days Off:
-          </span>
-          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <CalendarIcon className="h-4 w-4" />
-                {selectedDaysOff.length === 0
-                  ? 'Select dates'
-                  : `${selectedDaysOff.length} selected`}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-auto p-0 z-[60]"
-              align="start"
-              side="bottom"
-              sideOffset={4}
-            >
-              <Calendar
-                mode="multiple"
-                selected={selectedDaysOff}
-                onSelect={handleDayOffSelect}
-                defaultMonth={defaultMonth}
-                initialFocus
-                className="rounded-md border"
-              />
-              <div className="p-3 border-t flex justify-between">
-                <Button variant="outline" size="sm" onClick={clearAllDaysOff}>
-                  Clear All
-                </Button>
-                <Button size="sm" onClick={() => setIsCalendarOpen(false)}>
-                  Done
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Display selected days */}
-        {selectedDaysOff.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {selectedDaysOff.map((date, index) => (
-              <Badge
-                key={index}
-                variant="secondary"
-                className="flex items-center gap-1 pr-1"
-              >
-                <span className="text-xs">{format(date, 'MMM dd')}</span>
-                <button
-                  onClick={() => removeDayOff(date)}
-                  className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                  title="Remove date"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-700">
+          Preferred Days Off:
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={() => setIsCalendarOpen(true)}
+        >
+          <CalendarIcon className="h-4 w-4" />
+          {selectedDaysOff.length === 0
+            ? 'Select dates'
+            : `${selectedDaysOff.length} selected`}
+        </Button>
       </div>
+
+      {/* Calendar Dialog */}
+      <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Preferred Days Off</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center">
+            <Calendar
+              mode="multiple"
+              selected={selectedDaysOff}
+              onSelect={handleDayOffSelect}
+              defaultMonth={defaultMonth}
+              initialFocus
+              className="rounded-md"
+            />
+            {selectedDaysOff.length > 0 && (
+              <div className="mt-3 w-full">
+                <p className="text-sm text-gray-600 mb-2">Selected dates:</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedDaysOff.map((date, index) => (
+                    <Badge
+                      key={index}
+                      variant="secondary"
+                      className="flex items-center gap-1 pr-1"
+                    >
+                      <span className="text-xs">{format(date, 'M/d')}</span>
+                      <button
+                        onClick={() => removeDayOff(date)}
+                        className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                        title="Remove date"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between pt-3 border-t">
+            <Button variant="outline" size="sm" onClick={clearAllDaysOff}>
+              Clear All
+            </Button>
+            <Button size="sm" onClick={() => setIsCalendarOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Quick Filter Buttons */}
       <div className="space-y-2">
