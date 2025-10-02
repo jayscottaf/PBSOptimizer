@@ -252,23 +252,22 @@ export function StatsPanel({
 
         <div className="mt-6 pt-4 border-t border-gray-200">
           <h4 className="text-sm font-medium text-gray-900 mb-3">Averages by Trip Length</h4>
-          <div className="space-y-2">
+          <div className="space-y-1">
+            {/* Header row */}
+            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 pb-1">
+              <div></div>
+              <div className="text-right">Avg Credit</div>
+              <div className="text-right">Avg Block</div>
+            </div>
+            {/* Data rows */}
             {[1, 2, 3, 4, 5].map(days => {
               const data = stats.avgByDays[days];
               if (!data) return null;
               return (
-                <div key={days} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 font-medium">{days}-day:</span>
-                  <div className="flex gap-3">
-                    <span className="text-gray-900">
-                      <span className="font-medium">{data.credit.toFixed(1)}</span>
-                      <span className="text-gray-500 ml-1">cr</span>
-                    </span>
-                    <span className="text-gray-900">
-                      <span className="font-medium">{data.block.toFixed(1)}</span>
-                      <span className="text-gray-500 ml-1">blk</span>
-                    </span>
-                  </div>
+                <div key={days} className="grid grid-cols-3 gap-2 text-xs">
+                  <span className="text-gray-700 font-medium">{days}-day:</span>
+                  <span className="text-gray-900 font-medium text-right">{data.credit.toFixed(1)}</span>
+                  <span className="text-gray-900 font-medium text-right">{data.block.toFixed(1)}</span>
                 </div>
               );
             })}
@@ -407,23 +406,22 @@ export function StatsPanel({
 
         <div className="mt-6 pt-4 border-t border-gray-200">
           <h4 className="text-sm font-medium text-gray-900 mb-3">Averages by Trip Length</h4>
-          <div className="space-y-2">
+          <div className="space-y-1">
+            {/* Header row */}
+            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 pb-1">
+              <div></div>
+              <div className="text-right">Avg Credit</div>
+              <div className="text-right">Avg Block</div>
+            </div>
+            {/* Data rows */}
             {[1, 2, 3, 4, 5].map(days => {
               const data = stats.avgByDays[days];
               if (!data) return null;
               return (
-                <div key={days} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 font-medium">{days}-day:</span>
-                  <div className="flex gap-3">
-                    <span className="text-gray-900">
-                      <span className="font-medium">{data.credit.toFixed(1)}</span>
-                      <span className="text-gray-500 ml-1">cr</span>
-                    </span>
-                    <span className="text-gray-900">
-                      <span className="font-medium">{data.block.toFixed(1)}</span>
-                      <span className="text-gray-500 ml-1">blk</span>
-                    </span>
-                  </div>
+                <div key={days} className="grid grid-cols-3 gap-2 text-xs">
+                  <span className="text-gray-700 font-medium">{days}-day:</span>
+                  <span className="text-gray-900 font-medium text-right">{data.credit.toFixed(1)}</span>
+                  <span className="text-gray-900 font-medium text-right">{data.block.toFixed(1)}</span>
                 </div>
               );
             })}
