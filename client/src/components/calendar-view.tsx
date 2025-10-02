@@ -49,13 +49,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   const [userProfile, setUserProfile] = useState<{
     base?: string;
     aircraft?: string;
+    position?: string;
   }>({});
 
   React.useEffect(() => {
     try {
       const base = localStorage.getItem('base') || undefined;
       const aircraft = localStorage.getItem('aircraft') || undefined;
-      setUserProfile({ base, aircraft });
+      const position = localStorage.getItem('position') || undefined;
+      setUserProfile({ base, aircraft, position });
     } catch (error) {
       console.error('Error loading user profile:', error);
     }
@@ -100,20 +102,22 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
     // Try to match user's profile to ALV table FIRST (most specific)
     if (latestBidPackage.alvTable && Array.isArray(latestBidPackage.alvTable)) {
-      const { base, aircraft } = userProfile;
+      const { base, aircraft, position } = userProfile;
 
-      if (base && aircraft) {
-        console.log(`Looking for ALV match: base=${base}, aircraft=${aircraft}`);
+      if (base && aircraft && position) {
+        console.log(`Looking for ALV match: base=${base}, aircraft=${aircraft}, position=${position}`);
         console.log('Available ALV table:', latestBidPackage.alvTable);
 
         // Normalize inputs for matching
         const normalizedBase = base.replace(/[^a-z]/gi, '').toUpperCase();
         const normalizedAircraft = aircraft.replace(/[^a-z0-9]/gi, '').toUpperCase();
+        const normalizedPosition = position.toUpperCase();
 
-        // Try to find match with flexible aircraft matching
+        // Try to find match with flexible aircraft matching and exact position match
         const match = latestBidPackage.alvTable.find((entry: any) => {
           const entryAircraft = String(entry.aircraft || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
           const entryBase = String(entry.base || '').toUpperCase();
+          const entryPosition = String(entry.position || '').toUpperCase();
 
           // Base must match exactly
           const baseMatches = entryBase === normalizedBase || entryBase.includes(normalizedBase);
@@ -124,18 +128,21 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             entryAircraft.includes(normalizedAircraft) ||
             normalizedAircraft.includes(entryAircraft);
 
-          return baseMatches && aircraftMatches;
+          // Position must match exactly
+          const positionMatches = entryPosition === normalizedPosition;
+
+          return baseMatches && aircraftMatches && positionMatches;
         });
 
         if (match && match.alvHours) {
-          console.log(`✅ Matched ALV for ${base} ${aircraft}: ${match.alvHours}h from table entry:`, match);
+          console.log(`✅ Matched ALV for ${base} ${aircraft} ${position}: ${match.alvHours}h from table entry:`, match);
           return match.alvHours;
         } else {
-          console.warn(`❌ No ALV match found for ${base} ${aircraft}. Available entries:`,
+          console.warn(`❌ No ALV match found for ${base} ${aircraft} ${position}. Available entries:`,
             latestBidPackage.alvTable.map((e: any) => `${e.base} ${e.aircraft} ${e.position}`));
         }
       } else {
-        console.warn('User profile incomplete - missing base or aircraft', userProfile);
+        console.warn('User profile incomplete - missing base, aircraft, or position', userProfile);
       }
     }
 

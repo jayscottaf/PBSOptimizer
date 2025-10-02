@@ -130,6 +130,9 @@ export default function Dashboard() {
   const [aircraft, setAircraft] = useState(() => {
     return localStorage.getItem('aircraft') || '';
   });
+  const [position, setPosition] = useState(() => {
+    return localStorage.getItem('position') || '';
+  });
 
   // Track if this is the initial load to prevent overwriting saved values
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -147,8 +150,9 @@ export default function Dashboard() {
       localStorage.setItem('seniorityPercentile', seniorityPercentile);
       localStorage.setItem('base', base);
       localStorage.setItem('aircraft', aircraft);
+      localStorage.setItem('position', position);
     }
-  }, [name, seniorityNumber, seniorityPercentile, base, aircraft, hasInitialized]);
+  }, [name, seniorityNumber, seniorityPercentile, base, aircraft, position, hasInitialized]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -1803,7 +1807,7 @@ export default function Dashboard() {
         open={showProfileModal}
         onOpenChange={(open) => {
           // Prevent closing if required fields are empty
-          if (!open && (!seniorityNumber || !base || !aircraft)) {
+          if (!open && (!seniorityNumber || !base || !aircraft || !position)) {
             toast({
               title: 'Profile Required',
               description: 'Please complete your profile before continuing. All fields marked with * are required.',
@@ -1901,6 +1905,22 @@ export default function Dashboard() {
                 <option value="B767">B767</option>
               </select>
             </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Position <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={position}
+                onChange={e => setPosition(e.target.value)}
+                className={`flex h-10 w-full rounded-md border ${!position ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                required
+              >
+                <option value="">Select your position</option>
+                <option value="A">A - Position A</option>
+                <option value="B">B - Position B</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Position A or B (matches ALV table)</p>
+            </div>
             <div className="border-t pt-4 mt-4">
               <div className="text-sm font-medium text-gray-700 mb-2">
                 Cache Management
@@ -1971,10 +1991,10 @@ export default function Dashboard() {
               <Button
                 onClick={async () => {
                   // Validate required fields
-                  if (!seniorityNumber || !base || !aircraft) {
+                  if (!seniorityNumber || !base || !aircraft || !position) {
                     toast({
                       title: 'Missing Required Fields',
-                      description: 'Please fill in Seniority Number, Base, and Aircraft',
+                      description: 'Please fill in Seniority Number, Base, Aircraft, and Position',
                       variant: 'destructive',
                     });
                     return;

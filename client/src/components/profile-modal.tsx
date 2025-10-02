@@ -20,6 +20,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [seniorityPercentile, setSeniorityPercentile] = useState('');
   const [base, setBase] = useState('');
   const [aircraft, setAircraft] = useState('');
+  const [position, setPosition] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -28,12 +29,13 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       setSeniorityPercentile(localStorage.getItem('seniorityPercentile') || '');
       setBase(localStorage.getItem('base') || '');
       setAircraft(localStorage.getItem('aircraft') || '');
+      setPosition(localStorage.getItem('position') || '');
     }
   }, [isOpen]);
 
   const handleSave = () => {
     // Validate inputs
-    if (!seniorityNumber || !seniorityPercentile || !base || !aircraft) {
+    if (!seniorityNumber || !seniorityPercentile || !base || !aircraft || !position) {
       toast({
         title: 'Error',
         description: 'Please fill in all fields',
@@ -52,11 +54,22 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       return;
     }
 
+    // Validate position is A or B
+    if (position.toUpperCase() !== 'A' && position.toUpperCase() !== 'B') {
+      toast({
+        title: 'Error',
+        description: 'Position must be A or B',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Save to localStorage
     localStorage.setItem('seniorityNumber', seniorityNumber);
     localStorage.setItem('seniorityPercentile', seniorityPercentile);
     localStorage.setItem('base', base);
     localStorage.setItem('aircraft', aircraft);
+    localStorage.setItem('position', position.toUpperCase());
 
     // Trigger storage event for seniority update
     window.dispatchEvent(
@@ -137,6 +150,20 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               onChange={e => setAircraft(e.target.value)}
               placeholder="e.g., A220"
             />
+          </div>
+
+          <div>
+            <Label htmlFor="position">Position</Label>
+            <Input
+              id="position"
+              value={position}
+              onChange={e => setPosition(e.target.value)}
+              placeholder="A or B"
+              maxLength={1}
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Position A or B (matches ALV table in bid package)
+            </div>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
