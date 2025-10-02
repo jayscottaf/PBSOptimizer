@@ -61,7 +61,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { ProfileModal } from '@/components/profile-modal';
 import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming this hook exists
 import { toast } from '@/hooks/use-toast';
 interface SearchFilters {
