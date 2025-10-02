@@ -35,6 +35,8 @@ export const bidPackages = pgTable('bid_packages', {
   aircraft: text('aircraft').notNull(),
   uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
   status: text('status').notNull().default('processing'), // processing, completed, failed
+  alvHours: decimal('alv_hours', { precision: 5, scale: 2 }), // Average Line Value hours
+  alvTable: jsonb('alv_table'), // Full ALV table data as JSON
 });
 
 export const pairings = pgTable('pairings', {

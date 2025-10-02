@@ -45,6 +45,22 @@ type CalendarViewProps = {
 };
 
 export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
+  // Get user profile from localStorage for ALV matching
+  const [userProfile, setUserProfile] = useState<{
+    base?: string;
+    aircraft?: string;
+  }>({});
+
+  React.useEffect(() => {
+    try {
+      const base = localStorage.getItem('base') || undefined;
+      const aircraft = localStorage.getItem('aircraft') || undefined;
+      setUserProfile({ base, aircraft });
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  }, []);
+
   // Get latest bid package info for dynamic date initialization
   const { data: bidPackages = [] } = useQuery({
     queryKey: ['bidPackages'],
@@ -72,6 +88,71 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     );
     return mostRecentCompleted || packagesArray[0];
   }, [bidPackages]);
+
+  // Calculate user's ALV based on profile and bid package ALV table
+  const userALV = React.useMemo(() => {
+    const defaultALV = 85; // Only used if no bid package or profile
+
+    if (!latestBidPackage) {
+      console.warn('No bid package available for ALV calculation');
+      return defaultALV;
+    }
+
+    // Try to match user's profile to ALV table FIRST (most specific)
+    if (latestBidPackage.alvTable && Array.isArray(latestBidPackage.alvTable)) {
+      const { base, aircraft } = userProfile;
+
+      if (base && aircraft) {
+        console.log(`Looking for ALV match: base=${base}, aircraft=${aircraft}`);
+        console.log('Available ALV table:', latestBidPackage.alvTable);
+
+        // Normalize inputs for matching
+        const normalizedBase = base.replace(/[^a-z]/gi, '').toUpperCase();
+        const normalizedAircraft = aircraft.replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+        // Try to find match with flexible aircraft matching
+        const match = latestBidPackage.alvTable.find((entry: any) => {
+          const entryAircraft = String(entry.aircraft || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+          const entryBase = String(entry.base || '').toUpperCase();
+
+          // Base must match exactly
+          const baseMatches = entryBase === normalizedBase || entryBase.includes(normalizedBase);
+
+          // Aircraft can match in various ways (220, A220, etc.)
+          const aircraftMatches =
+            entryAircraft === normalizedAircraft ||
+            entryAircraft.includes(normalizedAircraft) ||
+            normalizedAircraft.includes(entryAircraft);
+
+          return baseMatches && aircraftMatches;
+        });
+
+        if (match && match.alvHours) {
+          console.log(`✅ Matched ALV for ${base} ${aircraft}: ${match.alvHours}h from table entry:`, match);
+          return match.alvHours;
+        } else {
+          console.warn(`❌ No ALV match found for ${base} ${aircraft}. Available entries:`,
+            latestBidPackage.alvTable.map((e: any) => `${e.base} ${e.aircraft} ${e.position}`));
+        }
+      } else {
+        console.warn('User profile incomplete - missing base or aircraft', userProfile);
+      }
+    }
+
+    // If no table match, check for default ALV
+    if (latestBidPackage.alvHours) {
+      const alvFromPackage = parseFloat(latestBidPackage.alvHours as string);
+      if (!isNaN(alvFromPackage) && alvFromPackage > 0) {
+        console.log(`Using default ALV from bid package: ${alvFromPackage}h`);
+        return alvFromPackage;
+      }
+    }
+
+    // Last resort fallback
+    console.warn('⚠️ Using hardcoded fallback ALV of 85h - bid package should have ALV data!');
+    return defaultALV;
+  }, [latestBidPackage, userProfile]);
+
   // Initialize to the bid package month/year dynamically
   const [currentDate, setCurrentDate] = useState(() => {
     if (bidPackageId && latestBidPackage) {
@@ -304,14 +385,6 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   const totalDaysOff = daysInMonth - totalWorkingDays;
 
   const ratio = totalBlockHours > 0 ? totalCreditHours / totalBlockHours : 0;
-  let ratioLabel = 'Poor';
-  if (ratio >= 1.3) {
-    ratioLabel = 'Excellent';
-  } else if (ratio >= 1.2) {
-    ratioLabel = 'Good';
-  } else if (ratio >= 1.1) {
-    ratioLabel = 'Average';
-  }
 
   // Use actual bid package statistics for efficiency scoring
   const hasStats =
@@ -321,6 +394,47 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   const avgRatio = hasStats
     ? bidPackageStats.creditBlockRatios.average
     : undefined;
+
+  // Calculate percentile-based rating using actual bid package range
+  let ratioLabel = 'Average';
+  let ratioDotColor = 'bg-orange-500';
+
+  if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
+    const range = maxRatio - minRatio;
+    const percentile = (ratio - minRatio) / range;
+
+    if (percentile >= 0.80) {
+      ratioLabel = 'Excellent';
+      ratioDotColor = 'bg-green-500';
+    } else if (percentile >= 0.60) {
+      ratioLabel = 'Good';
+      ratioDotColor = 'bg-blue-500';
+    } else if (percentile >= 0.40) {
+      ratioLabel = 'Average';
+      ratioDotColor = 'bg-orange-500';
+    } else if (percentile >= 0.20) {
+      ratioLabel = 'Below Average';
+      ratioDotColor = 'bg-yellow-500';
+    } else {
+      ratioLabel = 'Poor';
+      ratioDotColor = 'bg-red-500';
+    }
+  } else {
+    // Fallback to fixed thresholds if no stats available
+    if (ratio >= 1.3) {
+      ratioLabel = 'Excellent';
+      ratioDotColor = 'bg-green-500';
+    } else if (ratio >= 1.2) {
+      ratioLabel = 'Good';
+      ratioDotColor = 'bg-blue-500';
+    } else if (ratio >= 1.1) {
+      ratioLabel = 'Average';
+      ratioDotColor = 'bg-orange-500';
+    } else {
+      ratioLabel = 'Poor';
+      ratioDotColor = 'bg-red-500';
+    }
+  }
 
   // Calculate weeks for the calendar
   const weeks = [];
@@ -563,28 +677,32 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Credit Hours</div>
-                      <div className="text-xs text-gray-500">Target: 85h</div>
+                      <div className="text-xs text-gray-500">Target: {userALV.toFixed(0)}h</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-gray-900">
                       {totalCreditHours.toFixed(2)}
                     </div>
-                    <div className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                      +15.2h
+                    <div className={`text-xs px-2 py-1 rounded-full ${
+                      totalCreditHours >= userALV
+                        ? 'text-green-600 bg-green-100'
+                        : 'text-orange-600 bg-orange-100'
+                    }`}>
+                      {totalCreditHours >= userALV ? '+' : ''}{(totalCreditHours - userALV).toFixed(1)}h
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Progress</span>
-                    <span>{totalCreditHours.toFixed(1)}/85</span>
+                    <span>{totalCreditHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-green-500 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${Math.min((totalCreditHours / 85) * 100, 100)}%`,
+                        width: `${Math.min((totalCreditHours / userALV) * 100, 100)}%`,
                       }}
                     ></div>
                   </div>
@@ -728,9 +846,9 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     <div className="text-2xl font-bold text-gray-900">
                       {ratio.toFixed(2)}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-xs text-gray-500">(Excellent)</span>
+                    <div className="flex items-center gap-1 justify-end">
+                      <div className={`w-2 h-2 ${ratioDotColor} rounded-full`}></div>
+                      <span className="text-xs text-gray-500">({ratioLabel})</span>
                     </div>
                   </div>
                 </div>

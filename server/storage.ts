@@ -65,6 +65,8 @@ export interface IStorage {
       year?: number;
       base?: string;
       aircraft?: string;
+      alvHours?: number;
+      alvTable?: any;
     }
   ): Promise<void>;
   deleteBidPackage(id: number): Promise<void>;
@@ -267,6 +269,8 @@ export class DatabaseStorage implements IStorage {
       year?: number;
       base?: string;
       aircraft?: string;
+      alvHours?: number;
+      alvTable?: any;
     }
   ): Promise<void> {
     const updateData: any = {};
@@ -284,6 +288,12 @@ export class DatabaseStorage implements IStorage {
     }
     if (data.aircraft !== undefined) {
       updateData.aircraft = data.aircraft;
+    }
+    if (data.alvHours !== undefined) {
+      updateData.alvHours = data.alvHours.toString();
+    }
+    if (data.alvTable !== undefined) {
+      updateData.alvTable = data.alvTable;
     }
     if (Object.keys(updateData).length === 0) {
       return;
@@ -586,6 +596,16 @@ export class DatabaseStorage implements IStorage {
 
       conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
 
+      console.log(`searchPairingsWithPagination: bidPackageId=${filters.bidPackageId}, page=${page}, limit=${limit}`);
+
+      // Debug: Check total count in database for this bid package
+      const debugCount = await db
+        .select({ count: sql`count(*)` })
+        .from(pairings)
+        .where(eq(pairings.bidPackageId, filters.bidPackageId))
+        .execute();
+      console.log(`searchPairingsWithPagination: Database has ${debugCount[0]?.count || 0} total pairings for bid package ${filters.bidPackageId}`);
+
       // Add all the existing filter conditions (copy from searchPairings method)
       if (filters.search) {
         conditions.push(
@@ -758,6 +778,8 @@ export class DatabaseStorage implements IStorage {
           ? ((pairingsResult[0] as any).totalCount as number)
           : 0;
       const totalPages = Math.ceil(total / limit);
+
+      console.log(`searchPairingsWithPagination: Query returned ${pairingsResult.length} rows, total=${total}, totalPages=${totalPages}`);
 
       // Strip totalCount from rows to satisfy Pairing shape
       let finalResults = (pairingsResult as any[]).map(r => {

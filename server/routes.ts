@@ -306,7 +306,8 @@ export async function registerRoutes(app: Express) {
           console.log(
             `File parsing completed for bid package ${bidPackage.id}`
           );
-          await storage.updateBidPackageStatus(bidPackage.id, 'completed');
+          // Status is set to 'completed' inside parseFile() after all batch inserts finish
+          // Removed duplicate status update that was causing race condition
         })
         .catch(async error => {
           console.error(

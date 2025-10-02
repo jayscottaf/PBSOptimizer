@@ -125,6 +125,118 @@ export class PDFParser {
     return cleanedRoute.join('-');
   }
 
+  private extractALVTable(text: string): { alvTable: any[]; defaultALV: number | null } {
+    const lines = text.split('\n');
+    const alvTable: any[] = [];
+    let defaultALV: number | null = null;
+    let inALVSection = false;
+
+    console.log('Starting ALV table extraction...');
+
+    // Look for ALV section in the entire document (not just first 50 lines)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      // Detect start of ALV section
+      if (line.match(/ALV|Average\s+Line\s+Value/i)) {
+        inALVSection = true;
+        console.log(`ALV section detected at line ${i}: "${line}"`);
+
+        // Try to extract default ALV from header
+        const alvHeaderMatch = line.match(/ALV[:\s]+(\d{1,3})[:\.](\d{2})/i);
+        if (alvHeaderMatch && !defaultALV) {
+          const hours = parseInt(alvHeaderMatch[1]);
+          const minutes = parseInt(alvHeaderMatch[2]);
+          defaultALV = hours + minutes / 60;
+          console.log(`✅ Found default ALV in header: ${defaultALV.toFixed(2)} hours`);
+        }
+      }
+
+      // Stop parsing after ALV section if we hit another major section
+      if (inALVSection && line.match(/^(PAIRING|#\d{4}|EFFECTIVE|DAY\s+[A-E])/)) {
+        console.log(`ALV section ended at line ${i}`);
+        break;
+      }
+
+      // Skip if not in ALV section yet
+      if (!inALVSection && i > 100) continue;
+
+      // Pattern 1: Standard format "NYC 220 B    72:00" or "NYC A220 B    72.00"
+      // Captures: BASE(3-letter) AIRCRAFT(alphanumeric) POSITION(1-2 letters) HOURS
+      const alvRowMatch = line.match(/^([A-Z]{2,3})\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/);
+      if (alvRowMatch) {
+        const base = alvRowMatch[1];
+        const aircraft = alvRowMatch[2];
+        const position = alvRowMatch[3];
+        const hours = parseInt(alvRowMatch[4]);
+        const minutes = parseInt(alvRowMatch[5]);
+        const alvHours = hours + minutes / 60;
+
+        // Avoid duplicates
+        const exists = alvTable.some(
+          row => row.base === base && row.aircraft === aircraft && row.position === position
+        );
+
+        if (!exists) {
+          alvTable.push({
+            base,
+            aircraft,
+            position,
+            alvHours,
+            displayName: `${base} ${aircraft} ${position}`,
+          });
+          console.log(`✅ Found ALV row: ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`);
+        }
+      }
+
+      // Pattern 2: Full city name format "NEW YORK CITY 220 B    72:00"
+      const alvRowAltMatch = line.match(/^(NEW\s+YORK\s+CITY|NEWARK|LOS\s+ANGELES|SAN\s+FRANCISCO)\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/i);
+      if (alvRowAltMatch) {
+        const baseFull = alvRowAltMatch[1];
+        const baseMap: Record<string, string> = {
+          'NEW YORK CITY': 'NYC',
+          'NEWARK': 'EWR',
+          'LOS ANGELES': 'LAX',
+          'SAN FRANCISCO': 'SFO',
+        };
+        const base = baseMap[baseFull.toUpperCase().trim()] || baseFull.substring(0, 3).toUpperCase();
+        const aircraft = alvRowAltMatch[2];
+        const position = alvRowAltMatch[3];
+        const hours = parseInt(alvRowAltMatch[4]);
+        const minutes = parseInt(alvRowAltMatch[5]);
+        const alvHours = hours + minutes / 60;
+
+        const exists = alvTable.some(
+          row => row.base === base && row.aircraft === aircraft && row.position === position
+        );
+
+        if (!exists) {
+          alvTable.push({
+            base,
+            aircraft,
+            position,
+            alvHours,
+            displayName: `${base} ${aircraft} ${position}`,
+          });
+          console.log(`✅ Found ALV row (full name): ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`);
+        }
+      }
+    }
+
+    console.log(`\n=== ALV Extraction Summary ===`);
+    console.log(`Total entries found: ${alvTable.length}`);
+    console.log(`Default ALV: ${defaultALV ? defaultALV.toFixed(2) + 'h' : 'Not found'}`);
+    if (alvTable.length > 0) {
+      console.log('Entries:');
+      alvTable.forEach(entry => {
+        console.log(`  - ${entry.displayName}: ${entry.alvHours.toFixed(2)}h`);
+      });
+    }
+    console.log(`==============================\n`);
+
+    return { alvTable, defaultALV };
+  }
+
   private extractBidPackageDate(text: string): string | null {
     const lines = text.split('\n');
 
@@ -876,6 +988,18 @@ export class PDFParser {
         console.log(
           'Could not extract bid package date, proceeding with individual pairing dates only'
         );
+      }
+
+      // Extract ALV (Average Line Value) table from the PDF
+      const { alvTable, defaultALV } = this.extractALVTable(text);
+      if (alvTable.length > 0 || defaultALV !== null) {
+        console.log(`Extracted ALV data: ${alvTable.length} table entries, default: ${defaultALV}`);
+        await storage.updateBidPackageInfo(bidPackageId, {
+          alvTable: alvTable.length > 0 ? alvTable : undefined,
+          alvHours: defaultALV !== null ? defaultALV : undefined,
+        });
+      } else {
+        console.log('Could not extract ALV data from bid package');
       }
 
       // Extract pairing blocks from the text

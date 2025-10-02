@@ -305,7 +305,7 @@ export default function Dashboard() {
         },
         currentUser?.seniorityNumber || currentUser?.id
       ),
-    enabled: !!bidPackageId,
+    enabled: !!bidPackageId && latestBidPackage?.status === 'completed',
     staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
     refetchOnMount: false,
@@ -323,7 +323,7 @@ export default function Dashboard() {
   // Auto-prefetch full dataset for current bid package and filters
   React.useEffect(() => {
     const run = async () => {
-      if (!bidPackageId) {
+      if (!bidPackageId || latestBidPackage?.status !== 'completed') {
         setIsFullCacheReady(false);
         setFullLocal(null);
         return;
@@ -366,15 +366,32 @@ export default function Dashboard() {
 
       // Load filtered cache if it exists
       let full: any[] | null = null;
+      let needsFilteredRefetch = false;
+      const MINIMUM_EXPECTED_PAIRINGS = 400; // Reasonable minimum for a full bid package
+
       if (hasFull) {
         // Load existing filtered cache
         console.log('Dashboard: Loading existing filtered cache');
         full = await loadFullPairingsCache<any[]>(cacheKey);
         console.log('Dashboard: Loaded filtered cache, length:', full?.length || 0);
-        setFullLocal(full || null);
 
-        // Hide status indicator after 3 seconds when cache already exists
-        setTimeout(() => setShowInitialStatus(false), 3000);
+        // Validate filtered cache - it should have at least 400 pairings for a full bid package
+        // This prevents using partial/stale caches from incomplete uploads
+        const filteredLength = full?.length || 0;
+        if (filteredLength > 0 && filteredLength < MINIMUM_EXPECTED_PAIRINGS) {
+          console.warn(
+            `Dashboard: Filtered cache too small (${filteredLength} < ${MINIMUM_EXPECTED_PAIRINGS}), likely incomplete. Will re-fetch.`
+          );
+          needsFilteredRefetch = true;
+          full = null; // Don't use the stale cache
+          // DON'T call setFullLocal - keep the UI empty to avoid showing partial data
+        } else {
+          setFullLocal(full || null);
+          // Hide status indicator after 3 seconds when cache already exists
+          setTimeout(() => setShowInitialStatus(false), 3000);
+        }
+      } else {
+        needsFilteredRefetch = true;
       }
 
       // Also load unfiltered cache for sorting
@@ -388,7 +405,6 @@ export default function Dashboard() {
         // and should have a reasonable minimum (e.g., > 400 for full bid packages)
         const filteredLength = full?.length || 0;
         const unfilteredLength = unfiltered?.length || 0;
-        const MINIMUM_EXPECTED_PAIRINGS = 400; // Reasonable minimum for a full bid package
 
         if (unfilteredLength === 0 ||
             (unfilteredLength > 0 && unfilteredLength < filteredLength) ||
@@ -397,6 +413,7 @@ export default function Dashboard() {
             `Dashboard: Invalid unfiltered cache detected (length: ${unfilteredLength}, filtered: ${filteredLength}, min expected: ${MINIMUM_EXPECTED_PAIRINGS}). Will re-fetch.`
           );
           needsUnfilteredRefetch = true;
+          // DON'T call setUnfilteredLocal - avoid showing partial data
         } else {
           setUnfilteredLocal(unfiltered || null);
         }
@@ -429,16 +446,18 @@ export default function Dashboard() {
         }
       }
 
-      if (!hasFull && navigator.onLine) {
-        // Prefetch full dataset
+      if ((needsFilteredRefetch || !hasFull) && navigator.onLine) {
+        // Prefetch full dataset (either missing or invalid/incomplete)
         try {
           setIsPrefetching(true);
+          console.log('Dashboard: Prefetching filtered cache', needsFilteredRefetch ? '(forced due to incomplete cache)' : '(cache missing)');
           await api.prefetchAllPairings(
             {
               bidPackageId,
               ...debouncedFilters,
             } as any,
-            userId
+            userId,
+            { force: true } // Force refetch to bypass any stale cache
           );
 
           // Re-check and load after prefetch
@@ -447,6 +466,7 @@ export default function Dashboard() {
 
           if (newHasFull) {
             const full = await loadFullPairingsCache<any[]>(cacheKey);
+            console.log('Dashboard: Loaded fresh filtered cache after prefetch, length:', full?.length || 0);
             setFullLocal(full || null);
 
             // Hide status indicator after 3 seconds when cache is ready
@@ -466,6 +486,7 @@ export default function Dashboard() {
     JSON.stringify(debouncedFilters),
     currentUser?.seniorityNumber,
     currentUser?.id,
+    latestBidPackage?.status,
   ]);
 
   // When the bid package transitions to completed, invalidate and refetch pairings
@@ -1664,8 +1685,14 @@ export default function Dashboard() {
 
                           if (latestPackage) {
                             console.log(
-                              'Bid package processing completed, refreshing data...'
+                              'Bid package processing completed, waiting for database writes to commit...'
                             );
+                            // Wait 5 seconds to ensure all database batch inserts are committed
+                            // The server inserts pairings in batches (11 batches for 513 pairings),
+                            // and we need to wait for all batches to complete before fetching
+                            await new Promise(resolve => setTimeout(resolve, 5000));
+
+                            console.log('Database writes complete, refreshing data...');
                             // Refresh all data
                             refetchBidPackages();
                             if (latestPackage.id !== selectedBidPackageId) {
