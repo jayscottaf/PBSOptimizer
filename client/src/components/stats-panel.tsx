@@ -48,6 +48,7 @@ export function StatsPanel({
         sixDayCombos: 0,
         avgCreditHours: 0,
         avgBlockHours: 0,
+        avgByDays: {},
         ratioBreakdown: {
           excellent: 0,
           good: 0,
@@ -94,6 +95,21 @@ export function StatsPanel({
       pairings.length > 0 ? totalCredit / pairings.length : 0;
     const avgBlockHours =
       pairings.length > 0 ? totalBlock / pairings.length : 0;
+
+    // Calculate averages by pairing days (1-5 days)
+    const avgByDays: { [key: number]: { credit: number; block: number; count: number } } = {};
+    for (let days = 1; days <= 5; days++) {
+      const dayPairings = pairings.filter((p: any) => p.pairingDays === days);
+      if (dayPairings.length > 0) {
+        const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
+        const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+        avgByDays[days] = {
+          credit: dayCredit / dayPairings.length,
+          block: dayBlock / dayPairings.length,
+          count: dayPairings.length,
+        };
+      }
+    }
     // Calculate credit-to-block ratio breakdown
     // Use backend global ratio breakdown when available so the sidebar card reflects all pairings, not just current page
     const ratioBreakdown =
@@ -124,6 +140,7 @@ export function StatsPanel({
       highCredit: highCreditCount,
       avgCreditHours: pairings.length > 0 ? totalCredit / pairings.length : 0,
       avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
+      avgByDays,
       ratioBreakdown,
     };
   }, [pairings, pagination, statistics]);
@@ -234,19 +251,27 @@ export function StatsPanel({
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {stats.avgCreditHours.toFixed(1)}
-              </div>
-              <div className="text-gray-600">Avg Credit</div>
-            </div>
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {stats.avgBlockHours.toFixed(1)}
-              </div>
-              <div className="text-gray-600">Avg Block</div>
-            </div>
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Averages by Trip Length</h4>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map(days => {
+              const data = stats.avgByDays[days];
+              if (!data) return null;
+              return (
+                <div key={days} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 font-medium">{days}-day:</span>
+                  <div className="flex gap-3">
+                    <span className="text-gray-900">
+                      <span className="font-medium">{data.credit.toFixed(1)}</span>
+                      <span className="text-gray-500 ml-1">cr</span>
+                    </span>
+                    <span className="text-gray-900">
+                      <span className="font-medium">{data.block.toFixed(1)}</span>
+                      <span className="text-gray-500 ml-1">blk</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -381,19 +406,27 @@ export function StatsPanel({
         </div>
 
         <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {stats.avgCreditHours.toFixed(1)}
-              </div>
-              <div className="text-gray-600">Avg Credit</div>
-            </div>
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {stats.avgBlockHours.toFixed(1)}
-              </div>
-              <div className="text-gray-600">Avg Block</div>
-            </div>
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Averages by Trip Length</h4>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map(days => {
+              const data = stats.avgByDays[days];
+              if (!data) return null;
+              return (
+                <div key={days} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 font-medium">{days}-day:</span>
+                  <div className="flex gap-3">
+                    <span className="text-gray-900">
+                      <span className="font-medium">{data.credit.toFixed(1)}</span>
+                      <span className="text-gray-500 ml-1">cr</span>
+                    </span>
+                    <span className="text-gray-900">
+                      <span className="font-medium">{data.block.toFixed(1)}</span>
+                      <span className="text-gray-500 ml-1">blk</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
