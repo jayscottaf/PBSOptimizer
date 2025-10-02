@@ -153,13 +153,13 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     return defaultALV;
   }, [latestBidPackage, userProfile]);
 
-  // Initialize to the bid package month/year dynamically
-  const [currentDate, setCurrentDate] = useState(() => {
-    if (bidPackageId && latestBidPackage) {
-      // Use the bid package's month and year
-      const month = latestBidPackage.month || 'SEP';
-      const year = latestBidPackage.year || 2025;
+  // Initialize to current date, will be updated when bid package loads
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const queryClient = useQueryClient();
 
+  // Update calendar month when bid package data loads
+  React.useEffect(() => {
+    if (latestBidPackage?.month && latestBidPackage?.year) {
       const monthMap: { [key: string]: number } = {
         JAN: 0,
         FEB: 1,
@@ -175,13 +175,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
         DEC: 11,
       };
 
-      const monthIndex = monthMap[month] || 8; // Default to September if unknown
-      return new Date(year, monthIndex, 1);
+      const monthIndex = monthMap[latestBidPackage.month] ?? new Date().getMonth();
+      const targetDate = new Date(latestBidPackage.year, monthIndex, 1);
+
+      // Only update if we're not already on the correct month
+      if (currentDate.getMonth() !== monthIndex || currentDate.getFullYear() !== latestBidPackage.year) {
+        setCurrentDate(targetDate);
+      }
     }
-    // Fallback to current date
-    return new Date();
-  });
-  const queryClient = useQueryClient();
+  }, [latestBidPackage?.month, latestBidPackage?.year]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
