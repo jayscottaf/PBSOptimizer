@@ -187,6 +187,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrUpdateUser(userData: {
+    name?: string;
     seniorityNumber: number;
     seniorityPercentile?: number;
     base: string;
@@ -201,6 +202,7 @@ export class DatabaseStorage implements IStorage {
       const [updatedUser] = await db
         .update(users)
         .set({
+          name: userData.name !== undefined ? userData.name : existingUser.name,
           base: userData.base,
           aircraft: userData.aircraft,
           seniorityPercentile:
@@ -213,6 +215,7 @@ export class DatabaseStorage implements IStorage {
     } else {
       // Create new user
       return await this.createUser({
+        name: userData.name,
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
         aircraft: userData.aircraft,

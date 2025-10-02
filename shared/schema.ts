@@ -17,6 +17,7 @@ import { z } from 'zod';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
+  name: varchar('name', { length: 100 }),
   seniorityNumber: integer('seniority_number').notNull(),
   seniorityPercentile: integer('seniority_percentile').default(50), // 0-100, lower is more senior
   base: varchar('base', { length: 10 }).notNull(),

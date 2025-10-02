@@ -696,13 +696,14 @@ export async function registerRoutes(app: Express) {
   // Create/update user
   app.post('/api/user', async (req, res) => {
     try {
-      const { seniorityNumber, seniorityPercentile, base, aircraft } = req.body;
+      const { name, seniorityNumber, seniorityPercentile, base, aircraft } = req.body;
 
       if (!seniorityNumber || !base || !aircraft) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
       const user = await storage.createOrUpdateUser({
+        name,
         seniorityNumber: parseInt(seniorityNumber),
         seniorityPercentile: seniorityPercentile
           ? parseFloat(seniorityPercentile)

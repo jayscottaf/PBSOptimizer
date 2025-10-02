@@ -113,6 +113,9 @@ export default function Dashboard() {
 
     return () => clearTimeout(timer);
   }, [filters]);
+  const [name, setName] = useState(() => {
+    return localStorage.getItem('name') || '';
+  });
   const [seniorityNumber, setSeniorityNumber] = useState(() => {
     return localStorage.getItem('seniorityNumber') || '';
   });
@@ -138,12 +141,13 @@ export default function Dashboard() {
   // Save user info to localStorage when it changes (but not on initial load)
   React.useEffect(() => {
     if (hasInitialized) {
+      localStorage.setItem('name', name);
       localStorage.setItem('seniorityNumber', seniorityNumber);
       localStorage.setItem('seniorityPercentile', seniorityPercentile);
       localStorage.setItem('base', base);
       localStorage.setItem('aircraft', aircraft);
     }
-  }, [seniorityNumber, seniorityPercentile, base, aircraft, hasInitialized]);
+  }, [name, seniorityNumber, seniorityPercentile, base, aircraft, hasInitialized]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -1295,6 +1299,7 @@ export default function Dashboard() {
                         onFiltersChange={handleFiltersChange}
                         activeFilters={activeFilters}
                         onClearFilters={clearAllFilters}
+                        bidPackage={latestBidPackage}
                       />
                     </div>
                   </div>
@@ -1715,6 +1720,16 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Name
+              </label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name (optional)"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
                 Seniority Number <span className="text-red-500">*</span>
               </label>
               <Input
@@ -1864,6 +1879,7 @@ export default function Dashboard() {
                   try {
                     // Create or update user in database
                     await api.createOrUpdateUser({
+                      name: name || undefined,
                       seniorityNumber: parseInt(seniorityNumber),
                       seniorityPercentile: seniorityPercentile
                         ? Math.round(parseFloat(seniorityPercentile))

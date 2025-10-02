@@ -461,20 +461,42 @@ export const api = {
   async analyzePairings(question: string, bidPackageId?: number) {
     // Include bidPackageId and seniority context automatically
     let seniorityFromLocal: string | null = null;
+    let nameFromLocal: string | null = null;
     try {
       if (typeof window !== 'undefined') {
         seniorityFromLocal = localStorage.getItem('seniorityPercentile');
+        nameFromLocal = localStorage.getItem('name');
       }
     } catch {
       // Ignore localStorage errors
     }
 
     const prefixParts: string[] = [];
-    if (bidPackageId) {
-      prefixParts.push(`Bid package #${bidPackageId}`);
+
+    // Add name if available
+    if (nameFromLocal) {
+      prefixParts.push(`Pilot: ${nameFromLocal}`);
     }
+
+    // Add seniority
     if (seniorityFromLocal) {
-      prefixParts.push(`User seniority ${seniorityFromLocal}%`);
+      prefixParts.push(`Seniority: ${seniorityFromLocal}%`);
+    }
+
+    // Add bid package with full details
+    if (bidPackageId) {
+      try {
+        const bidPackages = await this.getBidPackages();
+        const currentPackage = bidPackages.find(pkg => pkg.id === bidPackageId);
+        if (currentPackage) {
+          const pkgDisplay = `${currentPackage.base} ${currentPackage.aircraft} ${currentPackage.month} ${currentPackage.year}`;
+          prefixParts.push(`Current Bid Package: ${pkgDisplay}`);
+        } else {
+          prefixParts.push(`Bid package #${bidPackageId}`);
+        }
+      } catch {
+        prefixParts.push(`Bid package #${bidPackageId}`);
+      }
     }
 
     const contextualQuestion = prefixParts.length

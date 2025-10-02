@@ -35,6 +35,7 @@ interface SmartFilterSystemProps {
   onFiltersChange: (filters: SearchFilters) => void;
   activeFilters: Array<{ key: string; label: string; value: any }>;
   onClearFilters: () => void;
+  bidPackage?: { month: string; year: number };
 }
 
 const filterOptions: FilterOption[] = [
@@ -146,7 +147,25 @@ export function SmartFilterSystem({
   onFiltersChange,
   activeFilters,
   onClearFilters,
+  bidPackage,
 }: SmartFilterSystemProps) {
+  // Calculate default month for calendar based on bid package
+  const defaultMonth = React.useMemo(() => {
+    if (!bidPackage) return new Date();
+
+    const monthMap: { [key: string]: number } = {
+      'January': 0, 'February': 1, 'March': 2, 'April': 3,
+      'May': 4, 'June': 5, 'July': 6, 'August': 7,
+      'September': 8, 'October': 9, 'November': 10, 'December': 11
+    };
+
+    const monthNum = monthMap[bidPackage.month];
+    if (monthNum !== undefined) {
+      return new Date(bidPackage.year, monthNum, 1);
+    }
+    return new Date();
+  }, [bidPackage]);
+
   // Preferred days off state
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -526,6 +545,7 @@ export function SmartFilterSystem({
                 mode="multiple"
                 selected={selectedDaysOff}
                 onSelect={handleDayOffSelect}
+                defaultMonth={defaultMonth}
                 initialFocus
                 className="rounded-md border"
               />
