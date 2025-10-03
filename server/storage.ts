@@ -837,6 +837,237 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getAllPairingsForBidPackage(filters: {
+    bidPackageId: number;
+    search?: string;
+    creditMin?: number;
+    creditMax?: number;
+    blockMin?: number;
+    blockMax?: number;
+    tafbMin?: number;
+    tafbMax?: number;
+    holdProbabilityMin?: number;
+    pairingDays?: number;
+    pairingDaysMin?: number;
+    pairingDaysMax?: number;
+    efficiency?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    pairings: Pairing[];
+    statistics: {
+      likelyToHold: number;
+      highCredit: number;
+      ratioBreakdown: {
+        excellent: number;
+        good: number;
+        average: number;
+        poor: number;
+      };
+    };
+  }> {
+    try {
+      const conditions = [];
+
+      if (!filters.bidPackageId) {
+        console.error('Bid package ID is required for pairing search');
+        return {
+          pairings: [],
+          statistics: {
+            likelyToHold: 0,
+            highCredit: 0,
+            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
+          },
+        };
+      }
+
+      conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
+
+      // Apply all filter conditions
+      if (filters.search) {
+        conditions.push(
+          or(
+            like(pairings.route, `%${filters.search}%`),
+            like(pairings.pairingNumber, `%${filters.search}%`),
+            like(pairings.effectiveDates, `%${filters.search}%`),
+            like(pairings.fullTextBlock, `%${filters.search}%`)
+          )
+        );
+      }
+
+      if (filters.creditMin !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`
+        );
+      }
+
+      if (filters.creditMax !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`
+        );
+      }
+
+      if (filters.blockMin !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`
+        );
+      }
+
+      if (filters.blockMax !== undefined) {
+        conditions.push(
+          sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`
+        );
+      }
+
+      if (filters.holdProbabilityMin !== undefined) {
+        conditions.push(
+          gte(pairings.holdProbability, filters.holdProbabilityMin)
+        );
+      }
+
+      if (filters.pairingDays !== undefined) {
+        conditions.push(eq(pairings.pairingDays, filters.pairingDays));
+      }
+
+      if (filters.pairingDaysMin !== undefined) {
+        conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
+      }
+
+      if (filters.pairingDaysMax !== undefined) {
+        conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
+      }
+
+      if (filters.tafbMin !== undefined) {
+        const minMins = filters.tafbMin * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) >= ${minMins}
+        `);
+      }
+
+      if (filters.tafbMax !== undefined) {
+        const maxMins = filters.tafbMax * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) <= ${maxMins}
+        `);
+      }
+
+      // Computed SQL expressions
+      const efficiencyExpr = sql`(CAST(${pairings.creditHours} AS numeric) / NULLIF(CAST(${pairings.blockHours} AS numeric), 0))`;
+
+      if (filters.efficiency !== undefined) {
+        conditions.push(sql`${efficiencyExpr} >= ${filters.efficiency}`);
+      }
+
+      // Calculate statistics for the filtered dataset
+      const statsQuery = db
+        .select({
+          likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
+          highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
+          excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
+          good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
+          average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
+          poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`,
+        })
+        .from(pairings)
+        .where(and(...conditions));
+
+      const [stats] = await statsQuery.execute();
+
+      // Build sort configuration
+      const sortColumn = filters.sortBy || 'pairingNumber';
+      const sortDirection = filters.sortOrder === 'desc' ? desc : asc;
+
+      const sortColumnMap: Record<string, any> = {
+        pairingNumber: pairings.pairingNumber,
+        creditHours: pairings.creditHours,
+        blockHours: pairings.blockHours,
+        holdProbability: pairings.holdProbability,
+        pairingDays: pairings.pairingDays,
+        route: pairings.route,
+      };
+
+      const tafbMinutesExpr = sql`
+        (
+          CASE
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+              (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
+              (split_part(${pairings.tafb}::text, '.', 1)::int * 60 + split_part(${pairings.tafb}::text, '.', 2)::int)
+            WHEN ${pairings.tafb}::text ~ '^[0-9]+$' THEN
+              (${pairings.tafb}::int * 60)
+            ELSE 0
+          END
+        )`;
+
+      const sortColumnField =
+        sortColumn === 'creditBlockRatio'
+          ? efficiencyExpr
+          : sortColumn === 'tafb'
+            ? tafbMinutesExpr
+            : sortColumnMap[sortColumn] || pairings.pairingNumber;
+
+      // Query all pairings (no LIMIT/OFFSET)
+      const pairingsResult = await db
+        .select({
+          id: pairings.id,
+          bidPackageId: pairings.bidPackageId,
+          pairingNumber: pairings.pairingNumber,
+          effectiveDates: pairings.effectiveDates,
+          route: pairings.route,
+          creditHours: pairings.creditHours,
+          blockHours: pairings.blockHours,
+          tafb: pairings.tafb,
+          holdProbability: pairings.holdProbability,
+          pairingDays: pairings.pairingDays,
+          fullTextBlock: pairings.fullTextBlock,
+        })
+        .from(pairings)
+        .where(and(...conditions))
+        .orderBy(sortDirection(sortColumnField))
+        .execute();
+
+      return {
+        pairings: pairingsResult as Pairing[],
+        statistics: {
+          likelyToHold: stats.likelyToHold,
+          highCredit: stats.highCredit,
+          ratioBreakdown: {
+            excellent: stats.excellent,
+            good: stats.good,
+            average: stats.average,
+            poor: stats.poor,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('Error in getAllPairingsForBidPackage:', error);
+      return {
+        pairings: [],
+        statistics: {
+          likelyToHold: 0,
+          highCredit: 0,
+          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
+        },
+      };
+    }
+  }
+
   async createBidHistory(
     bidHistoryData: InsertBidHistory
   ): Promise<BidHistory> {

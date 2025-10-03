@@ -137,13 +137,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
         if (match && match.alvHours) {
           console.log(`✅ Matched ALV for ${base} ${aircraft} ${position}: ${match.alvHours}h from table entry:`, match);
           return match.alvHours;
-        } else {
-          console.warn(`❌ No ALV match found for ${base} ${aircraft} ${position}. Available entries:`,
-            latestBidPackage.alvTable.map((e: any) => `${e.base} ${e.aircraft} ${e.position}`));
         }
-      } else {
-        console.warn('User profile incomplete - missing base, aircraft, or position', userProfile);
+        // Note: No match found, will try default ALV or fallback
       }
+      // Note: Profile not fully loaded yet, will use default or fallback
     }
 
     // If no table match, check for default ALV
@@ -155,8 +152,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       }
     }
 
-    // Last resort fallback
-    console.warn('⚠️ Using hardcoded fallback ALV of 85h - bid package should have ALV data!');
+    // Last resort fallback (only during initial load before bid package data is available)
     return defaultALV;
   }, [latestBidPackage, userProfile]);
 

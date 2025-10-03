@@ -487,14 +487,10 @@ export async function registerRoutes(app: Express) {
         Expires: '0',
       });
 
-      // Minimal request log for debugging; avoid dumping large payloads
-
       console.log('POST /api/pairings/search', { path: req.path });
 
       const {
         bidPackageId,
-        page = 1,
-        limit = 50,
         sortBy = 'pairingNumber',
         sortOrder = 'asc',
         ...filters
@@ -504,27 +500,19 @@ export async function registerRoutes(app: Express) {
         console.log('No bid package ID provided in search request');
         return res.status(400).json({
           message: 'Bid package ID is required',
-
           pairings: [],
-          pagination: {
-            page: 1,
-            limit: 50,
-            total: 0,
-            totalPages: 0,
-            hasNext: false,
-            hasPrev: false,
+          statistics: {
+            likelyToHold: 0,
+            highCredit: 0,
+            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
           },
         });
       }
-
-      // Do not mutate DB on seniority changes; compute per-response below
 
       // Log only key filter knobs for debugging (only in debug mode)
       if (process.env.LOG_LEVEL === 'debug') {
         console.log('Search params:', {
           bidPackageId,
-          page,
-          limit,
           sortBy,
           sortOrder,
           efficiency: (filters as any)?.efficiency,
@@ -535,10 +523,8 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      const result = await storage.searchPairingsWithPagination({
+      const result = await storage.getAllPairingsForBidPackage({
         bidPackageId,
-        page: parseInt(page),
-        limit: parseInt(limit),
         sortBy,
         sortOrder,
         ...filters,
@@ -577,24 +563,18 @@ export async function registerRoutes(app: Express) {
 
       // Only log in debug mode to reduce noise
       if (process.env.LOG_LEVEL === 'debug') {
-        console.log(
-          `Found ${result.pairings.length} pairings (page ${page} of ${result.pagination.totalPages})`
-        );
+        console.log(`Found ${result.pairings.length} pairings`);
       }
       res.json(result);
     } catch (error) {
       console.error('Error searching pairings:', error);
       res.status(500).json({
         message: 'Failed to search pairings',
-
         pairings: [],
-        pagination: {
-          page: 1,
-          limit: 50,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false,
+        statistics: {
+          likelyToHold: 0,
+          highCredit: 0,
+          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
         },
       });
     }

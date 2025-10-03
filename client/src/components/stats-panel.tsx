@@ -33,11 +33,6 @@ interface StatsPanelProps {
   pairings: Pairing[];
   bidPackage?: BidPackage;
   hideHeader?: boolean;
-  pagination?: {
-    total: number;
-    page: number;
-    limit: number;
-  };
   statistics?: BackendStatistics;
   bidPackageStats?: {
     totalPairings: number;
@@ -74,7 +69,6 @@ export function StatsPanel({
   pairings,
   bidPackage,
   hideHeader = false,
-  pagination,
   statistics,
   bidPackageStats,
   onTripLengthFilter,
@@ -116,8 +110,8 @@ export function StatsPanel({
       return 0;
     };
 
-    // Use total from pagination if available, otherwise use current page count
-    const totalPairings = pagination?.total || pairings.length;
+    // Use total from pairings length
+    const totalPairings = pairings.length;
 
     // Prefer backend-provided statistics when available; otherwise calculate from current page
     const highCreditCount =
@@ -251,7 +245,7 @@ export function StatsPanel({
       percentileThresholds,
       pairingTypeBreakdown,
     };
-  }, [pairings, pagination, statistics, bidPackageStats]);
+  }, [pairings, statistics, bidPackageStats]);
 
   // Show processing status for current bid package
   const isProcessing = bidPackage?.status === 'processing';

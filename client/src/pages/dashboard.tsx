@@ -156,8 +156,6 @@ export default function Dashboard() {
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize] = useState<number>(50);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
@@ -305,8 +303,6 @@ export default function Dashboard() {
       seniorityPercentile,
       sortColumn,
       sortDirection,
-      currentPage,
-      pageSize,
       currentUser?.seniorityNumber,
       currentUser?.id,
     ],
@@ -319,8 +315,6 @@ export default function Dashboard() {
             : undefined,
           sortBy: sortColumn || 'pairingNumber',
           sortOrder: sortDirection || 'asc',
-          page: currentPage,
-          limit: pageSize,
           ...debouncedFilters,
         },
         currentUser?.seniorityNumber || currentUser?.id
@@ -536,19 +530,14 @@ export default function Dashboard() {
     }
   }, [latestBidPackage?.status]);
 
-  // Extract pairings and pagination from the response, with fallback to preloaded data
+  // Extract pairings from the response, with fallback to preloaded data
   // Store full local cache data
   const [fullLocal, setFullLocal] = useState<any[] | null>(null);
   // Store unfiltered cache for sorting
   const [unfilteredLocal, setUnfilteredLocal] = useState<any[] | null>(null);
 
-  // Prefer full local cache whenever it exists (online or offline); fallback to server page
+  // Use pairings from response
   const pairings = pairingsResponse?.pairings || [];
-  const pagination = pairingsResponse?.pagination;
-
-  // Create custom pagination - will be updated after sortedPairings is computed
-  // This is a placeholder that will be overridden below
-  const effectivePagination = pagination;
 
   // Calculate full dataset statistics when using offline cache
   const effectiveStatistics = React.useMemo(() => {
@@ -760,7 +749,6 @@ export default function Dashboard() {
       setSortColumn(column);
       setSortDirection('desc');
     }
-    setCurrentPage(1);
   };
 
   const handleFiltersChange = (newFilters: SearchFilters) => {
@@ -813,7 +801,6 @@ export default function Dashboard() {
 
       return merged;
     });
-    setCurrentPage(1);
 
     // Update activeFilters to reflect the FULL merged filter set
     const updatedActiveFilters: Array<{
@@ -892,7 +879,6 @@ export default function Dashboard() {
       ...prev.filter(f => f.key !== 'pairingDays'),
       { key: 'pairingDays', label: `Trip Length: ${days}-day`, value: days },
     ]);
-    setCurrentPage(1);
   };
 
   // Client-side sorting from full cache when available
@@ -1143,34 +1129,13 @@ export default function Dashboard() {
     return sorted;
   }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings]);
 
-  // Update pagination based on sorted results
-  const actualEffectivePagination = React.useMemo(() => {
-    if (isFullCacheReady && sortedPairings.length > 0) {
-      const total = sortedPairings.length;
-      const totalPages = Math.ceil(total / pageSize);
-      return {
-        page: currentPage,
-        limit: pageSize,
-        total: total,
-        totalPages: totalPages,
-        hasNext: currentPage < totalPages,
-        hasPrev: currentPage > 1,
-      };
-    }
-    return effectivePagination;
-  }, [isFullCacheReady, sortedPairings, currentPage, pageSize, effectivePagination]);
-
   // Use sorted pairings if available, otherwise use regular pairings
-  // When using full cache with sorting, apply pagination slicing
   const displayPairings = React.useMemo(() => {
     if (isFullCacheReady && sortedPairings.length > 0) {
-      // Apply pagination to sorted results
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      return sortedPairings.slice(startIndex, endIndex);
+      return sortedPairings;
     }
     return pairings;
-  }, [isFullCacheReady, sortedPairings, currentPage, pageSize, pairings]);
+  }, [isFullCacheReady, sortedPairings, pairings]);
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<
     string | null
@@ -1182,12 +1147,8 @@ export default function Dashboard() {
       return { totalPairings: 0, likelyToHold: 0, highCredit: 0 };
     }
 
-    // Use pagination total if available, otherwise fall back to current page count
-    const totalPairings =
-      actualEffectivePagination && actualEffectivePagination.total
-        ? actualEffectivePagination.total
-        : pairings.length;
-    // Use backend statistics if available, otherwise calculate from current page
+    const totalPairings = pairings.length;
+    // Use backend statistics if available, otherwise calculate from pairings
     const likelyToHold = pairingsResponse?.statistics?.likelyToHold
       ? Number(pairingsResponse.statistics.likelyToHold)
       : pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
@@ -1201,7 +1162,7 @@ export default function Dashboard() {
       likelyToHold,
       highCredit,
     };
-  }, [pairings, pagination, pairingsResponse?.statistics]);
+  }, [pairings, pairingsResponse?.statistics]);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -1274,7 +1235,6 @@ export default function Dashboard() {
                   <StatsPanel
                     pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
                     bidPackage={latestBidPackage}
-                    pagination={actualEffectivePagination}
                     statistics={effectiveStatistics}
                     bidPackageStats={bidPackageStats}
                     onTripLengthFilter={handleTripLengthFilter}
@@ -1412,7 +1372,6 @@ export default function Dashboard() {
                         <StatsPanel
                           pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
                           bidPackage={latestBidPackage}
-                          pagination={actualEffectivePagination}
                           statistics={effectiveStatistics}
                           bidPackageStats={bidPackageStats}
                           onTripLengthFilter={handleTripLengthFilter}
@@ -1576,9 +1535,7 @@ export default function Dashboard() {
                             {latestBidPackage
                               ? `${latestBidPackage.month} ${latestBidPackage.year} - `
                               : ''}
-                            {actualEffectivePagination?.total ||
-                              displayPairings.length}{' '}
-                            pairings
+                            {displayPairings.length} pairings
                           </span>
                         </div>
                       </CardHeader>
@@ -1599,8 +1556,6 @@ export default function Dashboard() {
                           sortColumn={sortColumn || ''}
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
-                          pagination={effectivePagination as any}
-                          onPageChange={page => setCurrentPage(page)}
                         />
                       </CardContent>
                     </Card>

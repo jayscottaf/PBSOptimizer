@@ -64,19 +64,17 @@ export interface SearchFilters {
 }
 
 // Add this type for the new response format
-interface PaginatedResponse<T> {
-  pairings: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-  statistics?: {
+interface SearchPairingsResponse {
+  pairings: Pairing[];
+  statistics: {
     likelyToHold: number;
     highCredit: number;
+    ratioBreakdown: {
+      excellent: number;
+      good: number;
+      average: number;
+      poor: number;
+    };
   };
 }
 
@@ -256,7 +254,7 @@ export const api = {
   searchPairings: async (
     filters: SearchFilters,
     userId?: string | number
-  ): Promise<PaginatedResponse<Pairing>> => {
+  ): Promise<SearchPairingsResponse> => {
     try {
       const response = await fetch('/api/pairings/search', {
         method: 'POST',
@@ -270,77 +268,33 @@ export const api = {
         throw new Error('Failed to search pairings');
       }
       const data = await response.json();
-      // Cache the result snapshot (page)
+      // Cache the full result
       const list = data?.pairings ?? (Array.isArray(data) ? data : []);
       const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
-      savePairingsCache(key, list).catch(() => {});
+      saveFullPairingsCache(key, list).catch(() => {});
 
-      // If server returned total<=limit, treat as full dataset and cache fully
-      if (
-        data?.pagination &&
-        data.pagination.total <= (data.pagination.limit || 50)
-      ) {
-        saveFullPairingsCache(key, list).catch(() => {});
-      }
-      // Handle new paginated response format
-      if (data && data.pairings && data.pagination) {
-        return data;
-      }
-
-      // Fallback for old format (array)
-      return {
-        pairings: list,
-        pagination: {
-          page: 1,
-          limit: list.length || 0,
-          total: list.length || 0,
-          totalPages: 1,
-          hasNext: false,
-          hasPrev: false,
-        },
-      };
+      return data;
     } catch (error) {
       console.error('Error searching pairings:', error);
       // Offline: try cached
       const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
-      // Prefer full cache; fallback to last page cache
-      const full = await loadFullPairingsCache<Pairing[]>(key);
-      if (full) {
-        return {
-          pairings: full,
-          pagination: {
-            page: 1,
-            limit: full.length,
-            total: full.length,
-            totalPages: 1,
-            hasNext: false,
-            hasPrev: false,
-          },
-        };
-      }
-      const cached = await loadPairingsCache<Pairing[]>(key);
+      const cached = await loadFullPairingsCache<Pairing[]>(key);
       if (cached) {
         return {
           pairings: cached,
-          pagination: {
-            page: 1,
-            limit: cached.length,
-            total: cached.length,
-            totalPages: 1,
-            hasNext: false,
-            hasPrev: false,
+          statistics: {
+            likelyToHold: 0,
+            highCredit: 0,
+            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
           },
         };
       }
       return {
         pairings: [],
-        pagination: {
-          page: 1,
-          limit: 0,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false,
+        statistics: {
+          likelyToHold: 0,
+          highCredit: 0,
+          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
         },
       };
     }
