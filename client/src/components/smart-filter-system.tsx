@@ -416,7 +416,7 @@ export function SmartFilterSystem({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         {/* Function Selector */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Filter By</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter By</label>
           <select
             value={selectedFunction}
             onChange={e => {
@@ -436,7 +436,7 @@ export function SmartFilterSystem({
 
         {/* Data Selector */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Value</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Value</label>
           <select
             value={selectedData}
             onChange={e => {
@@ -575,11 +575,11 @@ export function SmartFilterSystem({
       {/* Quick Filter Buttons */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500">Quick filters:</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">Quick filters:</span>
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs"
+            className="text-xs dark:text-gray-300"
             onClick={() => setShowCustomize(true)}
           >
             Customize

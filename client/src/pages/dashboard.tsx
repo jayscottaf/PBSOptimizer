@@ -1170,15 +1170,15 @@ export default function Dashboard() {
   }, [pairings, pairingsResponse?.statistics]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Left Sidebar - Hidden on mobile */}
       <div
-        className={`hidden lg:flex bg-white border-r transition-all duration-300 ${
+        className={`hidden lg:flex bg-white dark:bg-gray-900 border-r dark:border-gray-800 transition-all duration-300 ${
           sidebarCollapsed ? 'w-16' : 'w-80'
         } flex-shrink-0 flex-col`}
       >
         {/* Toggle button */}
-        <div className="p-4 border-b flex justify-end">
+        <div className="p-4 border-b dark:border-gray-800 flex justify-end">
           <Button
             variant="ghost"
             size="sm"
@@ -1263,8 +1263,8 @@ export default function Dashboard() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <Plane className="h-6 w-6 text-blue-600" />
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                    <Plane className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                       PBS Bid Optimizer
                     </h1>
                   </div>
@@ -1290,7 +1290,7 @@ export default function Dashboard() {
                         setActiveTab('favorites');
                       }
                     }}
-                    className={`${activeTab === 'favorites' ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600'}`}
+                    className={`${activeTab === 'favorites' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'text-gray-600 dark:text-gray-400'}`}
                   >
                     <Star className="h-4 w-4" />
                   </Button>
@@ -1298,7 +1298,7 @@ export default function Dashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setActiveTab('calendar')}
-                    className={`${activeTab === 'calendar' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}
+                    className={`${activeTab === 'calendar' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}
                   >
                     <Calendar className="h-4 w-4" />
                   </Button>
@@ -1315,31 +1315,31 @@ export default function Dashboard() {
                         setShowAIAssistant(true);
                       }
                     }}
-                    className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 hover:border-green-300 transition-all duration-200 hover:scale-105 hover:shadow-md ${
+                    className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 dark:hover:bg-green-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all duration-200 hover:scale-105 hover:shadow-md ${
                       showMobileAI
-                        ? 'bg-green-50 border-green-300 text-green-700'
-                        : 'text-green-600'
+                        ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400'
                     }`}
                     title="AI Assistant"
                   >
-                    <Bot className="h-4 w-4 hover:text-green-700" />
+                    <Bot className="h-4 w-4 hover:text-green-700 dark:hover:text-green-400" />
                   </Button>
 
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowProfileModal(true)}
-                    className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 hover:scale-105"
+                    className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 hover:scale-105"
                     title="User Profile"
                   >
-                    <User className="h-4 w-4" />
+                    <User className="h-4 w-4 dark:text-gray-300" />
                   </Button>
                   <div className="flex items-center gap-3">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShowUploadModal(true)}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 dark:text-gray-300"
                     >
                       <CloudUpload className="h-4 w-4" />
                       <span className="hidden sm:inline">Upload</span>
@@ -1393,10 +1393,10 @@ export default function Dashboard() {
                 {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
                 {/* Horizontal Filters Bar */}
-                <div className="flex flex-col h-full bg-white">
-                  <div className="w-full bg-white border-b p-4">
+                <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+                  <div className="w-full bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-4">
                     <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Filters
                       </h3>
                       <SmartFilterSystem
@@ -1426,17 +1426,17 @@ export default function Dashboard() {
                             showInitialStatus) && (
                             <>
                               {isPrefetching ? (
-                                <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center">
+                                <span className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-700 flex items-center">
                                   <RefreshCw className="h-3 w-3 mr-1 animate-spin" />{' '}
                                   Preparing offline cache...
                                 </span>
                               ) : isFullCacheReady ? (
-                                <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
+                                <span className="text-xs px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700">
                                   Available offline: Yes
                                 </span>
                               ) : (
                                 <span
-                                  className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200 cursor-pointer"
+                                  className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 cursor-pointer"
                                   onClick={async () => {
                                     console.log('Manual prefetch triggered');
                                     setShowInitialStatus(true); // Show status during manual prefetch
@@ -1546,8 +1546,8 @@ export default function Dashboard() {
                       </CardHeader>
                       <CardContent className="flex-1 overflow-auto p-0">
                         {isUpdatingSeniority && (
-                          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                            <div className="flex items-center space-x-2 text-orange-600">
+                          <div className="absolute inset-0 bg-white dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                            <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
                               <RefreshCw className="h-6 w-6 animate-spin" />
                               <span className="text-lg font-medium">
                                 Updating hold probabilities...
@@ -1575,10 +1575,10 @@ export default function Dashboard() {
                 <Card className="h-full flex flex-col">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <Star className="h-5 w-5 text-yellow-500" />
+                      <Star className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
                       Your Favorites
                     </CardTitle>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
                       {favorites.length} favorite pairings
                     </span>
                   </CardHeader>
@@ -1769,11 +1769,11 @@ export default function Dashboard() {
       </Dialog>
       {/* Mobile AI Assistant Full Screen - Only on Mobile */}
       {showMobileAI && (
-        <div className="fixed inset-0 z-50 bg-white lg:hidden">
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 lg:hidden">
           <div className="h-full flex flex-col">
             {/* Minimal header with just close button */}
-            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b bg-white">
-              <h1 className="text-base font-medium">AI Assistant</h1>
+            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b dark:border-gray-800 bg-white dark:bg-gray-900">
+              <h1 className="text-base font-medium dark:text-gray-100">AI Assistant</h1>
               <Button
                 variant="ghost"
                 size="sm"

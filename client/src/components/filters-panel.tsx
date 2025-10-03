@@ -69,7 +69,7 @@ export function FiltersPanel({
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           Credit Range
         </label>
         <Select
@@ -98,7 +98,7 @@ export function FiltersPanel({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           Block Time
         </label>
         <Select
@@ -127,7 +127,7 @@ export function FiltersPanel({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           TAFB
         </label>
         <Select onValueChange={value => handleFilterChange('tafb', value)}>
@@ -144,7 +144,7 @@ export function FiltersPanel({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           Hold Probability
         </label>
         <Select
@@ -174,7 +174,7 @@ export function FiltersPanel({
 
       {/* Preferred Days Off Filter */}
       <div className="border-t pt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Preferred Days Off
         </label>
         <div className="flex flex-wrap gap-2 items-center">
@@ -229,14 +229,14 @@ export function FiltersPanel({
               variant="ghost"
               size="sm"
               onClick={clearAllDaysOff}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               Clear All
             </Button>
           )}
         </div>
         {selectedDaysOff.length > 0 && (
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {selectedDaysOff.length} day
             {selectedDaysOff.length !== 1 ? 's' : ''} selected for days off
           </p>

@@ -348,10 +348,10 @@ export function PairingTable({
 
   return (
     <Card>
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Pairing Results</h3>
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pairing Results</h3>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             Showing {safePairings.length} pairings
           </span>
           <Button
@@ -365,10 +365,10 @@ export function PairingTable({
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] sm:min-w-[900px] lg:min-w-[1000px]">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'pairingNumber',
@@ -387,11 +387,11 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] sm:min-w-[150px]">
+              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px] sm:min-w-[150px]">
                 Route
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'creditHours',
@@ -411,7 +411,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'blockHours',
@@ -431,7 +431,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'tafb',
@@ -451,7 +451,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'pairingDays',
@@ -471,7 +471,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'creditBlockRatio',
@@ -492,7 +492,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'holdProbability',
@@ -512,23 +512,23 @@ export function PairingTable({
                 </div>
               </th>
               {(showDeleteButton || showAddToCalendar) && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
                   Actions
                 </th>
               )}
               {showDeleteButton && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
                   Remove
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {safePairings.length === 0 ? (
               <tr>
                 <td
                   colSpan={showDeleteButton ? 10 : 9}
-                  className="px-6 py-8 text-center text-gray-500"
+                  className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                 >
                   No pairings found. Upload a bid package to get started.
                 </td>
@@ -537,12 +537,12 @@ export function PairingTable({
               safePairings.map((pairing, index) => (
                 <tr
                   key={`${pairing.id}-${index}`}
-                  className="hover:bg-gray-50 cursor-pointer"
+                  className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                   onClick={() => handlePairingClick(pairing)}
                 >
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <span className="font-mono font-medium text-gray-900 text-xs sm:text-sm">
+                      <span className="font-mono font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
                         {pairing.pairingNumber}
                       </span>
                       {pairing.holdProbability >= 80 && (
@@ -552,35 +552,35 @@ export function PairingTable({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div
-                      className="text-xs sm:text-sm text-gray-900 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]"
+                      className="text-xs sm:text-sm text-gray-900 dark:text-gray-100 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]"
                       title={pairing.route}
                     >
                       {pairing.route}
                     </div>
                     <div
-                      className="text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]"
+                      className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[140px]"
                       title={formatEffectiveDisplay(pairing)}
                     >
                       {formatEffectiveDisplay(pairing)}
                     </div>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm font-medium text-gray-900">
+                    <span className="font-mono text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                       {pairing.creditHours}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm text-gray-600">
+                    <span className="font-mono text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                       {pairing.blockHours}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-gray-600">
+                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                       {pairing.tafb}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm font-medium text-gray-900">
+                    <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                       {pairing.pairingDays}
                     </span>
                   </td>
@@ -647,7 +647,7 @@ export function PairingTable({
                               handleAddToCalendar(pairing);
                             }}
                             disabled={addToCalendarMutation.isPending}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             title="Add to Calendar"
                           >
                             <Calendar className="h-4 w-4" />
@@ -663,7 +663,7 @@ export function PairingTable({
                                 e.stopPropagation();
                                 onDeleteFavorite(pairing.id);
                               }}
-                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
                               title="Remove from favorites"
                             >
                               <X className="h-4 w-4" />
@@ -698,7 +698,7 @@ export function PairingTable({
 
       {/* Pagination */}
       {safePairings.length > 0 && pagination && (
-        <div className="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-900 px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
             <Button
               variant="outline"
