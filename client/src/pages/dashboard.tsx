@@ -573,10 +573,25 @@ export default function Dashboard() {
         { excellent: 0, good: 0, average: 0, poor: 0 }
       );
 
+      // Calculate averages by pairing days (1-5 days)
+      const avgByDays: { [key: number]: { credit: number; block: number } } = {};
+      for (let days = 1; days <= 5; days++) {
+        const dayPairings = fullLocal.filter((p: any) => p.pairingDays === days);
+        if (dayPairings.length > 0) {
+          const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
+          const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+          avgByDays[days] = {
+            credit: dayCredit / dayPairings.length,
+            block: dayBlock / dayPairings.length,
+          };
+        }
+      }
+
       return {
         highCredit,
         likelyToHold,
         ratioBreakdown,
+        avgByDays,
       };
     }
 

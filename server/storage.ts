@@ -1037,6 +1037,7 @@ export class DatabaseStorage implements IStorage {
       max: number;
       average: number;
     };
+    avgByDays: { [key: number]: { credit: number; block: number } };
   }> {
     const allPairings = await db
       .select()
@@ -1049,6 +1050,7 @@ export class DatabaseStorage implements IStorage {
         creditBlockRatios: { min: 1.0, max: 1.0, average: 1.0 },
         creditHours: { min: 0, max: 0, average: 0 },
         blockHours: { min: 0, max: 0, average: 0 },
+        avgByDays: {},
       };
     }
 
@@ -1059,6 +1061,20 @@ export class DatabaseStorage implements IStorage {
 
     const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
     const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
+
+    // Calculate averages by pairing days (1-5 days)
+    const avgByDays: { [key: number]: { credit: number; block: number } } = {};
+    for (let days = 1; days <= 5; days++) {
+      const dayPairings = allPairings.filter((p: any) => p.pairingDays === days);
+      if (dayPairings.length > 0) {
+        const dayCredit = dayPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0);
+        const dayBlock = dayPairings.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0);
+        avgByDays[days] = {
+          credit: dayCredit / dayPairings.length,
+          block: dayBlock / dayPairings.length,
+        };
+      }
+    }
 
     return {
       totalPairings: allPairings.length,
@@ -1080,6 +1096,7 @@ export class DatabaseStorage implements IStorage {
         average:
           blockHours.reduce((sum, hours) => sum + hours, 0) / blockHours.length,
       },
+      avgByDays,
     };
   }
 

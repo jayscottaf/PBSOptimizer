@@ -96,18 +96,32 @@ export function StatsPanel({
     const avgBlockHours =
       pairings.length > 0 ? totalBlock / pairings.length : 0;
 
-    // Calculate averages by pairing days (1-5 days)
+    // Calculate averages by pairing days (1-5 days) from current page OR use backend stats
     const avgByDays: { [key: number]: { credit: number; block: number; count: number } } = {};
-    for (let days = 1; days <= 5; days++) {
-      const dayPairings = pairings.filter((p: any) => p.pairingDays === days);
-      if (dayPairings.length > 0) {
-        const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
-        const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+
+    if (statistics?.avgByDays) {
+      // Use backend-provided stats (covers ALL pairings)
+      Object.keys(statistics.avgByDays).forEach(key => {
+        const days = parseInt(key);
         avgByDays[days] = {
-          credit: dayCredit / dayPairings.length,
-          block: dayBlock / dayPairings.length,
-          count: dayPairings.length,
+          credit: statistics.avgByDays[days].credit,
+          block: statistics.avgByDays[days].block,
+          count: 0, // Count not needed from backend
         };
+      });
+    } else {
+      // Fallback: calculate from current page pairings
+      for (let days = 1; days <= 5; days++) {
+        const dayPairings = pairings.filter((p: any) => p.pairingDays === days);
+        if (dayPairings.length > 0) {
+          const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
+          const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+          avgByDays[days] = {
+            credit: dayCredit / dayPairings.length,
+            block: dayBlock / dayPairings.length,
+            count: dayPairings.length,
+          };
+        }
       }
     }
     // Calculate credit-to-block ratio breakdown
