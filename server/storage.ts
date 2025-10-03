@@ -1038,6 +1038,13 @@ export class DatabaseStorage implements IStorage {
       average: number;
     };
     avgByDays: { [key: number]: { credit: number; block: number } };
+    pairingTypeBreakdown: { [key: number]: number };
+    ratioBreakdown: {
+      excellent: number;
+      good: number;
+      average: number;
+      poor: number;
+    };
   }> {
     const allPairings = await db
       .select()
@@ -1051,6 +1058,8 @@ export class DatabaseStorage implements IStorage {
         creditHours: { min: 0, max: 0, average: 0 },
         blockHours: { min: 0, max: 0, average: 0 },
         avgByDays: {},
+        pairingTypeBreakdown: {},
+        ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
       };
     }
 
@@ -1062,8 +1071,9 @@ export class DatabaseStorage implements IStorage {
     const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
     const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
 
-    // Calculate averages by pairing days (1-5 days)
+    // Calculate averages by pairing days (1-5 days) and count breakdown
     const avgByDays: { [key: number]: { credit: number; block: number } } = {};
+    const pairingTypeBreakdown: { [key: number]: number } = {};
     for (let days = 1; days <= 5; days++) {
       const dayPairings = allPairings.filter((p: any) => p.pairingDays === days);
       if (dayPairings.length > 0) {
@@ -1073,8 +1083,37 @@ export class DatabaseStorage implements IStorage {
           credit: dayCredit / dayPairings.length,
           block: dayBlock / dayPairings.length,
         };
+        pairingTypeBreakdown[days] = dayPairings.length;
       }
     }
+
+    // Calculate credit/block ratio breakdown using percentile-based categorization
+    const minRatio = Math.min(...ratios);
+    const maxRatio = Math.max(...ratios);
+    const range = maxRatio - minRatio;
+
+    const ratioBreakdown = allPairings.reduce(
+      (acc, pairing) => {
+        const credit = parseDecimal(pairing.creditHours);
+        const block = parseDecimal(pairing.blockHours);
+        if (block === 0) return acc; // Skip to avoid division by zero
+
+        const ratio = credit / block;
+        const percentile = range > 0 ? (ratio - minRatio) / range : 0;
+
+        if (percentile >= 0.80) {
+          acc.excellent++;
+        } else if (percentile >= 0.60) {
+          acc.good++;
+        } else if (percentile >= 0.40) {
+          acc.average++;
+        } else {
+          acc.poor++;
+        }
+        return acc;
+      },
+      { excellent: 0, good: 0, average: 0, poor: 0 }
+    );
 
     return {
       totalPairings: allPairings.length,
@@ -1097,6 +1136,8 @@ export class DatabaseStorage implements IStorage {
           blockHours.reduce((sum, hours) => sum + hours, 0) / blockHours.length,
       },
       avgByDays,
+      pairingTypeBreakdown,
+      ratioBreakdown,
     };
   }
 

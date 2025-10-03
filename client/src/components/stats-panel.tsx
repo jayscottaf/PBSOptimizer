@@ -5,6 +5,30 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart2 } from 'lucide-react';
 import { api } from '@/lib/api';
 
+type AvgByDaysStats = Record<number, { credit: number; block: number; count?: number }>;
+
+type RatioBreakdown = {
+  excellent: number;
+  good: number;
+  average: number;
+  poor: number;
+};
+
+type PercentileThresholds = {
+  excellent: number;
+  good: number;
+  average: number;
+};
+
+interface BackendStatistics {
+  likelyToHold: number;
+  highCredit: number;
+  avgByDays?: AvgByDaysStats;
+  ratioBreakdown?: RatioBreakdown;
+  percentileThresholds?: PercentileThresholds;
+  pairingTypeBreakdown?: Record<number, number>;
+}
+
 interface StatsPanelProps {
   pairings: Pairing[];
   bidPackage?: BidPackage;
@@ -14,16 +38,7 @@ interface StatsPanelProps {
     page: number;
     limit: number;
   };
-  statistics?: {
-    likelyToHold: number;
-    highCredit: number;
-    ratioBreakdown?: {
-      excellent: number;
-      good: number;
-      average: number;
-      poor: number;
-    };
-  };
+  statistics?: BackendStatistics;
   bidPackageStats?: {
     totalPairings: number;
     creditBlockRatios: {
@@ -31,8 +46,28 @@ interface StatsPanelProps {
       max: number;
       average: number;
     };
+    pairingTypeBreakdown?: Record<number, number>;
+    avgByDays?: Record<number, { credit: number; block: number }>;
+    ratioBreakdown?: {
+      excellent: number;
+      good: number;
+      average: number;
+      poor: number;
+    };
   } | null;
   onTripLengthFilter?: (days: number) => void;
+}
+
+interface ComputedStats {
+  totalPairings: number;
+  likelyToHold: number;
+  highCredit: number;
+  avgCreditHours: number;
+  avgBlockHours: number;
+  avgByDays: AvgByDaysStats;
+  ratioBreakdown: RatioBreakdown;
+  percentileThresholds: PercentileThresholds | null;
+  pairingTypeBreakdown: Record<number, number>;
 }
 
 export function StatsPanel({
@@ -50,13 +85,12 @@ export function StatsPanel({
     total?: number;
   } | null>(null);
   const esRef = useRef<EventSource | null>(null);
-  const stats = useMemo(() => {
+  const stats = useMemo<ComputedStats>(() => {
     if (!pairings || !Array.isArray(pairings) || pairings.length === 0) {
       return {
         totalPairings: 0,
         likelyToHold: 0,
         highCredit: 0,
-        sixDayCombos: 0,
         avgCreditHours: 0,
         avgBlockHours: 0,
         avgByDays: {},
@@ -66,6 +100,8 @@ export function StatsPanel({
           average: 0,
           poor: 0,
         },
+        percentileThresholds: null,
+        pairingTypeBreakdown: {},
       };
     }
 
@@ -115,8 +151,8 @@ export function StatsPanel({
       Object.keys(statistics.avgByDays).forEach(key => {
         const days = parseInt(key);
         avgByDays[days] = {
-          credit: statistics.avgByDays[days].credit,
-          block: statistics.avgByDays[days].block,
+          credit: statistics.avgByDays![days].credit,
+          block: statistics.avgByDays![days].block,
           count: 0, // Count not needed from backend
         };
       });
@@ -157,7 +193,7 @@ export function StatsPanel({
     const pairingTypeBreakdown = pairings.reduce(
       (acc, pairing) => {
         const days = pairing.pairingDays;
-        if (days >= 1 && days <= 5) {
+        if (days !== undefined && days >= 1 && days <= 5) {
           acc[days] = (acc[days] || 0) + 1;
         }
         return acc;
@@ -338,9 +374,11 @@ export function StatsPanel({
               </div>
               {/* Data rows */}
               {[1, 2, 3, 4, 5].map(days => {
-                const count = stats.pairingTypeBreakdown[days] || 0;
-                const percentage = stats.totalPairings > 0 ? (count / stats.totalPairings * 100).toFixed(0) : 0;
-                const avgData = stats.avgByDays[days];
+                // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
+                const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
+                const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;
+                const percentage = totalForPercentage > 0 ? (count / totalForPercentage * 100).toFixed(0) : 0;
+                const avgData = bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
                   <div
@@ -379,10 +417,10 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
-                  {stats.ratioBreakdown.excellent} (
+                  {bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent} (
                   {(
-                    (stats.ratioBreakdown.excellent /
-                      (displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent) /
+                      (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -396,9 +434,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
-                  {stats.ratioBreakdown.good} (
+                  {bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good} (
                   {(
-                    (stats.ratioBreakdown.good / (displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good) / (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -412,10 +450,10 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
-                  {stats.ratioBreakdown.average} (
+                  {bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average} (
                   {(
-                    (stats.ratioBreakdown.average /
-                      (displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average) /
+                      (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -429,9 +467,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
-                  {stats.ratioBreakdown.poor} (
+                  {bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor} (
                   {(
-                    (stats.ratioBreakdown.poor / (displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor) / (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -513,9 +551,11 @@ export function StatsPanel({
               </div>
               {/* Data rows */}
               {[1, 2, 3, 4, 5].map(days => {
-                const count = stats.pairingTypeBreakdown[days] || 0;
-                const percentage = stats.totalPairings > 0 ? (count / stats.totalPairings * 100).toFixed(0) : 0;
-                const avgData = stats.avgByDays[days];
+                // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
+                const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
+                const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;
+                const percentage = totalForPercentage > 0 ? (count / totalForPercentage * 100).toFixed(0) : 0;
+                const avgData = bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
                   <div
@@ -554,9 +594,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
-                  {stats.ratioBreakdown.excellent} (
+                  {bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent} (
                   {(
-                    (stats.ratioBreakdown.excellent / stats.totalPairings) *
+                    ((bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -570,9 +610,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
-                  {stats.ratioBreakdown.good} (
+                  {bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good} (
                   {(
-                    (stats.ratioBreakdown.good / stats.totalPairings) *
+                    ((bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -586,9 +626,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
-                  {stats.ratioBreakdown.average} (
+                  {bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average} (
                   {(
-                    (stats.ratioBreakdown.average / stats.totalPairings) *
+                    ((bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -602,9 +642,9 @@ export function StatsPanel({
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
-                  {stats.ratioBreakdown.poor} (
+                  {bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor} (
                   {(
-                    (stats.ratioBreakdown.poor / stats.totalPairings) *
+                    ((bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)

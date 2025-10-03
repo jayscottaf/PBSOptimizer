@@ -395,10 +395,16 @@ export default function Dashboard() {
         full = await loadFullPairingsCache<any[]>(cacheKey);
         console.log('Dashboard: Loaded filtered cache, length:', full?.length || 0);
 
+        // Check if any filters are active (excluding bidPackageId which is always present)
+        const hasActiveFilters = Object.keys(debouncedFilters).some(
+          key => key !== 'bidPackageId' && debouncedFilters[key] !== undefined && debouncedFilters[key] !== ''
+        );
+
         // Validate filtered cache - it should have at least 400 pairings for a full bid package
-        // This prevents using partial/stale caches from incomplete uploads
+        // Only validate size when NO filters are active (to detect incomplete uploads)
+        // When filters are active, smaller result sets are expected and valid
         const filteredLength = full?.length || 0;
-        if (filteredLength > 0 && filteredLength < MINIMUM_EXPECTED_PAIRINGS) {
+        if (!hasActiveFilters && filteredLength > 0 && filteredLength < MINIMUM_EXPECTED_PAIRINGS) {
           console.warn(
             `Dashboard: Filtered cache too small (${filteredLength} < ${MINIMUM_EXPECTED_PAIRINGS}), likely incomplete. Will re-fetch.`
           );
