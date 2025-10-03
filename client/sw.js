@@ -140,10 +140,18 @@ self.addEventListener('message', event => {
 
   switch (type) {
     case 'CHECK_VERSION':
-      event.ports[0]?.postMessage({
-        type: 'VERSION_RESPONSE',
-        version: SW_VERSION,
-      });
+      // Use ports if available (MessageChannel), otherwise use source
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({
+          type: 'VERSION_RESPONSE',
+          version: SW_VERSION,
+        });
+      } else if (event.source) {
+        event.source.postMessage({
+          type: 'VERSION_RESPONSE',
+          version: SW_VERSION,
+        });
+      }
       break;
 
     case 'FORCE_UPDATE':
