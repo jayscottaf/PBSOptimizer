@@ -24,6 +24,14 @@ interface StatsPanelProps {
       poor: number;
     };
   };
+  bidPackageStats?: {
+    totalPairings: number;
+    creditBlockRatios: {
+      min: number;
+      max: number;
+      average: number;
+    };
+  } | null;
 }
 
 export function StatsPanel({
@@ -32,6 +40,7 @@ export function StatsPanel({
   hideHeader = false,
   pagination,
   statistics,
+  bidPackageStats,
 }: StatsPanelProps) {
   const [streamProgress, setStreamProgress] = useState<{
     percent: number;
@@ -126,6 +135,22 @@ export function StatsPanel({
     }
     // Calculate credit-to-block ratio breakdown
     // Use backend global ratio breakdown when available so the sidebar card reflects all pairings, not just current page
+    // Use percentile-based categorization if bidPackageStats are available (consistent with calendar view)
+    const hasStats = !!bidPackageStats && (bidPackageStats.totalPairings || 0) > 0;
+    const minRatio = hasStats ? bidPackageStats.creditBlockRatios.min : undefined;
+    const maxRatio = hasStats ? bidPackageStats.creditBlockRatios.max : undefined;
+
+    // Calculate percentile thresholds for display
+    let percentileThresholds = null;
+    if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
+      const range = maxRatio - minRatio;
+      percentileThresholds = {
+        excellent: minRatio + (range * 0.80), // 80th percentile
+        good: minRatio + (range * 0.60),      // 60th percentile
+        average: minRatio + (range * 0.40),   // 40th percentile
+      };
+    }
+
     const ratioBreakdown =
       statistics?.ratioBreakdown ??
       pairings.reduce(
@@ -134,14 +159,31 @@ export function StatsPanel({
           const block = parseHours(pairing.blockHours);
           const ratio = block > 0 ? credit / block : 0;
 
-          if (ratio >= 1.3) {
-            acc.excellent++;
-          } else if (ratio >= 1.2) {
-            acc.good++;
-          } else if (ratio >= 1.1) {
-            acc.average++;
+          // Use percentile-based categorization if we have bid package stats
+          if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
+            const range = maxRatio - minRatio;
+            const percentile = (ratio - minRatio) / range;
+
+            if (percentile >= 0.80) {
+              acc.excellent++;
+            } else if (percentile >= 0.60) {
+              acc.good++;
+            } else if (percentile >= 0.40) {
+              acc.average++;
+            } else {
+              acc.poor++;
+            }
           } else {
-            acc.poor++;
+            // Fallback to fixed thresholds if no stats available
+            if (ratio >= 1.3) {
+              acc.excellent++;
+            } else if (ratio >= 1.2) {
+              acc.good++;
+            } else if (ratio >= 1.1) {
+              acc.average++;
+            } else {
+              acc.poor++;
+            }
           }
           return acc;
         },
@@ -156,8 +198,9 @@ export function StatsPanel({
       avgBlockHours: pairings.length > 0 ? totalBlock / pairings.length : 0,
       avgByDays,
       ratioBreakdown,
+      percentileThresholds,
     };
-  }, [pairings, pagination, statistics]);
+  }, [pairings, pagination, statistics, bidPackageStats]);
 
   // Show processing status for current bid package
   const isProcessing = bidPackage?.status === 'processing';
@@ -300,7 +343,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600">
-                    Excellent (≥1.3)
+                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (top 20%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
@@ -316,7 +359,9 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600">Good (1.2-1.29)</span>
+                  <span className="text-xs text-gray-600">
+                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (60-80%)'}
+                  </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
                   {stats.ratioBreakdown.good} (
@@ -331,7 +376,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600">
-                    Average (1.1-1.19)
+                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (40-60%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
@@ -347,7 +392,9 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600">Poor (&lt;1.1)</span>
+                  <span className="text-xs text-gray-600">
+                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (bottom 40%)'}
+                  </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
                   {stats.ratioBreakdown.poor} (
@@ -454,7 +501,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600">
-                    Excellent (≥1.3)
+                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (top 20%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
@@ -469,7 +516,9 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600">Good (1.2-1.29)</span>
+                  <span className="text-xs text-gray-600">
+                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (60-80%)'}
+                  </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
                   {stats.ratioBreakdown.good} (
@@ -484,7 +533,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600">
-                    Average (1.1-1.19)
+                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (40-60%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
@@ -499,7 +548,9 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600">Poor (&lt;1.1)</span>
+                  <span className="text-xs text-gray-600">
+                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (bottom 40%)'}
+                  </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
                   {stats.ratioBreakdown.poor} (

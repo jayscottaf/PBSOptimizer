@@ -239,6 +239,23 @@ export default function Dashboard() {
     (pkg: any) => pkg.status === 'completed'
   );
 
+  // Fetch bid package stats for percentile-based ratio calculations
+  const { data: bidPackageStats } = useQuery({
+    queryKey: ['bid-package-stats', bidPackageId || null],
+    queryFn: async () => {
+      if (!bidPackageId) {
+        return null;
+      }
+      const response = await fetch(`/api/bid-packages/${bidPackageId}/stats`);
+      if (!response.ok) {
+        return null;
+      }
+      return response.json();
+    },
+    enabled: !!bidPackageId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Removed redundant initial query to prevent duplicate API calls
 
   // Query for user data with enhanced caching
@@ -552,27 +569,6 @@ export default function Dashboard() {
         p => getHoldProb(p.holdProbability) >= 70
       ).length;
 
-      // Calculate ratio breakdown from full dataset
-      const ratioBreakdown = fullLocal.reduce(
-        (acc, pairing) => {
-          const credit = parseHours(pairing.creditHours);
-          const block = parseHours(pairing.blockHours);
-          const ratio = block > 0 ? credit / block : 0;
-
-          if (ratio >= 1.3) {
-            acc.excellent++;
-          } else if (ratio >= 1.2) {
-            acc.good++;
-          } else if (ratio >= 1.1) {
-            acc.average++;
-          } else {
-            acc.poor++;
-          }
-          return acc;
-        },
-        { excellent: 0, good: 0, average: 0, poor: 0 }
-      );
-
       // Calculate averages by pairing days (1-5 days)
       const avgByDays: { [key: number]: { credit: number; block: number } } = {};
       for (let days = 1; days <= 5; days++) {
@@ -590,13 +586,19 @@ export default function Dashboard() {
       return {
         highCredit,
         likelyToHold,
-        ratioBreakdown,
+        // ratioBreakdown removed - let StatsPanel calculate it with percentile-based logic
         avgByDays,
       };
     }
 
     // Fall back to server statistics when not using full cache
-    return pairingsResponse?.statistics as any;
+    // Remove ratioBreakdown from server stats to let StatsPanel calculate with percentiles
+    const serverStats = pairingsResponse?.statistics as any;
+    if (serverStats) {
+      const { ratioBreakdown, ...rest } = serverStats;
+      return rest;
+    }
+    return serverStats;
   }, [isFullCacheReady, fullLocal, pairingsResponse?.statistics]);
 
   // Debug logs removed after verification
@@ -1251,10 +1253,11 @@ export default function Dashboard() {
                 // Expanded view - show full stats panel
                 <div className="space-y-6">
                   <StatsPanel
-                    pairings={displayPairings || []}
+                    pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
                     bidPackage={latestBidPackage}
                     pagination={actualEffectivePagination}
                     statistics={effectiveStatistics}
+                    bidPackageStats={bidPackageStats}
                   />
                 </div>
               )}
@@ -1387,10 +1390,11 @@ export default function Dashboard() {
                     {showQuickStats && (
                       <CardContent>
                         <StatsPanel
-                          pairings={displayPairings || []}
+                          pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
                           bidPackage={latestBidPackage}
                           pagination={actualEffectivePagination}
                           statistics={effectiveStatistics}
+                          bidPackageStats={bidPackageStats}
                         />
                       </CardContent>
                     )}
