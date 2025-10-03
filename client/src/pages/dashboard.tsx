@@ -29,6 +29,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Bot,
+  Moon,
+  Sun,
+  Monitor,
 } from 'lucide-react';
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
@@ -63,6 +66,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming this hook exists
 import { toast } from '@/hooks/use-toast';
+import { useTheme } from 'next-themes';
 interface SearchFilters {
   search?: string;
   creditMin?: number;
@@ -93,6 +97,7 @@ interface Pairing {
 }
 
 export default function Dashboard() {
+  const { theme, setTheme } = useTheme();
   const [filters, setFilters] = useState<SearchFilters>({});
   const [debouncedFilters, setDebouncedFilters] = useState<SearchFilters>({});
   const [activeFilters, setActiveFilters] = useState<
@@ -1916,7 +1921,41 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500 mt-1">Position A or B (matches ALV table)</p>
             </div>
             <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-gray-700 mb-2">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Appearance
+              </div>
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant={theme === 'light' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTheme('light')}
+                  className="flex-1"
+                >
+                  <Sun className="h-4 w-4 mr-2" />
+                  Light
+                </Button>
+                <Button
+                  variant={theme === 'dark' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTheme('dark')}
+                  className="flex-1"
+                >
+                  <Moon className="h-4 w-4 mr-2" />
+                  Dark
+                </Button>
+                <Button
+                  variant={theme === 'system' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTheme('system')}
+                  className="flex-1"
+                >
+                  <Monitor className="h-4 w-4 mr-2" />
+                  System
+                </Button>
+              </div>
+            </div>
+            <div className="border-t pt-4 mt-4">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Cache Management
               </div>
               <div className="flex gap-2 mb-4">
