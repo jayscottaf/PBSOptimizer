@@ -13,7 +13,9 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(tasklist)",
+      "Read(//f/**)"
     ],
     "deny": [],
     "ask": []

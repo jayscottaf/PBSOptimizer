@@ -876,6 +876,19 @@ export default function Dashboard() {
     setFilters({});
     setActiveFilters([]);
   };
+
+  const handleTripLengthFilter = (days: number) => {
+    setFilters(prev => ({
+      ...prev,
+      pairingDays: days,
+    }));
+    setActiveFilters(prev => [
+      ...prev.filter(f => f.key !== 'pairingDays'),
+      { key: 'pairingDays', label: `Trip Length: ${days}-day`, value: days },
+    ]);
+    setCurrentPage(1);
+  };
+
   // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
     // When sorting is active OR preferredDaysOff filter is set, use unfiltered cache and apply filters client-side
@@ -1258,6 +1271,7 @@ export default function Dashboard() {
                     pagination={actualEffectivePagination}
                     statistics={effectiveStatistics}
                     bidPackageStats={bidPackageStats}
+                    onTripLengthFilter={handleTripLengthFilter}
                   />
                 </div>
               )}
@@ -1395,6 +1409,7 @@ export default function Dashboard() {
                           pagination={actualEffectivePagination}
                           statistics={effectiveStatistics}
                           bidPackageStats={bidPackageStats}
+                          onTripLengthFilter={handleTripLengthFilter}
                         />
                       </CardContent>
                     )}
