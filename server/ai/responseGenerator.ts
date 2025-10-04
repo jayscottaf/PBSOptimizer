@@ -31,6 +31,7 @@ export class ResponseGenerator {
     userQuery: string,
     pairings: any[],
     rankingExplanation?: string,
+    conversationHistory?: Array<{ role: string; content: string }>,
     enableCaching: boolean = AI_CONFIG.ENABLE_CACHING
   ): Promise<string> {
     try {
@@ -48,11 +49,20 @@ export class ResponseGenerator {
           // Enable caching for system prompt (static, reused across queries)
           ...(enableCaching && { cache_control: { type: 'ephemeral' } }),
         },
-        {
-          role: 'user',
-          content: `Generate a helpful response for this query: "${userQuery}"`,
-        },
       ];
+
+      // Add conversation history if provided (for context)
+      if (conversationHistory && conversationHistory.length > 0) {
+        // Only include last 4 messages to avoid token bloat
+        const recentHistory = conversationHistory.slice(-4);
+        messages.push(...recentHistory);
+      }
+
+      // Add current query
+      messages.push({
+        role: 'user',
+        content: `Generate a helpful response for this query: "${userQuery}"`,
+      });
 
       // Create completion with caching support
       const completion = await openai.chat.completions.create({

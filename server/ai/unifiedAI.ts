@@ -142,7 +142,8 @@ export class UnifiedAI {
       const response = await this.responseGenerator.generateResponse(
         query.message,
         displayPairings,
-        rankingExplanation
+        rankingExplanation,
+        query.conversationHistory
       );
 
       return {
