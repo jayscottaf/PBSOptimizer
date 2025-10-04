@@ -471,30 +471,30 @@ export class DatabaseStorage implements IStorage {
       if (filters.tafbMin !== undefined) {
         const minMins = filters.tafbMin * 60;
         conditions.push(sql`
-		(
-			CASE
-				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-					(split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-				WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-					floor((${pairings.tafb}::numeric) * 60)
-				ELSE 0
-			END
-		) >= ${minMins}
-	`);
+                (
+                        CASE
+                                WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                                        (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+                                WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                                        floor((${pairings.tafb}::numeric) * 60)
+                                ELSE 0
+                        END
+                ) >= ${minMins}
+        `);
       }
       if (filters.tafbMax !== undefined) {
         const maxMins = filters.tafbMax * 60;
         conditions.push(sql`
-		(
-			CASE
-				WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-					(split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-				WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-					floor((${pairings.tafb}::numeric) * 60)
-				ELSE 0
-			END
-		) <= ${maxMins}
-	`);
+                (
+                        CASE
+                                WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                                        (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+                                WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                                        floor((${pairings.tafb}::numeric) * 60)
+                                ELSE 0
+                        END
+                ) <= ${maxMins}
+        `);
       }
 
       if (conditions.length > 0) {
@@ -1033,6 +1033,14 @@ export class DatabaseStorage implements IStorage {
           creditHours: pairings.creditHours,
           blockHours: pairings.blockHours,
           tafb: pairings.tafb,
+          fdp: pairings.fdp,
+          payHours: pairings.payHours,
+          sitEdpPay: pairings.sitEdpPay,
+          carveouts: pairings.carveouts,
+          checkInTime: pairings.checkInTime,
+          deadheads: pairings.deadheads,
+          layovers: pairings.layovers,
+          flightSegments: pairings.flightSegments,
           holdProbability: pairings.holdProbability,
           pairingDays: pairings.pairingDays,
           fullTextBlock: pairings.fullTextBlock,

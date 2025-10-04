@@ -288,7 +288,7 @@ export function PairingTable({
         return;
       }
 
-      const pairingDays = pairing.pairingDays || 4;
+      const pairingDays = pairing.pairingDays || 1;
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + pairingDays - 1);
 
