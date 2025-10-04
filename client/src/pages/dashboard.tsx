@@ -1817,14 +1817,14 @@ export default function Dashboard() {
           setShowProfileModal(open);
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Complete Your Profile</DialogTitle>
             <DialogDescription>
               Please fill in your pilot information to continue. All fields marked with * are required.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto pr-2 flex-1">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
                 Name
