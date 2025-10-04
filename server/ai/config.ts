@@ -6,23 +6,23 @@
 export const AI_CONFIG = {
   /**
    * Model Selection Strategy:
-   * - Testing o4-mini for intent extraction (should work with temp 0.2)
-   * - gpt-4.1 for response generation (proven quality)
-   * - Target cost: $0.69/user/month (30% savings vs all gpt-4.1)
+   * - gpt-4.1 for both intent and response (proven reliable)
+   * - Cost: $1.13/user/month
+   * - Note: o4-mini doesn't support custom temperature (only 1.0), unsuitable for structured extraction
    */
   MODELS: {
-    INTENT: 'o4-mini',       // Testing with lower temperature
-    RESPONSE: 'gpt-4.1',     // Keep proven quality
+    INTENT: 'gpt-4.1',       // Reliable, supports temperature control
+    RESPONSE: 'gpt-4.1',     // Great detailed responses
   },
 
   /**
    * Temperature Settings:
-   * - o4-mini: 0.2 (low for deterministic JSON extraction, per GPT-5 recommendation)
-   * - gpt-4.1: 0.7 (higher for natural, conversational tone)
+   * - 0.3 for intent extraction (low = consistent JSON output)
+   * - 0.7 for response generation (higher = natural conversational tone)
    */
   TEMPERATURES: {
-    INTENT: 0.2,             // o4-mini: low for consistency
-    RESPONSE: 0.7,           // gpt-4.1: natural/conversational
+    INTENT: 0.3,             // Low for deterministic extraction
+    RESPONSE: 0.7,           // Higher for natural responses
   },
 
   /**
