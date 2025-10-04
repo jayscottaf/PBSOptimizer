@@ -412,7 +412,7 @@ export const api = {
   },
 
   // AI Chat Analysis
-  async analyzePairings(question: string, bidPackageId?: number) {
+  async analyzePairings(question: string, bidPackageId?: number, sessionId?: string) {
     // Include bidPackageId and seniority context automatically
     let seniorityFromLocal: string | null = null;
     let nameFromLocal: string | null = null;
@@ -468,6 +468,7 @@ export const api = {
         seniorityPercentile: seniorityFromLocal
           ? parseFloat(seniorityFromLocal)
           : undefined,
+        sessionId,
       }),
     });
 

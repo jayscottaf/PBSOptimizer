@@ -305,7 +305,7 @@ export function PairingChat({
     }
 
     try {
-      const result = await api.analyzePairings(input.trim(), bidPackageId);
+      const result = await api.analyzePairings(input.trim(), bidPackageId, sessionId);
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),

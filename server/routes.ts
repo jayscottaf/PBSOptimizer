@@ -725,7 +725,7 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({
         message: 'Failed to add favorite',
         error:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
       });
     }
   });
@@ -810,7 +810,7 @@ export async function registerRoutes(app: Express) {
             ? error.message
             : 'Failed to add calendar event',
         error:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
       });
     }
   });
@@ -876,7 +876,7 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({
         message: 'Failed to fetch calendar events',
         error:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
       });
     }
   });
@@ -945,7 +945,7 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
-      const { question, bidPackageId, seniorityPercentile } = req.body;
+      const { question, bidPackageId, seniorityPercentile, sessionId } = req.body;
 
       if (!question) {
         return res.status(400).json({ message: 'Question is required' });
@@ -966,103 +966,65 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      // Route based on intent; ensure DB-backed results for "best/top" queries
+      // Use unified AI pipeline (replaces dual system)
       if (finalBidPackageId) {
-        // Prepend seniority context for analysis if provided
-        const enrichedQuestion =
-          typeof seniorityPercentile === 'number'
-            ? `User seniority: ${seniorityPercentile}%. ${question}`
-            : question;
-        const lowerQ = question.toLowerCase();
-        const isBestQuery = lowerQ.includes('best') || lowerQ.includes('top');
-
-        // Prefer hybrid for "best/top" to guarantee real pairing numbers
-        if (isBestQuery) {
-          try {
-            const { HybridOpenAIService } = await import('./openaiHybrid');
-            const hybridService = new HybridOpenAIService(storage);
-            const result = await hybridService.analyzeQuery({
-              message: enrichedQuestion,
-              bidPackageId: finalBidPackageId,
-            });
-
-            res.json({
-              reply: result.response,
-              data: result.data,
-              truncated: result.truncated,
-            });
-            return;
-          } catch (hybridError) {
-            console.log(
-              'Hybrid (best/top) failed, falling back to natural analysis:',
-              hybridError
-            );
-          }
-        }
-
-        // Natural-language-first for everything else or as fallback
         try {
-          const { PairingAnalysisService } = await import('./openai');
-          const analysisService = new PairingAnalysisService();
-          const result = await analysisService.analyzeQuery(
-            {
-              message: enrichedQuestion,
-              bidPackageId: finalBidPackageId,
-            },
-            storage
-          );
+          const { UnifiedAI } = await import('./ai/unifiedAI');
+          const unifiedAI = new UnifiedAI(storage);
 
-          res.json({ reply: result.response, data: result.data });
+          // Get conversation history if sessionId provided
+          let conversationHistory: any[] = [];
+          if (sessionId) {
+            const history = await storage.getChatHistory(sessionId);
+            conversationHistory = history.map(msg => ({
+              role: msg.messageType === 'user' ? 'user' : 'assistant',
+              content: msg.content,
+            }));
+          }
+
+          const result = await unifiedAI.analyzeQuery({
+            message: question,
+            bidPackageId: finalBidPackageId,
+            seniorityPercentile: typeof seniorityPercentile === 'number'
+              ? seniorityPercentile
+              : undefined,
+            conversationHistory,
+          });
+
+          res.json({
+            reply: result.response,
+            data: result.data,
+            truncated: result.truncated,
+          });
           return;
-        } catch (analysisError) {
-          console.log(
-            'Natural analysis failed, falling back to hybrid optimizer:',
-            analysisError
-          );
+        } catch (unifiedError) {
+          console.error('Unified AI failed:', unifiedError);
 
-          try {
-            const { HybridOpenAIService } = await import('./openaiHybrid');
-            const hybridService = new HybridOpenAIService(storage);
-            const result = await hybridService.analyzeQuery({
-              message: enrichedQuestion,
-              bidPackageId: finalBidPackageId,
-            });
-
-            res.json({
-              reply: result.response,
-              data: result.data,
-              truncated: result.truncated,
-            });
-            return;
-          } catch (hybridError) {
-            console.log(
-              'Hybrid optimizer also failed, providing guidance:',
-              hybridError
-            );
-
-            if (
-              hybridError &&
-              typeof hybridError === 'object' &&
-              'message' in hybridError &&
-              typeof (hybridError as any).message === 'string'
-            ) {
-              const msg = (hybridError as any).message as string;
-              if (msg.includes('rate_limit_exceeded')) {
-                res.json({
-                  reply:
-                    "I'm experiencing high demand right now. Please try again in a moment.",
-                });
-                return;
-              }
-              if (msg.includes('context_length_exceeded')) {
-                res.json({
-                  reply:
-                    "This request is very large. Try narrowing your question (e.g., by day count or destination) and I'll go deeper.",
-                });
-                return;
-              }
+          // Graceful error handling
+          if (
+            unifiedError &&
+            typeof unifiedError === 'object' &&
+            'message' in unifiedError &&
+            typeof (unifiedError as any).message === 'string'
+          ) {
+            const msg = (unifiedError as any).message as string;
+            if (msg.includes('rate_limit_exceeded')) {
+              res.json({
+                reply:
+                  "I'm experiencing high demand right now. Please try again in a moment.",
+              });
+              return;
+            }
+            if (msg.includes('context_length_exceeded')) {
+              res.json({
+                reply:
+                  "This request is very large. Try narrowing your question (e.g., by day count or destination) and I'll go deeper.",
+              });
+              return;
             }
           }
+
+          // Fall through to basic assistant
         }
       }
 
