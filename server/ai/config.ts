@@ -6,12 +6,13 @@
 export const AI_CONFIG = {
   /**
    * Model Selection Strategy:
-   * - Use GPT-4.1 for everything (smartest non-reasoning model)
-   * - ChatGPT-like experience with excellent understanding
+   * - o4-mini for intent extraction (fast, cheap, excellent at structured JSON)
+   * - gpt-5 for response generation (best conversational quality, only 13% more than o4-mini)
+   * - Cost: $0.79/user/month vs $1.13 with all gpt-4.1 (30% savings, better quality)
    */
   MODELS: {
-    INTENT: 'gpt-4.1',       // Smartest non-reasoning model
-    RESPONSE: 'gpt-4.1',     // Smartest non-reasoning model
+    INTENT: 'o4-mini',       // Fast + cheap for JSON extraction
+    RESPONSE: 'gpt-5',       // Best quality for natural language responses
   },
 
   /**
@@ -36,10 +37,12 @@ export const AI_CONFIG = {
 
   /**
    * Context Windows (for reference):
-   * - gpt-4.1: 1,047,576 tokens (~1M)
+   * - o4-mini: 1,047,576 tokens (~1M)
+   * - gpt-5: 1,047,576 tokens (~1M)
    */
   CONTEXT_WINDOWS: {
-    'gpt-4.1': 1_047_576,
+    'o4-mini': 1_047_576,
+    'gpt-5': 1_047_576,
   },
 
   /**

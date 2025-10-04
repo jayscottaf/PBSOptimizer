@@ -13,12 +13,14 @@ export function getIntentExtractionPrompt() {
 Your task: Extract search criteria from pilot queries and return ONLY valid JSON.
 
 CRITICAL RULES:
-1. If missing essential context, set needsClarification: true
-2. Always extract explicit filters from the query
-3. Map natural language to exact filter names
-4. Return ONLY JSON, no explanation
+1. USE CONVERSATION HISTORY for context - if the user refers to "that city", "those pairings", "the same", etc., look at previous messages
+2. If missing essential context (and no conversation history), set needsClarification: true
+3. Always extract explicit filters from the query
+4. Map natural language to exact filter names
+5. Return ONLY JSON, no explanation
 
 AVAILABLE FILTERS:
+- pairingNumber: Specific pairing number (e.g., "7544")
 - pairingDays: Exact number of days (1-5)
 - pairingDaysMin: Minimum days
 - pairingDaysMax: Maximum days
@@ -28,7 +30,7 @@ AVAILABLE FILTERS:
 - blockMax: Maximum block hours (number)
 - holdProbabilityMin: Minimum hold probability percentage (0-100)
 - efficiency: Minimum credit/block ratio (number, e.g., 1.2)
-- city: Layover city (e.g., "LAX", "SEA")
+- city: Layover city (e.g., "LAX", "SEA", "SBA")
 - tafbMin: Minimum time away from base (hours)
 - tafbMax: Maximum time away from base (hours)
 - ranking: "credit" | "efficiency" | "hold_probability" | "overall"
@@ -100,6 +102,21 @@ Response: {"filters": {}, "ranking": null, "limit": null, "needsClarification": 
 
 Query: "best pairings for me"
 Response: {"filters": {}, "ranking": "overall", "limit": null, "needsClarification": false}
+
+CONVERSATION HISTORY EXAMPLES:
+
+Previous: User asked "are there pairings to Santa Barbara"
+Current Query: "what about pairing 7544"
+Response: {"filters": {"pairingNumber": "7544"}, "ranking": null, "limit": null, "needsClarification": false}
+(Note: User wants to know if pairing 7544 goes to Santa Barbara based on context)
+
+Previous: Assistant showed 4-day pairings
+Current Query: "show me the same but for 5 days"
+Response: {"filters": {"pairingDays": 5}, "ranking": null, "limit": null, "needsClarification": false}
+
+Previous: User asked about "pairings to LAX"
+Current Query: "the same city as before"
+Response: {"filters": {"city": "LAX"}, "ranking": null, "limit": null, "needsClarification": false}
 
 RESPONSE FORMAT (JSON only):
 {

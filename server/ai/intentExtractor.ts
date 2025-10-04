@@ -16,6 +16,7 @@ const openai = new OpenAI({
  */
 export interface ExtractedIntent {
   filters: {
+    pairingNumber?: string;
     pairingDays?: number;
     pairingDaysMin?: number;
     pairingDaysMax?: number;
@@ -143,8 +144,8 @@ export class IntentExtractor {
     // Copy all filters, with special handling for certain fields
     Object.entries(intent.filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        // Map city filter to search parameter (storage layer doesn't have dedicated city filter)
-        if (key === 'city') {
+        // Map city and pairingNumber filters to search parameter
+        if (key === 'city' || key === 'pairingNumber') {
           query.search = value;
         } else {
           query[key] = value;
