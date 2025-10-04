@@ -18,6 +18,10 @@ externalPort = 80
 localPort = 34523
 externalPort = 3000
 
+[[ports]]
+localPort = 39349
+externalPort = 3001
+
 [env]
 PORT = "5000"
 LOG_LEVEL = "warn"
