@@ -80,8 +80,8 @@ export class IntentExtractor {
 
       const completion = await openai.chat.completions.create({
         model: AI_CONFIG.MODELS.INTENT,
-        temperature: AI_CONFIG.TEMPERATURES.INTENT, // 0.1 for consistency
-        max_completion_tokens: AI_CONFIG.MAX_TOKENS.INTENT, // New models use max_completion_tokens
+        // o4-mini doesn't support custom temperature - omit to use default
+        max_completion_tokens: AI_CONFIG.MAX_TOKENS.INTENT,
         response_format: { type: 'json_object' }, // Force JSON output
         messages,
       });
