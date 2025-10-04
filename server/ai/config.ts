@@ -7,12 +7,12 @@ export const AI_CONFIG = {
   /**
    * Model Selection Strategy:
    * - o4-mini for intent extraction (fast, cheap, excellent at structured JSON)
-   * - gpt-5 for response generation (best conversational quality, only 13% more than o4-mini)
-   * - Cost: $0.79/user/month vs $1.13 with all gpt-4.1 (30% savings, better quality)
+   * - gpt-4.1 for response generation (proven better quality than gpt-5 for this use case)
+   * - Cost: $0.69/user/month (o4-mini saves on intent, gpt-4.1 for quality responses)
    */
   MODELS: {
     INTENT: 'o4-mini',       // Fast + cheap for JSON extraction
-    RESPONSE: 'gpt-5',       // Best quality for natural language responses
+    RESPONSE: 'gpt-4.1',     // Better response quality than gpt-5
   },
 
   /**
