@@ -17,12 +17,12 @@ export const AI_CONFIG = {
 
   /**
    * Temperature Settings:
-   * - Lower temperature (0.3) for consistent, deterministic outputs (intent extraction)
-   * - Higher temperature (0.7) for natural, conversational tone (responses)
+   * - o4-mini only supports temperature 1.0 (reasoning models have fixed temperature)
+   * - gpt-5 uses 0.7 for natural, conversational tone
    */
   TEMPERATURES: {
-    INTENT: 0.3,             // Low = consistent JSON extraction
-    RESPONSE: 0.7,           // Higher = natural/conversational
+    INTENT: 1.0,             // o4-mini only supports 1.0
+    RESPONSE: 0.7,           // Natural/conversational for gpt-5
   },
 
   /**
