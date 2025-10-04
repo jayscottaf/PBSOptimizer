@@ -19,7 +19,7 @@ export class OpenAIAssistantService {
 
       // Use chat completion instead of Assistant API
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',

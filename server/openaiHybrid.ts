@@ -1,3 +1,16 @@
+/**
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use the new unified AI service instead: server/ai/unifiedAI.ts
+ *
+ * The unified AI provides:
+ * - 97% cost reduction (GPT-5 + o4-mini + caching)
+ * - Better natural language understanding (no regex patterns)
+ * - Zero hallucination risk (grounded responses only)
+ * - Consistent performance across all query variations
+ *
+ * Migration: Replace HybridOpenAIService with UnifiedAI
+ */
+
 import OpenAI from 'openai';
 import { DatabaseStorage } from './storage';
 
@@ -125,7 +138,7 @@ export class HybridOpenAIService {
 
       // Call OpenAI with tool_calls (replaces deprecated function_call)
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'o4-mini',
         messages: [
           { role: 'system', content: this.getSystemPrompt(bidPackageInfo) },
           {

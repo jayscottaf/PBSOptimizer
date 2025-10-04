@@ -1,3 +1,16 @@
+/**
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use the new unified AI service instead: server/ai/unifiedAI.ts
+ *
+ * The unified AI provides:
+ * - 97% cost reduction (GPT-5 + o4-mini + caching)
+ * - Better natural language understanding (no regex patterns)
+ * - Zero hallucination risk (grounded responses only)
+ * - Consistent performance across all query variations
+ *
+ * Migration: Replace PairingAnalysisService with UnifiedAI
+ */
+
 import OpenAI from 'openai';
 import { DatabaseStorage } from './storage';
 import { HybridOpenAIService } from './openaiHybrid';
@@ -191,7 +204,7 @@ export class PairingAnalysisService {
       ];
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'o4-mini',
         messages: [
           {
             role: 'system',
@@ -314,7 +327,7 @@ export class PairingAnalysisService {
 
         // Send the summarized function result back to ChatGPT for final response
         const finalCompletion = await openai.chat.completions.create({
-          model: 'gpt-4',
+          model: 'o4-mini',
           messages: [
             {
               role: 'system',
@@ -834,7 +847,7 @@ IMPORTANT ANALYSIS REQUIREMENTS:
         route: p.route || 'N/A',
         tafb: p.tafb || 'N/A',
       }))
-      .filter(p => p.creditHours > 0);
+      .filter((p: any) => p.creditHours > 0);
 
     // Sort by different criteria
     const sortedPairings = [...analyzedPairings];

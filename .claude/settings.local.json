@@ -15,7 +15,10 @@
       "Bash(git pull:*)",
       "Bash(git fetch:*)",
       "Bash(tasklist)",
-      "Read(//f/**)"
+      "Read(//f/**)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run check:*)",
+      "Bash(cmd //c:*)"
     ],
     "deny": [],
     "ask": []

@@ -180,7 +180,7 @@ export function PairingChat({
           id: '1',
           type: 'assistant',
           content:
-            'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+            'Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "Show me 4-day pairings"\n• "Find pairings to Seattle with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "What are the most efficient pairings for junior pilots?"',
           timestamp: new Date(),
         };
         setMessages([welcomeMessage]);
@@ -224,7 +224,7 @@ export function PairingChat({
         id: '1',
         type: 'assistant',
         content:
-          'Chat history temporarily unavailable. Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "What are the 10 longest layovers in DFW?"\n• "Show me 4-day pairings with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "Find pairings with layovers over 12 hours"',
+          'Chat history temporarily unavailable. Hi! I can help you analyze your pairing data. Try asking me things like:\n\n• "Show me 4-day pairings"\n• "Find pairings to Seattle with high hold probability"\n• "Which pairings have the best credit-to-block ratio?"\n• "What are the most efficient pairings for junior pilots?"',
         timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
