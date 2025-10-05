@@ -33,6 +33,9 @@ AVAILABLE FILTERS:
 - city: Layover city (e.g., "LAX", "SEA", "SBA")
 - tafbMin: Minimum time away from base (hours)
 - tafbMax: Maximum time away from base (hours)
+- layoverDurationMin: Minimum layover duration in hours (e.g., 10 for "at least 10 hours rest")
+- layoverDurationMax: Maximum layover duration in hours (e.g., 24 for "less than 24 hours rest")
+- desirableLayoverCities: Array of desirable cities (e.g., ["LAX", "SEA", "SFO"] for "best layover cities")
 - ranking: "credit" | "efficiency" | "hold_probability" | "overall"
 - limit: Number of results to return
 

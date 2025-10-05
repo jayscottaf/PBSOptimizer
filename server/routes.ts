@@ -969,8 +969,8 @@ export async function registerRoutes(app: Express) {
       // Use unified AI pipeline (replaces dual system)
       if (finalBidPackageId) {
         try {
-          const { UnifiedAI } = await import('./ai/unifiedAI');
-          const unifiedAI = new UnifiedAI(storage);
+          const { SimpleAI } = await import('./ai/simpleAI');
+          const simpleAI = new SimpleAI(storage);
 
           // Get conversation history if sessionId provided
           let conversationHistory: any[] = [];
@@ -982,9 +982,10 @@ export async function registerRoutes(app: Express) {
             }));
           }
 
-          const result = await unifiedAI.analyzeQuery({
+          const result = await simpleAI.query({
             message: question,
             bidPackageId: finalBidPackageId,
+            userId: typeof userId === 'number' ? userId : undefined,
             seniorityPercentile: typeof seniorityPercentile === 'number'
               ? seniorityPercentile
               : undefined,
@@ -993,8 +994,7 @@ export async function registerRoutes(app: Express) {
 
           res.json({
             reply: result.response,
-            data: result.data,
-            truncated: result.truncated,
+            pairingNumbers: result.pairingNumbers,
           });
           return;
         } catch (unifiedError) {

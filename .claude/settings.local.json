@@ -18,7 +18,9 @@
       "Read(//f/**)",
       "mcp__ide__getDiagnostics",
       "Bash(npm run check:*)",
-      "Bash(cmd //c:*)"
+      "Bash(cmd //c:*)",
+      "Bash(npm run build:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []

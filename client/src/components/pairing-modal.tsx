@@ -16,6 +16,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { calculateValidStartDates } from '@/lib/pairingDates';
+import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCalculator';
 interface PairingModalProps {
   pairingId: number;
   onClose: () => void;
@@ -437,10 +438,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   return;
                 }
 
-                // Single date
-                const startDate = possibleStartDates[0];
-                const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + pairingDays - 1);
+                // Single date - calculate actual duty times
+                const baseDate = possibleStartDates[0];
+                const segments = pairing.flightSegments || [];
+                const startDate = segments.length > 0
+                  ? calculateDutyStartTime(baseDate, segments[0])
+                  : baseDate;
+                const endDate = segments.length > 0
+                  ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
+                  : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+
                 addToCalendarMutation.mutate({
                   userId: user.id,
                   pairingId: pairing.id,
@@ -582,15 +589,21 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                         });
                         return;
                       }
-                      for (const startDate of starts) {
+                      for (const baseDate of starts) {
                         const pairingDays = pairing.pairingDays || 1;
-                        const endDate = new Date(startDate);
-                        endDate.setDate(endDate.getDate() + pairingDays - 1);
+                        const segments = pairing.flightSegments || [];
+                        const dutyStart = segments.length > 0
+                          ? calculateDutyStartTime(baseDate, segments[0])
+                          : baseDate;
+                        const dutyEnd = segments.length > 0
+                          ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
+                          : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+
                         await api.addToCalendar(
                           user.id,
                           pairing.id,
-                          startDate,
-                          endDate
+                          dutyStart,
+                          dutyEnd
                         );
                       }
                       toast({

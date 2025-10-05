@@ -1348,11 +1348,11 @@ export class DatabaseStorage implements IStorage {
         const ratio = credit / block;
         const percentile = range > 0 ? (ratio - minRatio) / range : 0;
 
-        if (percentile >= 0.80) {
+        if (percentile >= 0.75) {
           acc.excellent++;
-        } else if (percentile >= 0.60) {
+        } else if (percentile >= 0.50) {
           acc.good++;
-        } else if (percentile >= 0.40) {
+        } else if (percentile >= 0.25) {
           acc.average++;
         } else {
           acc.poor++;
@@ -1639,11 +1639,19 @@ export class DatabaseStorage implements IStorage {
       );
 
     if (existing.length > 0) {
-      console.log(
-        'Calendar event already exists, returning existing:',
-        existing[0]
-      );
-      return existing[0];
+      // Update existing event with new times (duty time calculation may have changed)
+      const [updated] = await db
+        .update(userCalendarEvents)
+        .set({
+          startDate: data.startDate,
+          endDate: data.endDate,
+          notes: data.notes,
+        })
+        .where(eq(userCalendarEvents.id, existing[0].id))
+        .returning();
+
+      console.log('Updated existing calendar event with new times:', updated);
+      return updated;
     }
 
     const [result] = await db

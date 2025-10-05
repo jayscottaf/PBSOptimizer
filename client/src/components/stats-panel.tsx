@@ -177,9 +177,9 @@ export function StatsPanel({
     if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
       const range = maxRatio - minRatio;
       percentileThresholds = {
-        excellent: minRatio + (range * 0.80), // 80th percentile
-        good: minRatio + (range * 0.60),      // 60th percentile
-        average: minRatio + (range * 0.40),   // 40th percentile
+        excellent: minRatio + (range * 0.75), // 75th percentile
+        good: minRatio + (range * 0.50),      // 50th percentile
+        average: minRatio + (range * 0.25),   // 25th percentile
       };
     }
 
@@ -208,11 +208,11 @@ export function StatsPanel({
             const range = maxRatio - minRatio;
             const percentile = (ratio - minRatio) / range;
 
-            if (percentile >= 0.80) {
+            if (percentile >= 0.75) {
               acc.excellent++;
-            } else if (percentile >= 0.60) {
+            } else if (percentile >= 0.50) {
               acc.good++;
-            } else if (percentile >= 0.40) {
+            } else if (percentile >= 0.25) {
               acc.average++;
             } else {
               acc.poor++;
@@ -407,7 +407,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (top 20%)'}
+                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
@@ -424,7 +424,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (60-80%)'}
+                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
@@ -440,7 +440,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (40-60%)'}
+                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
@@ -457,7 +457,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (bottom 40%)'}
+                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
@@ -584,7 +584,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (top 20%)'}
+                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
@@ -600,7 +600,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (60-80%)'}
+                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
@@ -616,7 +616,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (40-60%)'}
+                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
@@ -632,7 +632,7 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (bottom 40%)'}
+                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">

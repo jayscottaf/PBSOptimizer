@@ -29,6 +29,10 @@ export interface ExtractedIntent {
     city?: string;
     tafbMin?: number;
     tafbMax?: number;
+    // Advanced filters (require post-query processing)
+    layoverDurationMin?: number; // Minimum layover hours
+    layoverDurationMax?: number; // Maximum layover hours
+    desirableLayoverCities?: string[]; // List of desirable cities
   };
   ranking?: 'credit' | 'efficiency' | 'hold_probability' | 'overall' | null;
   limit?: number | null;
