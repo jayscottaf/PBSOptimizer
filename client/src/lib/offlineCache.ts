@@ -7,8 +7,8 @@ type PairingCacheRecord = {
 };
 
 const DB_NAME = 'pbs-cache';
-const DB_VERSION = 2; // Increment when schema changes
-const CURRENT_SCHEMA_VERSION = '1.2.0'; // Match SW version for consistency
+const DB_VERSION = 3; // Increment when schema changes
+const CURRENT_SCHEMA_VERSION = '1.3.0'; // Match SW version for consistency
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -54,6 +54,24 @@ function openDB(): Promise<IDBDatabase> {
             pairingsStore.createIndex('updatedAt', 'updatedAt', {
               unique: false,
             });
+          }
+        }
+      }
+
+      // Schema version 3: Clear old cache due to backend data structure fix
+      if (oldVersion < 3) {
+        console.log('IndexedDB: Clearing old cache for v1.3.0 data fix');
+        // Clear all cached pairing data since backend now returns correct fields
+        if (db.objectStoreNames.contains('pairings')) {
+          const pairingsStore = req.transaction?.objectStore('pairings');
+          if (pairingsStore) {
+            pairingsStore.clear();
+          }
+        }
+        if (db.objectStoreNames.contains('stats')) {
+          const statsStore = req.transaction?.objectStore('stats');
+          if (statsStore) {
+            statsStore.clear();
           }
         }
       }

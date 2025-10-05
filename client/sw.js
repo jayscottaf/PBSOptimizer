@@ -1,5 +1,5 @@
 // Stage 6: Service Worker Update Strategy & Cache Management
-const SW_VERSION = '1.2.0'; // Increment this when making breaking changes
+const SW_VERSION = '1.3.0'; // Increment this when making breaking changes
 const STATIC_CACHE = `static-v${SW_VERSION}`;
 const RUNTIME_CACHE = `runtime-v${SW_VERSION}`;
 const ASSET_PATTERN = /\.(css|js|woff2?|ttf|eot|png|jpg|jpeg|svg|webp)$/i;
