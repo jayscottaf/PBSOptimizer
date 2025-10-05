@@ -39,6 +39,23 @@ if (import.meta.env.DEV) {
 }
 // Initialize app with migration checks
 (async () => {
+  // Check if we need to force reload for cache version update
+  const CURRENT_APP_VERSION = '1.3.0';
+  const storedVersion = localStorage.getItem('app_version');
+
+  if (storedVersion && storedVersion !== CURRENT_APP_VERSION) {
+    console.log(`App version changed from ${storedVersion} to ${CURRENT_APP_VERSION}, forcing reload...`);
+    localStorage.setItem('app_version', CURRENT_APP_VERSION);
+    // Force hard reload to bust all caches
+    window.location.reload();
+    return;
+  }
+
+  // Set version on first load
+  if (!storedVersion) {
+    localStorage.setItem('app_version', CURRENT_APP_VERSION);
+  }
+
   // Render the app first to prevent startup delays
   createRoot(document.getElementById('root')!).render(<App />);
 
