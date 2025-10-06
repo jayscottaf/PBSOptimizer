@@ -1050,6 +1050,7 @@ export class DatabaseStorage implements IStorage {
           layovers: pairings.layovers,
           flightSegments: pairings.flightSegments,
           holdProbability: pairings.holdProbability,
+          holdProbabilityReasoning: pairings.holdProbabilityReasoning,
           pairingDays: pairings.pairingDays,
           fullTextBlock: pairings.fullTextBlock,
         })

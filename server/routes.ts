@@ -30,19 +30,39 @@ import {
 } from '../shared/schema';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { openaiAssistant } from './openaiAssistant';
+import { ReasonsReportParser } from './reasonsReportParser';
+import { TripMatcher } from './tripMatcher';
 import multer from 'multer';
 import { z } from 'zod';
-import { insertBidPackageSchema, insertPairingSchema } from '@shared/schema';
+import {
+  insertBidPackageSchema,
+  insertPairingSchema,
+  bidHistory,
+} from '@shared/schema';
+import * as fs from 'fs/promises';
 
 // Optimized hold probability recalculation with batching
 async function recalculateHoldProbabilitiesOptimized(
   bidPackageId: number,
-  seniorityPercentile: number
+  seniorityPercentile: number,
+  seniorityNumber?: number
 ) {
   try {
     console.log(
       `Starting optimized hold probability recalculation for bid package ${bidPackageId} with seniority ${seniorityPercentile}%`
     );
+
+    // Fetch bid package to get base/aircraft
+    const [bidPackage] = await db
+      .select()
+      .from(bidPackages)
+      .where(eq(bidPackages.id, bidPackageId))
+      .limit(1);
+
+    if (!bidPackage) {
+      console.log('Bid package not found');
+      return;
+    }
 
     // Fetch all pairings in one query
     const allPairings = await db
@@ -54,35 +74,55 @@ async function recalculateHoldProbabilitiesOptimized(
       console.log('No pairings found for recalculation');
       return;
     }
+
     // Calculate all hold probabilities in memory
     const updates: Array<{ id: number; holdProbability: number }> = [];
 
-    for (const pairing of allPairings) {
-      const desirabilityScore =
-        HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
-      const pairingFrequency =
-        HoldProbabilityCalculator.calculatePairingFrequency(
-          pairing.pairingNumber,
-          allPairings
-        );
-      const startsOnWeekend =
-        HoldProbabilityCalculator.startsOnWeekend(pairing);
-      const includesWeekendOff =
-        HoldProbabilityCalculator.includesWeekendOff(pairing);
+    // Use historical data if seniority number is provided
+    const useHistoricalData = seniorityNumber !== undefined;
 
-      const holdProbabilityResult =
-        HoldProbabilityCalculator.calculateHoldProbability({
-          seniorityPercentile,
-          desirabilityScore,
-          pairingFrequency,
-          startsOnWeekend,
-          includesDeadheads: pairing.deadheads || 0,
-          includesWeekendOff,
-        });
+    for (const pairing of allPairings) {
+      let holdProbabilityResult;
+
+      if (useHistoricalData && seniorityNumber) {
+        // Try historical calculation first
+        holdProbabilityResult =
+          await HoldProbabilityCalculator.calculateHoldProbabilityWithHistory(
+            pairing,
+            seniorityNumber,
+            seniorityPercentile,
+            bidPackage.base,
+            bidPackage.aircraft
+          );
+      } else {
+        // Fall back to estimate-based calculation
+        const desirabilityScore =
+          HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+        const pairingFrequency =
+          HoldProbabilityCalculator.calculatePairingFrequency(
+            pairing.pairingNumber,
+            allPairings
+          );
+        const startsOnWeekend =
+          HoldProbabilityCalculator.startsOnWeekend(pairing);
+        const includesWeekendOff =
+          HoldProbabilityCalculator.includesWeekendOff(pairing);
+
+        holdProbabilityResult =
+          HoldProbabilityCalculator.calculateHoldProbability({
+            seniorityPercentile,
+            desirabilityScore,
+            pairingFrequency,
+            startsOnWeekend,
+            includesDeadheads: pairing.deadheads || 0,
+            includesWeekendOff,
+          });
+      }
 
       updates.push({
         id: pairing.id,
         holdProbability: holdProbabilityResult.probability,
+        reasoning: holdProbabilityResult.reasoning,
       });
     }
 
@@ -94,7 +134,10 @@ async function recalculateHoldProbabilitiesOptimized(
       for (const u of batch) {
         await db
           .update(pairings)
-          .set({ holdProbability: u.holdProbability })
+          .set({
+            holdProbability: u.holdProbability,
+            holdProbabilityReasoning: u.reasoning,
+          })
           .where(eq(pairings.id, u.id));
       }
     }
@@ -111,14 +154,17 @@ async function recalculateHoldProbabilitiesOptimized(
 // Background recalculation function (non-blocking)
 async function recalculateHoldProbabilitiesBackground(
   bidPackageId: number,
-  seniorityPercentile: number
+  seniorityPercentile: number,
+  seniorityNumber?: number
 ) {
   // Start recalculation in background without awaiting
-  setImmediate(async () => {
+  Promise.resolve().then(async () => {
     try {
+      console.log(`🔄 Background recalculation triggered for bid package ${bidPackageId}`);
       await recalculateHoldProbabilitiesOptimized(
         bidPackageId,
-        seniorityPercentile
+        seniorityPercentile,
+        seniorityNumber
       );
     } catch (error) {
       console.error('Background hold probability recalculation failed:', error);
@@ -134,6 +180,25 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Only PDF and TXT files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
+// Configure multer for reasons report HTML uploads
+const uploadReasonsReport = multer({
+  dest: 'uploads/',
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype === 'text/html' ||
+      file.originalname.endsWith('.htm') ||
+      file.originalname.endsWith('.html')
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only HTML files are allowed for reasons reports'));
     }
   },
   limits: {
@@ -334,6 +399,124 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Upload reasons report (HTML)
+  app.post(
+    '/api/upload-reasons-report',
+    uploadReasonsReport.single('reasonsReport'),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        console.log('Processing reasons report:', req.file.originalname);
+
+        // Parse the HTML file
+        const awards = await ReasonsReportParser.parseReasonsReport(
+          req.file.path
+        );
+
+        // Extract metadata from HTML
+        const htmlContent = await fs.readFile(req.file.path, 'utf-8');
+        const metadata = ReasonsReportParser.extractMetadata(htmlContent);
+
+        if (!metadata) {
+          return res.status(400).json({
+            message:
+              'Could not extract base/aircraft/month from HTML. Please check file format.',
+          });
+        }
+
+        // Store awards in bidHistory table
+        let storedCount = 0;
+
+        for (const award of awards) {
+          try {
+            // Create trip fingerprint
+            const fingerprint =
+              ReasonsReportParser.createTripFingerprint(award);
+
+            // Parse credit hours as decimal
+            const creditHours = parseFloat(
+              award.monthCredit.replace(':', '.').replace(/[^\d.]/g, '')
+            );
+            const totalCredit = parseFloat(
+              award.totalCredit.replace(':', '.').replace(/[^\d.]/g, '')
+            );
+
+            // Insert into database
+            await db.insert(bidHistory).values({
+              pairingNumber: award.pairingNumber,
+              month: metadata.month,
+              year: metadata.year,
+              base: metadata.base,
+              aircraft: metadata.aircraft,
+              juniorHolderSeniority: award.seniorityNumber,
+              juniorHolderName: award.pilotName,
+              juniorHolderEmployeeNumber: award.employeeNumber,
+              awardType: award.awardType,
+              pairingDays: award.pairingDays,
+              creditHours: creditHours.toString(),
+              totalCredit: totalCredit.toString(),
+              layoverCities: award.layoverCities,
+              checkInDate: award.checkInDate,
+              checkOutDate: award.checkOutDate,
+              tripFingerprint: fingerprint,
+              awardedAt: new Date(`${metadata.year}-${monthToNumber(metadata.month)}-01`),
+            });
+
+            storedCount++;
+          } catch (error) {
+            console.error(
+              `Error storing award for pairing ${award.pairingNumber}:`,
+              error
+            );
+          }
+        }
+
+        // Clean up uploaded file
+        await fs.unlink(req.file.path);
+
+        res.json({
+          success: true,
+          message: `Reasons report processed successfully`,
+          stats: {
+            totalParsed: awards.length,
+            stored: storedCount,
+            base: metadata.base,
+            aircraft: metadata.aircraft,
+            month: metadata.month,
+            year: metadata.year,
+          },
+        });
+      } catch (error) {
+        console.error('Error processing reasons report:', error);
+        res
+          .status(500)
+          .json({ message: 'Failed to process reasons report', error });
+      }
+    }
+  );
+
+  // Helper function to convert month name to number
+  function monthToNumber(month: string): number {
+    const months: Record<string, number> = {
+      JAN: 1,
+      FEB: 2,
+      MAR: 3,
+      APR: 4,
+      MAY: 5,
+      JUN: 6,
+      JUL: 7,
+      AUG: 8,
+      SEP: 9,
+      OCT: 10,
+      NOV: 11,
+      DEC: 12,
+    };
+    return months[month.toUpperCase()] || 1;
+  }
+
   // Get pairings with optional filtering
   app.get('/api/pairings', async (req, res) => {
     try {
@@ -530,34 +713,44 @@ export async function registerRoutes(app: Express) {
         ...filters,
       });
 
-      // If seniority provided, compute holdProbability per-response
+      // If seniority provided and pairings don't have stored probabilities, compute holdProbability per-response
       const seniorityValueRaw =
         (filters as any)?.seniorityPercentile ||
         (filters as any)?.seniorityPercentage;
       if (seniorityValueRaw) {
         const seniorityValue = parseFloat(seniorityValueRaw);
-        const allForPackage = await db
-          .select()
-          .from(pairings)
-          .where(eq(pairings.bidPackageId, bidPackageId));
 
-        for (const p of result.pairings) {
-          const desirability =
-            HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
-          const freq = HoldProbabilityCalculator.calculatePairingFrequency(
-            (p as any).pairingNumber,
-            allForPackage as any
-          );
-          const hp = HoldProbabilityCalculator.calculateHoldProbability({
-            seniorityPercentile: seniorityValue,
-            desirabilityScore: desirability,
-            pairingFrequency: freq,
-            startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
-            includesDeadheads: (p as any).deadheads || 0,
-            includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
-          });
-          // Only update holdProbability, preserve all other stored values including pairingDays
-          (p as any).holdProbability = hp.probability;
+        // Check if we need to recalculate (only if pairings don't have stored probabilities)
+        const needsRecalc = result.pairings.some(p => (p as any).holdProbability === null || (p as any).holdProbability === undefined);
+
+        if (needsRecalc) {
+          const allForPackage = await db
+            .select()
+            .from(pairings)
+            .where(eq(pairings.bidPackageId, bidPackageId));
+
+          for (const p of result.pairings) {
+            // Skip if this pairing already has a calculated probability
+            if ((p as any).holdProbability !== null && (p as any).holdProbability !== undefined) {
+              continue;
+            }
+
+            const desirability =
+              HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
+            const freq = HoldProbabilityCalculator.calculatePairingFrequency(
+              (p as any).pairingNumber,
+              allForPackage as any
+            );
+            const hp = HoldProbabilityCalculator.calculateHoldProbability({
+              seniorityPercentile: seniorityValue,
+              desirabilityScore: desirability,
+              pairingFrequency: freq,
+              startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
+              includesDeadheads: (p as any).deadheads || 0,
+              includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
+            });
+            (p as any).holdProbability = hp.probability;
+          }
         }
       }
 
@@ -696,6 +889,29 @@ export async function registerRoutes(app: Express) {
       res.json(user);
     } catch (error) {
       console.error('Error creating/updating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Recalculate hold probabilities with historical data
+  app.post('/api/recalculate-probabilities', async (req, res) => {
+    try {
+      const { bidPackageId, seniorityPercentile, seniorityNumber } = req.body;
+
+      if (!bidPackageId || seniorityPercentile === undefined) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Trigger recalculation in background
+      recalculateHoldProbabilitiesBackground(
+        bidPackageId,
+        seniorityPercentile,
+        seniorityNumber
+      );
+
+      res.json({ success: true, message: 'Recalculation started' });
+    } catch (error) {
+      console.error('Error triggering recalculation:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

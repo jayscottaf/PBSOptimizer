@@ -35,6 +35,7 @@ export interface Pairing {
   flightSegments: any;
   fullTextBlock: string;
   holdProbability: number;
+  holdProbabilityReasoning?: string[]; // Added reasoning array
   pairingDays?: number;
   seniorityPercentage?: number; // Added seniorityPercentage
 }
@@ -506,5 +507,22 @@ export const api = {
       `/api/chat-history/${sessionId}`
     );
     return response.json();
+  },
+
+  // Cache management
+  async clearLocalCache(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Delete both old and new cache databases
+      const deleteOld = indexedDB.deleteDatabase('pbs-cache');
+      const deleteNew = indexedDB.deleteDatabase('pbs-cache-v2');
+
+      Promise.all([
+        new Promise(r => { deleteOld.onsuccess = () => r(true); deleteOld.onerror = () => r(false); }),
+        new Promise(r => { deleteNew.onsuccess = () => r(true); deleteNew.onerror = () => r(false); })
+      ]).then(() => {
+        console.log('Cache deleted successfully');
+        resolve();
+      }).catch(reject);
+    });
   },
 };

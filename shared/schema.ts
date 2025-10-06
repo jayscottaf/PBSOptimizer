@@ -60,6 +60,7 @@ export const pairings = pgTable('pairings', {
   flightSegments: jsonb('flight_segments').notNull(), // Array of flight segment details
   fullTextBlock: text('full_text_block').notNull(), // Complete pairing text from PDF
   holdProbability: integer('hold_probability').default(0), // Percentage 0-100
+  holdProbabilityReasoning: jsonb('hold_probability_reasoning'), // Array of reasoning strings
   pairingDays: integer('pairing_days').default(1), // Number of days (calculated from flight segment day letters)
 });
 
@@ -68,8 +69,26 @@ export const bidHistory = pgTable('bid_history', {
   pairingNumber: text('pairing_number').notNull(),
   month: text('month').notNull(),
   year: integer('year').notNull(),
+  base: text('base').notNull(),
+  aircraft: text('aircraft').notNull(),
   juniorHolderSeniority: integer('junior_holder_seniority').notNull(),
+  juniorHolderName: text('junior_holder_name'),
+  juniorHolderEmployeeNumber: text('junior_holder_employee_number'),
+  awardType: text('award_type'), // Regular, Coverage, Open
+
+  // Trip characteristics for fingerprinting
+  pairingDays: integer('pairing_days').notNull(),
+  creditHours: decimal('credit_hours', { precision: 4, scale: 2 }).notNull(),
+  totalCredit: decimal('total_credit', { precision: 4, scale: 2 }), // Some pairings have month vs total credit
+  layoverCities: text('layover_cities'), // e.g., "BOS-14 RDU-14"
+  checkInDate: text('check_in_date'), // e.g., "10/07 Tue 05:59"
+  checkOutDate: text('check_out_date'), // e.g., "10/09 Thu 11:55"
+
+  // Trip fingerprint (computed from characteristics)
+  tripFingerprint: jsonb('trip_fingerprint'), // Structured fingerprint for matching
+
   awardedAt: timestamp('awarded_at').notNull(),
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
 });
 
 export const userFavorites = pgTable(

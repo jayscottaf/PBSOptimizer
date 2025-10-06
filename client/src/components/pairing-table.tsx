@@ -2,7 +2,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Eye, Bookmark, Star, X, Calendar } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Eye, Bookmark, Star, X, Calendar, Info } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
 import { useState } from 'react';
 import { api } from '@/lib/api';
@@ -633,6 +638,49 @@ export function PairingTable({
                       >
                         {pairing.holdProbability}%
                       </span>
+                      {(() => {
+                        const hasReasoning = pairing.holdProbabilityReasoning && pairing.holdProbabilityReasoning.length > 0;
+                        return hasReasoning ? (
+                            <div className="relative inline-flex group">
+                              <button
+                                type="button"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-shrink-0 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded inline-flex items-center cursor-pointer"
+                              >
+                                <Info className="w-3 h-3 text-blue-500" />
+                              </button>
+                              {/* Simple CSS-based tooltip - positioned below for first rows, above for others */}
+                              <div className={`absolute z-[100] ${
+                                index < 2
+                                  ? 'top-full mt-2'
+                                  : 'bottom-full mb-2'
+                                } left-1/2 transform -translate-x-1/2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none`}>
+                                <div className="bg-gray-900 text-white p-3 rounded-lg shadow-2xl border border-gray-600 min-w-[280px] max-w-sm">
+                                  <div className="space-y-2">
+                                    <div className="font-semibold text-sm border-b border-gray-700 pb-2">
+                                      Hold Probability: {pairing.holdProbability}%
+                                    </div>
+                                    {pairing.holdProbabilityReasoning.map((reason, idx) => (
+                                      <div key={idx} className="text-xs text-gray-100 leading-relaxed">
+                                        {reason}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Arrow pointing up for bottom tooltip, down for top tooltip */}
+                                  {index < 2 ? (
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-px">
+                                      <div className="border-8 border-transparent border-b-gray-900"></div>
+                                    </div>
+                                  ) : (
+                                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
+                                      <div className="border-8 border-transparent border-t-gray-900"></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                        ) : null;
+                      })()}
                     </div>
                   </td>
                   {(showDeleteButton || showAddToCalendar) && (

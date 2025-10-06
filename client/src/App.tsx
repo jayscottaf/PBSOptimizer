@@ -36,7 +36,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={200} skipDelayDuration={0}>
           <div
             id="offline-banner"
             style={{

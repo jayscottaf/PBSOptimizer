@@ -6,12 +6,13 @@ type PairingCacheRecord = {
   updatedAt: number;
 };
 
-const DB_NAME = 'pbs-cache';
-const DB_VERSION = 3; // Increment when schema changes
-const CURRENT_SCHEMA_VERSION = '1.3.0'; // Match SW version for consistency
+const DB_NAME = 'pbs-cache-v2'; // Changed to force fresh database with holdProbabilityReasoning
+const DB_VERSION = 4; // Increment when schema changes - v4 adds holdProbabilityReasoning
+const CURRENT_SCHEMA_VERSION = '1.4.0'; // Match SW version for consistency
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    console.log(`Opening IndexedDB: ${DB_NAME} version ${DB_VERSION}`);
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = event => {
       const db = req.result;
@@ -62,6 +63,24 @@ function openDB(): Promise<IDBDatabase> {
       if (oldVersion < 3) {
         console.log('IndexedDB: Clearing old cache for v1.3.0 data fix');
         // Clear all cached pairing data since backend now returns correct fields
+        if (db.objectStoreNames.contains('pairings')) {
+          const pairingsStore = req.transaction?.objectStore('pairings');
+          if (pairingsStore) {
+            pairingsStore.clear();
+          }
+        }
+        if (db.objectStoreNames.contains('stats')) {
+          const statsStore = req.transaction?.objectStore('stats');
+          if (statsStore) {
+            statsStore.clear();
+          }
+        }
+      }
+
+      // Schema version 4: Clear cache to include holdProbabilityReasoning field
+      if (oldVersion < 4) {
+        console.log('IndexedDB: Clearing old cache for v1.4.0 - adding holdProbabilityReasoning');
+        // Clear all cached pairing data to fetch fresh data with reasoning
         if (db.objectStoreNames.contains('pairings')) {
           const pairingsStore = req.transaction?.objectStore('pairings');
           if (pairingsStore) {

@@ -42,6 +42,7 @@ import { PairingModal } from '@/components/pairing-modal';
 import { CalendarView } from '@/components/calendar-view';
 import { SmartFilterSystem } from '@/components/smart-filter-system';
 import { NetworkStatus } from '@/components/network-status';
+import { ReasonsReportUpload } from '@/components/reasons-report-upload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cacheKeyForPairings,
@@ -1643,21 +1644,26 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Upload Bid Package Modal */}
+      {/* Upload Modal */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Bid Package</DialogTitle>
+            <DialogTitle>Upload Files</DialogTitle>
             <DialogDescription>
-              Upload your PBS bid package to analyze pairings
+              Upload bid packages or reasons reports to improve predictions
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-              <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
-              <div className="mt-4">
-                <FileUpload
-                  onUpload={file => {
+          <Tabs defaultValue="bidPackage" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="bidPackage">Bid Package</TabsTrigger>
+              <TabsTrigger value="reasonsReport">Reasons Report</TabsTrigger>
+            </TabsList>
+            <TabsContent value="bidPackage" className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="mt-4">
+                  <FileUpload
+                    onUpload={file => {
                     console.log('File uploaded:', file);
                     setShowUploadModal(false);
                     refetchBidPackages();
@@ -1725,14 +1731,26 @@ export default function Dashboard() {
 
                     pollForCompletion();
                   }}
-                />
+                  />
+                </div>
               </div>
-            </div>
-            <div className="text-xs text-gray-500 flex items-center">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              Supports NYC A220 bid packages (PDF or TXT format)
-            </div>
-          </div>
+              <div className="text-xs text-gray-500 flex items-center">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                Supports NYC A220 bid packages (PDF or TXT format)
+              </div>
+            </TabsContent>
+            <TabsContent value="reasonsReport" className="space-y-4">
+              <ReasonsReportUpload
+                onUploadSuccess={() => {
+                  // Optionally close modal or show success message
+                  toast({
+                    title: 'Historical data updated',
+                    description: 'Hold probabilities will now use this data for predictions.',
+                  });
+                }}
+              />
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
@@ -1963,24 +1981,23 @@ export default function Dashboard() {
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    const userId =
-                      currentUser?.seniorityNumber || currentUser?.id;
-                    if (userId) {
-                      try {
-                        await purgeUserCache(userId);
-                        // Clear React Query cache as well
-                        queryClient.clear();
-                        toast({
-                          title: 'Success',
-                          description: 'Cache cleared successfully',
-                        });
-                      } catch (error) {
-                        toast({
-                          title: 'Error',
-                          description: 'Failed to clear cache',
-                          variant: 'destructive',
-                        });
-                      }
+                    try {
+                      // Delete the entire IndexedDB database
+                      await api.clearLocalCache();
+                      // Clear React Query cache as well
+                      queryClient.clear();
+                      toast({
+                        title: 'Success',
+                        description: 'Cache cleared successfully. Reloading...',
+                      });
+                      // Reload to get fresh data with new schema
+                      setTimeout(() => window.location.reload(), 500);
+                    } catch (error) {
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to clear cache',
+                        variant: 'destructive',
+                      });
                     }
                   }}
                 >
