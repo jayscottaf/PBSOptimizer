@@ -1,8 +1,8 @@
 // Vercel serverless entry point
 import 'dotenv/config';
 import express from 'express';
-import { registerRoutes } from './server/routes';
-import { serveStatic } from './server/vite';
+import { registerRoutes } from '../server/routes';
+import { serveStatic } from '../server/vite';
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
