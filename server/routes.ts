@@ -429,9 +429,33 @@ export async function registerRoutes(app: Express) {
 
         // Store awards in bidHistory table
         let storedCount = 0;
+        let skippedCount = 0;
+        console.log(`Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
 
         for (const award of awards) {
           try {
+            // Check if this award already exists (duplicate detection)
+            const existingAward = await db
+              .select()
+              .from(bidHistory)
+              .where(
+                and(
+                  eq(bidHistory.pairingNumber, award.pairingNumber),
+                  eq(bidHistory.month, metadata.month),
+                  eq(bidHistory.year, metadata.year),
+                  eq(bidHistory.base, metadata.base),
+                  eq(bidHistory.aircraft, metadata.aircraft),
+                  eq(bidHistory.juniorHolderSeniority, award.seniorityNumber)
+                )
+              )
+              .limit(1);
+
+            // Skip if duplicate found
+            if (existingAward.length > 0) {
+              skippedCount++;
+              continue;
+            }
+
             // Create trip fingerprint
             const fingerprint =
               ReasonsReportParser.createTripFingerprint(award);
@@ -477,12 +501,17 @@ export async function registerRoutes(app: Express) {
         // Clean up uploaded file
         await fs.unlink(req.file.path);
 
+        console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped`);
+
         res.json({
           success: true,
-          message: `Reasons report processed successfully`,
+          message: skippedCount > 0
+            ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped`
+            : `Reasons report processed successfully`,
           stats: {
             totalParsed: awards.length,
             stored: storedCount,
+            skipped: skippedCount,
             base: metadata.base,
             aircraft: metadata.aircraft,
             month: metadata.month,
@@ -497,6 +526,38 @@ export async function registerRoutes(app: Express) {
       }
     }
   );
+
+  // Get list of uploaded reasons reports (summary by month/year/base/aircraft)
+  app.get('/api/reasons-reports', async (req, res) => {
+    try {
+      // Get distinct reports with count of awards
+      const reports = await db
+        .select({
+          month: bidHistory.month,
+          year: bidHistory.year,
+          base: bidHistory.base,
+          aircraft: bidHistory.aircraft,
+          count: sql<number>`count(*)::int`,
+          uploadedAt: sql<Date>`max(${bidHistory.uploadedAt})`,
+        })
+        .from(bidHistory)
+        .groupBy(
+          bidHistory.month,
+          bidHistory.year,
+          bidHistory.base,
+          bidHistory.aircraft
+        )
+        .orderBy(
+          sql`${bidHistory.year} desc`,
+          sql`${bidHistory.month} desc`
+        );
+
+      res.json(reports);
+    } catch (error) {
+      console.error('Error fetching reasons reports:', error);
+      res.status(500).json({ message: 'Failed to fetch reasons reports' });
+    }
+  });
 
   // Helper function to convert month name to number
   function monthToNumber(month: string): number {
