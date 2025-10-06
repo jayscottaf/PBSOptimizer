@@ -15,8 +15,19 @@ app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 // Serve static files from dist/public
 app.use(express.static(path.join(__dirname, '../dist/public')));
 
-// Initialize routes
-await registerRoutes(app);
+// Initialize routes (wrapped to handle async)
+let initialized = false;
+const initPromise = registerRoutes(app).then(() => {
+  initialized = true;
+});
+
+// Wait for initialization before handling requests
+app.use(async (req, res, next) => {
+  if (!initialized) {
+    await initPromise;
+  }
+  next();
+});
 
 // Fallback to index.html for client-side routing
 app.get('*', (req, res) => {
