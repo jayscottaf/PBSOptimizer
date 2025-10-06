@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "app.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/app.ts" },
+    { "source": "/(.*)", "destination": "/dist/public/$1" }
+  ]
+}
