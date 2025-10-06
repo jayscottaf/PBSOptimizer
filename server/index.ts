@@ -54,41 +54,59 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  const server = await registerRoutes(app);
+// Initialize routes and middleware
+let initialized = false;
+let initPromise: Promise<any> | null = null;
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || 'Internal Server Error';
+async function initialize() {
+  if (initialized) return;
+  if (initPromise) return initPromise;
 
-    res.status(status).json({ message });
-    throw err;
-  });
+  initPromise = (async () => {
+    const server = await registerRoutes(app);
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get('env') === 'development') {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || 'Internal Server Error';
+      res.status(status).json({ message });
+      throw err;
+    });
+
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get('env') === 'development') {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+
+    initialized = true;
+    return server;
+  })();
+
+  return initPromise;
+}
+
+// For Vercel serverless: lazy initialize on first request
+app.use(async (req, res, next) => {
+  if (!initialized) {
+    await initialize();
   }
+  next();
+});
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-
-  // Only listen on port if not in Vercel (Vercel uses serverless functions)
-  if (!process.env.VERCEL) {
+// If not in Vercel (local development), initialize immediately and start server
+if (!process.env.VERCEL) {
+  initialize().then((server) => {
+    const port = parseInt(process.env.PORT || '5000', 10);
     server.listen(port, '0.0.0.0', () => {
       logger('info', `Server started on port ${port}`);
       logger('info', `Environment: ${process.env.NODE_ENV || 'development'}`);
       logger('info', `Database URL configured: ${!!process.env.DATABASE_URL}`);
     });
-  }
-})();
+  });
+}
 
 // Export for Vercel serverless
 export default app;
