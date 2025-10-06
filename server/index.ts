@@ -79,9 +79,16 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen(port, '0.0.0.0', () => {
-    logger('info', `Server started on port ${port}`);
-    logger('info', `Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger('info', `Database URL configured: ${!!process.env.DATABASE_URL}`);
-  });
+
+  // Only listen on port if not in Vercel (Vercel uses serverless functions)
+  if (!process.env.VERCEL) {
+    server.listen(port, '0.0.0.0', () => {
+      logger('info', `Server started on port ${port}`);
+      logger('info', `Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger('info', `Database URL configured: ${!!process.env.DATABASE_URL}`);
+    });
+  }
 })();
+
+// Export for Vercel serverless
+export default app;
