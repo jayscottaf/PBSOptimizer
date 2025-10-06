@@ -76,7 +76,7 @@ async function recalculateHoldProbabilitiesOptimized(
     }
 
     // Calculate all hold probabilities in memory
-    const updates: Array<{ id: number; holdProbability: number }> = [];
+    const updates: Array<{ id: number; holdProbability: number; reasoning?: string[] }> = [];
 
     // Use historical data if seniority number is provided
     const useHistoricalData = seniorityNumber !== undefined;
@@ -1222,7 +1222,7 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
-      const { question, bidPackageId, seniorityPercentile, sessionId } = req.body;
+      const { question, bidPackageId, seniorityPercentile, sessionId, userId } = req.body;
 
       if (!question) {
         return res.status(400).json({ message: 'Question is required' });
