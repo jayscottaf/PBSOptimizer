@@ -7,11 +7,18 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// Register all API routes
-await registerRoutes(app);
+// Initialize routes (wrap in async IIFE to avoid top-level await)
+let routesInitialized = false;
+const initPromise = (async () => {
+  await registerRoutes(app);
+  serveStatic(app);
+  routesInitialized = true;
+})();
 
-// Serve static files in production
-serveStatic(app);
-
-// Export for Vercel serverless
-export default app;
+// Export handler that waits for initialization
+export default async (req: any, res: any) => {
+  if (!routesInitialized) {
+    await initPromise;
+  }
+  return app(req, res);
+};
