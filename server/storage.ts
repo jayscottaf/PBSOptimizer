@@ -21,7 +21,7 @@ import {
   type ChatHistory,
   type UserCalendarEvent,
   type InsertUserCalendarEvent,
-} from '@shared/schema.js';
+} from '../shared/schema.js';
 import { db } from './db.js';
 import {
   eq,

@@ -38,7 +38,7 @@ import {
   insertBidPackageSchema,
   insertPairingSchema,
   bidHistory,
-} from '@shared/schema.js';
+} from '../shared/schema.js';
 import * as fs from 'fs/promises';
 
 // Optimized hold probability recalculation with batching
