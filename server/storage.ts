@@ -200,17 +200,24 @@ export class DatabaseStorage implements IStorage {
     );
 
     if (existingUser) {
-      // Update existing user
+      // Update existing user - only update fields that are provided
+      const updateData: any = {
+        base: userData.base,
+        aircraft: userData.aircraft,
+        updatedAt: new Date(),
+      };
+
+      if (userData.name !== undefined) {
+        updateData.name = userData.name;
+      }
+
+      if (userData.seniorityPercentile !== undefined) {
+        updateData.seniorityPercentile = userData.seniorityPercentile;
+      }
+
       const [updatedUser] = await db
         .update(users)
-        .set({
-          name: userData.name !== undefined ? userData.name : existingUser.name,
-          base: userData.base,
-          aircraft: userData.aircraft,
-          seniorityPercentile:
-            userData.seniorityPercentile || existingUser.seniorityPercentile,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(users.seniorityNumber, userData.seniorityNumber))
         .returning();
       return updatedUser;
