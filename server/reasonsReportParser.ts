@@ -43,6 +43,10 @@ export class ReasonsReportParser {
    */
   static async parseReasonsReport(filePath: string): Promise<PairingAward[]> {
     const htmlContent = await fs.readFile(filePath, 'utf-8');
+    return this.parseReasonsReportFromContent(htmlContent);
+  }
+
+  static async parseReasonsReportFromContent(htmlContent: string): Promise<PairingAward[]> {
     const $ = cheerio.load(htmlContent);
     const awards: PairingAward[] = [];
 

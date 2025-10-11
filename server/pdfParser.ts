@@ -933,7 +933,7 @@ export class PDFParser {
   }
 
   async parseFile(
-    filePath: string,
+    fileData: string | Buffer,
     bidPackageId: number,
     mimeType: string,
     userSeniorityPercentile: number = 50
@@ -942,12 +942,27 @@ export class PDFParser {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
       let text: string;
-      if (mimeType === 'text/plain') {
-        text = await this.extractTextFromTXT(filePath);
-        console.log(`TXT file parsed successfully, ${text.length} characters`);
+      if (Buffer.isBuffer(fileData)) {
+        // Handle buffer from memory storage (Vercel)
+        if (mimeType === 'text/plain') {
+          text = fileData.toString('utf-8');
+          console.log(`TXT buffer parsed successfully, ${text.length} characters`);
+        } else {
+          // For PDF buffers, we need to use a different approach
+          const pdfParse = (await import('pdf-parse')).default;
+          const data = await pdfParse(fileData);
+          text = data.text;
+          console.log(`PDF buffer parsed successfully, ${text.length} characters`);
+        }
       } else {
-        text = await this.extractTextFromPDF(filePath);
-        console.log(`PDF parsed successfully, ${text.length} characters`);
+        // Handle file path (local development)
+        if (mimeType === 'text/plain') {
+          text = await this.extractTextFromTXT(fileData);
+          console.log(`TXT file parsed successfully, ${text.length} characters`);
+        } else {
+          text = await this.extractTextFromPDF(fileData);
+          console.log(`PDF parsed successfully, ${text.length} characters`);
+        }
       }
 
       // Extract bid package date from the PDF header

@@ -172,9 +172,9 @@ async function recalculateHoldProbabilitiesBackground(
   });
 }
 
-// Configure multer for file uploads
+// Configure multer for file uploads - use memory storage for serverless
 const upload = multer({
-  dest: 'uploads/',
+  storage: multer.memoryStorage(), // Use memory storage instead of disk for Vercel
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
       cb(null, true);
@@ -189,7 +189,7 @@ const upload = multer({
 
 // Configure multer for reasons report HTML uploads
 const uploadReasonsReport = multer({
-  dest: 'uploads/',
+  storage: multer.memoryStorage(), // Use memory storage instead of disk for Vercel
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype === 'text/html' ||
@@ -365,8 +365,9 @@ export async function registerRoutes(app: Express) {
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
       // Parse file asynchronously and update status
+      // With memory storage, use buffer instead of path
       pdfParser
-        .parseFile(req.file.path, bidPackage.id, req.file.mimetype)
+        .parseFile(req.file.buffer, bidPackage.id, req.file.mimetype)
         .then(async () => {
           console.log(
             `File parsing completed for bid package ${bidPackage.id}`
@@ -411,13 +412,13 @@ export async function registerRoutes(app: Express) {
 
         console.log('Processing reasons report:', req.file.originalname);
 
-        // Parse the HTML file
-        const awards = await ReasonsReportParser.parseReasonsReport(
-          req.file.path
+        // Parse the HTML file from buffer
+        const htmlContent = req.file.buffer.toString('utf-8');
+        const awards = await ReasonsReportParser.parseReasonsReportFromContent(
+          htmlContent
         );
 
         // Extract metadata from HTML
-        const htmlContent = await fs.readFile(req.file.path, 'utf-8');
         const metadata = ReasonsReportParser.extractMetadata(htmlContent);
 
         if (!metadata) {
@@ -498,8 +499,7 @@ export async function registerRoutes(app: Express) {
           }
         }
 
-        // Clean up uploaded file
-        await fs.unlink(req.file.path);
+        // No need to clean up - file is in memory and will be garbage collected
 
         console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped`);
 
