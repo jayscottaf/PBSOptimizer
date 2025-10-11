@@ -16,11 +16,32 @@ const initPromise = registerRoutes(app).then(() => {
 
 // Vercel serverless function handler
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Ensure routes are initialized
-  if (!initialized) {
-    await initPromise;
-  }
+  try {
+    // Ensure routes are initialized
+    if (!initialized) {
+      await initPromise;
+    }
 
-  // Delegate to Express
-  app(req as any, res as any);
+    // Delegate to Express and wait for response
+    return new Promise((resolve, reject) => {
+      // Wrap response to capture when it's finished
+      const originalEnd = res.end.bind(res);
+      res.end = function(...args: any[]) {
+        originalEnd(...args);
+        resolve(undefined);
+        return res;
+      } as any;
+
+      // Handle the request
+      app(req as any, res as any);
+    });
+  } catch (error) {
+    console.error('Error in serverless handler:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }
