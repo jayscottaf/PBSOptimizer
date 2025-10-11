@@ -7,7 +7,6 @@
   ],
   "functions": {
     "api/index.ts": {
-      "runtime": "nodejs20.x",
       "includeFiles": "**/*.{ts,js,json}"
     }
   }

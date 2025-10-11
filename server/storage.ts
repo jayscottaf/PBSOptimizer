@@ -223,13 +223,19 @@ export class DatabaseStorage implements IStorage {
       return updatedUser;
     } else {
       // Create new user
-      return await this.createUser({
-        name: userData.name,
+      const newUserData: InsertUser = {
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
         aircraft: userData.aircraft,
         seniorityPercentile: userData.seniorityPercentile || 50, // Default to 50 if not provided
-      });
+      };
+
+      // Only add name if it's provided
+      if (userData.name) {
+        newUserData.name = userData.name;
+      }
+
+      return await this.createUser(newUserData);
     }
   }
 
