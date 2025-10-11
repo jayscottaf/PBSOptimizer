@@ -1,4 +1,4 @@
-import { TripFingerprint } from './reasonsReportParser.js';
+import { TripFingerprint } from './reasonsReportParser';
 
 export interface SimilarityResult {
   score: number; // 0-100

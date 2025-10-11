@@ -12,7 +12,7 @@
  */
 
 import OpenAI from 'openai';
-import { DatabaseStorage } from './storage.js';
+import { DatabaseStorage } from './storage';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

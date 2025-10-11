@@ -1,10 +1,10 @@
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { storage } from './storage.js';
-import type { InsertPairing } from '../shared/schema.js';
-import { samplePdfText } from './samplePdfText.js';
-import { HoldProbabilityCalculator } from './holdProbabilityCalculator.js';
+import { storage } from './storage';
+import type { InsertPairing } from '../shared/schema';
+import { samplePdfText } from './samplePdfText';
+import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 
 interface FlightSegment {
   date: string;
