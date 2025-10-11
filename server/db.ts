@@ -3,13 +3,21 @@ config();
 
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
 import * as schema from '@shared/schema';
 
-neonConfig.webSocketConstructor = ws;
-neonConfig.pipelineTLS = false;
-neonConfig.pipelineConnect = false;
-neonConfig.useSecureWebSocket = true;
+// Configure for serverless environment
+if (process.env.VERCEL) {
+  // In Vercel, use native fetch instead of WebSocket
+  neonConfig.fetchConnectionCache = true;
+} else {
+  // In local development, use WebSocket
+  import('ws').then((ws) => {
+    neonConfig.webSocketConstructor = ws.default;
+  });
+  neonConfig.pipelineTLS = false;
+  neonConfig.pipelineConnect = false;
+  neonConfig.useSecureWebSocket = true;
+}
 
 if (!process.env.DATABASE_URL) {
   console.error('Environment variables:', {
