@@ -7,7 +7,7 @@
   ],
   "functions": {
     "api/index.ts": {
-      "includeFiles": ["dist/public/**"],
+      "includeFiles": "dist/public/**",
       "excludeFiles": "{uploads/**,PBSOptimizer/**}"
     }
   }
