@@ -12,8 +12,8 @@
  */
 
 import OpenAI from 'openai';
-import { DatabaseStorage } from './storage';
-import { HybridOpenAIService } from './openaiHybrid';
+import { DatabaseStorage } from './storage.js';
+import { HybridOpenAIService } from './openaiHybrid.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

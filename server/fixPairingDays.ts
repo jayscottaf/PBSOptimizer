@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from './db';
-import { pairings } from '../shared/schema';
+import { db } from './db.js';
+import { pairings } from '../shared/schema.js';
 
 /**
  * Fix incorrect pairing days for specific pairings that were misclassified

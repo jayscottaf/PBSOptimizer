@@ -1,14 +1,14 @@
 import type { Express } from 'express';
 import { createServer, type Server } from 'http';
-import { storage } from './storage';
-import { seedDatabase } from './seedData';
-import { pdfParser } from './pdfParser';
+import { storage } from './storage.js';
+import { seedDatabase } from './seedData.js';
+import { pdfParser } from './pdfParser.js';
 import {
   db,
   reconnectDatabase,
   executeWithRetry,
   getDatabaseHealth,
-} from './db';
+} from './db.js';
 import {
   eq,
   gte,
@@ -27,18 +27,18 @@ import {
   users,
   userFavorites,
   userCalendarEvents,
-} from '../shared/schema';
-import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
-import { openaiAssistant } from './openaiAssistant';
-import { ReasonsReportParser } from './reasonsReportParser';
-import { TripMatcher } from './tripMatcher';
+} from '../shared/schema.js';
+import { HoldProbabilityCalculator } from './holdProbabilityCalculator.js';
+import { openaiAssistant } from './openaiAssistant.js';
+import { ReasonsReportParser } from './reasonsReportParser.js';
+import { TripMatcher } from './tripMatcher.js';
 import multer from 'multer';
 import { z } from 'zod';
 import {
   insertBidPackageSchema,
   insertPairingSchema,
   bidHistory,
-} from '@shared/schema';
+} from '@shared/schema.js';
 import * as fs from 'fs/promises';
 
 // Optimized hold probability recalculation with batching

@@ -1,8 +1,8 @@
-import { db } from './db';
-import { bidHistory } from '../shared/schema';
+import { db } from './db.js';
+import { bidHistory } from '../shared/schema.js';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
-import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser';
-import { TripMatcher } from './tripMatcher';
+import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser.js';
+import { TripMatcher } from './tripMatcher.js';
 
 interface HoldProbabilityParams {
   seniorityPercentile: number; // 0-100 (lower is more senior)

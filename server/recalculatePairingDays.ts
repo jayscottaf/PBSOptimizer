@@ -1,5 +1,5 @@
-import { db } from './db';
-import { pairings } from '../shared/schema';
+import { db } from './db.js';
+import { pairings } from '../shared/schema.js';
 
 /**
  * Recalculate pairing days for all pairings based on their full text blocks

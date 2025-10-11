@@ -1,5 +1,5 @@
-import { db } from './db';
-import { pairings } from '../shared/schema';
+import { db } from './db.js';
+import { pairings } from '../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 async function verifyPairing7710() {
