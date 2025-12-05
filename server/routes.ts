@@ -83,21 +83,25 @@ async function recalculateHoldProbabilitiesOptimized(
 
     for (const pairing of allPairings) {
       let holdProbabilityResult;
+      
+      // Extract layover cities for location-based adjustments
+      const layoverCities = (pairing.layovers as any[])?.map((l: any) => l.city).filter((c: string) => c) || [];
 
       if (useHistoricalData && seniorityNumber) {
-        // Try historical calculation first
+        // Try historical calculation first (now with bid month for seasonal adjustments)
         holdProbabilityResult =
           await HoldProbabilityCalculator.calculateHoldProbabilityWithHistory(
             pairing,
             seniorityNumber,
             seniorityPercentile,
             bidPackage.base,
-            bidPackage.aircraft
+            bidPackage.aircraft,
+            bidPackage.month
           );
       } else {
-        // Fall back to estimate-based calculation
+        // Fall back to estimate-based calculation with location data
         const desirabilityScore =
-          HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+          HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidPackage.month);
         const pairingFrequency =
           HoldProbabilityCalculator.calculatePairingFrequency(
             pairing.pairingNumber,
@@ -116,6 +120,8 @@ async function recalculateHoldProbabilitiesOptimized(
             startsOnWeekend,
             includesDeadheads: pairing.deadheads || 0,
             includesWeekendOff,
+            bidMonth: bidPackage.month,
+            layoverCities,
           });
       }
 
@@ -692,11 +698,22 @@ export async function registerRoutes(app: Express) {
           .select()
           .from(pairings)
           .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
+        
+        // Get bid package month for seasonal adjustments
+        const [bidPkg] = await db
+          .select({ month: bidPackages.month })
+          .from(bidPackages)
+          .where(eq(bidPackages.id, parseInt(bidPackageId as string)))
+          .limit(1);
+        const bidMonth = bidPkg?.month;
 
         const seniorityValue = parseFloat(seniorityPercentile as string);
         for (const p of pairingsResult) {
+          // Extract layover cities for location-based adjustments
+          const layoverCities = (p.layovers as any[])?.map((l: any) => l.city).filter((c: string) => c) || [];
+          
           const desirability =
-            HoldProbabilityCalculator.calculateDesirabilityScore(p);
+            HoldProbabilityCalculator.calculateDesirabilityScore(p, bidMonth);
           const freq = HoldProbabilityCalculator.calculatePairingFrequency(
             p.pairingNumber,
             allForPackage
@@ -708,6 +725,8 @@ export async function registerRoutes(app: Express) {
             startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
             includesDeadheads: p.deadheads || 0,
             includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
+            bidMonth,
+            layoverCities,
           });
           // Only update holdProbability, preserve all other stored values including pairingDays
           (p as any).holdProbability = hp.probability;

@@ -212,6 +212,18 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                       {pairing.deadheads}
                     </div>
                   )}
+                  {pairing.holdProbability !== undefined && (
+                    <div>
+                      <span className="text-gray-600">Hold Probability:</span>{' '}
+                      <span className={
+                        pairing.holdProbability >= 70 ? 'text-green-600 font-medium' :
+                        pairing.holdProbability >= 50 ? 'text-yellow-600 font-medium' :
+                        'text-red-600 font-medium'
+                      }>
+                        {pairing.holdProbability}%
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -3,6 +3,14 @@ import { bidHistory } from '../shared/schema';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
+import {
+  calculateLayoverDesirability,
+  getLocationCompetitionAdjustment,
+  getMonthFromBidPackage,
+  getHolidayCompetitionPenalty,
+  isHolidayPeriod,
+  getSeason,
+} from './locationDesirability';
 
 interface HoldProbabilityParams {
   seniorityPercentile: number; // 0-100 (lower is more senior)
@@ -11,6 +19,8 @@ interface HoldProbabilityParams {
   startsOnWeekend: boolean;
   includesDeadheads: number;
   includesWeekendOff: boolean;
+  bidMonth?: string; // Optional bid package month for seasonal adjustments
+  layoverCities?: string[]; // Optional layover cities for location-based adjustments
 }
 
 interface HoldProbabilityResult {
@@ -30,13 +40,15 @@ interface HistoricalMatch {
 export class HoldProbabilityCalculator {
   /**
    * Calculate hold probability using historical data when available
+   * Now includes bid month for seasonal adjustments
    */
   static async calculateHoldProbabilityWithHistory(
     pairing: any,
     seniorityNumber: number,
     seniorityPercentile: number,
     base: string,
-    aircraft: string
+    aircraft: string,
+    bidMonth?: string
   ): Promise<HoldProbabilityResult> {
     // Try to find historical matches
     const historicalMatches = await this.findHistoricalMatches(
@@ -44,6 +56,9 @@ export class HoldProbabilityCalculator {
       base,
       aircraft
     );
+
+    // Extract layover cities for location-based adjustments
+    const layoverCities = pairing.layovers?.map((l: any) => l.city).filter((c: string) => c) || [];
 
     if (historicalMatches.length > 0) {
       // Use historical data
@@ -54,8 +69,8 @@ export class HoldProbabilityCalculator {
         pairing
       );
     } else {
-      // Fall back to estimate-based calculation
-      const desirabilityScore = this.calculateDesirabilityScore(pairing);
+      // Fall back to estimate-based calculation with location data
+      const desirabilityScore = this.calculateDesirabilityScore(pairing, bidMonth);
       const pairingFrequency = 1; // Can't determine without all pairings
       const startsOnWeekend = this.startsOnWeekend(pairing);
       const includesWeekendOff = this.includesWeekendOff(pairing);
@@ -67,6 +82,8 @@ export class HoldProbabilityCalculator {
         startsOnWeekend,
         includesDeadheads: pairing.deadheads || 0,
         includesWeekendOff,
+        bidMonth,
+        layoverCities,
       });
     }
   }
@@ -307,6 +324,8 @@ export class HoldProbabilityCalculator {
       startsOnWeekend,
       includesDeadheads,
       includesWeekendOff,
+      bidMonth,
+      layoverCities,
     } = params;
 
     const reasoning: string[] = [];
@@ -437,12 +456,39 @@ export class HoldProbabilityCalculator {
       reasoning.push('• Weekend start - less popular with senior pilots');
     }
 
+    // Location-based adjustments (seasonal layover desirability)
+    let locationAdjustment = 0;
+    if (bidMonth && layoverCities && layoverCities.length > 0) {
+      const { score: layoverScore, reasoning: layoverReasoning } = 
+        calculateLayoverDesirability(layoverCities, bidMonth);
+      
+      locationAdjustment = getLocationCompetitionAdjustment(layoverCities, bidMonth);
+      
+      const monthNumber = getMonthFromBidPackage(bidMonth);
+      const season = getSeason(monthNumber);
+      
+      if (layoverScore >= 80) {
+        reasoning.push(`🌴 High-demand layover(s) in ${season} - more competition`);
+      } else if (layoverScore <= 40) {
+        reasoning.push(`❄️ Less desirable layover(s) in ${season} - less competition`);
+      }
+      
+      // Holiday period penalty
+      if (isHolidayPeriod(monthNumber)) {
+        const holidayPenalty = getHolidayCompetitionPenalty(monthNumber);
+        locationAdjustment += holidayPenalty;
+        if (holidayPenalty < 0) {
+          reasoning.push('🎄 Holiday period - increased competition for good trips');
+        }
+      }
+    }
+
     // Add small randomization for realism only for non-senior cases
     const randomAdjustment =
       seniorityPercentile <= 10 ? 0 : (Math.random() - 0.5) * 6; // -3 to +3
     let finalProbability = Math.max(
       0,
-      Math.min(100, baseProbability + randomAdjustment)
+      Math.min(100, baseProbability + randomAdjustment + locationAdjustment)
     );
 
     // Enforce seniority floor if applicable
@@ -477,8 +523,9 @@ export class HoldProbabilityCalculator {
 
   /**
    * Calculate desirability score based on pairing characteristics
+   * Now includes location and seasonal factors when bid month is provided
    */
-  static calculateDesirabilityScore(pairing: any): number {
+  static calculateDesirabilityScore(pairing: any, bidMonth?: string): number {
     let score = 50; // Base score
 
     const creditHours = parseFloat(pairing.creditHours) || 0;
@@ -498,7 +545,7 @@ export class HoldProbabilityCalculator {
     }
 
     // Better credit/block ratio = more desirable
-    const efficiency = creditHours / blockHours;
+    const efficiency = blockHours > 0 ? creditHours / blockHours : 1;
     if (efficiency >= 1.5) {
       score += 20;
     } else if (efficiency >= 1.3) {
@@ -523,8 +570,22 @@ export class HoldProbabilityCalculator {
       score -= 10;
     }
 
+    // Location-based desirability (seasonal adjustment)
+    if (bidMonth && pairing.layovers && Array.isArray(pairing.layovers)) {
+      const layoverCities = pairing.layovers
+        .map((l: any) => l.city)
+        .filter((c: string) => c);
+      
+      if (layoverCities.length > 0) {
+        const { score: locationScore } = calculateLayoverDesirability(layoverCities, bidMonth);
+        // Blend location score with base score (weighted average)
+        // Location accounts for ~30% of the desirability calculation
+        score = score * 0.7 + locationScore * 0.3;
+      }
+    }
+
     // Clamp to 0-100 range
-    return Math.max(0, Math.min(100, score));
+    return Math.max(0, Math.min(100, Math.round(score)));
   }
 
   /**

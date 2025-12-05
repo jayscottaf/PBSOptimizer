@@ -46,18 +46,22 @@ interface ParsedPairing {
 }
 
 export class PDFParser {
-  // Calculate hold probability using new tiered logic
+  // Calculate hold probability using new tiered logic with seasonal adjustments
   private calculateHoldProbability(
     pairing: ParsedPairing,
     allPairings: ParsedPairing[],
-    userSeniorityPercentile?: number
+    userSeniorityPercentile?: number,
+    bidMonth?: string
   ): number {
     // Use provided seniority percentile, default to 50 if not provided
     const seniorityPercentile =
       userSeniorityPercentile !== undefined ? userSeniorityPercentile : 50; // Middle seniority as default
 
+    // Extract layover cities for location-based adjustments
+    const layoverCities = pairing.layovers?.map(l => l.city).filter(c => c) || [];
+
     const desirabilityScore =
-      HoldProbabilityCalculator.calculateDesirabilityScore(pairing);
+      HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidMonth);
     const pairingFrequency =
       HoldProbabilityCalculator.calculatePairingFrequency(
         pairing.pairingNumber,
@@ -74,6 +78,8 @@ export class PDFParser {
       startsOnWeekend,
       includesDeadheads: pairing.deadheads,
       includesWeekendOff,
+      bidMonth,
+      layoverCities,
     });
 
     return result.probability;
@@ -1035,13 +1041,18 @@ export class PDFParser {
         `Successfully parsed ${parsedPairings.length} pairings from PDF`
       );
 
+      // Get bid package month for seasonal hold probability adjustments
+      const bidPackageInfo = await storage.getBidPackage(bidPackageId);
+      const bidMonth = bidPackageInfo?.month;
+      
       // Calculate hold probabilities now that we have all pairings
-      console.log('Calculating hold probabilities...');
+      console.log(`Calculating hold probabilities (month: ${bidMonth || 'unknown'})...`);
       for (const pairing of parsedPairings) {
         pairing.holdProbability = this.calculateHoldProbability(
           pairing,
           parsedPairings,
-          userSeniorityPercentile
+          userSeniorityPercentile,
+          bidMonth
         );
       }
 
