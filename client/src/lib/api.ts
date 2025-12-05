@@ -41,6 +41,7 @@ export interface Pairing {
 }
 
 export interface SearchFilters {
+  [key: string]: string | number | Date[] | undefined;
   bidPackageId?: number;
   search?: string;
   creditMin?: number;
@@ -56,8 +57,7 @@ export interface SearchFilters {
   pairingDaysMax?: number;
   efficiency?: number;
   seniorityPercentage?: number;
-  preferredDaysOff?: Date[]; // Added preferredDaysOff
-  // Pagination and sorting
+  preferredDaysOff?: Date[];
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -308,6 +308,7 @@ export const api = {
 
   // User
   createOrUpdateUser: async (data: {
+    name?: string;
     seniorityNumber: number;
     seniorityPercentile?: number;
     base: string;

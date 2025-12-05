@@ -69,6 +69,7 @@ import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming t
 import { toast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 interface SearchFilters {
+  [key: string]: string | number | Date[] | undefined;
   search?: string;
   creditMin?: number;
   creditMax?: number;
@@ -82,8 +83,9 @@ interface SearchFilters {
   pairingDaysMin?: number;
   pairingDaysMax?: number;
   efficiency?: number;
-  sortBy?: string; // Add this line
-  sortOrder?: 'asc' | 'desc'; // Add this line
+  preferredDaysOff?: Date[];
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // Placeholder for Pairing type if not defined elsewhere
@@ -392,7 +394,7 @@ export default function Dashboard() {
       if (hasFull) {
         // Load existing filtered cache
         console.log('Dashboard: Loading existing filtered cache');
-        full = await loadFullPairingsCache<any[]>(cacheKey);
+        full = (await loadFullPairingsCache<any[]>(cacheKey)) ?? null;
         console.log('Dashboard: Loaded filtered cache, length:', full?.length || 0);
 
         // Check if any filters are active (excluding bidPackageId which is always present)
@@ -898,6 +900,9 @@ export default function Dashboard() {
     }
 
     const sourceData = useUnfiltered ? unfilteredLocal : fullLocal;
+    if (!sourceData) {
+      return pairings;
+    }
     console.log(`Sorting ${sourceData.length} pairings from ${useUnfiltered ? 'unfiltered' : 'filtered'} cache`);
 
     // Apply filters client-side when using unfiltered cache OR when preferredDaysOff is set
@@ -1041,17 +1046,6 @@ export default function Dashboard() {
                 effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
               }
             }
-          }
-
-          // Debug: log pairing 8094 specifically
-          if (pairing.pairingNumber === '8094' && !window.__logged8094) {
-            console.log('Pairing 8094 after fullTextBlock parse:', {
-              pairingNumber: pairing.pairingNumber,
-              originalEffectiveDates: pairing.effectiveDates,
-              parsedEffectiveDates: effectiveDates,
-              pairingDays: pairingDays
-            });
-            window.__logged8094 = true;
           }
 
           if (effectiveDates && pairingDays) {
@@ -1858,6 +1852,7 @@ export default function Dashboard() {
                 Seniority Number <span className="text-red-500">*</span>
               </label>
               <Input
+                data-testid="input-seniority-number"
                 value={seniorityNumber}
                 onChange={e => setSeniorityNumber(e.target.value)}
                 placeholder="Enter seniority number (e.g., 15600)"
@@ -1885,6 +1880,8 @@ export default function Dashboard() {
                 Base <span className="text-red-500">*</span>
               </label>
               <select
+                id="profile-base"
+                data-testid="select-base"
                 value={base}
                 onChange={e => setBase(e.target.value)}
                 className={`flex h-10 w-full rounded-md border ${!base ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
@@ -1906,6 +1903,8 @@ export default function Dashboard() {
                 Aircraft <span className="text-red-500">*</span>
               </label>
               <select
+                id="profile-aircraft"
+                data-testid="select-aircraft"
                 value={aircraft}
                 onChange={e => setAircraft(e.target.value)}
                 className={`flex h-10 w-full rounded-md border ${!aircraft ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
@@ -1927,6 +1926,8 @@ export default function Dashboard() {
                 Position <span className="text-red-500">*</span>
               </label>
               <select
+                id="profile-position"
+                data-testid="select-position"
                 value={position}
                 onChange={e => setPosition(e.target.value)}
                 className={`flex h-10 w-full rounded-md border ${!position ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
@@ -2039,6 +2040,7 @@ export default function Dashboard() {
             </div>
             <div className="flex justify-end pt-4">
               <Button
+                data-testid="button-save-profile"
                 onClick={async () => {
                   // Validate required fields
                   if (!seniorityNumber || !base || !aircraft || !position) {
