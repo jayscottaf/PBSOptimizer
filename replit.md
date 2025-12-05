@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Delta PBS Bid Optimization App is a full-stack web application designed for Delta pilots to parse monthly bid packages, store pairing data, track historical bid awards, and predict hold likelihood. The application processes PDF bid packages, extracts detailed pairing information, and provides analytics to help pilots make informed bidding decisions.
+The Delta PBS Bid Optimization App is a full-stack web application for Delta pilots. Its primary purpose is to parse monthly bid packages, store detailed pairing data, track historical bid awards, and predict the likelihood of a bid being awarded. This application aims to provide pilots with actionable analytics to inform their bidding decisions and optimize their monthly schedules.
 
 ## User Preferences
 
@@ -12,249 +12,38 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend Architecture
 
-- **Framework**: React with TypeScript using Vite as the build tool
-- **UI Framework**: Shadcn/ui components built on Radix UI primitives
-- **Styling**: Tailwind CSS with CSS variables for theming
-- **State Management**: TanStack Query (React Query) for server state management
-- **Routing**: Wouter for lightweight client-side routing
-- **Design System**: Component-based architecture with reusable UI components
+- **Framework**: React with TypeScript (Vite)
+- **UI/Styling**: Shadcn/ui (Radix UI primitives) and Tailwind CSS with CSS variables
+- **State Management**: TanStack Query (React Query)
+- **Routing**: Wouter
+- **Design System**: Component-based architecture
 
 ### Backend Architecture
 
-- **Runtime**: Node.js with Express.js framework
-- **Language**: TypeScript with ES modules
-- **API Structure**: RESTful API with structured route handlers
-- **File Processing**: Multer for PDF file uploads with validation
-- **Development Tools**: tsx for TypeScript execution in development
+- **Runtime**: Node.js with Express.js (TypeScript, ES modules)
+- **API**: RESTful API
+- **File Processing**: Multer for PDF uploads
+- **Development Tools**: tsx
 
 ### Data Storage Solutions
 
-- **Database**: PostgreSQL with Neon serverless database
-- **ORM**: Drizzle ORM for type-safe database operations
-- **Schema Management**: Drizzle Kit for migrations and schema management
-- **Connection**: Neon serverless connection pooling with WebSocket support
+- **Database**: PostgreSQL (Neon serverless)
+- **ORM**: Drizzle ORM for type-safe operations
+- **Schema Management**: Drizzle Kit
 
-## Key Components
+### Key Features and Specifications
 
-### Database Schema
-
-The application uses a well-structured PostgreSQL schema with the following main entities:
-
-1. **Users Table**: Stores pilot information including seniority number, base, and aircraft type
-2. **Bid Packages Table**: Contains monthly bid package metadata with processing status
-3. **Pairings Table**: Detailed pairing information including:
-   - Flight segments and layover details stored as JSONB
-   - Financial data (credit hours, block hours, pay)
-   - Full text blocks preserving original PDF content
-   - Hold probability predictions
-4. **Bid History Table**: Historical award data linking pairings to seniority numbers
-5. **User Favorites Table**: Allows pilots to save preferred pairings
-
-### PDF Processing System
-
-- **Upload Handling**: Secure PDF file uploads with type validation
-- **Text Extraction**: Custom parser for Delta bid package format with complete pairing text preservation
-- **Structured Parsing**: Extracts pairing numbers, effective dates, flight segments, layovers, credit hours, block hours, and total pay
-- **Status Tracking**: Processing status monitoring (processing, completed, failed)
-- **Delta Format Support**: Handles NYC A220 bid packages with TOTAL CREDIT and TOTAL PAY line extraction
-- **Multi-Day Parsing**: Correctly extracts complex multi-day pairings with multiple flight segments and layovers
-- **Pay Hours Format**: Supports time-based pay hours format (e.g., 12:43 = 12 hours 43 minutes)
-
-### Search and Filter System
-
-- **Advanced Filtering**: Multi-criteria search including credit hours, block time, TAFB
-- **Real-time Updates**: Live search results with debounced queries
-- **Hold Probability**: Integrated probability scoring for bid success prediction
-
-### Analytics Dashboard
-
-- **Seniority Trends**: Visual representation of historical award patterns
-- **Statistics Panel**: Quick stats for total pairings, hold likelihood, and preferences
-- **Interactive Tables**: Sortable, filterable pairing displays with detailed views
-
-## Data Flow
-
-1. **PDF Upload**: Pilots upload monthly bid packages through the file upload component
-2. **Processing Pipeline**: Server extracts text, parses structured data, and stores in database
-3. **Search Interface**: Real-time filtering and search across pairing data
-4. **Detail Views**: Modal dialogs showing complete pairing information and history
-5. **Analytics**: Historical data analysis for seniority trends and hold predictions
+- **Database Schema**: Includes Users, Bid Packages, Pairings (with JSONB for segments, financial data, and full text), Bid History, and User Favorites tables.
+- **PDF Processing**: Handles secure uploads, extracts text, and parses structured data from Delta bid packages (e.g., NYC A220 format, multi-day pairings, time-based pay hours). Tracks processing status.
+- **Search and Filter**: Advanced multi-criteria search with real-time updates and integrated hold probability scoring.
+- **Analytics Dashboard**: Visualizes seniority trends, provides quick statistics, and offers interactive pairing displays.
+- **Hold Probability System**: Predicts bid success likelihood, incorporating location desirability and seasonal adjustments.
+- **AI Assistant Integration**: Processes queries for pairing data, efficiency analysis, and high-credit pairings, with robust error handling and token optimization.
 
 ## External Dependencies
 
-### Frontend Dependencies
-
-- **Radix UI**: Comprehensive set of accessible UI primitives
-- **Lucide React**: Icon library for consistent iconography
-- **React Hook Form**: Form state management with validation
-- **Date-fns**: Date manipulation and formatting utilities
-- **Class Variance Authority**: Utility for managing component variants
-
-### Backend Dependencies
-
-- **Drizzle ORM**: Type-safe database operations and migrations
-- **Zod**: Runtime type validation for API inputs
-- **Multer**: File upload handling middleware
-- **Connect-pg-simple**: PostgreSQL session store
-
-### Database and Infrastructure
-
-- **Neon Database**: Serverless PostgreSQL with automatic scaling
-- **WebSocket Support**: Real-time connection capabilities
-- **Environment Configuration**: Secure credential management
-
-## Deployment Strategy
-
-### Development Environment
-
-- **Hot Reloading**: Vite development server with fast refresh
-- **Type Checking**: Continuous TypeScript compilation
-- **Database Migrations**: Drizzle Kit for schema updates
-- **Error Handling**: Runtime error overlay for debugging
-
-### Production Build
-
-- **Frontend**: Vite production build with optimized assets
-- **Backend**: ESBuild bundling for Node.js deployment
-- **Database**: Push migrations to production PostgreSQL
-- **Asset Serving**: Static file serving through Express
-
-### Configuration Management
-
-- **Environment Variables**: DATABASE_URL and other sensitive configuration
-- **Path Aliases**: TypeScript path mapping for clean imports
-- **Build Optimization**: Tree shaking and code splitting for performance
-
-The application follows a monorepo structure with shared TypeScript types between frontend and backend, ensuring type safety across the entire stack. The architecture prioritizes developer experience with hot reloading, comprehensive error handling, and a modern TypeScript-first approach.
-
-## Recent Changes
-
-**July 18, 2025**: Fixed Critical AI Assistant and Database Route Issues
-
-**AI Assistant Pairing Lookup**: Resolved specific pairing number queries (e.g., "show me pairing 7758")
-
-- Fixed `getPairingByNumber` database function to properly chain WHERE conditions using `and()` operator
-- Pairing lookups now return correct specific pairing data instead of random pairings
-
-**Database Route Field Completion**: Enhanced route generation to show complete journey paths
-
-- **Before**: Routes missing return segments (e.g., `JFK-MSP-CMH-MKE-SLC-SBA-ATL`)
-- **After**: Complete roundtrip routes (e.g., `JFK-MSP-CMH-MSP-MKE-SLC-SBA-ATL-JFK`)
-- Applied enhanced `parseRoute` function with chronological ordering to all 534 pairings
-- Routes now accurately reflect full pilot journey including intermediate returns
-
-**Hours Format Correction**: Fixed AI assistant time display to match Delta PBS format exactly
-
-- **Before**: Verbose format ("28 hours and 19 minutes of credit hours")
-- **After**: Authentic Delta PBS decimal format ("28.19 credit hours")
-- Updated data structure to pass raw decimal values (28.19, 16.58) to AI assistant
-- Enhanced system prompt to enforce Delta PBS decimal time format in responses
-
-**Production Impact**: AI assistant now provides accurate specific pairing analysis with correct route information and precise time data
-
-**July 19, 2025**: Fixed Critical AI Assistant Query Processing Issues
-
-**Pattern Matching Resolution**: Resolved AI assistant returning "no pairing data" for all queries
-
-- **Root Cause**: Regex pattern order was incorrectly parsing duration queries ("4-day pairings") as pairing number searches
-- **Solution**: Reordered preprocessing logic to prioritize duration detection before pairing number detection
-- **Impact**: All query types now function correctly (general questions, duration searches, specific pairings)
-
-**Query Processing Restored**: AI assistant now properly handles:
-
-- General questions: "what do you do?" → Returns proper introduction with authentic data summary
-- Duration searches: "Show me 4-day pairings" → Returns analysis of 143 four-day pairings
-- Specific pairings: "show me pairing 7758" → Returns detailed pairing information with Delta PBS formatting
-
-**Data Accuracy Confirmed**: System processes authentic data from 534 pairings with correct Delta PBS decimal time format throughout
-
-**July 19, 2025**: Resolved Missing Flight Segment Issue in Parser
-
-**Flight Segment Extraction Fix**: Corrected parser to capture continuation flights without day prefixes
-
-- **Issue**: Flight 2608 (SLC-IDA) missing from pairing 7745 flight segments despite being in full text
-- **Root Cause**: Parser pattern didn't handle `.57` block time format (missing leading zero)
-- **Solution**: Enhanced regex pattern to handle `(\d{0,2}\.?\d{1,2})` format and normalize `.57` to `0.57`
-- **Database Update**: Applied fix to pairing 7745, now shows complete 7-segment journey
-
-**Route Completion**: Updated route generation to include all intermediate stops
-
-- **Before**: `JFK-DFW-SLC-SLC-MSP-DFW-JFK` (missing IDA)
-- **After**: `JFK-DFW-SLC-IDA-SLC-MSP-DFW-JFK` (complete journey)
-
-**Parsing Enhancement**: System now captures all flight types including continuation flights on same day without day prefixes
-
-**July 19, 2025**: Fixed Critical AI Assistant Hold Probability Filtering Bug
-
-**Root Cause Resolved**: Corrected flawed regex pattern in multi-criteria query processing
-
-- **Issue**: Complex queries with multiple numeric criteria incorrectly extracted wrong hold probability thresholds
-- **Example**: "at least 70% hold probability...layovers longer than 20 hours" extracted 20% instead of 70%
-- **Impact**: AI recommended pairings with 50% hold probability when user required 70% minimum
-
-**Technical Fix**: Enhanced `extractHoldProbabilityThreshold` function regex pattern
-
-- **Before**: `/hold.*?(\d+)/` - matched any number after "hold" keyword
-- **After**: `/(?:at least|>=|>|with)\s*(\d+)%?\s*hold\s*prob/i` - matches specific percentage context
-- **Result**: Correctly extracts "at least 70% hold probability" → 70%, ignores "20 hours" → no false match
-
-**Data Integrity Restored**: AI assistant now provides accurate filtering recommendations
-
-- Complex multi-criteria queries work consistently across all processing paths
-- Maintains all existing fallback logic (junior=30%, senior=70%, default=75%)
-- No breaking changes to efficiency analysis or other query types
-
-**July 18, 2025**: Successfully Implemented Hybrid OpenAI Token Optimization System
-
-**Critical Issue Resolved**: Fixed OpenAI token limit errors that prevented AI assistant from processing large datasets (201,225 tokens → 8,000 limit)
-
-**Dependencies Fixed**: Resolved module import issues by installing missing packages:
-
-- `fast-safe-stringify` - Safe JSON serialization for large objects
-- `tiktoken` - Token counting and estimation for OpenAI models
-- Updated ES module import syntax for compatibility
-
-**Hybrid Analytics Engine Working**: System now efficiently processes 534 pairings with pre-processed summaries:
-
-- `getTopEfficientPairings()` - Returns credit-to-block ratio analysis with formatted hours
-- `getTopCreditPairings()` - Highest paying pairings with statistics
-- `getTopHoldProbabilityPairings()` - Best award likelihood analysis
-- Smart intent detection routes queries to appropriate backend functions
-- Data compression: Raw datasets reduced from 19,670+ tokens to ~3,900 chars
-
-**Query Processing Examples Now Working**:
-
-- "Show me the top 3 most efficient pairings" → Returns specific pairing numbers (7717, 7726, 7719) with efficiency ratios (2.12, 1.90, 1.77)
-- "What are highest credit pairings?" → Returns detailed credit analysis with hold probabilities
-- Complex queries with multiple criteria processed efficiently
-
-**Production Features Operational**:
-
-- Automatic bid package ID detection (uses most recent when not specified)
-- Three-tier fallback system: Hybrid Service → Legacy Analysis → Basic Assistant
-- Real-time debug logging for token estimation and data processing
-- Error handling for rate limits and context length exceeded
-- Cache system for repeated queries
-
-**July 17, 2025**: Resolved systematic parsing issue affecting 62% of pairings
-
-**Parser Enhancement**: Added comprehensive flight segment detection patterns:
-
-- Day D parsing with .58 format support (handles both ".58" and "0.58")
-- Standalone flight number detection for flights without day prefixes
-- Flight continuation parsing for multi-segment flights
-- Single day flight parsing for isolated day flights
-- Duplicate detection to prevent double-counting
-
-**Database Updates**: Applied enhanced parser to existing data, improving 13 out of 50 pairings
-
-**Frontend Caching**: Fixed cache configuration to show fresh data (staleTime reduced from Infinity to 5 minutes)
-
-**Critical Fix**: All 4 missing segments from pairing 7713 now properly captured:
-
-- Flight 1482 (Day B): ATL 1246 IAD 1431 (1.45)
-- Flight 2275 (Day D): PDX 0715 SEA 0813 (0.58)
-- Flight 595 (Day D): SEA 0935 DFW 1532 (3.57)
-- Flight 454 (Day E): DFW 0710 JFK 1200 (3.50)
-
-**System-wide Impact**: Issue rate reduced from 62% to near 0% with enhanced parsing patterns
+- **Database**: Neon Database (PostgreSQL)
+- **Frontend Libraries**: Radix UI, Lucide React, React Hook Form, Date-fns, Class Variance Authority
+- **Backend Libraries**: Drizzle ORM, Zod, Multer, Connect-pg-simple
+- **AI Services**: OpenAI (for AI assistant functionality)
+- **Utilities**: `fast-safe-stringify`, `tiktoken`
