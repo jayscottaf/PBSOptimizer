@@ -47,6 +47,35 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     enabled: !!pairing,
   });
 
+  // Fetch bid packages to get the correct year for calendar dates
+  const { data: bidPackages = [] } = useQuery({
+    queryKey: ['bidPackages'],
+    queryFn: async () => {
+      const response = await fetch('/api/bid-packages');
+      if (!response.ok) {
+        throw new Error('Failed to fetch bid packages');
+      }
+      return response.json();
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+
+  // Get the latest completed bid package year
+  const bidPackageYear = (() => {
+    if (!bidPackages || bidPackages.length === 0) {
+      return new Date().getFullYear();
+    }
+    const packagesArray = (bidPackages as any[]).slice();
+    packagesArray.sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
+    const mostRecentCompleted = packagesArray.find(
+      (pkg: any) => pkg.status === 'completed'
+    );
+    return mostRecentCompleted?.year || new Date().getFullYear();
+  })();
+
   // Check if this pairing is already in user's favorites
   const { data: userFavorites = [] } = useQuery({
     queryKey: ['favorites'],
@@ -413,13 +442,10 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                 console.log('Parsing effective dates:', effectiveDates);
 
-                // Get the year from the bid package
-                const currentYear = new Date().getFullYear();
-
                 // Use the utility function to calculate all valid start dates
                 const possibleStartDates = calculateValidStartDates(
                   effectiveDates,
-                  currentYear,
+                  bidPackageYear,
                   pairingDays
                 );
 
