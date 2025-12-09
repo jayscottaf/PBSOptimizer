@@ -164,22 +164,30 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   React.useEffect(() => {
     if (latestBidPackage?.month && latestBidPackage?.year) {
       const monthMap: { [key: string]: number } = {
-        JAN: 0,
-        FEB: 1,
-        MAR: 2,
-        APR: 3,
+        JAN: 0, JANUARY: 0,
+        FEB: 1, FEBRUARY: 1,
+        MAR: 2, MARCH: 2,
+        APR: 3, APRIL: 3,
         MAY: 4,
-        JUN: 5,
-        JUL: 6,
-        AUG: 7,
-        SEP: 8,
-        OCT: 9,
-        NOV: 10,
-        DEC: 11,
+        JUN: 5, JUNE: 5,
+        JUL: 6, JULY: 6,
+        AUG: 7, AUGUST: 7,
+        SEP: 8, SEPTEMBER: 8,
+        OCT: 9, OCTOBER: 9,
+        NOV: 10, NOVEMBER: 10,
+        DEC: 11, DECEMBER: 11,
       };
 
-      const monthIndex = monthMap[latestBidPackage.month] ?? new Date().getMonth();
+      const monthKey = latestBidPackage.month.toUpperCase();
+      const monthIndex = monthMap[monthKey] ?? new Date().getMonth();
       const targetDate = new Date(latestBidPackage.year, monthIndex, 1);
+
+      console.log('Setting calendar to bid package month:', {
+        month: latestBidPackage.month,
+        year: latestBidPackage.year,
+        monthIndex,
+        targetDate: targetDate.toISOString()
+      });
 
       // Only update if we're not already on the correct month
       if (currentDate.getMonth() !== monthIndex || currentDate.getFullYear() !== latestBidPackage.year) {
