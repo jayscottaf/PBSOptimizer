@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, X, Calendar as CalendarIcon } from 'lucide-react';
 import { SearchFilters } from '@/lib/api';
+import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ interface SmartFilterSystemProps {
   activeFilters: Array<{ key: string; label: string; value: any }>;
   onClearFilters: () => void;
   bidPackage?: { month: string; year: number };
+  bidPackageId?: number;
 }
 
 const filterOptions: FilterOption[] = [
@@ -137,12 +139,20 @@ const filterOptions: FilterOption[] = [
   },
 ];
 
+// Special filter for layover locations - will be populated dynamically
+const layoverFilterOption: FilterOption = {
+  key: 'layoverLocations',
+  label: 'Layover Locations',
+  dataOptions: [],
+};
+
 export function SmartFilterSystem({
   pairings,
   onFiltersChange,
   activeFilters,
   onClearFilters,
   bidPackage,
+  bidPackageId,
 }: SmartFilterSystemProps) {
   // Calculate default month for calendar based on bid package
   const defaultMonth = React.useMemo(() => {
@@ -164,6 +174,18 @@ export function SmartFilterSystem({
   // Preferred days off state
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [layoverLocations, setLayoverLocations] = useState<string[]>([]);
+
+  // Fetch layover locations when bid package changes
+  useEffect(() => {
+    if (bidPackageId) {
+      api.getLayoverLocations(bidPackageId).then(locations => {
+        setLayoverLocations(locations);
+      }).catch(() => {
+        setLayoverLocations([]);
+      });
+    }
+  }, [bidPackageId]);
   // Helper functions to handle filter changes
   const onFilterApply = (
     filterKey: string,
@@ -216,8 +238,26 @@ export function SmartFilterSystem({
 
   const [selectedFunction, setSelectedFunction] = useState<string>('');
   const [selectedData, setSelectedData] = useState<string>('');
+  
+  // Build dynamic filter options including layover locations
+  const allFilterOptions = React.useMemo(() => {
+    const options = [...filterOptions];
+    if (layoverLocations.length > 0) {
+      options.push({
+        key: 'layoverLocations',
+        label: 'Layover Locations',
+        dataOptions: layoverLocations.map(city => ({
+          value: city,
+          label: city,
+          filterKey: 'layoverLocations',
+        })),
+      });
+    }
+    return options;
+  }, [layoverLocations]);
+
   const currentFunctionOptions = selectedFunction
-    ? filterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
+    ? allFilterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
     : [];
 
   const handleAddFilter = () => {
@@ -225,7 +265,7 @@ export function SmartFilterSystem({
       return;
     }
 
-    const functionOption = filterOptions.find(f => f.key === selectedFunction);
+    const functionOption = allFilterOptions.find(f => f.key === selectedFunction);
     const dataOption = currentFunctionOptions.find(
       d => d.value.toString() === selectedData
     );

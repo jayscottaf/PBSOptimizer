@@ -1400,6 +1400,7 @@ export default function Dashboard() {
                         activeFilters={activeFilters}
                         onClearFilters={clearAllFilters}
                         bidPackage={latestBidPackage}
+                        bidPackageId={bidPackageId}
                       />
                     </div>
                   </div>
