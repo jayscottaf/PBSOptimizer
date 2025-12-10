@@ -571,13 +571,17 @@ export function PairingTable({
                           <TooltipContent side="right" className="max-w-xs z-50">
                             <div className="space-y-1">
                               <p className="font-semibold">Conflicts with calendar:</p>
-                              {conflicts.get(pairing.id)?.conflicts.map((conflict, idx) => (
-                                <div key={idx} className="text-xs">
-                                  Pairing {conflict.calendarPairingNumber}
-                                  <br />
-                                  {conflict.calendarStartDate} to {conflict.calendarEndDate}
-                                </div>
-                              ))}
+                              {conflicts.get(pairing.id)?.conflicts && conflicts.get(pairing.id)!.conflicts.length > 0 ? (
+                                conflicts.get(pairing.id)?.conflicts.map((conflict, idx) => (
+                                  <div key={idx} className="text-xs">
+                                    <strong>{conflict.calendarPairingNumber || `Pairing ${idx + 1}`}</strong>
+                                    <br />
+                                    {conflict.calendarStartDate} to {conflict.calendarEndDate}
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-xs text-gray-300">No conflict details available</p>
+                              )}
                             </div>
                           </TooltipContent>
                         </Tooltip>

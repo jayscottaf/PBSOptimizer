@@ -107,10 +107,21 @@ export function detectConflicts(
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return;
 
+    // Get pairing number from different possible locations
+    const pairingNumber = event.pairing?.pairingNumber || event.pairingNumber || `Pairing ${event.pairingId}`;
+    
+    console.log(`Calendar event for pairing ${event.pairingId}:`, {
+      pairingNumber,
+      startDate,
+      endDate,
+      eventPairingNumber: event.pairing?.pairingNumber,
+      eventDirectNumber: event.pairingNumber,
+    });
+
     calendarPairingDateMap.set(event.pairingId, {
       startDate,
       endDate,
-      pairingNumber: event.pairing?.pairingNumber || 'Unknown',
+      pairingNumber,
     });
   });
 
