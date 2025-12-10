@@ -557,34 +557,30 @@ export function PairingTable({
                         <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                       )}
                       {conflicts.has(pairing.id) && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              type="button"
-                              className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
-                              tabIndex={-1}
-                            >
-                              <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" className="max-w-xs z-50">
-                            <div className="space-y-1">
-                              <p className="font-semibold">Conflicts with calendar:</p>
-                              {conflicts.get(pairing.id)?.conflicts && conflicts.get(pairing.id)!.conflicts.length > 0 ? (
-                                conflicts.get(pairing.id)?.conflicts.map((conflict, idx) => (
-                                  <div key={idx} className="text-xs">
-                                    <strong>{conflict.calendarPairingNumber || `Pairing ${idx + 1}`}</strong>
-                                    <br />
-                                    {conflict.calendarStartDate} to {conflict.calendarEndDate}
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="text-xs text-gray-300">No conflict details available</p>
-                              )}
+                        <div className="relative group">
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            type="button"
+                            className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
+                            tabIndex={-1}
+                            title="Conflicts with calendar"
+                          >
+                            <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                          </button>
+                          {/* CSS-based tooltip */}
+                          <div className="absolute left-full ml-2 mt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none group-hover:pointer-events-auto">
+                            <div className="bg-gray-900 text-white text-xs rounded px-3 py-2 whitespace-nowrap shadow-lg">
+                              {(() => {
+                                const conflictData = conflicts.get(pairing.id);
+                                if (!conflictData?.conflicts || conflictData.conflicts.length === 0) {
+                                  return 'Conflicts with calendar';
+                                }
+                                const first = conflictData.conflicts[0];
+                                return `${first.calendarPairingNumber || 'Pairing'} (${first.calendarStartDate})`;
+                              })()}
                             </div>
-                          </TooltipContent>
-                        </Tooltip>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </td>
