@@ -331,7 +331,7 @@ export function SmartFilterSystem({
       return;
     }
 
-    const functionOption = filterOptions.find(f => f.key === selectedFunction);
+    const functionOption = allFilterOptions.find(f => f.key === selectedFunction);
     const optionList = functionOption?.dataOptions || [];
     const dataOption = optionList.find(d => d.value.toString() === value);
     if (!functionOption || !dataOption) {
@@ -466,7 +466,7 @@ export function SmartFilterSystem({
             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">Select function...</option>
-            {filterOptions.map(option => (
+            {allFilterOptions.map(option => (
               <option key={option.key} value={option.key}>
                 {option.label}
               </option>
