@@ -998,10 +998,12 @@ export class DatabaseStorage implements IStorage {
 
       // Filter by layover locations if provided
       if (filters.layoverLocations && filters.layoverLocations.length > 0) {
+        // Build the array literal for PostgreSQL
+        const citiesArray = `{${filters.layoverLocations.map(c => `"${c}"`).join(',')}}`;
         conditions.push(
           sql`EXISTS (
             SELECT 1 FROM jsonb_array_elements(${pairings.layovers}) AS layover
-            WHERE layover->>'city' = ANY(${filters.layoverLocations})
+            WHERE layover->>'city' = ANY(${citiesArray}::text[])
           )`
         );
       }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, MapPin } from 'lucide-react';
 import { SearchFilters } from '@/lib/api';
 import { api } from '@/lib/api';
 import {
@@ -14,6 +14,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 interface FilterOption {
   key: string;
@@ -175,20 +176,40 @@ export function SmartFilterSystem({
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [layoverLocations, setLayoverLocations] = useState<string[]>([]);
+  const [selectedLayovers, setSelectedLayovers] = useState<string[]>([]);
+  const [isLayoverDialogOpen, setIsLayoverDialogOpen] = useState(false);
 
   // Fetch layover locations when bid package changes
   useEffect(() => {
-    console.log('[SmartFilterSystem] bidPackageId changed:', bidPackageId);
     if (bidPackageId) {
       api.getLayoverLocations(bidPackageId).then(locations => {
-        console.log('[SmartFilterSystem] Fetched layover locations:', locations.length, 'cities');
         setLayoverLocations(locations);
-      }).catch((err) => {
-        console.error('[SmartFilterSystem] Failed to fetch layover locations:', err);
+      }).catch(() => {
         setLayoverLocations([]);
       });
     }
   }, [bidPackageId]);
+
+  // Handle layover location toggle (multi-select)
+  const toggleLayoverCity = (city: string) => {
+    const newSelection = selectedLayovers.includes(city)
+      ? selectedLayovers.filter(c => c !== city)
+      : [...selectedLayovers, city];
+    
+    setSelectedLayovers(newSelection);
+    
+    // Apply filter with array of cities
+    if (newSelection.length === 0) {
+      onFiltersChange({ layoverLocations: undefined });
+    } else {
+      onFiltersChange({ layoverLocations: newSelection });
+    }
+  };
+
+  const clearAllLayovers = () => {
+    setSelectedLayovers([]);
+    onFiltersChange({ layoverLocations: undefined });
+  };
   // Helper functions to handle filter changes
   const onFilterApply = (
     filterKey: string,
@@ -242,24 +263,10 @@ export function SmartFilterSystem({
   const [selectedFunction, setSelectedFunction] = useState<string>('');
   const [selectedData, setSelectedData] = useState<string>('');
   
-  // Build dynamic filter options including layover locations
+  // Build dynamic filter options (layovers handled separately with multi-select)
   const allFilterOptions = React.useMemo(() => {
-    const options = [...filterOptions];
-    if (layoverLocations.length > 0) {
-      console.log('[SmartFilterSystem] Adding Layover Locations filter with', layoverLocations.length, 'cities');
-      options.push({
-        key: 'layoverLocations',
-        label: 'Layover Locations',
-        dataOptions: layoverLocations.map(city => ({
-          value: city,
-          label: city,
-          filterKey: 'layoverLocations',
-        })),
-      });
-    }
-    console.log('[SmartFilterSystem] allFilterOptions count:', options.length, options.map(o => o.label));
-    return options;
-  }, [layoverLocations]);
+    return [...filterOptions];
+  }, []);
 
   const currentFunctionOptions = selectedFunction
     ? allFilterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
@@ -549,23 +556,144 @@ export function SmartFilterSystem({
         </div>
       )}
 
-      {/* Preferred Days Off Calendar Button */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-700">
-          Preferred Days Off:
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
-          onClick={() => setIsCalendarOpen(true)}
-        >
-          <CalendarIcon className="h-4 w-4" />
-          {selectedDaysOff.length === 0
-            ? 'Select dates'
-            : `${selectedDaysOff.length} selected`}
-        </Button>
+      {/* Preferred Days Off and Layover Locations Row */}
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Preferred Days Off */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Days Off:
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => setIsCalendarOpen(true)}
+            data-testid="button-select-days-off"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            {selectedDaysOff.length === 0
+              ? 'Select'
+              : `${selectedDaysOff.length} selected`}
+          </Button>
+        </div>
+
+        {/* Layover Locations Multi-Select */}
+        {layoverLocations.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Layover Cities:
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => setIsLayoverDialogOpen(true)}
+              data-testid="button-select-layovers"
+            >
+              <MapPin className="h-4 w-4" />
+              {selectedLayovers.length === 0
+                ? 'Select cities'
+                : `${selectedLayovers.length} selected`}
+            </Button>
+            {/* Show selected cities as badges inline */}
+            {selectedLayovers.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {selectedLayovers.slice(0, 3).map(city => (
+                  <Badge
+                    key={city}
+                    variant="secondary"
+                    className="flex items-center gap-1 pr-1"
+                  >
+                    <span className="text-xs">{city}</span>
+                    <button
+                      onClick={() => toggleLayoverCity(city)}
+                      className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {selectedLayovers.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{selectedLayovers.length - 3} more
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Layover Cities Dialog */}
+      <Dialog open={isLayoverDialogOpen} onOpenChange={setIsLayoverDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Layover Cities</DialogTitle>
+            <DialogDescription>
+              Filter pairings by overnight layover locations
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-72 pr-4">
+            <div className="grid grid-cols-3 gap-3">
+              {layoverLocations.map(city => (
+                <div key={city} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`layover-dialog-${city}`}
+                    checked={selectedLayovers.includes(city)}
+                    onCheckedChange={() => toggleLayoverCity(city)}
+                    data-testid={`checkbox-layover-${city}`}
+                  />
+                  <Label
+                    htmlFor={`layover-dialog-${city}`}
+                    className="text-sm cursor-pointer"
+                  >
+                    {city}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          {selectedLayovers.length > 0 && (
+            <div className="pt-3 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedLayovers.length} cities selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllLayovers}
+                  className="text-xs text-red-600 hover:text-red-700"
+                >
+                  Clear All
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {selectedLayovers.map(city => (
+                  <Badge
+                    key={city}
+                    variant="secondary"
+                    className="flex items-center gap-1 pr-1"
+                  >
+                    <span className="text-xs">{city}</span>
+                    <button
+                      onClick={() => toggleLayoverCity(city)}
+                      className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end pt-3">
+            <Button size="sm" onClick={() => setIsLayoverDialogOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Calendar Dialog */}
       <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
