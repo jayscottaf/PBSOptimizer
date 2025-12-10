@@ -14,10 +14,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, X } from 'lucide-react';
 import { format } from 'date-fns';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SearchFilters } from '@/lib/api';
+import { api } from '@/lib/api';
 interface FiltersPanelProps {
   onFiltersChange: (filters: SearchFilters) => void;
+  bidPackageId?: number;
   bidPackages?: Array<{
     id: number;
     name: string;
@@ -28,10 +30,25 @@ interface FiltersPanelProps {
 }
 export function FiltersPanel({
   onFiltersChange,
+  bidPackageId,
   bidPackages = [],
 }: FiltersPanelProps) {
   const [selectedDaysOff, setSelectedDaysOff] = useState<Date[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [layoverLocations, setLayoverLocations] = useState<string[]>([]);
+  const [selectedLayovers, setSelectedLayovers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (bidPackageId) {
+      api.getLayoverLocations(bidPackageId).then(locations => {
+        setLayoverLocations(locations.sort());
+        setSelectedLayovers([]);
+      }).catch(error => {
+        console.error('Failed to fetch layover locations:', error);
+        setLayoverLocations([]);
+      });
+    }
+  }, [bidPackageId]);
 
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
     const numericValue =
@@ -171,6 +188,39 @@ export function FiltersPanel({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Layover Locations Filter */}
+      {layoverLocations.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Layover Locations
+          </label>
+          <Select
+            value={selectedLayovers.length === 1 ? selectedLayovers[0] : ''}
+            onValueChange={value => {
+              if (value === '') {
+                setSelectedLayovers([]);
+                onFiltersChange({ layoverLocations: undefined });
+              } else {
+                setSelectedLayovers([value]);
+                onFiltersChange({ layoverLocations: [value] });
+              }
+            }}
+          >
+            <SelectTrigger className="text-sm">
+              <SelectValue placeholder="Any Location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Any Location</SelectItem>
+              {layoverLocations.map(location => (
+                <SelectItem key={location} value={location}>
+                  {location}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Preferred Days Off Filter */}
       <div className="border-t pt-4">

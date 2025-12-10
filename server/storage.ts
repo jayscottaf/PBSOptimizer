@@ -872,6 +872,7 @@ export class DatabaseStorage implements IStorage {
     pairingDaysMin?: number;
     pairingDaysMax?: number;
     efficiency?: number;
+    layoverLocations?: string[];
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<{
@@ -993,6 +994,16 @@ export class DatabaseStorage implements IStorage {
 
       if (filters.efficiency !== undefined) {
         conditions.push(sql`${efficiencyExpr} >= ${filters.efficiency}`);
+      }
+
+      // Filter by layover locations if provided
+      if (filters.layoverLocations && filters.layoverLocations.length > 0) {
+        conditions.push(
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements(${pairings.layovers}) AS layover
+            WHERE layover->>'city' = ANY(${filters.layoverLocations})
+          )`
+        );
       }
 
       // Calculate statistics for the filtered dataset

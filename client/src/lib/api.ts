@@ -41,7 +41,7 @@ export interface Pairing {
 }
 
 export interface SearchFilters {
-  [key: string]: string | number | Date[] | undefined;
+  [key: string]: string | number | Date[] | string[] | undefined;
   bidPackageId?: number;
   search?: string;
   creditMin?: number;
@@ -58,6 +58,7 @@ export interface SearchFilters {
   efficiency?: number;
   seniorityPercentage?: number;
   preferredDaysOff?: Date[];
+  layoverLocations?: string[];
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -85,6 +86,12 @@ export const api = {
   // Bid packages
   getBidPackages: async (): Promise<BidPackage[]> => {
     const response = await apiRequest('GET', '/api/bid-packages');
+    return response.json();
+  },
+
+  // Get unique layover locations for a bid package
+  getLayoverLocations: async (bidPackageId: number): Promise<string[]> => {
+    const response = await apiRequest('GET', `/api/layover-locations?bidPackageId=${bidPackageId}`);
     return response.json();
   },
 

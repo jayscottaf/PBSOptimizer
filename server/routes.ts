@@ -756,6 +756,7 @@ export async function registerRoutes(app: Express) {
         bidPackageId,
         sortBy = 'pairingNumber',
         sortOrder = 'asc',
+        layoverLocations,
         ...filters
       } = req.body;
 
@@ -790,6 +791,7 @@ export async function registerRoutes(app: Express) {
         bidPackageId,
         sortBy,
         sortOrder,
+        layoverLocations,
         ...filters,
       });
 
@@ -1424,6 +1426,39 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error verifying data:', error);
       res.status(500).json({ message: 'Failed to verify data' });
+    }
+  });
+
+  // Get unique layover locations for a bid package
+  app.get('/api/layover-locations', async (req, res) => {
+    try {
+      const bidPackageId = parseInt(req.query.bidPackageId as string);
+      
+      if (!bidPackageId) {
+        return res.status(400).json({ error: 'bidPackageId is required' });
+      }
+
+      const pairingsList = await db
+        .select({ layovers: pairings.layovers })
+        .from(pairings)
+        .where(eq(pairings.bidPackageId, bidPackageId));
+
+      const uniqueLocations = new Set<string>();
+      
+      for (const p of pairingsList) {
+        if (p.layovers && Array.isArray(p.layovers)) {
+          for (const layover of p.layovers) {
+            if (layover.city) {
+              uniqueLocations.add(layover.city);
+            }
+          }
+        }
+      }
+
+      res.json(Array.from(uniqueLocations).sort());
+    } catch (error) {
+      console.error('Error fetching layover locations:', error);
+      res.status(500).json({ error: 'Failed to fetch layover locations' });
     }
   });
 
