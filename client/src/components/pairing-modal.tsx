@@ -195,55 +195,55 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Pairing Overview */}
             <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-gray-900 text-sm sm:text-base">
+              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
                 Overview
               </h4>
               <Card>
-                <CardContent className="p-3 sm:p-4 bg-gray-50 font-mono text-xs sm:text-sm space-y-1">
+                <CardContent className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-800 font-mono text-xs sm:text-sm space-y-1 text-gray-900 dark:text-gray-100">
                   <div>
-                    <span className="text-gray-600">Pairing:</span>{' '}
+                    <span className="text-gray-600 dark:text-gray-400">Pairing:</span>{' '}
                     {pairing.pairingNumber}
                   </div>
                   <div>
-                    <span className="text-gray-600">Effective:</span>{' '}
+                    <span className="text-gray-600 dark:text-gray-400">Effective:</span>{' '}
                     {pairing.effectiveDates}
                   </div>
                   {pairing.payHours && (
                     <div>
-                      <span className="text-gray-600">Total Pay:</span>{' '}
+                      <span className="text-gray-600 dark:text-gray-400">Total Pay:</span>{' '}
                       {pairing.payHours}
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-600">Credit:</span>{' '}
+                    <span className="text-gray-600 dark:text-gray-400">Credit:</span>{' '}
                     {pairing.creditHours}
                   </div>
                   <div>
-                    <span className="text-gray-600">Block:</span>{' '}
+                    <span className="text-gray-600 dark:text-gray-400">Block:</span>{' '}
                     {pairing.blockHours}
                   </div>
                   <div>
-                    <span className="text-gray-600">TAFB:</span> {pairing.tafb}{' '}
+                    <span className="text-gray-600 dark:text-gray-400">TAFB:</span> {pairing.tafb}{' '}
                     hours
                   </div>
                   <div>
-                    <span className="text-gray-600">Days:</span>{' '}
+                    <span className="text-gray-600 dark:text-gray-400">Days:</span>{' '}
                     {pairing.pairingDays || 'N/A'}
                   </div>
                   {pairing.fdp && (
                     <div>
-                      <span className="text-gray-600">FDP:</span> {pairing.fdp}
+                      <span className="text-gray-600 dark:text-gray-400">FDP:</span> {pairing.fdp}
                     </div>
                   )}
                   {pairing.deadheads > 0 && (
                     <div>
-                      <span className="text-gray-600">Deadheads:</span>{' '}
+                      <span className="text-gray-600 dark:text-gray-400">Deadheads:</span>{' '}
                       {pairing.deadheads}
                     </div>
                   )}
                   {pairing.holdProbability !== undefined && (
                     <div>
-                      <span className="text-gray-600">Hold Probability:</span>{' '}
+                      <span className="text-gray-600 dark:text-gray-400">Hold Probability:</span>{' '}
                       <span className={
                         pairing.holdProbability >= 70 ? 'text-green-600 font-medium' :
                         pairing.holdProbability >= 50 ? 'text-yellow-600 font-medium' :
@@ -259,7 +259,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
             {/* Flight Segments */}
             <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-gray-900 text-sm sm:text-base">
+              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
                 Flight Segments
               </h4>
               <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
@@ -285,15 +285,15 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
                     return sortedDays.map((dayLetter, dayIndex) => (
                       <Card key={dayLetter}>
-                        <CardContent className="p-2 sm:p-3 bg-blue-50 border border-blue-200 font-mono text-xs sm:text-sm">
-                          <div className="font-medium text-blue-900 mb-2 text-xs sm:text-sm">
+                        <CardContent className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 font-mono text-xs sm:text-sm">
+                          <div className="font-medium text-blue-900 dark:text-blue-300 mb-2 text-xs sm:text-sm">
                             Day {dayIndex + 1} - {dayLetter}
                           </div>
                           {groupedByDay[dayLetter].map(
                             (segment: any, segIndex: number) => (
                               <div
                                 key={segIndex}
-                                className="text-blue-800 mb-1 text-xs sm:text-sm break-all sm:break-normal"
+                                className="text-blue-800 dark:text-blue-200 mb-1 text-xs sm:text-sm break-all sm:break-normal"
                               >
                                 {segment.flightNumber} {segment.departure}{' '}
                                 {segment.departureTime} {segment.arrival}{' '}
@@ -311,7 +311,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                     ));
                   })()
                 ) : (
-                  <div className="text-gray-500 text-sm">
+                  <div className="text-gray-500 dark:text-gray-400 text-sm">
                     No flight segment details available
                   </div>
                 )}
@@ -321,12 +321,12 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
           {/* Full Text Block */}
           <div className="space-y-2 sm:space-y-4">
-            <h4 className="font-semibold text-gray-900 text-sm sm:text-base">
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
               Full Pairing Text
             </h4>
             <Card>
               <CardContent className="p-2 sm:p-4">
-                <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
+                <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 dark:text-gray-100 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
                   {pairing.fullTextBlock || 'No full text block available'}
                 </pre>
               </CardContent>
@@ -335,14 +335,14 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
           {/* Historical Awards */}
           <div className="space-y-2 sm:space-y-4">
-            <h4 className="font-semibold text-gray-900 text-sm sm:text-base">
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
               Historical Awards
             </h4>
             <Card>
               <CardContent className="p-2 sm:p-4">
                 {bidHistory.length > 0 ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="text-sm text-yellow-800">
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <div className="text-sm text-yellow-800 dark:text-yellow-300">
                       <div className="font-medium mb-2">
                         Recent awards for similar pairings:
                       </div>
@@ -359,7 +359,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-gray-500 text-sm">
+                  <div className="text-gray-500 dark:text-gray-400 text-sm">
                     No historical award data available
                   </div>
                 )}
