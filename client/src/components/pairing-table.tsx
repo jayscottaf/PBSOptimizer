@@ -7,12 +7,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Eye, Bookmark, Star, X, Calendar, Info } from 'lucide-react';
+import { Eye, Bookmark, Star, X, Calendar, Info, AlertTriangle } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
+import type { ConflictInfo } from '@/lib/conflictDetection';
 
 interface PairingTableProps {
   pairings: Pairing[];
@@ -33,6 +34,7 @@ interface PairingTableProps {
     hasPrev: boolean;
   };
   onPageChange?: (page: number) => void;
+  conflicts?: Map<number, ConflictInfo>;
 }
 
 export function PairingTable({
@@ -47,6 +49,7 @@ export function PairingTable({
   currentUser,
   pagination,
   onPageChange,
+  conflicts = new Map(),
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -546,12 +549,31 @@ export function PairingTable({
                   onClick={() => handlePairingClick(pairing)}
                 >
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-1">
                       <span className="font-mono font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
                         {pairing.pairingNumber}
                       </span>
                       {pairing.holdProbability >= 80 && (
-                        <Star className="text-yellow-400 ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                        <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                      )}
+                      {conflicts.has(pairing.id) && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <div className="space-y-1">
+                              <p className="font-semibold">Conflicts with calendar:</p>
+                              {conflicts.get(pairing.id)?.conflicts.map((conflict, idx) => (
+                                <div key={idx} className="text-xs">
+                                  Pairing {conflict.calendarPairingNumber}
+                                  <br />
+                                  {conflict.calendarStartDate} to {conflict.calendarEndDate}
+                                </div>
+                              ))}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   </td>

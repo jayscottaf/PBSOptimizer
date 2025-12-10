@@ -52,7 +52,7 @@ import {
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
-import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
+import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
 import {
   Dialog,
   DialogContent,
@@ -110,6 +110,9 @@ export default function Dashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [hideConflicts, setHideConflicts] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [conflictMap, setConflictMap] = useState<Map<number, ConflictInfo>>(new Map());
 
   const queryClient = useQueryClient();
 
@@ -606,6 +609,44 @@ export default function Dashboard() {
 
   // Debug logs removed after verification
 
+  // Query for calendar events to detect conflicts
+  const { data: calendarEventsData = [] } = useQuery({
+    queryKey: ['calendarEvents', currentUser?.id, bidPackageId],
+    queryFn: async () => {
+      if (!currentUser || !bidPackageId) {
+        return [];
+      }
+      try {
+        const response = await fetch(`/api/calendar-events?userId=${currentUser.id}&bidPackageId=${bidPackageId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch calendar events');
+        }
+        return response.json();
+      } catch (error) {
+        console.error('Error fetching calendar events:', error);
+        return [];
+      }
+    },
+    enabled: !!currentUser && !!bidPackageId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  // Update calendar events state
+  React.useEffect(() => {
+    setCalendarEvents(calendarEventsData);
+  }, [calendarEventsData]);
+
+  // Calculate conflicts when pairings or calendar events change
+  React.useEffect(() => {
+    if (displayPairings && displayPairings.length > 0 && calendarEvents.length > 0 && latestBidPackage) {
+      const conflicts = detectConflicts(displayPairings, calendarEvents, latestBidPackage.year);
+      setConflictMap(conflicts);
+    } else {
+      setConflictMap(new Map());
+    }
+  }, [displayPairings, calendarEvents, latestBidPackage]);
+
   // Query for user's favorites with enhanced caching
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
     queryKey: ['favorites', currentUser?.id],
@@ -876,6 +917,7 @@ export default function Dashboard() {
   const clearAllFilters = () => {
     setFilters({});
     setActiveFilters([]);
+    setHideConflicts(false);
   };
 
   const handleTripLengthFilter = (days: number) => {
@@ -1147,6 +1189,14 @@ export default function Dashboard() {
     }
     return pairings;
   }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters]);
+
+  // Filter out conflict pairings if hideConflicts is enabled
+  const filteredDisplayPairings = React.useMemo(() => {
+    if (!hideConflicts) {
+      return displayPairings;
+    }
+    return displayPairings.filter(p => !conflictMap.has(p.id));
+  }, [displayPairings, hideConflicts, conflictMap]);
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<
     string | null
@@ -1547,7 +1597,7 @@ export default function Dashboard() {
                             {latestBidPackage
                               ? `${latestBidPackage.month} ${latestBidPackage.year} - `
                               : ''}
-                            {displayPairings.length} pairings
+                            {filteredDisplayPairings.length} pairings {hideConflicts && conflictMap.size > 0 ? `(${conflictMap.size} hidden)` : ''}
                           </span>
                         </div>
                       </CardHeader>
@@ -1562,12 +1612,30 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
+                        <div className="space-y-3 p-4">
+                          {conflictMap.size > 0 && (
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={hideConflicts}
+                                  onChange={(e) => setHideConflicts(e.target.checked)}
+                                  className="rounded border border-gray-300 dark:border-gray-600"
+                                />
+                                <span className="text-gray-700 dark:text-gray-300">
+                                  Hide conflicts ({conflictMap.size})
+                                </span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
                         <PairingTable
-                          pairings={displayPairings || []}
+                          pairings={filteredDisplayPairings || []}
                           onSort={handleSort}
                           sortColumn={sortColumn || ''}
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
+                          conflicts={conflictMap}
                         />
                       </CardContent>
                     </Card>
