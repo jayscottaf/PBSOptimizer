@@ -277,7 +277,17 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['calendar', userId] });
+      // Invalidate both the calendar view query and the dashboard calendar query
+      queryClient.invalidateQueries({
+        queryKey: [
+          'calendar',
+          userId,
+          currentDate.getMonth() + 1,
+          currentDate.getFullYear(),
+        ],
+      });
+      // Also invalidate the dashboard's calendar events query to recalculate conflicts
+      queryClient.invalidateQueries({ queryKey: ['calendarEvents', userId] });
       toast({ title: 'Success', description: 'Pairing removed from calendar' });
     },
     onError: () => {
