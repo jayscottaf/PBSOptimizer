@@ -857,6 +857,16 @@ export class PDFParser {
       }
     }
 
+    // Deduplicate layovers - keep only first occurrence of each city
+    const uniqueLayovers: Layover[] = [];
+    const seenCities = new Set<string>();
+    for (const layover of layovers) {
+      if (!seenCities.has(layover.city)) {
+        uniqueLayovers.push(layover);
+        seenCities.add(layover.city);
+      }
+    }
+
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
@@ -869,7 +879,7 @@ export class PDFParser {
       sitEdpPay: sitEdpPay || undefined,
       carveouts: carveouts || undefined,
       deadheads,
-      layovers,
+      layovers: uniqueLayovers,
       flightSegments,
       fullTextBlock: block,
       holdProbability: 0, // Will be calculated
