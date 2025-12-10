@@ -53,6 +53,7 @@ import {
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
+import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
 import {
   Dialog,
   DialogContent,
@@ -69,7 +70,7 @@ import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming t
 import { toast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 interface SearchFilters {
-  [key: string]: string | number | Date[] | undefined;
+  [key: string]: string | number | Date[] | string[] | undefined;
   search?: string;
   creditMin?: number;
   creditMax?: number;
@@ -84,6 +85,7 @@ interface SearchFilters {
   pairingDaysMax?: number;
   efficiency?: number;
   preferredDaysOff?: Date[];
+  layoverLocations?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
@@ -637,16 +639,6 @@ export default function Dashboard() {
     setCalendarEvents(calendarEventsData);
   }, [calendarEventsData]);
 
-  // Calculate conflicts when pairings or calendar events change
-  React.useEffect(() => {
-    if (displayPairings && displayPairings.length > 0 && calendarEvents.length > 0 && latestBidPackage) {
-      const conflicts = detectConflicts(displayPairings, calendarEvents, latestBidPackage.year);
-      setConflictMap(conflicts);
-    } else {
-      setConflictMap(new Map());
-    }
-  }, [displayPairings, calendarEvents, latestBidPackage]);
-
   // Query for user's favorites with enhanced caching
   const { data: favorites = [], refetch: refetchFavorites } = useQuery({
     queryKey: ['favorites', currentUser?.id],
@@ -1197,6 +1189,17 @@ export default function Dashboard() {
     }
     return displayPairings.filter(p => !conflictMap.has(p.id));
   }, [displayPairings, hideConflicts, conflictMap]);
+
+  // Calculate conflicts when pairings or calendar events change
+  React.useEffect(() => {
+    if (displayPairings && displayPairings.length > 0 && calendarEvents.length > 0 && latestBidPackage) {
+      const conflicts = detectConflicts(displayPairings, calendarEvents, latestBidPackage.year);
+      setConflictMap(conflicts);
+    } else {
+      setConflictMap(new Map());
+    }
+  }, [displayPairings, calendarEvents, latestBidPackage]);
+
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<
     string | null
