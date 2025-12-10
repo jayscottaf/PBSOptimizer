@@ -559,9 +559,16 @@ export function PairingTable({
                       {conflicts.has(pairing.id) && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              type="button"
+                              className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
+                              tabIndex={-1}
+                            >
+                              <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                            </button>
                           </TooltipTrigger>
-                          <TooltipContent side="right" className="max-w-xs">
+                          <TooltipContent side="right" className="max-w-xs z-50">
                             <div className="space-y-1">
                               <p className="font-semibold">Conflicts with calendar:</p>
                               {conflicts.get(pairing.id)?.conflicts.map((conflict, idx) => (
