@@ -1194,7 +1194,7 @@ export default function Dashboard() {
               effectiveDates,
               year,
               pairingDays,
-              filters.preferredDaysOff
+              filters.preferredDaysOff || []
             );
             if (hasConflict) {
               return false;
@@ -1704,6 +1704,7 @@ export default function Dashboard() {
                         onDeleteFavorite={handleDeleteFavorite}
                         showAddToCalendar={true}
                         currentUser={currentUser}
+                        conflicts={conflictMap}
                       />
                     ) : (
                       <div className="text-center py-8">

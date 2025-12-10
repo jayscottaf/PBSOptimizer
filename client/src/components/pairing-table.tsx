@@ -682,7 +682,7 @@ export function PairingTable({
                                     <div className="font-semibold text-sm border-b border-gray-700 pb-2">
                                       Hold Probability: {pairing.holdProbability}%
                                     </div>
-                                    {pairing.holdProbabilityReasoning.map((reason, idx) => (
+                                    {pairing.holdProbabilityReasoning?.map((reason, idx) => (
                                       <div key={idx} className="text-xs text-gray-100 leading-relaxed">
                                         {reason}
                                       </div>
