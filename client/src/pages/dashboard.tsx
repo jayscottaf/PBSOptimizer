@@ -1175,7 +1175,7 @@ export default function Dashboard() {
       // Apply Days Off filter client-side when using API response directly
       let result = [...pairings];
       
-      if (filters.preferredDaysOff && filters.preferredDaysOff.length > 0 && latestBidPackage) {
+      if (debouncedFilters.preferredDaysOff && debouncedFilters.preferredDaysOff.length > 0 && latestBidPackage) {
         const year = latestBidPackage.year || new Date().getFullYear();
         result = result.filter(pairing => {
           let effectiveDates = pairing.effectiveDates || '';
@@ -1194,7 +1194,7 @@ export default function Dashboard() {
               effectiveDates,
               year,
               pairingDays,
-              filters.preferredDaysOff || []
+              debouncedFilters.preferredDaysOff || []
             );
             if (hasConflict) {
               return false;
@@ -1212,7 +1212,7 @@ export default function Dashboard() {
       return sortedPairings;
     }
     return pairings;
-  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters, filters.preferredDaysOff, latestBidPackage]);
+  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters, latestBidPackage]);
 
   // Filter out conflict pairings if hideConflicts is enabled
   const filteredDisplayPairings = React.useMemo(() => {
