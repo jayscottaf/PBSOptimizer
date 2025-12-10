@@ -372,11 +372,11 @@ export function PairingTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[800px] sm:min-w-[900px] lg:min-w-[1000px]">
+        <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'pairingNumber',
@@ -395,11 +395,11 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px] sm:min-w-[150px]">
+              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px] sm:min-w-[280px] lg:min-w-[350px]">
                 Route
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'creditHours',
@@ -419,7 +419,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'blockHours',
@@ -439,7 +439,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'tafb',
@@ -459,7 +459,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'pairingDays',
@@ -479,7 +479,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[70px] sm:min-w-[90px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'creditBlockRatio',
@@ -500,7 +500,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[80px] sm:min-w-[100px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() =>
                   onSort(
                     'holdProbability',
@@ -520,12 +520,12 @@ export function PairingTable({
                 </div>
               </th>
               {(showDeleteButton || showAddToCalendar) && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[70px] sm:min-w-[90px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px]">
                   Actions
                 </th>
               )}
               {showDeleteButton && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
                   Remove
                 </th>
               )}
