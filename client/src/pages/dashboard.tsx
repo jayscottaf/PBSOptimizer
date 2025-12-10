@@ -1237,28 +1237,23 @@ export default function Dashboard() {
     string | null
   >(null);
 
-  // Update the quick stats to use backend statistics
+  // Update the quick stats to use filtered pairings instead of raw response
   const quickStats = React.useMemo(() => {
-    if (!pairings || pairings.length === 0) {
+    if (!filteredDisplayPairings || filteredDisplayPairings.length === 0) {
       return { totalPairings: 0, likelyToHold: 0, highCredit: 0 };
     }
 
-    const totalPairings = pairings.length;
-    // Use backend statistics if available, otherwise calculate from pairings
-    const likelyToHold = pairingsResponse?.statistics?.likelyToHold
-      ? Number(pairingsResponse.statistics.likelyToHold)
-      : pairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
+    const totalPairings = filteredDisplayPairings.length;
+    // Calculate stats from filtered pairings
+    const likelyToHold = filteredDisplayPairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
+    const highCredit = filteredDisplayPairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
 
-    const highCredit = pairingsResponse?.statistics?.highCredit
-      ? Number(pairingsResponse.statistics.highCredit)
-      : pairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18)
-          .length;
     return {
       totalPairings,
       likelyToHold,
       highCredit,
     };
-  }, [pairings, pairingsResponse?.statistics]);
+  }, [filteredDisplayPairings]);
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
