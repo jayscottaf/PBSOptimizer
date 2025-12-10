@@ -178,10 +178,13 @@ export function SmartFilterSystem({
 
   // Fetch layover locations when bid package changes
   useEffect(() => {
+    console.log('[SmartFilterSystem] bidPackageId changed:', bidPackageId);
     if (bidPackageId) {
       api.getLayoverLocations(bidPackageId).then(locations => {
+        console.log('[SmartFilterSystem] Fetched layover locations:', locations.length, 'cities');
         setLayoverLocations(locations);
-      }).catch(() => {
+      }).catch((err) => {
+        console.error('[SmartFilterSystem] Failed to fetch layover locations:', err);
         setLayoverLocations([]);
       });
     }
@@ -243,6 +246,7 @@ export function SmartFilterSystem({
   const allFilterOptions = React.useMemo(() => {
     const options = [...filterOptions];
     if (layoverLocations.length > 0) {
+      console.log('[SmartFilterSystem] Adding Layover Locations filter with', layoverLocations.length, 'cities');
       options.push({
         key: 'layoverLocations',
         label: 'Layover Locations',
@@ -253,6 +257,7 @@ export function SmartFilterSystem({
         })),
       });
     }
+    console.log('[SmartFilterSystem] allFilterOptions count:', options.length, options.map(o => o.label));
     return options;
   }, [layoverLocations]);
 
