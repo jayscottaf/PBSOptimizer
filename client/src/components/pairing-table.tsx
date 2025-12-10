@@ -66,12 +66,14 @@ export function PairingTable({
           .map((l: any) => l.city.toUpperCase())
       : [];
 
-    // Build a map of which segments are deadheads
-    const deadheadDestinations = new Set<string>();
+    // Build a set of deadhead segment pairs (e.g., "EWR-ATL")
+    const deadheadSegments = new Set<string>();
     if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
       pairing.flightSegments.forEach((segment: any) => {
-        if (segment.isDeadhead) {
-          deadheadDestinations.add(segment.arrival?.toUpperCase());
+        if (segment.isDeadhead && segment.departure && segment.arrival) {
+          deadheadSegments.add(
+            `${segment.departure.toUpperCase()}-${segment.arrival.toUpperCase()}`
+          );
         }
       });
     }
@@ -81,21 +83,28 @@ export function PairingTable({
         {routeAirports.map((airport, idx) => {
           const upperAirport = airport.toUpperCase();
           const isLayover = layoverCities.includes(upperAirport);
-          const isDHDestination = deadheadDestinations.has(upperAirport);
+          
+          // Check if the segment FROM the previous airport TO this one is a deadhead
+          let isDeadheadLeg = false;
+          if (idx > 0) {
+            const prevAirport = routeAirports[idx - 1].toUpperCase();
+            const segmentKey = `${prevAirport}-${upperAirport}`;
+            isDeadheadLeg = deadheadSegments.has(segmentKey);
+          }
 
           return (
             <div key={`${airport}-${idx}`} className="flex items-center gap-1">
               {idx > 0 && <span className="text-gray-400 dark:text-gray-600">-</span>}
               <span
                 className={`${
-                  isDHDestination ? 'text-gray-500 dark:text-gray-400 italic' : ''
+                  isDeadheadLeg ? 'text-gray-500 dark:text-gray-400 italic' : ''
                 } ${
                   isLayover
                     ? 'font-bold text-teal-600 dark:text-teal-400'
                     : 'text-gray-900 dark:text-gray-100'
                 }`}
               >
-                {isDHDestination ? `(DH)${airport}` : airport}
+                {isDeadheadLeg ? `(DH)${airport}` : airport}
               </span>
             </div>
           );
