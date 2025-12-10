@@ -1,4 +1,4 @@
-import { parse, isWithinInterval, isBefore, isAfter } from 'date-fns';
+import { parse, addDays, isBefore, isAfter } from 'date-fns';
 
 export interface ConflictInfo {
   pairingId: number;
@@ -10,45 +10,53 @@ export interface ConflictInfo {
 }
 
 /**
- * Parse pairing effective dates (e.g., "JAN01-JAN03")
- * This handles date ranges in the format "MONdd-MONdd"
+ * Parse pairing effective dates and calculate date range
+ * Handles formats like "JAN01-JAN03", "JAN4 SU", "EFFECTIVE JAN 01 - JAN 31"
  */
 export function parsePairingDateRange(
   effectiveDates: string,
-  year: number
+  year: number,
+  pairingDays: number = 1
 ): { startDate: Date; endDate: Date } | null {
   if (!effectiveDates) return null;
 
   try {
-    // Extract date tokens like "JAN01" or "01JAN"
-    const dateRegex =
-      /\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*\d{1,2}|\d{1,2}\s*(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))\b/g;
-    const matches = Array.from(effectiveDates.matchAll(dateRegex)).map(
-      m => m[1]
-    );
+    const upperDates = effectiveDates.toUpperCase();
+    
+    // Try to extract date tokens like "JAN01", "JAN 01", "01JAN"
+    const dateRegex = /\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*\d{1,2}|\d{1,2}\s*(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))\b/gi;
+    const matches = Array.from(upperDates.matchAll(dateRegex)).map(m => m[1].replace(/\s+/g, ''));
 
-    if (matches.length < 2) return null;
+    if (matches.length === 0) return null;
 
-    const parseDate = (token: string): Date => {
+    const parseDate = (token: string): Date | null => {
       // Normalize to "MONdd" format
-      const match = token.match(
-        /^(?:([A-Z]{3})\s*(\d{1,2})|(\d{1,2})\s*([A-Z]{3}))$/
-      );
-      if (!match) throw new Error(`Cannot parse date token: ${token}`);
+      const match = token.match(/^(?:([A-Z]{3})(\d{1,2})|(\d{1,2})([A-Z]{3}))$/i);
+      if (!match) return null;
 
-      const month = (match[1] || match[4]) as string;
+      const month = (match[1] || match[4])?.toUpperCase();
       const day = parseInt(match[2] || match[3], 10);
 
-      const dateStr = `${month}${day}${year}`;
-      return parse(dateStr, 'MMMddyyyy', new Date());
+      if (!month || isNaN(day)) return null;
+
+      const dateStr = `${month}${day.toString().padStart(2, '0')}${year}`;
+      const parsed = parse(dateStr, 'MMMddyyyy', new Date());
+      
+      return isNaN(parsed.getTime()) ? null : parsed;
     };
 
     const startDate = parseDate(matches[0]);
-    const endDate = parseDate(matches[1]);
+    if (!startDate) return null;
 
-    // Validate parsed dates
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      return null;
+    // If we have two dates, use the second as end date
+    // Otherwise, calculate end date based on pairingDays
+    let endDate: Date;
+    if (matches.length >= 2) {
+      const parsedEnd = parseDate(matches[1]);
+      endDate = parsedEnd || addDays(startDate, pairingDays - 1);
+    } else {
+      // Calculate end date from pairingDays
+      endDate = addDays(startDate, pairingDays - 1);
     }
 
     return { startDate, endDate };
@@ -81,6 +89,10 @@ export function detectConflicts(
 ): Map<number, ConflictInfo> {
   const conflicts = new Map<number, ConflictInfo>();
 
+  if (!calendarEvents || calendarEvents.length === 0) {
+    return conflicts;
+  }
+
   // Build a map of calendar pairings with their date ranges
   const calendarPairingDateMap = new Map<
     number,
@@ -88,8 +100,12 @@ export function detectConflicts(
   >();
 
   calendarEvents.forEach(event => {
+    if (!event.startDate || !event.endDate) return;
+    
     const startDate = new Date(event.startDate);
     const endDate = new Date(event.endDate);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return;
 
     calendarPairingDateMap.set(event.pairingId, {
       startDate,
@@ -98,15 +114,24 @@ export function detectConflicts(
     });
   });
 
+  if (calendarPairingDateMap.size === 0) {
+    return conflicts;
+  }
+
   // Check each search result pairing for conflicts
   searchPairings.forEach(pairing => {
+    // Skip if this pairing is already in calendar (can't conflict with itself)
+    if (calendarPairingDateMap.has(pairing.id)) {
+      return;
+    }
+
     const pairingDates = parsePairingDateRange(
       pairing.effectiveDates,
-      bidPackageYear
+      bidPackageYear,
+      pairing.pairingDays || 1
     );
 
     if (!pairingDates) {
-      // If we can't parse dates, assume no conflict
       return;
     }
 
@@ -124,9 +149,7 @@ export function detectConflicts(
       ) {
         pairingConflicts.push({
           calendarPairingNumber: calendarDates.pairingNumber,
-          calendarStartDate: calendarDates.startDate
-            .toISOString()
-            .split('T')[0],
+          calendarStartDate: calendarDates.startDate.toISOString().split('T')[0],
           calendarEndDate: calendarDates.endDate.toISOString().split('T')[0],
         });
       }

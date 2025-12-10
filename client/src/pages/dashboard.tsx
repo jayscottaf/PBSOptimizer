@@ -613,13 +613,13 @@ export default function Dashboard() {
 
   // Query for calendar events to detect conflicts
   const { data: calendarEventsData = [] } = useQuery({
-    queryKey: ['calendarEvents', currentUser?.id, bidPackageId],
+    queryKey: ['calendarEvents', currentUser?.id],
     queryFn: async () => {
-      if (!currentUser || !bidPackageId) {
+      if (!currentUser) {
         return [];
       }
       try {
-        const response = await fetch(`/api/calendar-events?userId=${currentUser.id}&bidPackageId=${bidPackageId}`);
+        const response = await fetch(`/api/calendar/${currentUser.id}`);
         if (!response.ok) {
           throw new Error('Failed to fetch calendar events');
         }
@@ -629,7 +629,7 @@ export default function Dashboard() {
         return [];
       }
     },
-    enabled: !!currentUser && !!bidPackageId,
+    enabled: !!currentUser,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -1172,7 +1172,39 @@ export default function Dashboard() {
     
     // Always use API response if layover filter is active (bypass cache)
     if (hasLayoverFilter) {
-      return pairings;
+      // Apply Days Off filter client-side when using API response directly
+      let result = [...pairings];
+      
+      if (filters.preferredDaysOff && filters.preferredDaysOff.length > 0 && latestBidPackage) {
+        const year = latestBidPackage.year || new Date().getFullYear();
+        result = result.filter(pairing => {
+          let effectiveDates = pairing.effectiveDates || '';
+          let pairingDays = pairing.pairingDays || 1;
+          
+          // Try to extract better effectiveDates from fullTextBlock if available
+          if (pairing.fullTextBlock) {
+            const effectiveMatch = pairing.fullTextBlock.match(/EFFECTIVE\s+([A-Z]{3}\s*\d{1,2}\s*[-–]\s*[A-Z]{3}\s*\d{1,2})/i);
+            if (effectiveMatch) {
+              effectiveDates = effectiveMatch[1].trim();
+            }
+          }
+          
+          if (effectiveDates && pairingDays) {
+            const hasConflict = pairingConflictsWithDaysOff(
+              effectiveDates,
+              year,
+              pairingDays,
+              filters.preferredDaysOff
+            );
+            if (hasConflict) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+      
+      return result;
     }
     
     // Otherwise use cached data if available
@@ -1180,7 +1212,7 @@ export default function Dashboard() {
       return sortedPairings;
     }
     return pairings;
-  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters]);
+  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters, filters.preferredDaysOff, latestBidPackage]);
 
   // Filter out conflict pairings if hideConflicts is enabled
   const filteredDisplayPairings = React.useMemo(() => {
