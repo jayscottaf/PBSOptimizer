@@ -1130,12 +1130,23 @@ export default function Dashboard() {
   }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings]);
 
   // Use sorted pairings if available, otherwise use regular pairings
+  // BUT: if layoverLocations filter is active, bypass cache and use API response directly
   const displayPairings = React.useMemo(() => {
+    const hasLayoverFilter = debouncedFilters.layoverLocations && 
+                             Array.isArray(debouncedFilters.layoverLocations) && 
+                             debouncedFilters.layoverLocations.length > 0;
+    
+    // Always use API response if layover filter is active (bypass cache)
+    if (hasLayoverFilter) {
+      return pairings;
+    }
+    
+    // Otherwise use cached data if available
     if (isFullCacheReady && sortedPairings.length > 0) {
       return sortedPairings;
     }
     return pairings;
-  }, [isFullCacheReady, sortedPairings, pairings]);
+  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters]);
   // Mocking selectedBidPackageId for the polling logic in the modal
   const [selectedBidPackageId, setSelectedBidPackageId] = useState<
     string | null
