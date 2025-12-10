@@ -944,38 +944,27 @@ export class PDFParser {
     mimeType: string,
     userSeniorityPercentile: number = 50
   ): Promise<void> {
+    let tempFilePath: string | null = null;
     try {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
       let text: string;
-      const isBuffer = Buffer.isBuffer(fileData) || fileData instanceof Uint8Array;
       
-      if (isBuffer) {
-        // Handle buffer from memory storage (Vercel) or Uint8Array
-        console.log(`Received buffer/Uint8Array of type ${fileData.constructor.name}, size: ${fileData.length} bytes`);
+      if (Buffer.isBuffer(fileData) || fileData instanceof Uint8Array) {
+        // Convert buffer to temp file for processing
+        const bufferData = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData);
+        console.log(`Received buffer of size: ${bufferData.length} bytes`);
         
-        if (mimeType === 'text/plain' || mimeType === 'application/octet-stream') {
-          // Try to treat as text first
-          try {
-            text = Buffer.isBuffer(fileData) 
-              ? fileData.toString('utf-8') 
-              : new TextDecoder().decode(fileData as Uint8Array);
-            console.log(`Buffer parsed as text successfully, ${text.length} characters`);
-          } catch (e) {
-            // If text parsing fails, try PDF
-            const pdfParse = (await import('pdf-parse')).default;
-            const data = await pdfParse(Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData));
-            text = data.text;
-            console.log(`Buffer parsed as PDF successfully, ${text.length} characters`);
-          }
+        // Write to temp file
+        tempFilePath = `/tmp/bid-package-${bidPackageId}-${Date.now()}.${mimeType === 'text/plain' ? 'txt' : 'pdf'}`;
+        fs.writeFileSync(tempFilePath, bufferData);
+        
+        if (mimeType === 'text/plain') {
+          text = await this.extractTextFromTXT(tempFilePath);
+          console.log(`TXT file parsed successfully, ${text.length} characters`);
         } else {
-          // For PDF buffers, use pdf-parse
-          const pdfParse = (await import('pdf-parse')).default;
-          const bufferToUse = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData);
-          console.log(`Parsing as PDF, buffer size: ${bufferToUse.length} bytes`);
-          const data = await pdfParse(bufferToUse);
-          text = data.text;
-          console.log(`PDF buffer parsed successfully, ${text.length} characters`);
+          text = await this.extractTextFromPDF(tempFilePath);
+          console.log(`PDF parsed successfully, ${text.length} characters`);
         }
       } else {
         // Handle file path (local development)
@@ -1147,6 +1136,16 @@ export class PDFParser {
         // Ignore progress emit errors
       }
       throw error;
+    } finally {
+      // Clean up temp file
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+          console.log(`Cleaned up temp file: ${tempFilePath}`);
+        } catch (e) {
+          console.error(`Failed to clean up temp file: ${tempFilePath}`, e);
+        }
+      }
     }
   }
 
