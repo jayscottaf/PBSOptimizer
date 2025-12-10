@@ -1324,7 +1324,7 @@ export default function Dashboard() {
                 // Expanded view - show full stats panel
                 <div className="space-y-6">
                   <StatsPanel
-                    pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
+                    pairings={filteredDisplayPairings || []}
                     bidPackage={latestBidPackage}
                     statistics={effectiveStatistics}
                     bidPackageStats={bidPackageStats}
