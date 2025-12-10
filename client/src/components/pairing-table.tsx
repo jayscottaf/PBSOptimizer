@@ -567,8 +567,8 @@ export function PairingTable({
                           >
                             <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                           </button>
-                          {/* CSS-based tooltip */}
-                          <div className="absolute left-full ml-2 mt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none group-hover:pointer-events-auto">
+                          {/* CSS-based tooltip - positioned above */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
                             <div className="bg-gray-900 text-white text-xs rounded px-3 py-2 whitespace-nowrap shadow-lg">
                               {(() => {
                                 const conflictData = conflicts.get(pairing.id);
