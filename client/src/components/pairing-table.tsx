@@ -54,6 +54,56 @@ export function PairingTable({
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
 
+  // Format route with layover highlighting and DH markers
+  const formatRouteDisplay = (pairing: Pairing) => {
+    const routeAirports = (pairing.route || '').split('-').filter(a => a.trim());
+    if (routeAirports.length === 0) return pairing.route;
+
+    // Get layover cities
+    const layoverCities = pairing.layovers
+      ? (Array.isArray(pairing.layovers) ? pairing.layovers : Object.values(pairing.layovers || {}))
+          .filter(l => l && l.city)
+          .map((l: any) => l.city.toUpperCase())
+      : [];
+
+    // Build a map of which segments are deadheads
+    const deadheadDestinations = new Set<string>();
+    if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
+      pairing.flightSegments.forEach((segment: any) => {
+        if (segment.isDeadhead) {
+          deadheadDestinations.add(segment.arrival?.toUpperCase());
+        }
+      });
+    }
+
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {routeAirports.map((airport, idx) => {
+          const upperAirport = airport.toUpperCase();
+          const isLayover = layoverCities.includes(upperAirport);
+          const isDHDestination = deadheadDestinations.has(upperAirport);
+
+          return (
+            <div key={`${airport}-${idx}`} className="flex items-center gap-1">
+              {idx > 0 && <span className="text-gray-400 dark:text-gray-600">-</span>}
+              <span
+                className={`${
+                  isDHDestination ? 'text-gray-500 dark:text-gray-400 italic' : ''
+                } ${
+                  isLayover
+                    ? 'font-bold text-teal-600 dark:text-teal-400'
+                    : 'text-gray-900 dark:text-gray-100'
+                }`}
+              >
+                {isDHDestination ? `(DH)${airport}` : airport}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const formatEffectiveDisplay = (pairing: Pairing): string => {
     try {
       const months = [
@@ -586,10 +636,10 @@ export function PairingTable({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4">
                     <div
-                      className="text-xs sm:text-sm text-gray-900 dark:text-gray-100"
+                      className="text-xs sm:text-sm"
                       title={pairing.route}
                     >
-                      {pairing.route}
+                      {formatRouteDisplay(pairing)}
                     </div>
                     <div
                       className="text-xs text-gray-500 dark:text-gray-400"
