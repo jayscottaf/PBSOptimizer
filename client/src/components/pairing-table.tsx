@@ -59,12 +59,17 @@ export function PairingTable({
     const routeAirports = (pairing.route || '').split('-').filter(a => a.trim());
     if (routeAirports.length === 0) return pairing.route;
 
-    // Get layover cities
-    const layoverCities = pairing.layovers
-      ? (Array.isArray(pairing.layovers) ? pairing.layovers : Object.values(pairing.layovers || {}))
-          .filter(l => l && l.city)
-          .map((l: any) => l.city.toUpperCase())
-      : [];
+    // Get unique layover cities (deduplicated)
+    const layoverCitiesSet = new Set<string>();
+    if (pairing.layovers) {
+      const layoverArray = Array.isArray(pairing.layovers) ? pairing.layovers : Object.values(pairing.layovers || {});
+      layoverArray.forEach((l: any) => {
+        if (l && l.city) {
+          layoverCitiesSet.add(l.city.toUpperCase());
+        }
+      });
+    }
+    const layoverCities = layoverCitiesSet;
 
     // Build a set of deadhead segment pairs (e.g., "EWR-ATL")
     const deadheadSegments = new Set<string>();
@@ -82,7 +87,7 @@ export function PairingTable({
       <div className="flex flex-wrap items-center gap-1">
         {routeAirports.map((airport, idx) => {
           const upperAirport = airport.toUpperCase();
-          const isLayover = layoverCities.includes(upperAirport);
+          const isLayover = layoverCities.has(upperAirport);
           
           // Check if the segment FROM the previous airport TO this one is a deadhead
           let isDeadheadLeg = false;
