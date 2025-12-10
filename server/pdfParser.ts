@@ -939,7 +939,7 @@ export class PDFParser {
   }
 
   async parseFile(
-    fileData: string | Buffer,
+    fileData: string | Buffer | Uint8Array,
     bidPackageId: number,
     mimeType: string,
     userSeniorityPercentile: number = 50
@@ -948,15 +948,32 @@ export class PDFParser {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
       let text: string;
-      if (Buffer.isBuffer(fileData)) {
-        // Handle buffer from memory storage (Vercel)
-        if (mimeType === 'text/plain') {
-          text = fileData.toString('utf-8');
-          console.log(`TXT buffer parsed successfully, ${text.length} characters`);
+      const isBuffer = Buffer.isBuffer(fileData) || fileData instanceof Uint8Array;
+      
+      if (isBuffer) {
+        // Handle buffer from memory storage (Vercel) or Uint8Array
+        console.log(`Received buffer/Uint8Array of type ${fileData.constructor.name}, size: ${fileData.length} bytes`);
+        
+        if (mimeType === 'text/plain' || mimeType === 'application/octet-stream') {
+          // Try to treat as text first
+          try {
+            text = Buffer.isBuffer(fileData) 
+              ? fileData.toString('utf-8') 
+              : new TextDecoder().decode(fileData as Uint8Array);
+            console.log(`Buffer parsed as text successfully, ${text.length} characters`);
+          } catch (e) {
+            // If text parsing fails, try PDF
+            const pdfParse = (await import('pdf-parse')).default;
+            const data = await pdfParse(Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData));
+            text = data.text;
+            console.log(`Buffer parsed as PDF successfully, ${text.length} characters`);
+          }
         } else {
-          // For PDF buffers, we need to use a different approach
+          // For PDF buffers, use pdf-parse
           const pdfParse = (await import('pdf-parse')).default;
-          const data = await pdfParse(fileData);
+          const bufferToUse = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData);
+          console.log(`Parsing as PDF, buffer size: ${bufferToUse.length} bytes`);
+          const data = await pdfParse(bufferToUse);
           text = data.text;
           console.log(`PDF buffer parsed successfully, ${text.length} characters`);
         }
