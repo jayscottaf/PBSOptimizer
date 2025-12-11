@@ -13,6 +13,7 @@ import {
   differenceInDays,
   isBefore,
   isAfter,
+  startOfDay,
 } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -353,7 +354,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       : eventStart;
     const displayEnd = isAfter(eventEnd, weekEnd) ? weekEnd : eventEnd;
 
-    const span = differenceInDays(displayEnd, displayStart) + 1;
+    // Normalize to start-of-day to calculate calendar days, not hours
+    // This fixes pairings with duty times that don't span full days
+    const normalizedStart = startOfDay(displayStart);
+    const normalizedEnd = startOfDay(displayEnd);
+    const span = differenceInDays(normalizedEnd, normalizedStart) + 1;
+    
     const isStart =
       isSameDay(eventStart, displayStart) || isSameDay(eventStart, startDay);
 
