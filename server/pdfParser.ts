@@ -356,8 +356,8 @@ export class PDFParser {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
 
-      // Check if this line starts a new pairing (format: #7986 SA)
-      if (line.match(/^#\d{4,5}\s+[A-Z]{2}/)) {
+      // Check if this line starts a new pairing (format: #7986 SA or #L452 SU)
+      if (line.match(/^#[A-Z]?\d{3,5}\s+[A-Z]{2}/)) {
         if (currentBlock && inPairing) {
           pairingBlocks.push(currentBlock.trim());
         }
@@ -369,7 +369,7 @@ export class PDFParser {
         // Check if we've reached the end of this pairing (next pairing starts)
         if (i + 1 < lines.length) {
           const nextLine = lines[i + 1].trim();
-          if (nextLine.match(/^#\d{4,5}\s+[A-Z]{2}/)) {
+          if (nextLine.match(/^#[A-Z]?\d{3,5}\s+[A-Z]{2}/)) {
             pairingBlocks.push(currentBlock.trim());
             currentBlock = '';
             inPairing = false;
@@ -396,7 +396,7 @@ export class PDFParser {
     }
 
     // Parse the header line to get pairing number and effective dates
-    const headerMatch = lines[0].match(/^#(\d{4,5})\s+([A-Z]{2})/);
+    const headerMatch = lines[0].match(/^#([A-Z]?\d{3,5})\s+([A-Z]{2})/);
     if (!headerMatch) {
       return null;
     }
