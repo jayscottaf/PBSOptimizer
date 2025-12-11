@@ -720,15 +720,21 @@ export class PDFParser {
       }
 
       // Layover pattern: ORD 18.43/PALMER HOUSE
+      // Must have valid duration (> 0) and hotel name (at least 3 chars)
       const layoverMatch = line.match(
-        /([A-Z]{3})\s+(\d{1,2}\.\d{2})\/([A-Z\s]+)/
+        /([A-Z]{3})\s+(\d{1,2}\.\d{2})\/([A-Z][A-Z\s]+)/
       );
       if (layoverMatch) {
-        layovers.push({
-          city: layoverMatch[1],
-          duration: layoverMatch[2],
-          hotel: layoverMatch[3].trim(),
-        });
+        const duration = parseFloat(layoverMatch[2]);
+        const hotel = layoverMatch[3].trim();
+        // Only add if duration > 0 and hotel name is valid (at least 3 chars)
+        if (duration > 0 && hotel.length >= 3) {
+          layovers.push({
+            city: layoverMatch[1],
+            duration: layoverMatch[2],
+            hotel: hotel,
+          });
+        }
       }
 
       // Check-in time pattern: "CHECK-IN AT 10.35"
@@ -857,15 +863,26 @@ export class PDFParser {
       }
     }
 
+    // Get cities that appear in the route for validation
+    const routeCities = new Set(route.split('-').map(c => c.trim().toUpperCase()));
+    
     // Deduplicate layovers - keep only first occurrence of each city
+    // Also filter out cities that don't appear in the route (false positives)
     const uniqueLayovers: Layover[] = [];
     const seenCities = new Set<string>();
     for (const layover of layovers) {
-      if (!seenCities.has(layover.city)) {
+      const cityUpper = layover.city.toUpperCase();
+      // Only add if not seen before AND the city is actually in the route
+      if (!seenCities.has(cityUpper) && routeCities.has(cityUpper)) {
         uniqueLayovers.push(layover);
-        seenCities.add(layover.city);
+        seenCities.add(cityUpper);
       }
     }
+    
+    // Additional validation: max layovers should be pairingDays - 1
+    // (you can only have one layover per night, and nights = days - 1)
+    const maxAllowedLayovers = Math.max(0, pairingDays - 1);
+    const validatedLayovers = uniqueLayovers.slice(0, maxAllowedLayovers);
 
     const pairing: ParsedPairing = {
       pairingNumber,
@@ -879,7 +896,7 @@ export class PDFParser {
       sitEdpPay: sitEdpPay || undefined,
       carveouts: carveouts || undefined,
       deadheads,
-      layovers: uniqueLayovers,
+      layovers: validatedLayovers,
       flightSegments,
       fullTextBlock: block,
       holdProbability: 0, // Will be calculated

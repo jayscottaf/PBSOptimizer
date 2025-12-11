@@ -59,13 +59,25 @@ export function PairingTable({
     const routeAirports = (pairing.route || '').split('-').filter(a => a.trim());
     if (routeAirports.length === 0) return pairing.route;
 
-    // Get unique layover cities (deduplicated)
+    // Get route cities for validation
+    const routeCitiesSet = new Set(routeAirports.map(a => a.toUpperCase()));
+    
+    // Get unique layover cities (deduplicated and validated against route)
     const layoverCitiesSet = new Set<string>();
     if (pairing.layovers) {
       const layoverArray = Array.isArray(pairing.layovers) ? pairing.layovers : Object.values(pairing.layovers || {});
+      const pairingDays = pairing.pairingDays || 1;
+      const maxLayovers = Math.max(0, pairingDays - 1);
+      let layoverCount = 0;
+      
       layoverArray.forEach((l: any) => {
-        if (l && l.city) {
-          layoverCitiesSet.add(l.city.toUpperCase());
+        if (l && l.city && layoverCount < maxLayovers) {
+          const cityUpper = l.city.toUpperCase();
+          // Only add if city is in the route and not already seen
+          if (routeCitiesSet.has(cityUpper) && !layoverCitiesSet.has(cityUpper)) {
+            layoverCitiesSet.add(cityUpper);
+            layoverCount++;
+          }
         }
       });
     }
