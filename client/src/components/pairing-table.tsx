@@ -54,113 +54,98 @@ export function PairingTable({
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
 
-  // Format route with layover highlighting and DH markers
+  // Format route with day-by-day grouping, layover highlighting, and DH markers
   const formatRouteDisplay = (pairing: Pairing) => {
-    const routeAirports = (pairing.route || '').split('-').filter(a => a.trim());
-    if (routeAirports.length === 0) return pairing.route;
+    if (!pairing.flightSegments || !Array.isArray(pairing.flightSegments) || pairing.flightSegments.length === 0) {
+      return <span className="text-gray-900 dark:text-gray-100">{pairing.route || ''}</span>;
+    }
 
     // Build deadhead segments set
     const deadheadSegments = new Set<string>();
-    if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
-      pairing.flightSegments.forEach((segment: any) => {
-        if (segment.isDeadhead && segment.departure && segment.arrival) {
-          deadheadSegments.add(
-            `${segment.departure.toUpperCase()}-${segment.arrival.toUpperCase()}`
-          );
-        }
-      });
-    }
+    pairing.flightSegments.forEach((segment: any) => {
+      if (segment.isDeadhead && segment.departure && segment.arrival) {
+        deadheadSegments.add(
+          `${segment.departure.toUpperCase()}-${segment.arrival.toUpperCase()}`
+        );
+      }
+    });
 
-    // Find layover POSITIONS in the route by tracking segment-to-position mapping
-    // A layover is the arrival airport of the last flight of each day (except last day)
-    const layoverPositions = new Set<number>();
+    // Sort segments chronologically
+    const sortedSegments = [...pairing.flightSegments].sort((a: any, b: any) => {
+      const dateCompare = (a.date || 'A').localeCompare(b.date || 'A');
+      if (dateCompare !== 0) return dateCompare;
+      return (a.departureTime || '').localeCompare(b.departureTime || '');
+    });
+
+    // Group segments by day
+    const flightsByDay = new Map<string, any[]>();
+    sortedSegments.forEach((seg: any) => {
+      const day = seg.date || 'A';
+      if (!flightsByDay.has(day)) {
+        flightsByDay.set(day, []);
+      }
+      flightsByDay.get(day)!.push(seg);
+    });
+
+    const sortedDays = Array.from(flightsByDay.keys()).sort();
+    const lastDayWithFlights = sortedDays[sortedDays.length - 1];
+
+    // Build route for each day
+    const dayRoutes: { day: string; segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] }[] = [];
     
-    if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
-      // Sort segments chronologically
-      const sortedSegments = [...pairing.flightSegments].sort((a: any, b: any) => {
-        const dateCompare = (a.date || 'A').localeCompare(b.date || 'A');
-        if (dateCompare !== 0) return dateCompare;
-        return (a.departureTime || '').localeCompare(b.departureTime || '');
-      });
-
-      // Build route with position tracking for each segment arrival
-      // Track which route position each segment's arrival lands on
-      const segmentArrivalPositions: number[] = [];
-      let currentPosition = 0; // Position 0 is first departure
+    sortedDays.forEach((day, dayIdx) => {
+      const dayFlights = flightsByDay.get(day)!;
+      const segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] = [];
       
-      for (let i = 0; i < sortedSegments.length; i++) {
-        const seg = sortedSegments[i];
-        currentPosition++; // Each segment adds its arrival as the next position
-        segmentArrivalPositions.push(currentPosition);
+      dayFlights.forEach((seg: any, segIdx: number) => {
+        const departure = (seg.departure || '').toUpperCase();
+        const arrival = (seg.arrival || '').toUpperCase();
+        const segmentKey = `${departure}-${arrival}`;
+        const isDeadhead = deadheadSegments.has(segmentKey);
         
-        // Check if next segment departs from a different airport (skip in route)
-        // This handles the duplicate removal in route building
-        if (i < sortedSegments.length - 1) {
-          const nextSeg = sortedSegments[i + 1];
-          if (seg.arrival?.toUpperCase() !== nextSeg.departure?.toUpperCase()) {
-            // Route would have both, so positions align
-          }
+        // Add departure if it's the first segment of the day
+        if (segIdx === 0) {
+          segments.push({ airport: departure, isDeadhead: false, isLayover: false });
         }
-      }
-
-      // Group segments by day to find last segment of each day
-      const flightsByDay = new Map<string, { segment: any; arrivalPosition: number }[]>();
-      sortedSegments.forEach((seg: any, idx: number) => {
-        const day = seg.date || 'A';
-        if (!flightsByDay.has(day)) {
-          flightsByDay.set(day, []);
-        }
-        flightsByDay.get(day)!.push({ 
-          segment: seg, 
-          arrivalPosition: segmentArrivalPositions[idx] 
-        });
+        
+        // Add arrival - mark as layover if it's the last segment of the day (except last day)
+        const isLastSegmentOfDay = segIdx === dayFlights.length - 1;
+        const isLayover = isLastSegmentOfDay && day !== lastDayWithFlights;
+        
+        segments.push({ airport: arrival, isDeadhead, isLayover });
       });
-
-      // Get sorted days and find last segment of each day (except final day)
-      const sortedDays = Array.from(flightsByDay.keys()).sort();
-      const pairingDays = pairing.pairingDays || sortedDays.length;
-      const maxLayovers = Math.max(0, pairingDays - 1);
       
-      for (let i = 0; i < sortedDays.length - 1 && layoverPositions.size < maxLayovers; i++) {
-        const dayFlights = flightsByDay.get(sortedDays[i])!;
-        if (dayFlights.length > 0) {
-          const lastFlightOfDay = dayFlights[dayFlights.length - 1];
-          layoverPositions.add(lastFlightOfDay.arrivalPosition);
-        }
-      }
-    }
+      dayRoutes.push({ day, segments });
+    });
 
     return (
       <div className="flex flex-wrap items-center gap-1">
-        {routeAirports.map((airport, idx) => {
-          const upperAirport = airport.toUpperCase();
-          const isLayover = layoverPositions.has(idx);
-          
-          // Check if the segment FROM the previous airport TO this one is a deadhead
-          let isDeadheadLeg = false;
-          if (idx > 0) {
-            const prevAirport = routeAirports[idx - 1].toUpperCase();
-            const segmentKey = `${prevAirport}-${upperAirport}`;
-            isDeadheadLeg = deadheadSegments.has(segmentKey);
-          }
-
-          return (
-            <div key={`${airport}-${idx}`} className="flex items-center gap-1">
-              {idx > 0 && <span className="text-gray-400 dark:text-gray-600">-</span>}
-              <span
-                className={`${
-                  isDeadheadLeg ? 'text-gray-500 dark:text-gray-400 italic' : ''
-                } ${
-                  isLayover
-                    ? 'font-bold text-teal-600 dark:text-teal-400'
-                    : 'text-gray-900 dark:text-gray-100'
-                }`}
-              >
-                {isDeadheadLeg ? `(DH)${airport}` : airport}
-              </span>
-            </div>
-          );
-        })}
+        {dayRoutes.map((dayRoute, dayIdx) => (
+          <div key={dayRoute.day} className="flex items-center gap-1">
+            {dayIdx > 0 && (
+              <span className="text-gray-500 dark:text-gray-400 mx-1">|</span>
+            )}
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">
+              {dayRoute.day}:
+            </span>
+            {dayRoute.segments.map((seg, segIdx) => (
+              <div key={`${seg.airport}-${segIdx}`} className="flex items-center">
+                {segIdx > 0 && <span className="text-gray-400 dark:text-gray-600">-</span>}
+                <span
+                  className={`${
+                    seg.isDeadhead ? 'text-gray-500 dark:text-gray-400 italic' : ''
+                  } ${
+                    seg.isLayover
+                      ? 'font-bold text-teal-600 dark:text-teal-400'
+                      : seg.isDeadhead ? '' : 'text-gray-900 dark:text-gray-100'
+                  }`}
+                >
+                  {seg.isDeadhead ? `(DH)${seg.airport}` : seg.airport}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     );
   };
