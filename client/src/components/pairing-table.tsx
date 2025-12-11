@@ -70,11 +70,6 @@ export function PairingTable({
       const maxLayovers = Math.max(0, pairingDays - 1);
       let layoverCount = 0;
       
-      // Debug logging for specific pairings
-      if (['7659', '7660', '7663'].includes(pairing.pairingNumber)) {
-        console.log(`DEBUG ${pairing.pairingNumber}: pairingDays=${pairingDays}, maxLayovers=${maxLayovers}, layoverArray=`, layoverArray);
-      }
-      
       layoverArray.forEach((l: any) => {
         if (l && l.city && layoverCount < maxLayovers) {
           const cityUpper = l.city.toUpperCase();
@@ -86,9 +81,9 @@ export function PairingTable({
         }
       });
       
-      // Debug logging for specific pairings
+      // Debug logging for specific pairings - show actual cities
       if (['7659', '7660', '7663'].includes(pairing.pairingNumber)) {
-        console.log(`DEBUG ${pairing.pairingNumber}: final layoverCities=`, Array.from(layoverCitiesSet));
+        console.log(`DEBUG ${pairing.pairingNumber}: route=${pairing.route}, layoverCities=[${Array.from(layoverCitiesSet).join(',')}], routeCities=[${Array.from(routeCitiesSet).join(',')}]`);
       }
     }
     const layoverCities = layoverCitiesSet;
@@ -103,6 +98,12 @@ export function PairingTable({
           );
         }
       });
+    }
+
+    // Debug for specific pairings - show render decisions
+    if (['7659', '7660', '7663'].includes(pairing.pairingNumber)) {
+      const renderLog = routeAirports.map(a => `${a}:${layoverCities.has(a.toUpperCase()) ? 'TEAL' : 'gray'}`).join(' ');
+      console.log(`RENDER ${pairing.pairingNumber}: ${renderLog}`);
     }
 
     return (
