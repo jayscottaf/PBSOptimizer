@@ -304,6 +304,7 @@ export function PairingTable({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
       toast({
         title: 'Success',
         description: 'Pairing added to calendar successfully!',

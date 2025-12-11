@@ -143,7 +143,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
         description: 'Pairing added to calendar successfully',
       });
       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
       queryClient.refetchQueries({ queryKey: ['calendar'] });
+      queryClient.refetchQueries({ queryKey: ['calendarEvents'] });
       setIsAddedToCalendar(true);
     },
     onError: (error: any) => {
@@ -649,7 +651,9 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                         description: `Added ${starts.length} date${starts.length > 1 ? 's' : ''} to calendar.`,
                       });
                       queryClient.invalidateQueries({ queryKey: ['calendar'] });
+                      queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
                       queryClient.refetchQueries({ queryKey: ['calendar'] });
+                      queryClient.refetchQueries({ queryKey: ['calendarEvents'] });
                       setIsAddedToCalendar(true);
                     } catch (err) {
                       toast({
