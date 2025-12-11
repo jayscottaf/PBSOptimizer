@@ -59,36 +59,7 @@ export function PairingTable({
     const routeAirports = (pairing.route || '').split('-').filter(a => a.trim());
     if (routeAirports.length === 0) return pairing.route;
 
-    // Get route cities for validation
-    const routeCitiesSet = new Set(routeAirports.map(a => a.toUpperCase()));
-    
-    // Get unique layover cities (deduplicated and validated against route)
-    const layoverCitiesSet = new Set<string>();
-    if (pairing.layovers) {
-      const layoverArray = Array.isArray(pairing.layovers) ? pairing.layovers : Object.values(pairing.layovers || {});
-      const pairingDays = pairing.pairingDays || 1;
-      const maxLayovers = Math.max(0, pairingDays - 1);
-      let layoverCount = 0;
-      
-      layoverArray.forEach((l: any) => {
-        if (l && l.city && layoverCount < maxLayovers) {
-          const cityUpper = l.city.toUpperCase();
-          // Only add if city is in the route and not already seen
-          if (routeCitiesSet.has(cityUpper) && !layoverCitiesSet.has(cityUpper)) {
-            layoverCitiesSet.add(cityUpper);
-            layoverCount++;
-          }
-        }
-      });
-      
-      // Debug logging for specific pairings - show actual cities
-      if (['7658', '7659', '7660', '7661', '7662', '7663'].includes(pairing.pairingNumber)) {
-        console.log(`DEBUG ${pairing.pairingNumber}: days=${pairing.pairingDays}, maxLayovers=${maxLayovers}, layoverCities=[${Array.from(layoverCitiesSet).join(',')}]`);
-      }
-    }
-    const layoverCities = layoverCitiesSet;
-
-    // Build a set of deadhead segment pairs (e.g., "EWR-ATL")
+    // Build deadhead segments set
     const deadheadSegments = new Set<string>();
     if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
       pairing.flightSegments.forEach((segment: any) => {
@@ -100,17 +71,60 @@ export function PairingTable({
       });
     }
 
-    // Debug for specific pairings - show render decisions
-    if (['7658', '7659', '7660', '7661', '7662', '7663'].includes(pairing.pairingNumber)) {
-      const renderLog = routeAirports.map(a => `${a}:${layoverCities.has(a.toUpperCase()) ? 'TEAL' : 'gray'}`).join(' ');
-      console.log(`RENDER ${pairing.pairingNumber}: ${renderLog}`);
+    // Find layover POSITIONS in the route (not just cities)
+    // A layover is the arrival airport of the last flight of each day (except last day)
+    const layoverPositions = new Set<number>();
+    
+    if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
+      // Group flights by day
+      const flightsByDay = new Map<string, any[]>();
+      pairing.flightSegments.forEach((seg: any) => {
+        const day = seg.date || 'A';
+        if (!flightsByDay.has(day)) {
+          flightsByDay.set(day, []);
+        }
+        flightsByDay.get(day)!.push(seg);
+      });
+
+      // Sort days and get the last flight of each day (except last day)
+      const sortedDays = Array.from(flightsByDay.keys()).sort();
+      const pairingDays = pairing.pairingDays || sortedDays.length;
+      const maxLayovers = Math.max(0, pairingDays - 1);
+      
+      // Get arrival airports of last flight of each day (except final day)
+      const layoverAirports: string[] = [];
+      for (let i = 0; i < sortedDays.length - 1 && layoverAirports.length < maxLayovers; i++) {
+        const dayFlights = flightsByDay.get(sortedDays[i])!;
+        if (dayFlights.length > 0) {
+          const lastFlight = dayFlights[dayFlights.length - 1];
+          if (lastFlight.arrival) {
+            layoverAirports.push(lastFlight.arrival.toUpperCase());
+          }
+        }
+      }
+
+      // Match layover airports to route positions
+      // Track which layovers we've matched to avoid double-counting
+      let layoverIdx = 0;
+      for (let routeIdx = 0; routeIdx < routeAirports.length && layoverIdx < layoverAirports.length; routeIdx++) {
+        const routeCity = routeAirports[routeIdx].toUpperCase();
+        if (routeCity === layoverAirports[layoverIdx]) {
+          layoverPositions.add(routeIdx);
+          layoverIdx++;
+        }
+      }
+
+      // Debug for specific pairings
+      if (['7658', '7659', '7660', '7661', '7662', '7663'].includes(pairing.pairingNumber)) {
+        console.log(`DEBUG ${pairing.pairingNumber}: days=${pairingDays}, layoverAirports=[${layoverAirports.join(',')}], layoverPositions=[${Array.from(layoverPositions).join(',')}]`);
+      }
     }
 
     return (
       <div className="flex flex-wrap items-center gap-1">
         {routeAirports.map((airport, idx) => {
           const upperAirport = airport.toUpperCase();
-          const isLayover = layoverCities.has(upperAirport);
+          const isLayover = layoverPositions.has(idx);
           
           // Check if the segment FROM the previous airport TO this one is a deadhead
           let isDeadheadLeg = false;
