@@ -434,9 +434,9 @@ export class PDFParser {
 
       // Enhanced flight pattern detection to capture all flights within each day
       // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
-      // Handle asterisks and extra formatting: "A    1188    LGA 0715  ORD 0851* 2.36"
+      // Handle asterisks before/after airports: "D 2572 *SAN 1525 SEA 1840 3.15" or "A 1188 LGA 0715 ORD 0851* 2.36"
       const dayFlightMatch = line.match(
-        /^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
+        /^([A-E])\s*(?:DH\s+)?(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
       );
 
       if (dayFlightMatch) {
@@ -486,9 +486,9 @@ export class PDFParser {
             break;
           }
 
-          // Match continuation flights: "    2974    IAD 1014 ATL 1200 1.46"
+          // Match continuation flights: "    2974    IAD 1014 ATL 1200 1.46" or "    2572   *SAN 1525  SEA 1840  3.15"
           const contFlightMatch = nextLine.match(
-            /^\s*(?:DH\s+)?(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*?)?\s+(\d{1,2}\.\d{2})/
+            /^\s*(?:DH\s+)?(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*?)?\s+(\d{1,2}\.\d{2})/
           );
           if (contFlightMatch) {
             const isContDeadhead = nextLine.includes('DH');
@@ -513,9 +513,9 @@ export class PDFParser {
           }
 
           // Match multi-leg format (same flight, different segment): "        IAD 1014 ATL 1200 1.46"
-          // Also handle formats with additional data: "                 ORD 1859  LGA 2230  2.31           M 10.30/13.00 10.30/12.30 2"
+          // Also handle formats with additional data and asterisks: "                 ORD 1859  LGA 2230  2.31" or "*SAN 1525 SEA 1840"
           const multiLegMatch = nextLine.match(
-            /^\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
+            /^\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
           );
           if (multiLegMatch && flightSegments.length > 0) {
             // This is another leg of the previous flight
@@ -622,10 +622,10 @@ export class PDFParser {
         }
       }
 
-      // Pattern 2: Day letters that start new days: "D      2275    PDX 0715  SEA 0813   .58"
-      // Handle both ".58" and "0.58" formats
+      // Pattern 2: Day letters that start new days: "D      2275    PDX 0715  SEA 0813   .58" or "D 2572 *SAN 1525 SEA 1840 3.15"
+      // Handle both ".58" and "0.58" formats, and asterisks before airports
       const dayStartMatch = line.match(
-        /^([A-E])\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{2})/
+        /^([A-E])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{2})/
       );
       if (dayStartMatch) {
         currentDay = dayStartMatch[1];
@@ -660,9 +660,9 @@ export class PDFParser {
         }
       }
 
-      // Pattern 3: Single day flight at start of line: "E       454    DFW 0710  JFK 1200  3.50"
+      // Pattern 3: Single day flight at start of line: "E       454    DFW 0710  JFK 1200  3.50" or with asterisks
       const singleDayFlight = line.match(
-        /^([A-E])\s+(\d{3,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
+        /^([A-E])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
       );
       if (singleDayFlight && !dayStartMatch) {
         // Avoid duplicate processing
@@ -693,9 +693,9 @@ export class PDFParser {
         }
       }
 
-      // Pattern 4: Handle standalone continuation flights without day letters: "ORD 1859  LGA 2230  2.31"
+      // Pattern 4: Handle standalone continuation flights without day letters: "ORD 1859  LGA 2230  2.31" or with asterisks
       const continuationFlightMatch = line.match(
-        /^\s*([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
+        /^\s*\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
       );
       if (
         continuationFlightMatch &&
