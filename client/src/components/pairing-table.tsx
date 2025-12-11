@@ -114,10 +114,6 @@ export function PairingTable({
         }
       }
 
-      // Debug for specific pairings
-      if (['7658', '7659', '7660', '7661', '7662', '7663'].includes(pairing.pairingNumber)) {
-        console.log(`DEBUG ${pairing.pairingNumber}: days=${pairingDays}, layoverAirports=[${layoverAirports.join(',')}], layoverPositions=[${Array.from(layoverPositions).join(',')}]`);
-      }
     }
 
     return (
