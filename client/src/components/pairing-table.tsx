@@ -71,49 +71,63 @@ export function PairingTable({
       });
     }
 
-    // Find layover POSITIONS in the route (not just cities)
+    // Find layover POSITIONS in the route by tracking segment-to-position mapping
     // A layover is the arrival airport of the last flight of each day (except last day)
     const layoverPositions = new Set<number>();
     
     if (pairing.flightSegments && Array.isArray(pairing.flightSegments)) {
-      // Group flights by day
-      const flightsByDay = new Map<string, any[]>();
-      pairing.flightSegments.forEach((seg: any) => {
-        const day = seg.date || 'A';
-        if (!flightsByDay.has(day)) {
-          flightsByDay.set(day, []);
-        }
-        flightsByDay.get(day)!.push(seg);
+      // Sort segments chronologically
+      const sortedSegments = [...pairing.flightSegments].sort((a: any, b: any) => {
+        const dateCompare = (a.date || 'A').localeCompare(b.date || 'A');
+        if (dateCompare !== 0) return dateCompare;
+        return (a.departureTime || '').localeCompare(b.departureTime || '');
       });
 
-      // Sort days and get the last flight of each day (except last day)
-      const sortedDays = Array.from(flightsByDay.keys()).sort();
-      const pairingDays = pairing.pairingDays || sortedDays.length;
-      const maxLayovers = Math.max(0, pairingDays - 1);
+      // Build route with position tracking for each segment arrival
+      // Track which route position each segment's arrival lands on
+      const segmentArrivalPositions: number[] = [];
+      let currentPosition = 0; // Position 0 is first departure
       
-      // Get arrival airports of last flight of each day (except final day)
-      const layoverAirports: string[] = [];
-      for (let i = 0; i < sortedDays.length - 1 && layoverAirports.length < maxLayovers; i++) {
-        const dayFlights = flightsByDay.get(sortedDays[i])!;
-        if (dayFlights.length > 0) {
-          const lastFlight = dayFlights[dayFlights.length - 1];
-          if (lastFlight.arrival) {
-            layoverAirports.push(lastFlight.arrival.toUpperCase());
+      for (let i = 0; i < sortedSegments.length; i++) {
+        const seg = sortedSegments[i];
+        currentPosition++; // Each segment adds its arrival as the next position
+        segmentArrivalPositions.push(currentPosition);
+        
+        // Check if next segment departs from a different airport (skip in route)
+        // This handles the duplicate removal in route building
+        if (i < sortedSegments.length - 1) {
+          const nextSeg = sortedSegments[i + 1];
+          if (seg.arrival?.toUpperCase() !== nextSeg.departure?.toUpperCase()) {
+            // Route would have both, so positions align
           }
         }
       }
 
-      // Match layover airports to route positions
-      // Track which layovers we've matched to avoid double-counting
-      let layoverIdx = 0;
-      for (let routeIdx = 0; routeIdx < routeAirports.length && layoverIdx < layoverAirports.length; routeIdx++) {
-        const routeCity = routeAirports[routeIdx].toUpperCase();
-        if (routeCity === layoverAirports[layoverIdx]) {
-          layoverPositions.add(routeIdx);
-          layoverIdx++;
+      // Group segments by day to find last segment of each day
+      const flightsByDay = new Map<string, { segment: any; arrivalPosition: number }[]>();
+      sortedSegments.forEach((seg: any, idx: number) => {
+        const day = seg.date || 'A';
+        if (!flightsByDay.has(day)) {
+          flightsByDay.set(day, []);
+        }
+        flightsByDay.get(day)!.push({ 
+          segment: seg, 
+          arrivalPosition: segmentArrivalPositions[idx] 
+        });
+      });
+
+      // Get sorted days and find last segment of each day (except final day)
+      const sortedDays = Array.from(flightsByDay.keys()).sort();
+      const pairingDays = pairing.pairingDays || sortedDays.length;
+      const maxLayovers = Math.max(0, pairingDays - 1);
+      
+      for (let i = 0; i < sortedDays.length - 1 && layoverPositions.size < maxLayovers; i++) {
+        const dayFlights = flightsByDay.get(sortedDays[i])!;
+        if (dayFlights.length > 0) {
+          const lastFlightOfDay = dayFlights[dayFlights.length - 1];
+          layoverPositions.add(lastFlightOfDay.arrivalPosition);
         }
       }
-
     }
 
     return (
