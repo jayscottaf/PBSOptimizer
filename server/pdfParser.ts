@@ -396,7 +396,8 @@ export class PDFParser {
     }
 
     // Parse the header line to get pairing number and effective dates
-    const headerMatch = lines[0].match(/^#([A-Z]?\d{3,5})\s+([A-Z]{2})/);
+    // Letter prefixes like #L452, #R523 should strip the letter - only keep the numeric portion
+    const headerMatch = lines[0].match(/^#[A-Z]?(\d{3,5})\s+([A-Z]{2})/);
     if (!headerMatch) {
       return null;
     }
