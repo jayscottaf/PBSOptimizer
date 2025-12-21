@@ -38,6 +38,7 @@ import {
   insertBidPackageSchema,
   insertPairingSchema,
   bidHistory,
+  type Pairing,
 } from '../shared/schema';
 import * as fs from 'fs/promises';
 
@@ -293,11 +294,52 @@ export async function registerRoutes(app: Express) {
       const packages = await withDatabaseRetry(async () => {
         return await storage.getBidPackages();
       });
+      
+      // Mark the most recent package as current (for UI display)
+      const packagesWithCurrent = packages.map((pkg, index) => ({
+        ...pkg,
+        isCurrent: index === 0, // First one is most recent (ordered by uploadedAt desc)
+      }));
 
-      res.json(packages);
+      res.json(packagesWithCurrent);
     } catch (error) {
       console.error('Error fetching bid packages:', error);
       res.status(500).json({ error: 'Failed to fetch bid packages' });
+    }
+  });
+  
+  // Get data health stats (bid package and history counts)
+  app.get('/api/data-health', async (req, res) => {
+    try {
+      const packages = await storage.getBidPackages();
+      const historyCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory);
+      const linkedCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory).where(sql`linked_pairing_id IS NOT NULL`);
+      
+      // Get current (most recent) package
+      const currentPackage = packages[0];
+      
+      res.json({
+        bidPackages: {
+          total: packages.length,
+          current: currentPackage ? `${currentPackage.month} ${currentPackage.year}` : null,
+          list: packages.map(p => ({
+            id: p.id,
+            month: p.month,
+            year: p.year,
+            base: p.base,
+            aircraft: p.aircraft,
+            isCurrent: p === currentPackage,
+          })),
+        },
+        historicalRecords: {
+          total: historyCount[0]?.count || 0,
+          linkedToBidPackage: linkedCount[0]?.count || 0,
+          unlinked: (historyCount[0]?.count || 0) - (linkedCount[0]?.count || 0),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching data health:', error);
+      res.status(500).json({ error: 'Failed to fetch data health' });
     }
   });
 
@@ -349,14 +391,24 @@ export async function registerRoutes(app: Express) {
 
       const { name, month, year, base, aircraft } = req.body;
 
-      // Delete all existing bid packages and their associated data
+      // Only delete bid package if one with same month/year/base/aircraft already exists
+      // This prevents duplicates while keeping historical packages
       const existingPackages = await storage.getBidPackages();
-      if (existingPackages.length > 0) {
+      const duplicatePackage = existingPackages.find(
+        pkg => pkg.month === month && 
+               pkg.year === parseInt(year) && 
+               pkg.base === base && 
+               pkg.aircraft === aircraft
+      );
+      
+      if (duplicatePackage) {
         console.log(
-          `Removing ${existingPackages.length} existing bid packages before uploading new one`
+          `Replacing existing bid package for ${month} ${year} ${base} ${aircraft} (ID: ${duplicatePackage.id})`
         );
-        await Promise.all(
-          existingPackages.map(pkg => storage.deleteBidPackage(pkg.id))
+        await storage.deleteBidPackage(duplicatePackage.id);
+      } else {
+        console.log(
+          `Adding new bid package for ${month} ${year} ${base} ${aircraft} (keeping ${existingPackages.length} existing packages)`
         );
       }
 
@@ -434,9 +486,66 @@ export async function registerRoutes(app: Express) {
           });
         }
 
+        // Find the matching bid package to look up pairing details
+        const allPackages = await storage.getBidPackages();
+        const matchingPackage = allPackages.find(
+          pkg => pkg.month === metadata.month && 
+                 pkg.year === metadata.year && 
+                 pkg.base === metadata.base && 
+                 pkg.aircraft === metadata.aircraft
+        );
+        
+        // Get all pairings from the matching package for efficient lookup
+        let packagePairings: Pairing[] = [];
+        if (matchingPackage) {
+          packagePairings = await storage.getPairings(matchingPackage.id);
+          console.log(`Found matching bid package (ID: ${matchingPackage.id}) with ${packagePairings.length} pairings`);
+        } else {
+          console.log(`WARNING: No matching bid package found for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
+          console.log(`Historical records will be stored without leg/layover data from package`);
+        }
+        
+        // Create a map for fast pairing lookup
+        const pairingMap = new Map<string, Pairing>();
+        for (const p of packagePairings) {
+          pairingMap.set(p.pairingNumber, p);
+        }
+        
+        // Helper function to compute leg signature from flight segments
+        const computeLegSignature = (segments: any[]): string => {
+          if (!segments || segments.length === 0) return '';
+          // Build sequence: departure -> arrival -> next departure -> ... -> final arrival
+          const legs: string[] = [];
+          for (let i = 0; i < segments.length; i++) {
+            if (i === 0) {
+              legs.push(segments[i].departure);
+            }
+            legs.push(segments[i].arrival);
+          }
+          return legs.join('-');
+        };
+        
+        // Helper function to get turn destination for 1-day trips
+        const getTurnDestination = (segments: any[], pairingDays: number): string | null => {
+          if (pairingDays !== 1 || !segments || segments.length === 0) return null;
+          // For a turn, the destination is typically the furthest point from base
+          // Usually the arrival of the first leg that's not a return
+          const arrivals = segments.map((s: any) => s.arrival);
+          const departures = segments.map((s: any) => s.departure);
+          // The base is the first departure (and last arrival)
+          const base = departures[0];
+          // Find destinations that aren't the base
+          const destinations = arrivals.filter((a: string) => a !== base);
+          // Return unique destinations joined, or the first one
+          const uniqueDests = [...new Set(destinations)];
+          return uniqueDests.length > 0 ? uniqueDests.join('-') : null;
+        };
+        
         // Store awards in bidHistory table
         let storedCount = 0;
         let skippedCount = 0;
+        let linkedCount = 0;
+        let unlinkedCount = 0;
         console.log(`Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
 
         for (const award of awards) {
@@ -474,8 +583,46 @@ export async function registerRoutes(app: Express) {
             const totalCredit = parseFloat(
               award.totalCredit.replace(':', '.').replace(/[^\d.]/g, '')
             );
+            
+            // Look up matching pairing from bid package
+            const matchingPairing = pairingMap.get(award.pairingNumber);
+            let linkedPairingId: number | null = null;
+            let layoverCitiesFromPackage: string | null = null;
+            let turnDestination: string | null = null;
+            let legSignature: string | null = null;
+            
+            if (matchingPairing) {
+              linkedPairingId = matchingPairing.id;
+              linkedCount++;
+              
+              // Extract layovers from pairing
+              const layovers = typeof matchingPairing.layovers === 'string' 
+                ? JSON.parse(matchingPairing.layovers) 
+                : matchingPairing.layovers;
+              if (Array.isArray(layovers) && layovers.length > 0) {
+                layoverCitiesFromPackage = layovers.map((l: any) => l.city).sort().join('-');
+              }
+              
+              // Extract flight segments and compute signatures
+              const segments = typeof matchingPairing.flightSegments === 'string'
+                ? JSON.parse(matchingPairing.flightSegments)
+                : matchingPairing.flightSegments;
+              
+              if (Array.isArray(segments)) {
+                legSignature = computeLegSignature(segments);
+                turnDestination = getTurnDestination(segments, matchingPairing.pairingDays || award.pairingDays);
+              }
+              
+              // Update fingerprint with real data from package
+              if (layoverCitiesFromPackage) {
+                fingerprint.layoverCities = layoverCitiesFromPackage.split('-').sort();
+                fingerprint.layoverPattern = layoverCitiesFromPackage;
+              }
+            } else {
+              unlinkedCount++;
+            }
 
-            // Insert into database
+            // Insert into database with new fields
             await db.insert(bidHistory).values({
               pairingNumber: award.pairingNumber,
               month: metadata.month,
@@ -492,6 +639,10 @@ export async function registerRoutes(app: Express) {
               layoverCities: award.layoverCities,
               checkInDate: award.checkInDate,
               checkOutDate: award.checkOutDate,
+              linkedPairingId,
+              layoverCitiesFromPackage,
+              turnDestination,
+              legSignature,
               tripFingerprint: fingerprint,
               awardedAt: new Date(`${metadata.year}-${monthToNumber(metadata.month)}-01`),
             });
@@ -507,22 +658,27 @@ export async function registerRoutes(app: Express) {
 
         // No need to clean up - file is in memory and will be garbage collected
 
-        console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped`);
+        console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`);
 
         res.json({
           success: true,
           message: skippedCount > 0
-            ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped`
-            : `Reasons report processed successfully`,
+            ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package`
+            : `Reasons report processed: ${storedCount} awards stored, ${linkedCount} linked to bid package`,
           stats: {
             totalParsed: awards.length,
             stored: storedCount,
             skipped: skippedCount,
+            linked: linkedCount,
+            unlinked: unlinkedCount,
             base: metadata.base,
             aircraft: metadata.aircraft,
             month: metadata.month,
             year: metadata.year,
           },
+          warning: unlinkedCount > 0 && linkedCount === 0
+            ? `No matching bid package found for ${metadata.month} ${metadata.year}. Upload the bid package first for accurate leg/layover data.`
+            : undefined,
         });
       } catch (error) {
         console.error('Error processing reasons report:', error);
@@ -1003,6 +1159,29 @@ export async function registerRoutes(app: Express) {
       const creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
       const pairingDays = currentPairing.pairingDays || 1;
       
+      // Compute turn destination for current pairing (for 1-day trip matching)
+      let currentTurnDestination: string | null = null;
+      let currentLegSignature: string | null = null;
+      if (pairingDays === 1 && Array.isArray(parsedPairing.flightSegments)) {
+        const segments = parsedPairing.flightSegments;
+        // Compute leg signature
+        const legs: string[] = [];
+        for (let i = 0; i < segments.length; i++) {
+          if (i === 0) legs.push(segments[i].departure);
+          legs.push(segments[i].arrival);
+        }
+        currentLegSignature = legs.join('-');
+        
+        // Get turn destination (non-base airports)
+        const base = segments[0]?.departure;
+        const destinations = segments.map((s: any) => s.arrival).filter((a: string) => a !== base);
+        const uniqueDests = [...new Set(destinations)];
+        currentTurnDestination = uniqueDests.length > 0 ? uniqueDests.join('-') : null;
+      }
+      
+      // Compute layover pattern for current pairing (for multi-day trip matching)
+      const currentLayoverPattern = layoverCities.length > 0 ? layoverCities.join('-') : 'none';
+      
       // Get all historical data - fingerprint matching already ensures relevant trips match
       // No base/aircraft filter needed since similarity scoring handles relevance
       const historicalData = await db.select().from(bidHistory);
@@ -1093,14 +1272,40 @@ export async function registerRoutes(app: Express) {
                                  history.month === currentMonth && 
                                  history.year === currentYear;
           
-          // Check if this is the same pairing number (any month/year)
-          const isSamePairingNumber = history.pairingNumber === currentPairing.pairingNumber;
+          // For ONE-DAY TRIPS: Match by turn destination (the airports visited)
+          // This allows matching turns to the same city across different months
+          // e.g., a BOS turn in January should match a BOS turn in December
+          if (pairingDays === 1) {
+            // Get historical turn destination from the new field
+            const histTurnDest = history.turnDestination;
+            const histLegSig = history.legSignature;
+            
+            // If historical record has leg signature, match by that (most accurate)
+            // Otherwise, if it has turn destination, match by that
+            // If neither exists (old data without bid package), skip unless same pairing number in same month
+            if (histLegSig && currentLegSignature) {
+              // Exact leg sequence match
+              if (histLegSig !== currentLegSignature) {
+                continue; // Different leg sequence - not a match
+              }
+            } else if (histTurnDest && currentTurnDestination) {
+              // Turn destination match
+              if (histTurnDest !== currentTurnDestination) {
+                continue; // Different destinations - not a match
+              }
+            } else if (!isSamePairing) {
+              // No leg data available - only match if it's the exact same pairing from same month
+              // This handles legacy data that wasn't linked to a bid package
+              continue;
+            }
+          }
           
-          // For ONE-DAY TRIPS: Only match records with the same pairing number
-          // This is because one-day trips have no layovers, so we can't verify the route matches
-          // Different pairing numbers = different routes (e.g., JFK-BOS-JFK vs JFK-MIA-JFK)
-          if (pairingDays === 1 && !isSamePairingNumber) {
-            continue; // Skip - can't verify route match for 1-day trips with different pairing numbers
+          // For MULTI-DAY TRIPS: Use layover cities from package if available
+          if (pairingDays > 1 && history.layoverCitiesFromPackage) {
+            // Override fingerprint with accurate layover data from bid package
+            const packageLayovers = history.layoverCitiesFromPackage.split('-').sort();
+            histFingerprint.layoverCities = packageLayovers;
+            histFingerprint.layoverPattern = packageLayovers.join('-');
           }
           
           let similarity: { score: number; confidence: string; breakdown: any };

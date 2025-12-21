@@ -103,16 +103,28 @@ export function ReasonsReportUpload({
 
       const result = await response.json();
 
-      // Build description with skipped info if applicable
+      // Build description with skipped and linking info
       let description = `Processed ${result.stats.stored} new awards from ${result.stats.month} ${result.stats.year} (${result.stats.base} ${result.stats.aircraft})`;
       if (result.stats.skipped > 0) {
         description += `. ${result.stats.skipped} duplicates skipped.`;
+      }
+      if (result.stats.linked > 0) {
+        description += ` ${result.stats.linked} linked to bid package.`;
       }
 
       toast({
         title: 'Upload successful',
         description,
       });
+      
+      // Show warning if no bid package was found
+      if (result.warning) {
+        toast({
+          title: 'Warning',
+          description: result.warning,
+          variant: 'destructive',
+        });
+      }
 
       // Refresh the uploaded reports list
       fetchUploadedReports();

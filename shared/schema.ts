@@ -84,6 +84,14 @@ export const bidHistory = pgTable('bid_history', {
   checkInDate: text('check_in_date'), // e.g., "10/07 Tue 05:59"
   checkOutDate: text('check_out_date'), // e.g., "10/09 Thu 11:55"
 
+  // Link to actual pairing from bid package (for full flight segment data)
+  linkedPairingId: integer('linked_pairing_id').references(() => pairings.id),
+  
+  // Copied from linked pairing for efficient matching
+  layoverCitiesFromPackage: text('layover_cities_from_package'), // Actual layovers from bid package
+  turnDestination: text('turn_destination'), // For 1-day trips: the turnaround airport (e.g., "BOS")
+  legSignature: text('leg_signature'), // Full leg sequence (e.g., "LGA-BOS-LGA" or "LGA-ORD-LGA-JAX-LGA")
+
   // Trip fingerprint (computed from characteristics)
   tripFingerprint: jsonb('trip_fingerprint'), // Structured fingerprint for matching
 
