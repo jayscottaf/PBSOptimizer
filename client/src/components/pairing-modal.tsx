@@ -402,7 +402,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                           </div>
                           
                           {/* Match breakdown */}
-                          <div className="grid grid-cols-5 gap-1 text-xs">
+                          <div className="grid grid-cols-6 gap-1 text-xs">
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.layoverMatch)}%
@@ -414,6 +414,12 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                                 {Math.round(match.breakdown.daysMatch)}%
                               </div>
                               <div className="text-gray-500 dark:text-gray-400">Days</div>
+                            </div>
+                            <div className="text-center">
+                              <div className={`font-semibold ${(match.breakdown.seasonMatch ?? 0) >= 80 ? 'text-green-600' : (match.breakdown.seasonMatch ?? 0) >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.seasonMatch ?? 0)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Season</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.creditMatch >= 80 ? 'text-green-600' : match.breakdown.creditMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>

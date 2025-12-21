@@ -1006,6 +1006,7 @@ export async function registerRoutes(app: Express) {
           timeMatch: number;
           creditMatch: number;
           efficiencyMatch: number;
+          seasonMatch: number;
         };
         historicalLayovers: string;
         historicalDays: number;

@@ -9,13 +9,61 @@ export interface SimilarityResult {
     timeMatch: number;
     creditMatch: number;
     efficiencyMatch: number;
+    seasonMatch: number;
   };
 }
 
+type Season = 'winter' | 'spring' | 'summer' | 'fall';
+
+const MONTH_NAME_TO_NUMBER: Record<string, number> = {
+  'jan': 1, 'january': 1,
+  'feb': 2, 'february': 2,
+  'mar': 3, 'march': 3,
+  'apr': 4, 'april': 4,
+  'may': 5,
+  'jun': 6, 'june': 6,
+  'jul': 7, 'july': 7,
+  'aug': 8, 'august': 8,
+  'sep': 9, 'sept': 9, 'september': 9,
+  'oct': 10, 'october': 10,
+  'nov': 11, 'november': 11,
+  'dec': 12, 'december': 12,
+};
+
 export class TripMatcher {
+  /**
+   * Get season from month (supports numeric 1-12 or string month names)
+   */
+  private static getSeason(month: number | string | undefined): Season {
+    let numericMonth: number;
+    
+    if (typeof month === 'string') {
+      // Try to parse as string month name
+      numericMonth = MONTH_NAME_TO_NUMBER[month.toLowerCase()] || parseInt(month) || new Date().getMonth() + 1;
+    } else if (typeof month === 'number') {
+      numericMonth = month;
+    } else {
+      // Default to current month
+      numericMonth = new Date().getMonth() + 1;
+    }
+    
+    if (numericMonth === 12 || numericMonth === 1 || numericMonth === 2) return 'winter';
+    if (numericMonth >= 3 && numericMonth <= 5) return 'spring';
+    if (numericMonth >= 6 && numericMonth <= 8) return 'summer';
+    return 'fall'; // 9, 10, 11
+  }
+
   /**
    * Calculate similarity between two trip fingerprints
    * Returns a score from 0-100 with confidence level
+   * 
+   * Weights:
+   * - Layovers: 35% (most important - which cities you visit)
+   * - Days: 25% (trip length preference)
+   * - Times: 15% (check-in/check-out time preferences)
+   * - Season: 10% (seasonal patterns - pilots may prefer different trips by season)
+   * - Credit: 10% (pay hours preference)
+   * - Efficiency: 5% (credit per day preference)
    */
   static calculateSimilarity(
     trip1: TripFingerprint,
@@ -27,9 +75,10 @@ export class TripMatcher {
       timeMatch: 0,
       creditMatch: 0,
       efficiencyMatch: 0,
+      seasonMatch: 0,
     };
 
-    // 1. Layover pattern match (40% weight) - most important
+    // 1. Layover pattern match (35% weight) - most important
     if (trip1.layoverPattern === trip2.layoverPattern) {
       breakdown.layoverMatch = 100; // Exact match
     } else {
@@ -85,7 +134,28 @@ export class TripMatcher {
 
     breakdown.timeMatch = timeScore;
 
-    // 4. Credit hours bucket match (10% weight)
+    // 4. Season match (10% weight) - compare seasons for seasonal preference patterns
+    const season1 = this.getSeason(trip1.checkInMonth);
+    const season2 = this.getSeason(trip2.checkInMonth);
+    
+    if (season1 === season2) {
+      breakdown.seasonMatch = 100; // Same season = full match
+    } else {
+      // Adjacent seasons get partial credit
+      const seasonOrder: Season[] = ['winter', 'spring', 'summer', 'fall'];
+      const idx1 = seasonOrder.indexOf(season1);
+      const idx2 = seasonOrder.indexOf(season2);
+      const diff = Math.abs(idx1 - idx2);
+      
+      // Handle wrap-around (winter-fall are adjacent)
+      if (diff === 1 || diff === 3) {
+        breakdown.seasonMatch = 50; // Adjacent season
+      } else {
+        breakdown.seasonMatch = 0; // Opposite season (e.g., winter vs summer)
+      }
+    }
+
+    // 5. Credit hours bucket match (10% weight)
     if (trip1.creditBucket === trip2.creditBucket) {
       breakdown.creditMatch = 100;
     } else {
@@ -93,7 +163,7 @@ export class TripMatcher {
       breakdown.creditMatch = Math.max(0, 100 - creditDiff * 10);
     }
 
-    // 5. Efficiency bucket match (10% weight)
+    // 6. Efficiency bucket match (5% weight)
     if (trip1.efficiencyBucket === trip2.efficiencyBucket) {
       breakdown.efficiencyMatch = 100;
     } else {
@@ -102,12 +172,14 @@ export class TripMatcher {
     }
 
     // Calculate weighted score
+    // Layovers 35%, Days 25%, Times 15%, Season 10%, Credit 10%, Efficiency 5%
     const score =
-      breakdown.layoverMatch * 0.4 +
+      breakdown.layoverMatch * 0.35 +
       breakdown.daysMatch * 0.25 +
       breakdown.timeMatch * 0.15 +
-      breakdown.creditMatch * 0.1 +
-      breakdown.efficiencyMatch * 0.1;
+      breakdown.seasonMatch * 0.10 +
+      breakdown.creditMatch * 0.10 +
+      breakdown.efficiencyMatch * 0.05;
 
     // Determine confidence level
     let confidence: 'exact' | 'high' | 'medium' | 'low';
