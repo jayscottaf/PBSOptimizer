@@ -506,13 +506,18 @@ export async function registerRoutes(app: Express) {
 
       // Only delete bid package if one with same month/year/base/aircraft already exists
       // This prevents duplicates while keeping historical packages
+      // Use normalized month and aircraft for comparison to handle format variations
       const existingPackages = await storage.getBidPackages();
-      const duplicatePackage = existingPackages.find(
-        pkg => pkg.month === month && 
+      const { baseType: uploadAircraftBase } = parseAircraftCode(aircraft);
+      const uploadMonthNorm = normalizeMonth(month);
+      const duplicatePackage = existingPackages.find(pkg => {
+        const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
+        const pkgMonthNorm = normalizeMonth(pkg.month);
+        return pkgMonthNorm === uploadMonthNorm && 
                pkg.year === parseInt(year) && 
                pkg.base === base && 
-               pkg.aircraft === aircraft
-      );
+               pkgAircraftBase === uploadAircraftBase;
+      });
       
       if (duplicatePackage) {
         console.log(
@@ -544,7 +549,50 @@ export async function registerRoutes(app: Express) {
             `File parsing completed for bid package ${bidPackage.id}`
           );
           // Status is set to 'completed' inside parseFile() after all batch inserts finish
-          // Removed duplicate status update that was causing race condition
+          
+          // Link any existing unlinked bid_history records to the new pairings
+          try {
+            const pairings = await storage.getPairings(bidPackage.id);
+            if (pairings.length > 0) {
+              // Find unlinked bid_history records that match this package
+              const { baseType: pkgAircraftBase } = parseAircraftCode(bidPackage.aircraft);
+              const pkgMonthNorm = normalizeMonth(bidPackage.month);
+              
+              // Get all unlinked history records for matching month/year/base
+              const unlinkedRecords = await db
+                .select()
+                .from(bidHistory)
+                .where(sql`linked_pairing_id IS NULL`);
+              
+              let linkedCount = 0;
+              for (const record of unlinkedRecords) {
+                const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
+                const histMonthNorm = normalizeMonth(record.month);
+                
+                // Check if this record matches the bid package
+                if (histMonthNorm === pkgMonthNorm && 
+                    record.year === bidPackage.year && 
+                    record.base === bidPackage.base && 
+                    histAircraftBase === pkgAircraftBase) {
+                  // Find matching pairing by number
+                  const matchingPairing = pairings.find(p => p.pairingNumber === record.pairingNumber);
+                  if (matchingPairing) {
+                    await db
+                      .update(bidHistory)
+                      .set({ linkedPairingId: matchingPairing.id })
+                      .where(sql`id = ${record.id}`);
+                    linkedCount++;
+                  }
+                }
+              }
+              
+              if (linkedCount > 0) {
+                console.log(`Linked ${linkedCount} existing bid_history records to bid package ${bidPackage.id}`);
+              }
+            }
+          } catch (linkError) {
+            console.error('Error linking existing bid_history records:', linkError);
+          }
         })
         .catch(async error => {
           console.error(
