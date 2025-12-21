@@ -998,6 +998,7 @@ export async function registerRoutes(app: Express) {
         month: string;
         year: number;
         juniorHolderSeniority: number;
+        checkInDate?: string;
         similarity: number;
         confidence: string;
         breakdown: {
@@ -1093,6 +1094,7 @@ export async function registerRoutes(app: Express) {
               month: history.month,
               year: history.year,
               juniorHolderSeniority: history.juniorHolderSeniority,
+              checkInDate: history.checkInDate ?? undefined, // Include check-in date for grouping
               similarity: similarity.score,
               confidence: similarity.confidence,
               breakdown: similarity.breakdown,
@@ -1104,10 +1106,110 @@ export async function registerRoutes(app: Express) {
         }
       }
       
-      // Sort by similarity (highest first)
-      matches.sort((a, b) => b.similarity - a.similarity);
+      // Group matches by pairing number + month + year
+      // This consolidates multiple awards of the same pairing (different pilots/dates)
+      const groupedMatches = new Map<string, {
+        pairingNumber: string;
+        month: string;
+        year: number;
+        similarity: number;
+        confidence: string;
+        breakdown: typeof matches[0]['breakdown'];
+        historicalLayovers: string;
+        historicalDays: number;
+        historicalCredit: string;
+        awards: Array<{ seniority: number; checkInDate?: string }>;
+        isExactPairing: boolean; // True if same pairing number as current
+      }>();
       
-      // Return top 5 matches with current pairing info for comparison
+      for (const match of matches) {
+        const key = `${match.pairingNumber}-${match.month}-${match.year}`;
+        const existing = groupedMatches.get(key);
+        
+        if (existing) {
+          // Add this award to the existing group
+          existing.awards.push({ 
+            seniority: match.juniorHolderSeniority, 
+            checkInDate: match.checkInDate 
+          });
+          // Keep the highest similarity score
+          if (match.similarity > existing.similarity) {
+            existing.similarity = match.similarity;
+            existing.confidence = match.confidence;
+            existing.breakdown = match.breakdown;
+          }
+        } else {
+          // Create new group
+          groupedMatches.set(key, {
+            pairingNumber: match.pairingNumber,
+            month: match.month,
+            year: match.year,
+            similarity: match.similarity,
+            confidence: match.confidence,
+            breakdown: match.breakdown,
+            historicalLayovers: match.historicalLayovers,
+            historicalDays: match.historicalDays,
+            historicalCredit: match.historicalCredit,
+            awards: [{ seniority: match.juniorHolderSeniority, checkInDate: match.checkInDate }],
+            isExactPairing: match.pairingNumber === currentPairing.pairingNumber,
+          });
+        }
+      }
+      
+      // Convert to array and sort:
+      // 1. Exact pairing number matches first (historical versions of THIS pairing)
+      // 2. Then by similarity (highest first)
+      // 3. Then by most recent (year/month)
+      const sortedMatches = Array.from(groupedMatches.values()).sort((a, b) => {
+        // Exact pairing matches come first
+        if (a.isExactPairing && !b.isExactPairing) return -1;
+        if (!a.isExactPairing && b.isExactPairing) return 1;
+        
+        // Then by similarity
+        if (b.similarity !== a.similarity) return b.similarity - a.similarity;
+        
+        // Then by most recent
+        if (b.year !== a.year) return b.year - a.year;
+        const monthOrder = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        return monthOrder.indexOf(b.month) - monthOrder.indexOf(a.month);
+      });
+      
+      // Format for response - include award count, seniority range, and date range
+      const formattedMatches = sortedMatches.slice(0, 10).map(m => {
+        // Extract and format check-in dates for date range display
+        const checkInDates = m.awards
+          .map(a => a.checkInDate)
+          .filter(Boolean)
+          .map(d => {
+            // Parse format like "12/20 Sat 07:25" to just "12/20"
+            const match = d?.match(/^(\d{2}\/\d{2})/);
+            return match ? match[1] : d;
+          })
+          .sort();
+        
+        const dateRange = checkInDates.length > 1 
+          ? `${checkInDates[0]} - ${checkInDates[checkInDates.length - 1]}`
+          : checkInDates[0] || '';
+        
+        return {
+          pairingNumber: m.pairingNumber,
+          month: m.month,
+          year: m.year,
+          similarity: m.similarity,
+          confidence: m.confidence,
+          breakdown: m.breakdown,
+          historicalLayovers: m.historicalLayovers,
+          historicalDays: m.historicalDays,
+          historicalCredit: m.historicalCredit,
+          isExactPairing: m.isExactPairing,
+          awardCount: m.awards.length,
+          juniorHolderSeniority: Math.max(...m.awards.map(a => a.seniority)), // Most junior
+          seniorHolderSeniority: Math.min(...m.awards.map(a => a.seniority)), // Most senior
+          allHolders: m.awards.map(a => a.seniority).sort((a, b) => a - b),
+          dateRange, // e.g., "12/20 - 12/28" for multiple awards
+        };
+      });
+      
       res.json({
         currentPairing: {
           pairingNumber: currentPairing.pairingNumber,
@@ -1115,7 +1217,7 @@ export async function registerRoutes(app: Express) {
           days: pairingDays,
           credit: creditHours.toFixed(2),
         },
-        similarMatches: matches.slice(0, 5),
+        similarMatches: formattedMatches,
       });
     } catch (error) {
       console.error('Error fetching similar bid history:', error);

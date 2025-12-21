@@ -366,6 +366,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                         <div 
                           key={index}
                           className={`rounded-lg p-3 border ${
+                            match.isExactPairing ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' :
                             match.confidence === 'exact' ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
                             match.confidence === 'high' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700' :
                             'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
@@ -376,6 +377,14 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                               <span className="font-medium text-sm">
                                 #{match.pairingNumber} - {match.month} {match.year}
                               </span>
+                              {match.isExactPairing && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="ml-2 text-xs bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100"
+                                >
+                                  This Pairing
+                                </Badge>
+                              )}
                               <Badge 
                                 variant="outline" 
                                 className={`ml-2 text-xs ${
@@ -386,11 +395,30 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                               >
                                 {match.similarity}% {match.confidence}
                               </Badge>
+                              {match.awardCount > 1 && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
+                                >
+                                  {match.awardCount}x awarded{match.dateRange ? `: ${match.dateRange}` : ''}
+                                </Badge>
+                              )}
                             </div>
                             <div className="text-right">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                Jr Holder #{match.juniorHolderSeniority}
-                              </div>
+                              {match.awardCount > 1 ? (
+                                <div className="text-sm text-gray-900 dark:text-gray-100">
+                                  <div className="font-semibold">
+                                    Seniority: #{match.seniorHolderSeniority} - #{match.juniorHolderSeniority}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    (Most Sr to Jr)
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                  Jr Holder #{match.juniorHolderSeniority}
+                                </div>
+                              )}
                             </div>
                           </div>
                           
