@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Database, Package, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 interface PositionInfo {
   position: string;
@@ -38,30 +38,17 @@ interface DataHealthResponse {
 }
 
 export function DataManagementPanel() {
-  const [data, setData] = useState<DataHealthResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchDataHealth();
-  }, []);
-
-  const fetchDataHealth = async () => {
-    try {
-      setIsLoading(true);
+  const { data, isLoading, error } = useQuery<DataHealthResponse>({
+    queryKey: ['data-health'],
+    queryFn: async () => {
       const response = await fetch('/api/data-health');
       if (!response.ok) {
         throw new Error('Failed to fetch data health');
       }
-      const result = await response.json();
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return response.json();
+    },
+    staleTime: 30 * 1000, // 30 seconds
+  });
 
   if (isLoading) {
     return (
@@ -80,7 +67,7 @@ export function DataManagementPanel() {
         <CardContent className="py-8">
           <div className="text-center text-red-500">
             <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>{error}</p>
+            <p>{error instanceof Error ? error.message : 'Unknown error'}</p>
           </div>
         </CardContent>
       </Card>

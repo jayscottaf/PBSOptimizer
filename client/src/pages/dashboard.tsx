@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,18 @@ export default function Dashboard() {
   const [conflictMap, setConflictMap] = useState<Map<number, ConflictInfo>>(new Map());
 
   const queryClient = useQueryClient();
+  
+  // Ref to track upload polling interval for cleanup
+  const uploadPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const uploadPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
+      if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
+    };
+  }, []);
 
   // Enhanced debouncing with request deduplication
   useEffect(() => {
@@ -201,7 +213,60 @@ export default function Dashboard() {
     {
       onUploadProgress: setUploadProgress,
       onSuccess: data => {
-        // Optionally, trigger a refetch of pairings or other relevant data
+        // Clear any existing polling
+        if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
+        if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
+        
+        // Invalidate queries to refresh UI after upload
+        queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+        queryClient.invalidateQueries({ queryKey: ['data-health'] });
+        
+        // Poll for processing completion and refresh again
+        const bidPackageId = data?.bidPackage?.id;
+        if (bidPackageId) {
+          uploadPollIntervalRef.current = setInterval(async () => {
+            try {
+              const response = await fetch(`/api/bid-packages/${bidPackageId}`);
+              if (response.ok) {
+                const pkg = await response.json();
+                if (pkg.status === 'completed' || pkg.status === 'failed') {
+                  if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
+                  if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
+                  uploadPollIntervalRef.current = null;
+                  uploadPollTimeoutRef.current = null;
+                  // Refresh all relevant queries using partial key matching
+                  queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+                  queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                  // Use predicate to match all pairing and bid-package related queries
+                  queryClient.invalidateQueries({
+                    predicate: (query) => {
+                      const key = query.queryKey[0];
+                      return key === 'pairings' || key === 'initial-pairings' || 
+                             key === '/api/pairings' || key === '/api/pairings/search' ||
+                             key === '/api/bid-packages' || key === 'bid-package-stats';
+                    }
+                  });
+                  toast({
+                    title: pkg.status === 'completed' ? 'Upload Complete' : 'Upload Failed',
+                    description: pkg.status === 'completed' 
+                      ? 'Bid package processed successfully. Data refreshed.'
+                      : 'Failed to process bid package.',
+                    variant: pkg.status === 'completed' ? 'default' : 'destructive',
+                  });
+                }
+              }
+            } catch (err) {
+              console.error('Error polling bid package status:', err);
+            }
+          }, 2000); // Poll every 2 seconds
+          
+          // Stop polling after 2 minutes max
+          uploadPollTimeoutRef.current = setTimeout(() => {
+            if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
+            uploadPollIntervalRef.current = null;
+            uploadPollTimeoutRef.current = null;
+          }, 120000);
+        }
       },
     }
   );

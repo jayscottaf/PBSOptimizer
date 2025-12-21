@@ -604,17 +604,22 @@ export async function registerRoutes(app: Express) {
               
               console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
               
-              // After linking, check if there's a duplicate package with the EXACT same month/year/base/aircraft (including position)
+              // After linking, check if there's a duplicate package with the same normalized aircraft (baseType + position)
               const allPackages = await storage.getBidPackages();
+              const { baseType: freshAircraftBase, position: freshPosition } = parseAircraftCode(freshBidPackage.aircraft);
+              const freshMonth = normalizeMonth(freshBidPackage.month);
+              
               const duplicates = allPackages.filter(pkg => {
                 if (pkg.id === freshBidPackage.id) return false;
                 const pkgMonth = normalizeMonth(pkg.month);
-                const freshMonth = normalizeMonth(freshBidPackage.month);
-                // Use FULL aircraft code to preserve Captain/First Officer distinction (e.g., 220-A vs 220-B)
+                const { baseType: pkgAircraftBase, position: pkgPosition } = parseAircraftCode(pkg.aircraft);
+                // Use normalized comparison: baseType + position to handle format differences
+                // e.g., "A220" vs "220", "220-A" vs "A220-A" should match if they're the same aircraft+position
                 return pkgMonth === freshMonth && 
                        pkg.year === freshBidPackage.year && 
                        pkg.base === freshBidPackage.base &&
-                       pkg.aircraft === freshBidPackage.aircraft;
+                       pkgAircraftBase === freshAircraftBase &&
+                       pkgPosition === freshPosition;
               });
               
               if (duplicates.length > 0) {
