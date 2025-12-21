@@ -1025,6 +1025,39 @@ export async function registerRoutes(app: Express) {
             }
           }
           
+          // CRITICAL: Override fingerprint values with authoritative record data
+          // The stored fingerprint may have stale/incorrect values
+          
+          // 1. Override pairingDays with the authoritative record value (for days hard filter)
+          if (history.pairingDays) {
+            histFingerprint.pairingDays = history.pairingDays;
+          }
+          
+          // HARD FILTER: Skip records where days don't match
+          // Days must be identical - a 3-day trip should only match other 3-day trips
+          if (histFingerprint.pairingDays !== pairingDays) {
+            continue; // Skip this historical record - days don't match
+          }
+          
+          // 2. Override layoverCities/layoverPattern with authoritative record data
+          if (history.layoverCities) {
+            // Parse layover cities from format like "IAD-15 SNA-18" to ["IAD", "SNA"]
+            let parsedCities: string[] = [];
+            if (typeof history.layoverCities === 'string') {
+              parsedCities = history.layoverCities
+                .split(/\s+/)
+                .map(city => city.replace(/-\d+(\.\d+)?$/, '')) // Remove duration suffix
+                .filter(city => city.length > 0);
+            } else if (Array.isArray(history.layoverCities)) {
+              parsedCities = history.layoverCities as string[];
+            }
+            
+            if (parsedCities.length > 0) {
+              histFingerprint.layoverCities = parsedCities.sort();
+              histFingerprint.layoverPattern = parsedCities.sort().join('-');
+            }
+          }
+          
           // Ensure layoverCities is an array
           if (!Array.isArray(histFingerprint.layoverCities)) {
             histFingerprint.layoverCities = [];
