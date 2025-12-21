@@ -1218,22 +1218,29 @@ export async function registerRoutes(app: Express) {
         return monthOrder.indexOf(b.month) - monthOrder.indexOf(a.month);
       });
       
-      // Format for response - include award count, seniority range, and date range
+      // Format for response - include individual awards with date+seniority pairs
       const formattedMatches = sortedMatches.slice(0, 10).map(m => {
-        // Extract and format check-in dates for date range display
-        const checkInDates = m.awards
-          .map(a => a.checkInDate)
-          .filter(Boolean)
-          .map(d => {
-            // Parse format like "12/20 Sat 07:25" to just "12/20"
-            const match = d?.match(/^(\d{2}\/\d{2})/);
-            return match ? match[1] : d;
+        // Format individual awards with date and seniority paired together
+        const formattedAwards = m.awards
+          .map(a => {
+            // Parse format like "12/20 Sat 07:25" to extract date and day of week
+            const dateMatch = a.checkInDate?.match(/^(\d{2}\/\d{2})\s*(\w{3})?/);
+            const date = dateMatch?.[1] || '';
+            const dayOfWeek = dateMatch?.[2] || '';
+            return {
+              date,
+              dayOfWeek,
+              seniority: a.seniority,
+              fullDate: a.checkInDate || '',
+            };
           })
-          .sort();
+          .sort((a, b) => a.date.localeCompare(b.date)); // Sort by date
         
-        const dateRange = checkInDates.length > 1 
-          ? `${checkInDates[0]} - ${checkInDates[checkInDates.length - 1]}`
-          : checkInDates[0] || '';
+        // Still compute date range for summary badge
+        const dates = formattedAwards.map(a => a.date).filter(Boolean);
+        const dateRange = dates.length > 1 
+          ? `${dates[0]} - ${dates[dates.length - 1]}`
+          : dates[0] || '';
         
         return {
           pairingNumber: m.pairingNumber,
@@ -1249,8 +1256,8 @@ export async function registerRoutes(app: Express) {
           awardCount: m.awards.length,
           juniorHolderSeniority: Math.max(...m.awards.map(a => a.seniority)), // Most junior
           seniorHolderSeniority: Math.min(...m.awards.map(a => a.seniority)), // Most senior
-          allHolders: m.awards.map(a => a.seniority).sort((a, b) => a - b),
-          dateRange, // e.g., "12/20 - 12/28" for multiple awards
+          awards: formattedAwards, // Individual awards with date+seniority pairs
+          dateRange, // e.g., "12/20 - 12/28" for multiple awards (for summary)
         };
       });
       

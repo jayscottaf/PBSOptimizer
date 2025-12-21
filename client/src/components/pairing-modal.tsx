@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { X, Heart, Calendar } from 'lucide-react';
+import { X, Heart, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -31,7 +31,12 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   const [selectedDates, setSelectedDates] = useState<Record<number, boolean>>(
     {}
   );
+  const [expandedMatches, setExpandedMatches] = useState<Record<number, boolean>>({});
   const queryClient = useQueryClient();
+  
+  const toggleMatchExpanded = (index: number) => {
+    setExpandedMatches(prev => ({ ...prev, [index]: !prev[index] }));
+  };
 
   const { data: pairing, isLoading } = useQuery({
     queryKey: ['/api/pairings', pairingId],
@@ -400,26 +405,60 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                                   variant="outline" 
                                   className="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
                                 >
-                                  {match.awardCount}x awarded{match.dateRange ? `: ${match.dateRange}` : ''}
+                                  {match.awardCount}x awarded
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-right">
-                              {match.awardCount > 1 ? (
-                                <div className="text-sm text-gray-900 dark:text-gray-100">
-                                  <div className="font-semibold">
-                                    Seniority: #{match.seniorHolderSeniority} - #{match.juniorHolderSeniority}
-                                  </div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    (Most Sr to Jr)
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                  Jr Holder #{match.juniorHolderSeniority}
-                                </div>
-                              )}
-                            </div>
+                          </div>
+                          
+                          {/* Individual awards list - each date with seniority */}
+                          <div className="mb-2 space-y-1">
+                            {(() => {
+                              const awards = match.awards || [];
+                              const isExpanded = expandedMatches[index];
+                              const maxVisible = 3;
+                              const displayAwards = isExpanded ? awards : awards.slice(0, maxVisible);
+                              const hasMore = awards.length > maxVisible;
+                              
+                              return (
+                                <>
+                                  {displayAwards.map((award: any, awardIndex: number) => (
+                                    <div 
+                                      key={awardIndex}
+                                      data-testid={`row-award-${match.pairingNumber}-${awardIndex}`}
+                                      className="flex items-center text-sm font-mono bg-gray-100 dark:bg-gray-700/50 rounded px-2 py-1"
+                                    >
+                                      <span className="text-gray-600 dark:text-gray-300 w-24">
+                                        {award.date} {award.dayOfWeek}
+                                      </span>
+                                      <span className="text-gray-400 dark:text-gray-500 mx-2">—</span>
+                                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                        Seniority #{award.seniority}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {hasMore && (
+                                    <button
+                                      onClick={() => toggleMatchExpanded(index)}
+                                      data-testid={`button-toggle-awards-${match.pairingNumber}-${index}`}
+                                      className="flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <ChevronUp className="w-3 h-3 mr-1" />
+                                          Show less
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronDown className="w-3 h-3 mr-1" />
+                                          Show {awards.length - maxVisible} more
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                           
                           {/* Historical pairing details */}
