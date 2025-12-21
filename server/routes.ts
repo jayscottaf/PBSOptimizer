@@ -1029,8 +1029,12 @@ export async function registerRoutes(app: Express) {
           // The stored fingerprint may have stale/incorrect values
           
           // 1. Override pairingDays with the authoritative record value (for days hard filter)
-          if (history.pairingDays) {
+          // If authoritative value is null/undefined/0, skip this record entirely
+          if (history.pairingDays !== undefined && history.pairingDays !== null && history.pairingDays > 0) {
             histFingerprint.pairingDays = history.pairingDays;
+          } else {
+            // Skip records with unknown/invalid days - can't reliably match them
+            continue;
           }
           
           // HARD FILTER: Skip records where days don't match
@@ -1040,10 +1044,11 @@ export async function registerRoutes(app: Express) {
           }
           
           // 2. Override layoverCities/layoverPattern with authoritative record data
-          if (history.layoverCities) {
+          // Always prefer database values over stale fingerprint values
+          if (history.layoverCities !== undefined && history.layoverCities !== null) {
             // Parse layover cities from format like "IAD-15 SNA-18" to ["IAD", "SNA"]
             let parsedCities: string[] = [];
-            if (typeof history.layoverCities === 'string') {
+            if (typeof history.layoverCities === 'string' && history.layoverCities.length > 0) {
               parsedCities = history.layoverCities
                 .split(/\s+/)
                 .map(city => city.replace(/-\d+(\.\d+)?$/, '')) // Remove duration suffix
@@ -1052,10 +1057,9 @@ export async function registerRoutes(app: Express) {
               parsedCities = history.layoverCities as string[];
             }
             
-            if (parsedCities.length > 0) {
-              histFingerprint.layoverCities = parsedCities.sort();
-              histFingerprint.layoverPattern = parsedCities.sort().join('-');
-            }
+            // Always override - even with empty array to replace stale data
+            histFingerprint.layoverCities = parsedCities.sort();
+            histFingerprint.layoverPattern = parsedCities.length > 0 ? parsedCities.sort().join('-') : 'none';
           }
           
           // Ensure layoverCities is an array
