@@ -308,6 +308,51 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  // Normalize month to uppercase 3-letter abbreviation for consistent matching
+  const normalizeMonth = (month: string): string => {
+    const upper = month.toUpperCase();
+    const monthMap: Record<string, string> = {
+      JANUARY: 'JAN', FEBRUARY: 'FEB', MARCH: 'MAR', APRIL: 'APR',
+      MAY: 'MAY', JUNE: 'JUN', JULY: 'JUL', AUGUST: 'AUG',
+      SEPTEMBER: 'SEP', OCTOBER: 'OCT', NOVEMBER: 'NOV', DECEMBER: 'DEC',
+    };
+    return monthMap[upper] || upper.substring(0, 3);
+  };
+  
+  // Normalize aircraft type to base code, stripping position suffix (-A/-B)
+  // Examples:
+  //   A220, 220-A, 220-B -> 220
+  //   73H, 73H-A, 73H-B -> 73H
+  //   CR9, CR9-B -> CR9
+  //   CS1-A -> CS1
+  // Position: A = Captain, B = First Officer
+  const parseAircraftCode = (aircraft: string): { baseType: string; position: string | null } => {
+    const normalized = aircraft.toUpperCase().trim();
+    
+    // Pattern 1: Any base code with position suffix like "220-A", "73H-B", "CR9-A"
+    // Match: alphanumeric base + hyphen + A or B
+    const suffixMatch = normalized.match(/^([A-Z0-9]+)-([AB])$/);
+    if (suffixMatch) {
+      let baseType = suffixMatch[1];
+      // If base is purely numeric with letter prefix like "A220", strip the prefix
+      const prefixNumeric = baseType.match(/^[A-Z](\d{3})$/);
+      if (prefixNumeric) {
+        baseType = prefixNumeric[1];
+      }
+      return { baseType, position: suffixMatch[2] };
+    }
+    
+    // Pattern 2: Letter prefix like "A220" or "A350" (no position suffix)
+    const prefixMatch = normalized.match(/^[A-Z](\d{3})$/);
+    if (prefixMatch) {
+      return { baseType: prefixMatch[1], position: null };
+    }
+    
+    // Pattern 3: Any alphanumeric code without position suffix (e.g., "73H", "CR9", "220")
+    // Return as-is since there's no position suffix to strip
+    return { baseType: normalized, position: null };
+  };
+
   // Get data health stats (bid package and history counts)
   app.get('/api/data-health', async (req, res) => {
     try {
@@ -328,22 +373,41 @@ export async function registerRoutes(app: Express) {
         .from(bidHistory)
         .groupBy(bidHistory.month, bidHistory.year, bidHistory.base, bidHistory.aircraft);
       
-      // Normalize month to uppercase 3-letter abbreviation for consistent matching
-      const normalizeMonth = (month: string): string => {
-        const upper = month.toUpperCase();
-        const monthMap: Record<string, string> = {
-          JANUARY: 'JAN', FEBRUARY: 'FEB', MARCH: 'MAR', APRIL: 'APR',
-          MAY: 'MAY', JUNE: 'JUN', JULY: 'JUL', AUGUST: 'AUG',
-          SEPTEMBER: 'SEP', OCTOBER: 'OCT', NOVEMBER: 'NOV', DECEMBER: 'DEC',
-        };
-        return monthMap[upper] || upper.substring(0, 3);
-      };
+      // Create lookup map for reasons reports using normalized aircraft base type
+      // Key format: MONTH-YEAR-BASE-AIRCRAFT_BASE_TYPE
+      // Also track per-position details
+      const reasonsMap = new Map<string, { 
+        count: number; 
+        linkedCount: number;
+        positions: { position: string; count: number; linkedCount: number }[];
+      }>();
       
-      // Create lookup map for reasons reports (with normalized keys)
-      const reasonsMap = new Map<string, { count: number; linkedCount: number }>();
       for (const r of reasonsReports) {
-        const key = `${normalizeMonth(r.month)}-${r.year}-${r.base}-${r.aircraft}`;
-        reasonsMap.set(key, { count: r.count, linkedCount: r.linkedCount });
+        const { baseType, position } = parseAircraftCode(r.aircraft);
+        const key = `${normalizeMonth(r.month)}-${r.year}-${r.base}-${baseType}`;
+        
+        const existing = reasonsMap.get(key);
+        if (existing) {
+          existing.count += r.count;
+          existing.linkedCount += r.linkedCount;
+          if (position) {
+            existing.positions.push({ 
+              position: position === 'A' ? 'Captain' : 'First Officer', 
+              count: r.count, 
+              linkedCount: r.linkedCount 
+            });
+          }
+        } else {
+          reasonsMap.set(key, { 
+            count: r.count, 
+            linkedCount: r.linkedCount,
+            positions: position ? [{ 
+              position: position === 'A' ? 'Captain' : 'First Officer', 
+              count: r.count, 
+              linkedCount: r.linkedCount 
+            }] : []
+          });
+        }
       }
       
       // Get current (most recent) package ID
@@ -351,7 +415,8 @@ export async function registerRoutes(app: Express) {
       
       // Build enriched package list with reasons report status
       const enrichedPackages = packages.map(p => {
-        const key = `${normalizeMonth(p.month)}-${p.year}-${p.base}-${p.aircraft}`;
+        const { baseType } = parseAircraftCode(p.aircraft);
+        const key = `${normalizeMonth(p.month)}-${p.year}-${p.base}-${baseType}`;
         const reasons = reasonsMap.get(key);
         return {
           id: p.id,
@@ -365,6 +430,7 @@ export async function registerRoutes(app: Express) {
           hasReasonsReport: !!reasons,
           reasonsReportCount: reasons?.count || 0,
           linkedRecords: reasons?.linkedCount || 0,
+          positions: reasons?.positions || [],
         };
       });
       
@@ -531,13 +597,16 @@ export async function registerRoutes(app: Express) {
         }
 
         // Find the matching bid package to look up pairing details
+        // Use normalized aircraft type for matching (A220 matches 220-A and 220-B)
         const allPackages = await storage.getBidPackages();
-        const matchingPackage = allPackages.find(
-          pkg => pkg.month === metadata.month && 
+        const { baseType: metadataAircraftBase } = parseAircraftCode(metadata.aircraft);
+        const matchingPackage = allPackages.find(pkg => {
+          const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
+          return normalizeMonth(pkg.month) === normalizeMonth(metadata.month) && 
                  pkg.year === metadata.year && 
                  pkg.base === metadata.base && 
-                 pkg.aircraft === metadata.aircraft
-        );
+                 pkgAircraftBase === metadataAircraftBase;
+        });
         
         // Get all pairings from the matching package for efficient lookup
         let packagePairings: Pairing[] = [];

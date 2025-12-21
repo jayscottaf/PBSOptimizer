@@ -3,6 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Database, Package, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
+interface PositionInfo {
+  position: string;
+  count: number;
+  linkedCount: number;
+}
+
 interface BidPackageInfo {
   id: number;
   month: string;
@@ -15,6 +21,7 @@ interface BidPackageInfo {
   hasReasonsReport: boolean;
   reasonsReportCount: number;
   linkedRecords: number;
+  positions: PositionInfo[];
 }
 
 interface DataHealthResponse {
@@ -149,11 +156,26 @@ export function DataManagementPanel() {
                   
                   <div className="flex items-center gap-2">
                     {pkg.hasReasonsReport ? (
-                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400" data-testid={`status-linked-${pkg.id}`}>
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="text-xs">
-                          {pkg.linkedRecords}/{pkg.reasonsReportCount} linked
-                        </span>
+                      <div className="flex flex-col items-end gap-1" data-testid={`status-linked-${pkg.id}`}>
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="text-xs">
+                            {pkg.reasonsReportCount} records
+                          </span>
+                        </div>
+                        {pkg.positions.length > 0 && (
+                          <div className="flex gap-1">
+                            {pkg.positions.map((pos, idx) => (
+                              <Badge 
+                                key={idx} 
+                                variant="outline" 
+                                className="text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                              >
+                                {pos.position}: {pos.count}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400" data-testid={`status-no-report-${pkg.id}`}>
