@@ -319,27 +319,30 @@ export async function registerRoutes(app: Express) {
     return monthMap[upper] || upper.substring(0, 3);
   };
   
-  // Normalize aircraft type to base code, stripping position suffix (-A/-B)
+  // Normalize aircraft type to base code, stripping position suffix (A/B with or without hyphen)
   // Examples:
-  //   A220, 220-A, 220-B -> 220
-  //   73H, 73H-A, 73H-B -> 73H
-  //   CR9, CR9-B -> CR9
-  //   CS1-A -> CS1
+  //   A220, 220-A, 220-B, 220A, 220B -> 220
+  //   73H, 73H-A, 73H-B, 73HA, 73HB -> 73H
+  //   CR9, CR9-B, CR9A -> CR9
+  //   CS1-A, CS1B -> CS1
   // Position: A = Captain, B = First Officer
   const parseAircraftCode = (aircraft: string): { baseType: string; position: string | null } => {
     const normalized = aircraft.toUpperCase().trim();
     
-    // Pattern 1: Any base code with position suffix like "220-A", "73H-B", "CR9-A"
-    // Match: alphanumeric base + hyphen + A or B
-    const suffixMatch = normalized.match(/^([A-Z0-9]+)-([AB])$/);
+    // Pattern 1: Any base code with position suffix (with or without hyphen)
+    // Match: alphanumeric base + optional hyphen + A or B at end
+    // Examples: "220-A", "220A", "73H-B", "73HB", "CR9A"
+    const suffixMatch = normalized.match(/^([A-Z0-9]+?)-?([AB])$/);
     if (suffixMatch) {
       let baseType = suffixMatch[1];
+      const position = suffixMatch[2];
+      
       // If base is purely numeric with letter prefix like "A220", strip the prefix
       const prefixNumeric = baseType.match(/^[A-Z](\d{3})$/);
       if (prefixNumeric) {
         baseType = prefixNumeric[1];
       }
-      return { baseType, position: suffixMatch[2] };
+      return { baseType, position };
     }
     
     // Pattern 2: Letter prefix like "A220" or "A350" (no position suffix)
