@@ -216,19 +216,6 @@ export class HoldProbabilityCalculator {
       }
     }
 
-    // Estimate check-out time of day from TAFB and pairing days
-    let checkOutTimeOfDay = 'afternoon';
-    if (pairing.tafb && pairing.pairingDays) {
-      const tafbHours = parseFloat(pairing.tafb);
-      const days = pairing.pairingDays;
-      if (!isNaN(tafbHours) && days > 0) {
-        // Rough estimate: if TAFB indicates late return, mark as evening
-        const avgHoursPerDay = tafbHours / days;
-        if (avgHoursPerDay > 14) checkOutTimeOfDay = 'evening';
-        else if (avgHoursPerDay < 10) checkOutTimeOfDay = 'morning';
-      }
-    }
-
     // Handle flight segments that might also be a string
     let flightSegmentsData = pairing.flightSegments;
     if (typeof flightSegmentsData === 'string') {
@@ -240,9 +227,43 @@ export class HoldProbabilityCalculator {
     }
     
     const firstSegment = Array.isArray(flightSegmentsData) ? flightSegmentsData[0] : null;
+    const lastSegment = Array.isArray(flightSegmentsData) && flightSegmentsData.length > 0
+      ? flightSegmentsData[flightSegmentsData.length - 1]
+      : null;
+    
     const checkInMonth = firstSegment?.departureDate
       ? new Date(firstSegment.departureDate).getMonth() + 1
       : new Date().getMonth() + 1;
+    
+    // Calculate checkout time from last flight segment's arrival time
+    // This is more accurate than TAFB estimation
+    // Fallback to TAFB-based estimation if arrival time not available
+    let checkOutTimeOfDay = 'afternoon'; // Default
+    let checkOutDetermined = false;
+    
+    // First, try to use last flight segment's arrival time
+    if (lastSegment?.arrivalTime) {
+      const checkOutHour = this.normalizeTimeToHour(lastSegment.arrivalTime);
+      if (!isNaN(checkOutHour)) {
+        if (checkOutHour < 12) checkOutTimeOfDay = 'morning';
+        else if (checkOutHour >= 12 && checkOutHour < 17) checkOutTimeOfDay = 'afternoon';
+        else checkOutTimeOfDay = 'evening';
+        checkOutDetermined = true;
+      }
+    }
+    
+    // Fallback: TAFB-based heuristic (proven legacy approach)
+    if (!checkOutDetermined && pairing.tafb && pairing.pairingDays) {
+      const tafbHours = parseFloat(pairing.tafb);
+      const days = pairing.pairingDays;
+      if (!isNaN(tafbHours) && days > 0) {
+        const avgHoursPerDay = tafbHours / days;
+        if (avgHoursPerDay > 14) checkOutTimeOfDay = 'evening';
+        else if (avgHoursPerDay < 10) checkOutTimeOfDay = 'morning';
+        // else stays 'afternoon' (default)
+        checkOutDetermined = true;
+      }
+    }
 
     const creditHours = parseFloat(pairing.creditHours || 0);
     const pairingDays = pairing.pairingDays || 1;
