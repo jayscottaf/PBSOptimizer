@@ -967,6 +967,19 @@ export async function registerRoutes(app: Express) {
       
       const currentPairing = pairing[0];
       
+      // Get bid package info for month/year
+      const bidPackageResult = await db
+        .select()
+        .from(bidPackages)
+        .where(eq(bidPackages.id, currentPairing.bidPackageId))
+        .limit(1);
+      
+      const bidPackage = bidPackageResult[0];
+      // Normalize month to 3-letter uppercase format (e.g., "January" -> "JAN")
+      const rawMonth = bidPackage?.month || 'JAN';
+      const currentMonth = rawMonth.substring(0, 3).toUpperCase();
+      const currentYear = bidPackage?.year || new Date().getFullYear();
+      
       // Ensure JSONB fields are properly parsed (Drizzle should do this, but be explicit)
       const parsedPairing = {
         ...currentPairing,
@@ -980,6 +993,8 @@ export async function registerRoutes(app: Express) {
       
       // Use the canonical fingerprint creation from HoldProbabilityCalculator
       const currentFingerprint = HoldProbabilityCalculator.createFingerprintFromPairing(parsedPairing);
+      // Add actual credit hours to fingerprint for accurate comparison
+      currentFingerprint.creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
       
       // Extract layover info for display
       const layoverCities = Array.isArray(parsedPairing.layovers) 
@@ -1068,7 +1083,36 @@ export async function registerRoutes(app: Express) {
             histFingerprint.layoverCities = [];
           }
           
-          const similarity = TripMatcher.calculateSimilarity(currentFingerprint, histFingerprint);
+          // 3. Add actual credit hours for more accurate matching
+          if (history.creditHours !== null && history.creditHours !== undefined) {
+            histFingerprint.creditHours = parseFloat(history.creditHours.toString());
+          }
+          
+          // Check if this is the EXACT same pairing number from the same month/year
+          const isSamePairing = history.pairingNumber === currentPairing.pairingNumber && 
+                                 history.month === currentMonth && 
+                                 history.year === currentYear;
+          
+          let similarity: { score: number; confidence: string; breakdown: any };
+          
+          if (isSamePairing) {
+            // SAME pairing number from same bid package = 100% exact match always
+            // This is the actual historical version of this exact pairing
+            similarity = {
+              score: 100,
+              confidence: 'exact',
+              breakdown: {
+                layoverMatch: 100,
+                daysMatch: 100,
+                timeMatch: 100,
+                creditMatch: 100,
+                efficiencyMatch: 100,
+                seasonMatch: 100,
+              }
+            };
+          } else {
+            similarity = TripMatcher.calculateSimilarity(currentFingerprint, histFingerprint);
+          }
           
           // Only include matches with >= 60% similarity
           if (similarity.score >= 60) {

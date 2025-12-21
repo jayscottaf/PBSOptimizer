@@ -151,8 +151,25 @@ export class TripMatcher {
       }
     }
 
-    // 5. Credit hours bucket match (10% weight)
-    if (trip1.creditBucket === trip2.creditBucket) {
+    // 5. Credit hours match (15% weight) - use actual credit if available, else bucket
+    // Strict matching: credit must be very close for high scores
+    if (trip1.creditHours !== undefined && trip2.creditHours !== undefined) {
+      const creditDiff = Math.abs(trip1.creditHours - trip2.creditHours);
+      // Only exact or near-exact credit gets 100%
+      if (creditDiff <= 0.02) {
+        breakdown.creditMatch = 100; // Essentially identical (within 1 minute)
+      } else if (creditDiff <= 0.1) {
+        breakdown.creditMatch = 90; // Very close (within 6 minutes)
+      } else if (creditDiff <= 0.25) {
+        breakdown.creditMatch = 80; // Close (within 15 minutes)
+      } else if (creditDiff <= 0.5) {
+        breakdown.creditMatch = 70; // Similar (within 30 minutes)
+      } else if (creditDiff <= 1.0) {
+        breakdown.creditMatch = 50;
+      } else {
+        breakdown.creditMatch = Math.max(0, 30 - (creditDiff - 1) * 10);
+      }
+    } else if (trip1.creditBucket === trip2.creditBucket) {
       breakdown.creditMatch = 100;
     } else {
       const creditDiff = Math.abs(trip1.creditBucket - trip2.creditBucket);

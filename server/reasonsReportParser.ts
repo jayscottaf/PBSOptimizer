@@ -10,6 +10,7 @@ export interface TripFingerprint {
   checkOutTimeOfDay: string;
   checkInMonth: number;
   creditBucket: number;
+  creditHours?: number; // Actual credit hours for more accurate matching
   isCommutable: boolean;
   isWeekendTrip: boolean;
   includesWeekend: boolean;
