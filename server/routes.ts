@@ -953,7 +953,6 @@ export async function registerRoutes(app: Express) {
   app.get('/api/history/similar/:pairingId', async (req, res) => {
     try {
       const pairingId = parseInt(req.params.pairingId);
-      const { base, aircraft } = req.query;
       
       // Get the pairing
       const pairing = await db
@@ -989,16 +988,9 @@ export async function registerRoutes(app: Express) {
       const creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
       const pairingDays = currentPairing.pairingDays || 1;
       
-      // Get all historical data (optionally filtered by base/aircraft)
-      const historicalData = base && aircraft
-        ? await db
-            .select()
-            .from(bidHistory)
-            .where(and(
-              eq(bidHistory.base, base as string),
-              eq(bidHistory.aircraft, aircraft as string)
-            ))
-        : await db.select().from(bidHistory);
+      // Get all historical data - fingerprint matching already ensures relevant trips match
+      // No base/aircraft filter needed since similarity scoring handles relevance
+      const historicalData = await db.select().from(bidHistory);
       
       // Find similar matches using fingerprint comparison
       const matches: Array<{
