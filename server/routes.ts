@@ -552,19 +552,27 @@ export async function registerRoutes(app: Express) {
           
           // Link any existing unlinked bid_history records to the new pairings
           try {
-            const pairings = await storage.getPairings(bidPackage.id);
-            if (pairings.length > 0) {
+            const fetchedPairings = await storage.getPairings(bidPackage.id);
+            console.log(`Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${bidPackage.id}`);
+            
+            if (fetchedPairings.length > 0) {
               // Find unlinked bid_history records that match this package
               const { baseType: pkgAircraftBase } = parseAircraftCode(bidPackage.aircraft);
               const pkgMonthNorm = normalizeMonth(bidPackage.month);
+              console.log(`Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${bidPackage.year}, base: ${bidPackage.base}, aircraft: ${pkgAircraftBase}`);
               
-              // Get all unlinked history records for matching month/year/base
+              // Get all unlinked history records
               const unlinkedRecords = await db
                 .select()
                 .from(bidHistory)
                 .where(sql`linked_pairing_id IS NULL`);
+              console.log(`Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`);
+              
+              // Build a map of pairing numbers for fast lookup
+              const pairingMap = new Map(fetchedPairings.map(p => [p.pairingNumber, p]));
               
               let linkedCount = 0;
+              let matchingRecords = 0;
               for (const record of unlinkedRecords) {
                 const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
                 const histMonthNorm = normalizeMonth(record.month);
@@ -574,8 +582,9 @@ export async function registerRoutes(app: Express) {
                     record.year === bidPackage.year && 
                     record.base === bidPackage.base && 
                     histAircraftBase === pkgAircraftBase) {
+                  matchingRecords++;
                   // Find matching pairing by number
-                  const matchingPairing = pairings.find(p => p.pairingNumber === record.pairingNumber);
+                  const matchingPairing = pairingMap.get(record.pairingNumber);
                   if (matchingPairing) {
                     await db
                       .update(bidHistory)
@@ -586,9 +595,7 @@ export async function registerRoutes(app: Express) {
                 }
               }
               
-              if (linkedCount > 0) {
-                console.log(`Linked ${linkedCount} existing bid_history records to bid package ${bidPackage.id}`);
-              }
+              console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
             }
           } catch (linkError) {
             console.error('Error linking existing bid_history records:', linkError);
