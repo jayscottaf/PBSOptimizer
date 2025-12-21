@@ -43,6 +43,7 @@ import { CalendarView } from '@/components/calendar-view';
 import { SmartFilterSystem } from '@/components/smart-filter-system';
 import { NetworkStatus } from '@/components/network-status';
 import { ReasonsReportUpload } from '@/components/reasons-report-upload';
+import { DataManagementPanel } from '@/components/data-management-panel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cacheKeyForPairings,
@@ -1759,9 +1760,10 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <Tabs defaultValue="bidPackage" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="bidPackage">Bid Package</TabsTrigger>
               <TabsTrigger value="reasonsReport">Reasons Report</TabsTrigger>
+              <TabsTrigger value="dataOverview" data-testid="tab-data-overview">Data Overview</TabsTrigger>
             </TabsList>
             <TabsContent value="bidPackage" className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
@@ -1854,6 +1856,9 @@ export default function Dashboard() {
                   });
                 }}
               />
+            </TabsContent>
+            <TabsContent value="dataOverview" className="space-y-4">
+              <DataManagementPanel />
             </TabsContent>
           </Tabs>
         </DialogContent>

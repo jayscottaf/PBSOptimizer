@@ -315,21 +315,65 @@ export async function registerRoutes(app: Express) {
       const historyCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory);
       const linkedCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory).where(sql`linked_pairing_id IS NOT NULL`);
       
-      // Get current (most recent) package
-      const currentPackage = packages[0];
+      // Get reasons reports grouped by month/year/base/aircraft
+      const reasonsReports = await db
+        .select({
+          month: bidHistory.month,
+          year: bidHistory.year,
+          base: bidHistory.base,
+          aircraft: bidHistory.aircraft,
+          count: sql<number>`count(*)::int`,
+          linkedCount: sql<number>`count(linked_pairing_id)::int`,
+        })
+        .from(bidHistory)
+        .groupBy(bidHistory.month, bidHistory.year, bidHistory.base, bidHistory.aircraft);
       
+      // Normalize month to uppercase 3-letter abbreviation for consistent matching
+      const normalizeMonth = (month: string): string => {
+        const upper = month.toUpperCase();
+        const monthMap: Record<string, string> = {
+          JANUARY: 'JAN', FEBRUARY: 'FEB', MARCH: 'MAR', APRIL: 'APR',
+          MAY: 'MAY', JUNE: 'JUN', JULY: 'JUL', AUGUST: 'AUG',
+          SEPTEMBER: 'SEP', OCTOBER: 'OCT', NOVEMBER: 'NOV', DECEMBER: 'DEC',
+        };
+        return monthMap[upper] || upper.substring(0, 3);
+      };
+      
+      // Create lookup map for reasons reports (with normalized keys)
+      const reasonsMap = new Map<string, { count: number; linkedCount: number }>();
+      for (const r of reasonsReports) {
+        const key = `${normalizeMonth(r.month)}-${r.year}-${r.base}-${r.aircraft}`;
+        reasonsMap.set(key, { count: r.count, linkedCount: r.linkedCount });
+      }
+      
+      // Get current (most recent) package ID
+      const currentPackageId = packages[0]?.id;
+      
+      // Build enriched package list with reasons report status
+      const enrichedPackages = packages.map(p => {
+        const key = `${normalizeMonth(p.month)}-${p.year}-${p.base}-${p.aircraft}`;
+        const reasons = reasonsMap.get(key);
+        return {
+          id: p.id,
+          month: p.month,
+          year: p.year,
+          base: p.base,
+          aircraft: p.aircraft,
+          status: p.status,
+          uploadedAt: p.uploadedAt instanceof Date ? p.uploadedAt.toISOString() : p.uploadedAt,
+          isCurrent: p.id === currentPackageId,
+          hasReasonsReport: !!reasons,
+          reasonsReportCount: reasons?.count || 0,
+          linkedRecords: reasons?.linkedCount || 0,
+        };
+      });
+      
+      const currentPackage = packages[0];
       res.json({
         bidPackages: {
           total: packages.length,
           current: currentPackage ? `${currentPackage.month} ${currentPackage.year}` : null,
-          list: packages.map(p => ({
-            id: p.id,
-            month: p.month,
-            year: p.year,
-            base: p.base,
-            aircraft: p.aircraft,
-            isCurrent: p === currentPackage,
-          })),
+          list: enrichedPackages,
         },
         historicalRecords: {
           total: historyCount[0]?.count || 0,
