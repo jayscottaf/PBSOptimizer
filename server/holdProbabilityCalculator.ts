@@ -201,9 +201,15 @@ export class HoldProbabilityCalculator {
       }
     }
     
-    const layoverCities = Array.isArray(layoversData)
+    let layoverCities = Array.isArray(layoversData)
       ? layoversData.map((l: any) => l.city).filter(Boolean).sort()
       : [];
+    
+    // Normalize "no layovers" to match historical data format from ReasonsReportParser
+    // Historical data stores ["none"] when there are no layovers, so we match that
+    if (layoverCities.length === 0) {
+      layoverCities = ['none'];
+    }
 
     // Parse check-in time to determine time of day
     // Normalize different formats: "5.00" (decimal hours), "0500" (HHMM), "05:00" (HH:MM)
