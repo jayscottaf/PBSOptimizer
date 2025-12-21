@@ -627,8 +627,59 @@ export async function registerRoutes(app: Express) {
                 console.log(`Auto-linking: Found ${duplicates.length} duplicate packages to clean up`);
                 for (const dup of duplicates) {
                   console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`);
-                  await storage.deleteBidPackage(dup.id);
+                  try {
+                    // CRITICAL: Must unlink bid_history records BEFORE deleting pairings/package
+                    // Foreign key constraint on linked_pairing_id will block deletion otherwise
+                    const dupPairings = await storage.getPairings(dup.id);
+                    if (dupPairings.length > 0) {
+                      console.log(`Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`);
+                      
+                      // Unlink all bid_history records pointing to these pairings one by one
+                      for (const pairing of dupPairings) {
+                        await db
+                          .update(bidHistory)
+                          .set({ linkedPairingId: null })
+                          .where(sql`linked_pairing_id = ${pairing.id}`);
+                      }
+                      console.log(`Auto-linking: Successfully unlinked bid_history records`);
+                    }
+                    
+                    // Now safe to delete the package (will cascade delete pairings)
+                    await storage.deleteBidPackage(dup.id);
+                    console.log(`Auto-linking: Successfully deleted duplicate package ${dup.id}`);
+                  } catch (deleteError) {
+                    console.error(`Auto-linking: Failed to delete duplicate package ${dup.id}:`, deleteError);
+                  }
                 }
+                
+                // Re-link bid_history records to the new package's pairings
+                console.log(`Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`);
+                const newPairingMap = new Map(fetchedPairings.map(p => [p.pairingNumber, p]));
+                const unlinkedAfterCleanup = await db
+                  .select()
+                  .from(bidHistory)
+                  .where(sql`linked_pairing_id IS NULL`);
+                
+                let relinkedCount = 0;
+                for (const record of unlinkedAfterCleanup) {
+                  const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
+                  const histMonthNorm = normalizeMonth(record.month);
+                  
+                  if (histMonthNorm === freshMonth && 
+                      record.year === freshBidPackage.year && 
+                      record.base === freshBidPackage.base && 
+                      histAircraftBase === freshAircraftBase) {
+                    const matchingPairing = newPairingMap.get(record.pairingNumber);
+                    if (matchingPairing) {
+                      await db
+                        .update(bidHistory)
+                        .set({ linkedPairingId: matchingPairing.id })
+                        .where(sql`id = ${record.id}`);
+                      relinkedCount++;
+                    }
+                  }
+                }
+                console.log(`Auto-linking: Re-linked ${relinkedCount} bid_history records to new package`);
               }
             }
           } catch (linkError) {
