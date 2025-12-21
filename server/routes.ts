@@ -1072,16 +1072,19 @@ export async function registerRoutes(app: Express) {
           // Only include matches with >= 60% similarity
           if (similarity.score >= 60) {
             // Normalize layover cities for display (handle both string and array formats)
+            // IMPORTANT: Sort alphabetically to match fingerprint comparison order
             let displayLayovers = '';
             if (history.layoverCities) {
               if (typeof history.layoverCities === 'string') {
-                // Parse string format like "BOS-14 RDU-14" to just cities
+                // Parse string format like "BOS-14 RDU-14" to just cities, then sort
                 displayLayovers = history.layoverCities
                   .split(/\s+/)
                   .map(city => city.replace(/-\d+$/, ''))
+                  .filter(city => city.length > 0)
+                  .sort()
                   .join('-');
               } else if (Array.isArray(history.layoverCities)) {
-                displayLayovers = (history.layoverCities as string[]).join('-');
+                displayLayovers = (history.layoverCities as string[]).sort().join('-');
               }
             }
             

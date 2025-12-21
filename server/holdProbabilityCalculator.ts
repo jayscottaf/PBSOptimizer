@@ -39,6 +39,53 @@ interface HistoricalMatch {
 
 export class HoldProbabilityCalculator {
   /**
+   * Normalize various time formats to hour (0-23)
+   * Handles: "5.00" (decimal hours), "0500" (HHMM), "05:00" (HH:MM), "5" (hour only)
+   */
+  private static normalizeTimeToHour(timeStr: string): number {
+    if (!timeStr) return NaN;
+    
+    const str = timeStr.toString().trim();
+    
+    // Format: "HH:MM" (e.g., "05:00", "17:30")
+    if (str.includes(':')) {
+      const [hours] = str.split(':');
+      return parseInt(hours, 10);
+    }
+    
+    // Format: "H.MM" or "HH.MM" (decimal hours, e.g., "5.00", "17.30")
+    if (str.includes('.')) {
+      const hour = parseFloat(str);
+      // If it's a reasonable hour (0-24), it's decimal format
+      if (hour >= 0 && hour <= 24) {
+        return Math.floor(hour);
+      }
+    }
+    
+    // Format: "HHMM" (4 digits, e.g., "0500", "1730")
+    if (/^\d{4}$/.test(str)) {
+      return parseInt(str.substring(0, 2), 10);
+    }
+    
+    // Format: "HMM" (3 digits, e.g., "500" for 5:00)
+    if (/^\d{3}$/.test(str)) {
+      return parseInt(str.substring(0, 1), 10);
+    }
+    
+    // Format: "H" or "HH" (hour only, e.g., "5", "17")
+    if (/^\d{1,2}$/.test(str)) {
+      const hour = parseInt(str, 10);
+      if (hour >= 0 && hour <= 24) {
+        return hour;
+      }
+    }
+    
+    // Fallback: try parseFloat for any numeric string
+    const fallback = parseFloat(str);
+    return (fallback >= 0 && fallback <= 24) ? Math.floor(fallback) : NaN;
+  }
+
+  /**
    * Calculate hold probability using historical data when available
    * Now includes bid month for seasonal adjustments
    */
@@ -159,9 +206,10 @@ export class HoldProbabilityCalculator {
       : [];
 
     // Parse check-in time to determine time of day
+    // Normalize different formats: "5.00" (decimal hours), "0500" (HHMM), "05:00" (HH:MM)
     let checkInTimeOfDay = 'morning';
     if (pairing.checkInTime) {
-      const hour = parseFloat(pairing.checkInTime);
+      const hour = this.normalizeTimeToHour(pairing.checkInTime);
       if (!isNaN(hour)) {
         if (hour >= 12 && hour < 17) checkInTimeOfDay = 'afternoon';
         else if (hour >= 17) checkInTimeOfDay = 'evening';
