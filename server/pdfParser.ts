@@ -419,6 +419,13 @@ export class PDFParser {
     let checkInTime = '';
     let currentDay = 'A'; // Track current day for continuation flights
 
+    // CRITICAL: Extract CHECK-IN time from header line (line 0)
+    // Header format: "#7652  SA  EFFECTIVE JAN10 ONLY  CHECK-IN AT  5.00"
+    const headerCheckInMatch = lines[0].match(/CHECK-IN AT\s+([\d:.]+)/i);
+    if (headerCheckInMatch) {
+      checkInTime = headerCheckInMatch[1];
+    }
+
     // Extract effective dates from the block
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -864,17 +871,15 @@ export class PDFParser {
       }
     }
 
-    // Get cities that appear in the route for validation
-    const routeCities = new Set(route.split('-').map(c => c.trim().toUpperCase()));
-    
     // Deduplicate layovers - keep only first occurrence of each city
-    // Also filter out cities that don't appear in the route (false positives)
+    // NOTE: We no longer filter by route cities because crews may be transported
+    // to nearby hotel cities (e.g., fly into BUR, layover at SNA via ground transport)
     const uniqueLayovers: Layover[] = [];
     const seenCities = new Set<string>();
     for (const layover of layovers) {
       const cityUpper = layover.city.toUpperCase();
-      // Only add if not seen before AND the city is actually in the route
-      if (!seenCities.has(cityUpper) && routeCities.has(cityUpper)) {
+      // Only add if not seen before (remove route validation - hotels may be in nearby cities)
+      if (!seenCities.has(cityUpper)) {
         uniqueLayovers.push(layover);
         seenCities.add(cityUpper);
       }
