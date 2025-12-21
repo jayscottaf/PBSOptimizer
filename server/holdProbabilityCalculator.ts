@@ -205,9 +205,11 @@ export class HoldProbabilityCalculator {
       ? layoversData.map((l: any) => l.city).filter(Boolean).sort()
       : [];
     
-    // Normalize "no layovers" to match historical data format from ReasonsReportParser
-    // Historical data stores ["none"] when there are no layovers, so we match that
-    if (layoverCities.length === 0) {
+    // Normalize "no layovers" to ['none'] ONLY for single-day trips (pairingDays === 1)
+    // This is the expected case where no layovers is normal (turn trips)
+    // For multi-day trips, empty layovers might indicate missing data, so keep empty
+    const pairingDaysValue = pairing.pairingDays || 1;
+    if (layoverCities.length === 0 && pairingDaysValue === 1) {
       layoverCities = ['none'];
     }
 

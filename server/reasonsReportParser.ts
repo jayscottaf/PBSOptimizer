@@ -135,11 +135,18 @@ export class ReasonsReportParser {
    */
   static createTripFingerprint(award: PairingAward): TripFingerprint {
     // Parse layover cities from format like "SAT-15 BOS-11 BOS-15"
-    const layoverCities = award.layoverCities
+    let layoverCities = award.layoverCities
       .split(/\s+/)
       .filter((city) => city.length > 0)
       .map((city) => city.replace(/-\d+$/, '')) // Remove hours like "BOS-14"
+      .filter((city) => city.toLowerCase() !== 'none') // Remove literal "none"
       .sort();
+    
+    // Canonicalize empty layovers to ['none'] ONLY for single-day trips (pairingDays === 1)
+    // This is expected for turn trips; multi-day trips keep empty to distinguish missing data
+    if (layoverCities.length === 0 && award.pairingDays === 1) {
+      layoverCities = ['none'];
+    }
 
     // Parse check-in date to get day of week and time
     // Format: "10/12 Sun 13:24"
