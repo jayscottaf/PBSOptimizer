@@ -57,12 +57,14 @@ export class TripMatcher {
    * Calculate similarity between two trip fingerprints
    * Returns a score from 0-100 with confidence level
    * 
-   * Weights:
-   * - Layovers: 35% (most important - which cities you visit)
-   * - Days: 25% (trip length preference)
-   * - Times: 15% (check-in/check-out time preferences)
-   * - Season: 10% (seasonal patterns - pilots may prefer different trips by season)
-   * - Credit: 10% (pay hours preference)
+   * NOTE: Days is now a HARD FILTER (handled in findBestMatches) - only trips
+   * with the same number of days are compared. daysMatch is always 100 here.
+   * 
+   * Weights (after days filter):
+   * - Layovers: 45% (most important - which cities you visit)
+   * - Times: 20% (check-in/check-out time preferences for commutability)
+   * - Season: 15% (seasonal patterns - pilots may prefer different trips by season)
+   * - Credit: 15% (pay hours preference)
    * - Efficiency: 5% (credit per day preference)
    */
   static calculateSimilarity(
@@ -71,14 +73,14 @@ export class TripMatcher {
   ): SimilarityResult {
     const breakdown = {
       layoverMatch: 0,
-      daysMatch: 0,
+      daysMatch: 100, // Always 100 since days is a hard filter now
       timeMatch: 0,
       creditMatch: 0,
       efficiencyMatch: 0,
       seasonMatch: 0,
     };
 
-    // 1. Layover pattern match (35% weight) - most important
+    // 1. Layover pattern match (45% weight) - most important
     if (trip1.layoverPattern === trip2.layoverPattern) {
       breakdown.layoverMatch = 100; // Exact match
     } else {
@@ -95,16 +97,10 @@ export class TripMatcher {
       }
     }
 
-    // 2. Pairing days match (25% weight)
-    if (trip1.pairingDays === trip2.pairingDays) {
-      breakdown.daysMatch = 100;
-    } else {
-      // Closer days = higher score
-      const daysDiff = Math.abs(trip1.pairingDays - trip2.pairingDays);
-      breakdown.daysMatch = Math.max(0, 100 - daysDiff * 25); // -25% per day difference
-    }
+    // 2. Days match - now a hard filter, so always 100% if we get here
+    // (Filtering happens in findBestMatches)
 
-    // 3. Check-in/check-out time similarity (15% weight)
+    // 3. Check-in/check-out time similarity (20% weight)
     let timeScore = 0;
 
     // Check-in time of day match
@@ -172,13 +168,13 @@ export class TripMatcher {
     }
 
     // Calculate weighted score
-    // Layovers 35%, Days 25%, Times 15%, Season 10%, Credit 10%, Efficiency 5%
+    // Days is a hard filter (not weighted) - only same-day trips are compared
+    // Layovers 45%, Times 20%, Season 15%, Credit 15%, Efficiency 5%
     const score =
-      breakdown.layoverMatch * 0.35 +
-      breakdown.daysMatch * 0.25 +
-      breakdown.timeMatch * 0.15 +
-      breakdown.seasonMatch * 0.10 +
-      breakdown.creditMatch * 0.10 +
+      breakdown.layoverMatch * 0.45 +
+      breakdown.timeMatch * 0.20 +
+      breakdown.seasonMatch * 0.15 +
+      breakdown.creditMatch * 0.15 +
       breakdown.efficiencyMatch * 0.05;
 
     // Determine confidence level
@@ -203,13 +199,19 @@ export class TripMatcher {
 
   /**
    * Find best matches from a list of historical trips
+   * Days is a HARD FILTER - only trips with the same number of days are compared
    */
   static findBestMatches(
     currentTrip: TripFingerprint,
     historicalTrips: TripFingerprint[],
     minScore: number = 50
   ): Array<{ trip: TripFingerprint; similarity: SimilarityResult }> {
-    const matches = historicalTrips
+    // First, filter to only trips with the same number of days (hard filter)
+    const sameDayTrips = historicalTrips.filter(
+      (trip) => trip.pairingDays === currentTrip.pairingDays
+    );
+
+    const matches = sameDayTrips
       .map((historicalTrip) => ({
         trip: historicalTrip,
         similarity: this.calculateSimilarity(currentTrip, historicalTrip),
