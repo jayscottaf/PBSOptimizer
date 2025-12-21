@@ -182,12 +182,13 @@ export class TripMatcher {
       breakdown.efficiencyMatch * 0.05;
 
     // Determine confidence level
+    // "exact" is reserved for true 100% matches only
     let confidence: 'exact' | 'high' | 'medium' | 'low';
-    if (score >= 95) {
+    if (score >= 100) {
       confidence = 'exact';
-    } else if (score >= 80) {
+    } else if (score >= 90) {
       confidence = 'high';
-    } else if (score >= 60) {
+    } else if (score >= 70) {
       confidence = 'medium';
     } else {
       confidence = 'low';
