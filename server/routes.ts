@@ -327,7 +327,8 @@ export async function registerRoutes(app: Express) {
   //   CS1-A, CS1B -> CS1
   // Position: A = Captain, B = First Officer
   const parseAircraftCode = (aircraft: string): { baseType: string; position: string | null } => {
-    const normalized = aircraft.toUpperCase().trim();
+    // Remove ALL whitespace (not just trim) to handle "220 B" vs "220B" variations
+    const normalized = aircraft.toUpperCase().replace(/\s+/g, '');
     
     // Pattern 1: Any base code with position suffix (with or without hyphen)
     // Match: alphanumeric base + optional hyphen + A or B at end

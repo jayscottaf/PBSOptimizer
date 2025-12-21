@@ -47,7 +47,13 @@ export function DataManagementPanel() {
       }
       return response.json();
     },
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 10 * 1000, // 10 seconds
+    // Auto-refresh every 3 seconds if any package is processing
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasProcessing = data?.bidPackages?.list?.some(pkg => pkg.status === 'processing');
+      return hasProcessing ? 3000 : false;
+    },
   });
 
   if (isLoading) {
@@ -173,8 +179,9 @@ export function DataManagementPanel() {
                     
                     <Badge 
                       variant={pkg.status === 'completed' ? 'outline' : 'secondary'}
-                      className="text-xs"
+                      className={`text-xs ${pkg.status === 'processing' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 animate-pulse' : ''}`}
                     >
+                      {pkg.status === 'processing' && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
                       {pkg.status}
                     </Badge>
                   </div>
