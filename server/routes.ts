@@ -552,14 +552,21 @@ export async function registerRoutes(app: Express) {
           
           // Link any existing unlinked bid_history records to the new pairings
           try {
-            const fetchedPairings = await storage.getPairings(bidPackage.id);
-            console.log(`Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${bidPackage.id}`);
+            // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
+            const freshBidPackage = await storage.getBidPackage(bidPackage.id);
+            if (!freshBidPackage) {
+              console.error(`Auto-linking: Could not find bid package ${bidPackage.id}`);
+              return;
+            }
+            
+            const fetchedPairings = await storage.getPairings(freshBidPackage.id);
+            console.log(`Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`);
             
             if (fetchedPairings.length > 0) {
               // Find unlinked bid_history records that match this package
-              const { baseType: pkgAircraftBase } = parseAircraftCode(bidPackage.aircraft);
-              const pkgMonthNorm = normalizeMonth(bidPackage.month);
-              console.log(`Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${bidPackage.year}, base: ${bidPackage.base}, aircraft: ${pkgAircraftBase}`);
+              const { baseType: pkgAircraftBase } = parseAircraftCode(freshBidPackage.aircraft);
+              const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
+              console.log(`Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`);
               
               // Get all unlinked history records
               const unlinkedRecords = await db
@@ -579,8 +586,8 @@ export async function registerRoutes(app: Express) {
                 
                 // Check if this record matches the bid package
                 if (histMonthNorm === pkgMonthNorm && 
-                    record.year === bidPackage.year && 
-                    record.base === bidPackage.base && 
+                    record.year === freshBidPackage.year && 
+                    record.base === freshBidPackage.base && 
                     histAircraftBase === pkgAircraftBase) {
                   matchingRecords++;
                   // Find matching pairing by number
@@ -596,6 +603,27 @@ export async function registerRoutes(app: Express) {
               }
               
               console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
+              
+              // After linking, check if there's a duplicate package with the same month/year/base/aircraft and delete it
+              const allPackages = await storage.getBidPackages();
+              const duplicates = allPackages.filter(pkg => {
+                if (pkg.id === freshBidPackage.id) return false;
+                const pkgMonth = normalizeMonth(pkg.month);
+                const freshMonth = normalizeMonth(freshBidPackage.month);
+                const { baseType: pkgAircraft } = parseAircraftCode(pkg.aircraft);
+                return pkgMonth === freshMonth && 
+                       pkg.year === freshBidPackage.year && 
+                       pkg.base === freshBidPackage.base &&
+                       pkgAircraft === pkgAircraftBase;
+              });
+              
+              if (duplicates.length > 0) {
+                console.log(`Auto-linking: Found ${duplicates.length} duplicate packages to clean up`);
+                for (const dup of duplicates) {
+                  console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year})`);
+                  await storage.deleteBidPackage(dup.id);
+                }
+              }
             }
           } catch (linkError) {
             console.error('Error linking existing bid_history records:', linkError);
