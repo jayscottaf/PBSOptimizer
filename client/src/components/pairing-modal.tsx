@@ -40,11 +40,15 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
     refetchOnMount: true,
   });
 
-  const { data: bidHistory = [] } = useQuery({
-    queryKey: ['/api/history', pairing?.pairingNumber],
-    queryFn: () =>
-      pairing ? api.getBidHistory(pairing.pairingNumber) : Promise.resolve([]),
-    enabled: !!pairing,
+  // Get user's base and aircraft for filtering
+  const userBase = typeof window !== 'undefined' ? localStorage.getItem('base') || 'NYC' : 'NYC';
+  const userAircraft = typeof window !== 'undefined' ? localStorage.getItem('aircraft') || 'A220' : 'A220';
+
+  // Use fingerprint-based matching instead of pairing number
+  const { data: similarHistoryData } = useQuery({
+    queryKey: ['/api/history/similar', pairingId, userBase, userAircraft],
+    queryFn: () => api.getSimilarBidHistory(pairingId, userBase, userAircraft),
+    enabled: !!pairingId,
   });
 
   // Fetch bid packages to get the correct year for calendar dates
@@ -335,34 +339,108 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
             </Card>
           </div>
 
-          {/* Historical Awards */}
+          {/* Historical Awards - Fingerprint Matching */}
           <div className="space-y-2 sm:space-y-4">
             <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
-              Historical Awards
+              Similar Historical Pairings
             </h4>
             <Card>
               <CardContent className="p-2 sm:p-4">
-                {bidHistory.length > 0 ? (
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                    <div className="text-sm text-yellow-800 dark:text-yellow-300">
-                      <div className="font-medium mb-2">
-                        Recent awards for similar pairings:
+                {similarHistoryData?.similarMatches?.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Current pairing reference */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <div className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">
+                        Current Pairing #{similarHistoryData.currentPairing?.pairingNumber}
                       </div>
-                      <div className="space-y-1 font-mono">
-                        {bidHistory
-                          .slice(0, 3)
-                          .map((award: any, index: number) => (
-                            <div key={index}>
-                              • {award.month} {award.year}: Junior holder #
-                              {award.juniorHolderSeniority}
+                      <div className="text-xs text-blue-800 dark:text-blue-300 font-mono">
+                        Layovers: {similarHistoryData.currentPairing?.layovers || 'None'} | 
+                        Days: {similarHistoryData.currentPairing?.days} | 
+                        Credit: {similarHistoryData.currentPairing?.credit}
+                      </div>
+                    </div>
+                    
+                    {/* Similar matches */}
+                    <div className="space-y-3">
+                      {similarHistoryData.similarMatches.map((match: any, index: number) => (
+                        <div 
+                          key={index}
+                          className={`rounded-lg p-3 border ${
+                            match.confidence === 'exact' ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
+                            match.confidence === 'high' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700' :
+                            'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span className="font-medium text-sm">
+                                #{match.pairingNumber} - {match.month} {match.year}
+                              </span>
+                              <Badge 
+                                variant="outline" 
+                                className={`ml-2 text-xs ${
+                                  match.confidence === 'exact' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
+                                  match.confidence === 'high' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
+                                }`}
+                              >
+                                {match.similarity}% {match.confidence}
+                              </Badge>
                             </div>
-                          ))}
-                      </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                Jr Holder #{match.juniorHolderSeniority}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Historical pairing details */}
+                          <div className="text-xs text-gray-600 dark:text-gray-400 font-mono mb-2">
+                            Layovers: {match.historicalLayovers || 'None'} | 
+                            Days: {match.historicalDays} | 
+                            Credit: {parseFloat(match.historicalCredit).toFixed(2)}
+                          </div>
+                          
+                          {/* Match breakdown */}
+                          <div className="grid grid-cols-5 gap-1 text-xs">
+                            <div className="text-center">
+                              <div className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.layoverMatch)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Layovers</div>
+                            </div>
+                            <div className="text-center">
+                              <div className={`font-semibold ${match.breakdown.daysMatch >= 80 ? 'text-green-600' : match.breakdown.daysMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.daysMatch)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Days</div>
+                            </div>
+                            <div className="text-center">
+                              <div className={`font-semibold ${match.breakdown.creditMatch >= 80 ? 'text-green-600' : match.breakdown.creditMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.creditMatch)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Credit</div>
+                            </div>
+                            <div className="text-center">
+                              <div className={`font-semibold ${match.breakdown.timeMatch >= 80 ? 'text-green-600' : match.breakdown.timeMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.timeMatch)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Times</div>
+                            </div>
+                            <div className="text-center">
+                              <div className={`font-semibold ${match.breakdown.efficiencyMatch >= 80 ? 'text-green-600' : match.breakdown.efficiencyMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {Math.round(match.breakdown.efficiencyMatch)}%
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400">Efficiency</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
                   <div className="text-gray-500 dark:text-gray-400 text-sm">
-                    No historical award data available
+                    No similar historical pairings found (60%+ match required)
                   </div>
                 )}
               </CardContent>

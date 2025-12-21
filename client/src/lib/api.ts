@@ -414,9 +414,20 @@ export const api = {
     return response.json();
   },
 
-  // History
+  // History (DEPRECATED - use getSimilarBidHistory instead)
   getBidHistory: async (pairingNumber: string) => {
     const response = await apiRequest('GET', `/api/history/${pairingNumber}`);
+    return response.json();
+  },
+
+  // Get similar historical pairings using fingerprint matching
+  getSimilarBidHistory: async (pairingId: number, base?: string, aircraft?: string) => {
+    const params = new URLSearchParams();
+    if (base) params.append('base', base);
+    if (aircraft) params.append('aircraft', aircraft);
+    const queryString = params.toString();
+    const url = `/api/history/similar/${pairingId}${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest('GET', url);
     return response.json();
   },
 

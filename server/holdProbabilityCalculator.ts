@@ -140,35 +140,78 @@ export class HoldProbabilityCalculator {
 
   /**
    * Create trip fingerprint from a pairing object
+   * Made public so it can be reused by the similar history API endpoint
    */
-  private static createFingerprintFromPairing(pairing: any): TripFingerprint {
+  public static createFingerprintFromPairing(pairing: any): TripFingerprint {
     // Extract layover cities from pairing data
-    const layoverCities =
-      pairing.layovers?.map((l: any) => l.city).sort() || [];
+    // Handle case where layovers might be a JSON string (from database) or already parsed array
+    let layoversData = pairing.layovers;
+    if (typeof layoversData === 'string') {
+      try {
+        layoversData = JSON.parse(layoversData);
+      } catch {
+        layoversData = [];
+      }
+    }
+    
+    const layoverCities = Array.isArray(layoversData)
+      ? layoversData.map((l: any) => l.city).filter(Boolean).sort()
+      : [];
 
-    // Parse check-in date if available
-    const firstSegment = pairing.flightSegments?.[0];
+    // Parse check-in time to determine time of day
+    let checkInTimeOfDay = 'morning';
+    if (pairing.checkInTime) {
+      const hour = parseFloat(pairing.checkInTime);
+      if (!isNaN(hour)) {
+        if (hour >= 12 && hour < 17) checkInTimeOfDay = 'afternoon';
+        else if (hour >= 17) checkInTimeOfDay = 'evening';
+      }
+    }
+
+    // Estimate check-out time of day from TAFB and pairing days
+    let checkOutTimeOfDay = 'afternoon';
+    if (pairing.tafb && pairing.pairingDays) {
+      const tafbHours = parseFloat(pairing.tafb);
+      const days = pairing.pairingDays;
+      if (!isNaN(tafbHours) && days > 0) {
+        // Rough estimate: if TAFB indicates late return, mark as evening
+        const avgHoursPerDay = tafbHours / days;
+        if (avgHoursPerDay > 14) checkOutTimeOfDay = 'evening';
+        else if (avgHoursPerDay < 10) checkOutTimeOfDay = 'morning';
+      }
+    }
+
+    // Handle flight segments that might also be a string
+    let flightSegmentsData = pairing.flightSegments;
+    if (typeof flightSegmentsData === 'string') {
+      try {
+        flightSegmentsData = JSON.parse(flightSegmentsData);
+      } catch {
+        flightSegmentsData = [];
+      }
+    }
+    
+    const firstSegment = Array.isArray(flightSegmentsData) ? flightSegmentsData[0] : null;
     const checkInMonth = firstSegment?.departureDate
       ? new Date(firstSegment.departureDate).getMonth() + 1
       : new Date().getMonth() + 1;
 
+    const creditHours = parseFloat(pairing.creditHours || 0);
+    const pairingDays = pairing.pairingDays || 1;
+
     return {
-      pairingDays: pairing.pairingDays || 1,
+      pairingDays,
       layoverCities,
       layoverPattern: layoverCities.join('-'),
       checkInDayOfWeek: 0, // Can be enhanced if we parse effectiveDates
-      checkInTimeOfDay: 'morning', // Default
-      checkOutTimeOfDay: 'afternoon', // Default
+      checkInTimeOfDay,
+      checkOutTimeOfDay,
       checkInMonth,
-      creditBucket: Math.floor(parseFloat(pairing.creditHours || 0) / 2) * 2,
+      creditBucket: Math.floor(creditHours / 2) * 2,
       isCommutable: false, // Can be enhanced
       isWeekendTrip: false,
-      includesWeekend: pairing.pairingDays >= 3,
-      efficiencyBucket:
-        Math.floor(
-          (parseFloat(pairing.creditHours || 0) / (pairing.pairingDays || 1)) *
-            2
-        ) / 2,
+      includesWeekend: pairingDays >= 3,
+      efficiencyBucket: Math.floor((creditHours / pairingDays) * 2) / 2,
     };
   }
 

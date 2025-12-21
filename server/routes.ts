@@ -937,7 +937,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Get bid history for a pairing
+  // Get bid history for a pairing (DEPRECATED - use /api/history/similar/:pairingId instead)
   app.get('/api/history/:pairingNumber', async (req, res) => {
     try {
       const { pairingNumber } = req.params;
@@ -946,6 +946,147 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching bid history:', error);
       res.status(500).json({ message: 'Failed to fetch bid history' });
+    }
+  });
+
+  // Get similar historical pairings using fingerprint matching (CORRECT approach)
+  app.get('/api/history/similar/:pairingId', async (req, res) => {
+    try {
+      const pairingId = parseInt(req.params.pairingId);
+      const { base, aircraft } = req.query;
+      
+      // Get the pairing
+      const pairing = await db
+        .select()
+        .from(pairings)
+        .where(eq(pairings.id, pairingId))
+        .limit(1);
+      
+      if (pairing.length === 0) {
+        return res.status(404).json({ message: 'Pairing not found' });
+      }
+      
+      const currentPairing = pairing[0];
+      
+      // Ensure JSONB fields are properly parsed (Drizzle should do this, but be explicit)
+      const parsedPairing = {
+        ...currentPairing,
+        layovers: typeof currentPairing.layovers === 'string' 
+          ? JSON.parse(currentPairing.layovers) 
+          : currentPairing.layovers,
+        flightSegments: typeof currentPairing.flightSegments === 'string'
+          ? JSON.parse(currentPairing.flightSegments)
+          : currentPairing.flightSegments,
+      };
+      
+      // Use the canonical fingerprint creation from HoldProbabilityCalculator
+      const currentFingerprint = HoldProbabilityCalculator.createFingerprintFromPairing(parsedPairing);
+      
+      // Extract layover info for display
+      const layoverCities = Array.isArray(parsedPairing.layovers) 
+        ? parsedPairing.layovers.map((l: any) => l.city).sort() 
+        : [];
+      const creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
+      const pairingDays = currentPairing.pairingDays || 1;
+      
+      // Get all historical data (optionally filtered by base/aircraft)
+      const historicalData = base && aircraft
+        ? await db
+            .select()
+            .from(bidHistory)
+            .where(and(
+              eq(bidHistory.base, base as string),
+              eq(bidHistory.aircraft, aircraft as string)
+            ))
+        : await db.select().from(bidHistory);
+      
+      // Find similar matches using fingerprint comparison
+      const matches: Array<{
+        pairingNumber: string;
+        month: string;
+        year: number;
+        juniorHolderSeniority: number;
+        similarity: number;
+        confidence: string;
+        breakdown: {
+          layoverMatch: number;
+          daysMatch: number;
+          timeMatch: number;
+          creditMatch: number;
+          efficiencyMatch: number;
+        };
+        historicalLayovers: string;
+        historicalDays: number;
+        historicalCredit: string;
+      }> = [];
+      
+      for (const history of historicalData) {
+        if (history.tripFingerprint) {
+          // Parse historical fingerprint if it's a string (Drizzle may not auto-parse JSONB)
+          let histFingerprint = history.tripFingerprint as any;
+          if (typeof histFingerprint === 'string') {
+            try {
+              histFingerprint = JSON.parse(histFingerprint);
+            } catch {
+              continue; // Skip invalid fingerprints
+            }
+          }
+          
+          // Ensure layoverCities is an array
+          if (!Array.isArray(histFingerprint.layoverCities)) {
+            histFingerprint.layoverCities = [];
+          }
+          
+          const similarity = TripMatcher.calculateSimilarity(currentFingerprint, histFingerprint);
+          
+          // Only include matches with >= 60% similarity
+          if (similarity.score >= 60) {
+            // Normalize layover cities for display (handle both string and array formats)
+            let displayLayovers = '';
+            if (history.layoverCities) {
+              if (typeof history.layoverCities === 'string') {
+                // Parse string format like "BOS-14 RDU-14" to just cities
+                displayLayovers = history.layoverCities
+                  .split(/\s+/)
+                  .map(city => city.replace(/-\d+$/, ''))
+                  .join('-');
+              } else if (Array.isArray(history.layoverCities)) {
+                displayLayovers = (history.layoverCities as string[]).join('-');
+              }
+            }
+            
+            matches.push({
+              pairingNumber: history.pairingNumber,
+              month: history.month,
+              year: history.year,
+              juniorHolderSeniority: history.juniorHolderSeniority,
+              similarity: similarity.score,
+              confidence: similarity.confidence,
+              breakdown: similarity.breakdown,
+              historicalLayovers: displayLayovers || 'None',
+              historicalDays: history.pairingDays,
+              historicalCredit: history.creditHours?.toString() || '0',
+            });
+          }
+        }
+      }
+      
+      // Sort by similarity (highest first)
+      matches.sort((a, b) => b.similarity - a.similarity);
+      
+      // Return top 5 matches with current pairing info for comparison
+      res.json({
+        currentPairing: {
+          pairingNumber: currentPairing.pairingNumber,
+          layovers: layoverCities.join('-') || 'None',
+          days: pairingDays,
+          credit: creditHours.toFixed(2),
+        },
+        similarMatches: matches.slice(0, 5),
+      });
+    } catch (error) {
+      console.error('Error fetching similar bid history:', error);
+      res.status(500).json({ message: 'Failed to fetch similar bid history' });
     }
   });
 
