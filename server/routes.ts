@@ -1093,6 +1093,16 @@ export async function registerRoutes(app: Express) {
                                  history.month === currentMonth && 
                                  history.year === currentYear;
           
+          // Check if this is the same pairing number (any month/year)
+          const isSamePairingNumber = history.pairingNumber === currentPairing.pairingNumber;
+          
+          // For ONE-DAY TRIPS: Only match records with the same pairing number
+          // This is because one-day trips have no layovers, so we can't verify the route matches
+          // Different pairing numbers = different routes (e.g., JFK-BOS-JFK vs JFK-MIA-JFK)
+          if (pairingDays === 1 && !isSamePairingNumber) {
+            continue; // Skip - can't verify route match for 1-day trips with different pairing numbers
+          }
+          
           let similarity: { score: number; confidence: string; breakdown: any };
           
           if (isSamePairing) {
