@@ -604,23 +604,23 @@ export async function registerRoutes(app: Express) {
               
               console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
               
-              // After linking, check if there's a duplicate package with the same month/year/base/aircraft and delete it
+              // After linking, check if there's a duplicate package with the EXACT same month/year/base/aircraft (including position)
               const allPackages = await storage.getBidPackages();
               const duplicates = allPackages.filter(pkg => {
                 if (pkg.id === freshBidPackage.id) return false;
                 const pkgMonth = normalizeMonth(pkg.month);
                 const freshMonth = normalizeMonth(freshBidPackage.month);
-                const { baseType: pkgAircraft } = parseAircraftCode(pkg.aircraft);
+                // Use FULL aircraft code to preserve Captain/First Officer distinction (e.g., 220-A vs 220-B)
                 return pkgMonth === freshMonth && 
                        pkg.year === freshBidPackage.year && 
                        pkg.base === freshBidPackage.base &&
-                       pkgAircraft === pkgAircraftBase;
+                       pkg.aircraft === freshBidPackage.aircraft;
               });
               
               if (duplicates.length > 0) {
                 console.log(`Auto-linking: Found ${duplicates.length} duplicate packages to clean up`);
                 for (const dup of duplicates) {
-                  console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year})`);
+                  console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`);
                   await storage.deleteBidPackage(dup.id);
                 }
               }
