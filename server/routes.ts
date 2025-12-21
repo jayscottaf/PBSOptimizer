@@ -662,13 +662,15 @@ export async function registerRoutes(app: Express) {
                 
                 let relinkedCount = 0;
                 for (const record of unlinkedAfterCleanup) {
-                  const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
+                  const { baseType: histAircraftBase, position: histPosition } = parseAircraftCode(record.aircraft);
                   const histMonthNorm = normalizeMonth(record.month);
                   
+                  // Must match month/year/base AND position to preserve Captain/FO segregation
                   if (histMonthNorm === freshMonth && 
                       record.year === freshBidPackage.year && 
                       record.base === freshBidPackage.base && 
-                      histAircraftBase === freshAircraftBase) {
+                      histAircraftBase === freshAircraftBase &&
+                      histPosition === freshPosition) {
                     const matchingPairing = newPairingMap.get(record.pairingNumber);
                     if (matchingPairing) {
                       await db
@@ -679,7 +681,7 @@ export async function registerRoutes(app: Express) {
                     }
                   }
                 }
-                console.log(`Auto-linking: Re-linked ${relinkedCount} bid_history records to new package`);
+                console.log(`Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || 'none'})`);
               }
             }
           } catch (linkError) {
