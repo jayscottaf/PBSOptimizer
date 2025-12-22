@@ -307,7 +307,33 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ error: 'Failed to fetch bid packages' });
     }
   });
-  
+
+  // Get single bid package by ID (used for polling status during upload)
+  app.get('/api/bid-packages/:id', async (req, res) => {
+    try {
+      const bidPackageId = parseInt(req.params.id);
+      if (isNaN(bidPackageId)) {
+        return res.status(400).json({ error: 'Invalid bid package ID' });
+      }
+
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      });
+
+      const bidPackage = await storage.getBidPackage(bidPackageId);
+      if (!bidPackage) {
+        return res.status(404).json({ error: 'Bid package not found' });
+      }
+
+      res.json(bidPackage);
+    } catch (error) {
+      console.error('Error fetching bid package:', error);
+      res.status(500).json({ error: 'Failed to fetch bid package' });
+    }
+  });
+
   // Normalize month to uppercase 3-letter abbreviation for consistent matching
   const normalizeMonth = (month: string): string => {
     const upper = month.toUpperCase();
@@ -414,9 +440,11 @@ export async function registerRoutes(app: Express) {
         }
       }
       
-      // Get current (most recent) package ID
-      const currentPackageId = packages[0]?.id;
-      
+      // Get current package: the most recently uploaded completed package
+      // (packages are already sorted by uploadedAt desc, so find first completed one)
+      const currentPackage = packages.find(p => p.status === 'completed');
+      const currentPackageId = currentPackage?.id;
+
       // Build enriched package list with reasons report status
       const enrichedPackages = packages.map(p => {
         const { baseType } = parseAircraftCode(p.aircraft);
@@ -438,7 +466,6 @@ export async function registerRoutes(app: Express) {
         };
       });
       
-      const currentPackage = packages[0];
       res.json({
         bidPackages: {
           total: packages.length,

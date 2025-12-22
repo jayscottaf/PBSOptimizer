@@ -4,8 +4,16 @@ import { CloudUpload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
 
+interface UploadResult {
+  bidPackage?: {
+    id: number;
+    month: string;
+    year: number;
+  };
+}
+
 interface FileUploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (file: File, result?: UploadResult) => void;
 }
 
 export function FileUpload({ onUpload }: FileUploadProps) {
@@ -54,7 +62,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
     setIsUploading(true);
 
     try {
-      await api.uploadBidPackage(file, {
+      const result = await api.uploadBidPackage(file, {
         name: file.name,
         month: 'August', // Would be dynamically determined
         year: 2025,
@@ -69,7 +77,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
 
       // Wait a moment for processing to begin, then trigger refresh
       setTimeout(() => {
-        onUpload(file);
+        onUpload(file, result);
       }, 1000);
     } catch (error) {
       console.error('Upload error:', error);

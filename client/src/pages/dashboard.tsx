@@ -122,6 +122,9 @@ export default function Dashboard() {
   // Ref to track upload polling interval for cleanup
   const uploadPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const uploadPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track processing bid package for persistent indicator
+  const [processingBidPackage, setProcessingBidPackage] = useState<{id: number; name: string} | null>(null);
   
   // Cleanup polling on unmount
   useEffect(() => {
@@ -216,17 +219,24 @@ export default function Dashboard() {
         // Clear any existing polling
         if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
         if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
-        
+
         // Invalidate queries to refresh UI after upload
         queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
         queryClient.invalidateQueries({ queryKey: ['data-health'] });
-        
+
         // Poll for processing completion and refresh again
-        const bidPackageId = data?.bidPackage?.id;
-        if (bidPackageId) {
+        const uploadedBidPackageId = data?.bidPackage?.id;
+        const uploadedBidPackageName = data?.bidPackage?.month && data?.bidPackage?.year
+          ? `${data.bidPackage.month} ${data.bidPackage.year}`
+          : 'Bid Package';
+
+        if (uploadedBidPackageId) {
+          // Set processing state for persistent indicator
+          setProcessingBidPackage({ id: uploadedBidPackageId, name: uploadedBidPackageName });
+
           uploadPollIntervalRef.current = setInterval(async () => {
             try {
-              const response = await fetch(`/api/bid-packages/${bidPackageId}`);
+              const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
               if (response.ok) {
                 const pkg = await response.json();
                 if (pkg.status === 'completed' || pkg.status === 'failed') {
@@ -234,6 +244,10 @@ export default function Dashboard() {
                   if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
                   uploadPollIntervalRef.current = null;
                   uploadPollTimeoutRef.current = null;
+
+                  // Clear processing state
+                  setProcessingBidPackage(null);
+
                   // Refresh all relevant queries using partial key matching
                   queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
                   queryClient.invalidateQueries({ queryKey: ['data-health'] });
@@ -241,17 +255,20 @@ export default function Dashboard() {
                   queryClient.invalidateQueries({
                     predicate: (query) => {
                       const key = query.queryKey[0];
-                      return key === 'pairings' || key === 'initial-pairings' || 
+                      return key === 'pairings' || key === 'initial-pairings' ||
                              key === '/api/pairings' || key === '/api/pairings/search' ||
                              key === '/api/bid-packages' || key === 'bid-package-stats';
                     }
                   });
+
+                  // Show completion toast with longer duration
                   toast({
-                    title: pkg.status === 'completed' ? 'Upload Complete' : 'Upload Failed',
-                    description: pkg.status === 'completed' 
-                      ? 'Bid package processed successfully. Data refreshed.'
-                      : 'Failed to process bid package.',
+                    title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
+                    description: pkg.status === 'completed'
+                      ? `${uploadedBidPackageName} is ready. View updated data in Data Overview.`
+                      : `Failed to process ${uploadedBidPackageName}. Please try again.`,
                     variant: pkg.status === 'completed' ? 'default' : 'destructive',
+                    duration: 8000, // Show for 8 seconds
                   });
                 }
               }
@@ -259,12 +276,13 @@ export default function Dashboard() {
               console.error('Error polling bid package status:', err);
             }
           }, 2000); // Poll every 2 seconds
-          
+
           // Stop polling after 2 minutes max
           uploadPollTimeoutRef.current = setTimeout(() => {
             if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
             uploadPollIntervalRef.current = null;
             uploadPollTimeoutRef.current = null;
+            setProcessingBidPackage(null);
           }, 120000);
         }
       },
@@ -1322,7 +1340,22 @@ export default function Dashboard() {
   }, [filteredDisplayPairings]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className={`flex min-h-screen bg-gray-50 dark:bg-gray-950 ${processingBidPackage ? 'pt-12' : ''}`}>
+      {/* Processing Banner - Shows during bid package processing */}
+      {processingBidPackage && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 dark:bg-blue-700 text-white px-4 py-3 shadow-lg">
+          <div className="flex items-center justify-center gap-3">
+            <RefreshCw className="h-5 w-5 animate-spin" />
+            <span className="font-medium">
+              Processing {processingBidPackage.name}...
+            </span>
+            <span className="text-blue-200 text-sm hidden sm:inline">
+              This may take a minute. You can continue using the app.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Left Sidebar - Hidden on mobile */}
       <div
         className={`hidden lg:flex bg-white dark:bg-gray-900 border-r dark:border-gray-800 transition-all duration-300 ${
@@ -1835,63 +1868,87 @@ export default function Dashboard() {
                 <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
                 <div className="mt-4">
                   <FileUpload
-                    onUpload={file => {
-                    console.log('File uploaded:', file);
+                    onUpload={(file, result) => {
+                    console.log('File uploaded:', file, result);
                     setShowUploadModal(false);
                     refetchBidPackages();
+                    queryClient.invalidateQueries({ queryKey: ['data-health'] });
+
+                    // Get bid package ID from result
+                    const uploadedBidPackageId = result?.bidPackage?.id;
+
+                    // Set processing state - use generic name initially since actual month/year comes from PDF parsing
+                    if (uploadedBidPackageId) {
+                      setProcessingBidPackage({ id: uploadedBidPackageId, name: 'bid package' });
+                    }
 
                     // Poll for completion and refresh data
                     const pollForCompletion = async () => {
                       let attempts = 0;
-                      const maxAttempts = 30; // 30 seconds max
+                      const maxAttempts = 120; // 120 seconds max for longer processing
 
                       const checkStatus = async () => {
                         attempts++;
                         try {
-                          const packages = await api.getBidPackages();
-                          const latestPackage = packages.reduce(
-                            (latest: any, pkg: any) => {
-                              if (
-                                pkg.status === 'completed' &&
-                                (!latest ||
-                                  new Date(pkg.uploadedAt) >
-                                    new Date(latest.uploadedAt))
-                              ) {
-                                return pkg;
+                          if (uploadedBidPackageId) {
+                            const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
+                            if (response.ok) {
+                              const pkg = await response.json();
+
+                              // Update banner with actual month/year from parsed PDF
+                              if (pkg.month && pkg.year && pkg.status === 'processing') {
+                                setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
                               }
-                              return latest;
-                            },
-                            null
-                          );
 
-                          if (latestPackage) {
-                            console.log(
-                              'Bid package processing completed, waiting for database writes to commit...'
-                            );
-                            // Wait 5 seconds to ensure all database batch inserts are committed
-                            // The server inserts pairings in batches (11 batches for 513 pairings),
-                            // and we need to wait for all batches to complete before fetching
-                            await new Promise(resolve => setTimeout(resolve, 5000));
+                              if (pkg.status === 'completed' || pkg.status === 'failed') {
+                                const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
 
-                            console.log('Database writes complete, refreshing data...');
-                            // Refresh all data
-                            refetchBidPackages();
-                            if (latestPackage.id !== selectedBidPackageId) {
-                              setSelectedBidPackageId(latestPackage.id);
+                                // Clear processing state
+                                setProcessingBidPackage(null);
+
+                                // Refresh all data
+                                queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+                                queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                                queryClient.invalidateQueries({
+                                  predicate: (query) => {
+                                    const key = query.queryKey[0];
+                                    return key === 'pairings' || key === 'initial-pairings' ||
+                                           key === '/api/pairings' || key === '/api/pairings/search' ||
+                                           key === '/api/bid-packages' || key === 'bid-package-stats';
+                                  }
+                                });
+
+                                // Show completion toast with actual name from parsed PDF
+                                toast({
+                                  title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
+                                  description: pkg.status === 'completed'
+                                    ? `${actualName} is ready!`
+                                    : `Failed to process ${actualName}. Please try again.`,
+                                  variant: pkg.status === 'completed' ? 'default' : 'destructive',
+                                  duration: 8000,
+                                });
+
+                                if (pkg.status === 'completed' && pkg.id !== selectedBidPackageId) {
+                                  setSelectedBidPackageId(pkg.id);
+                                }
+                                return; // Exit polling
+                              }
                             }
-                            return; // Exit polling
                           }
 
                           if (attempts < maxAttempts) {
                             setTimeout(checkStatus, 1000); // Check again in 1 second
                           } else {
                             console.log('Polling timeout reached');
+                            setProcessingBidPackage(null);
+                            toast({
+                              title: 'Processing timeout',
+                              description: 'Processing is taking longer than expected. Please refresh the page.',
+                              variant: 'destructive',
+                            });
                           }
                         } catch (error) {
-                          console.error(
-                            'Error checking bid package status:',
-                            error
-                          );
+                          console.error('Error checking bid package status:', error);
                           if (attempts < maxAttempts) {
                             setTimeout(checkStatus, 1000);
                           }
