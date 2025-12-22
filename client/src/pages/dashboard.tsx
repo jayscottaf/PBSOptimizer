@@ -1850,134 +1850,139 @@ export default function Dashboard() {
 
       {/* Upload Modal */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Upload Files</DialogTitle>
             <DialogDescription>
               Upload bid packages or reasons reports to improve predictions
             </DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="bidPackage" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="bidPackage">Bid Package</TabsTrigger>
-              <TabsTrigger value="reasonsReport">Reasons Report</TabsTrigger>
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upload">Upload</TabsTrigger>
               <TabsTrigger value="dataOverview" data-testid="tab-data-overview">Data Overview</TabsTrigger>
             </TabsList>
-            <TabsContent value="bidPackage" className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                <CloudUpload className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="mt-4">
+            <TabsContent value="upload" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Bid Package Upload */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bid Package</h3>
                   <FileUpload
                     onUpload={(file, result) => {
-                    console.log('File uploaded:', file, result);
-                    setShowUploadModal(false);
-                    refetchBidPackages();
-                    queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                        console.log('File uploaded:', file, result);
+                        setShowUploadModal(false);
+                        refetchBidPackages();
+                        queryClient.invalidateQueries({ queryKey: ['data-health'] });
 
-                    // Get bid package ID from result
-                    const uploadedBidPackageId = result?.bidPackage?.id;
+                        // Get bid package ID from result
+                        const uploadedBidPackageId = result?.bidPackage?.id;
 
-                    // Set processing state - use generic name initially since actual month/year comes from PDF parsing
-                    if (uploadedBidPackageId) {
-                      setProcessingBidPackage({ id: uploadedBidPackageId, name: 'bid package' });
-                    }
+                        // Set processing state - use generic name initially since actual month/year comes from PDF parsing
+                        if (uploadedBidPackageId) {
+                          setProcessingBidPackage({ id: uploadedBidPackageId, name: 'bid package' });
+                        }
 
-                    // Poll for completion and refresh data
-                    const pollForCompletion = async () => {
-                      let attempts = 0;
-                      const maxAttempts = 120; // 120 seconds max for longer processing
+                        // Poll for completion and refresh data
+                        const pollForCompletion = async () => {
+                          let attempts = 0;
+                          const maxAttempts = 120; // 120 seconds max for longer processing
 
-                      const checkStatus = async () => {
-                        attempts++;
-                        try {
-                          if (uploadedBidPackageId) {
-                            const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
-                            if (response.ok) {
-                              const pkg = await response.json();
+                          const checkStatus = async () => {
+                            attempts++;
+                            try {
+                              if (uploadedBidPackageId) {
+                                const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
+                                if (response.ok) {
+                                  const pkg = await response.json();
 
-                              // Update banner with actual month/year from parsed PDF
-                              if (pkg.month && pkg.year && pkg.status === 'processing') {
-                                setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
+                                  // Update banner with actual month/year from parsed PDF
+                                  if (pkg.month && pkg.year && pkg.status === 'processing') {
+                                    setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
+                                  }
+
+                                  if (pkg.status === 'completed' || pkg.status === 'failed') {
+                                    const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
+
+                                    // Clear processing state
+                                    setProcessingBidPackage(null);
+
+                                    // Refresh all data
+                                    queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+                                    queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                                    queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
+                                    queryClient.invalidateQueries({
+                                      predicate: (query) => {
+                                        const key = query.queryKey[0];
+                                        return key === 'pairings' || key === 'initial-pairings' ||
+                                               key === '/api/pairings' || key === '/api/pairings/search' ||
+                                               key === '/api/bid-packages' || key === 'bid-package-stats';
+                                      }
+                                    });
+
+                                    // Show completion toast with actual name from parsed PDF
+                                    toast({
+                                      title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
+                                      description: pkg.status === 'completed'
+                                        ? `${actualName} is ready!`
+                                        : `Failed to process ${actualName}. Please try again.`,
+                                      variant: pkg.status === 'completed' ? 'default' : 'destructive',
+                                      duration: 8000,
+                                    });
+
+                                    if (pkg.status === 'completed' && pkg.id !== selectedBidPackageId) {
+                                      setSelectedBidPackageId(pkg.id);
+                                    }
+                                    return; // Exit polling
+                                  }
+                                }
                               }
 
-                              if (pkg.status === 'completed' || pkg.status === 'failed') {
-                                const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
-
-                                // Clear processing state
+                              if (attempts < maxAttempts) {
+                                setTimeout(checkStatus, 1000); // Check again in 1 second
+                              } else {
+                                console.log('Polling timeout reached');
                                 setProcessingBidPackage(null);
-
-                                // Refresh all data
-                                queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
-                                queryClient.invalidateQueries({ queryKey: ['data-health'] });
-                                queryClient.invalidateQueries({
-                                  predicate: (query) => {
-                                    const key = query.queryKey[0];
-                                    return key === 'pairings' || key === 'initial-pairings' ||
-                                           key === '/api/pairings' || key === '/api/pairings/search' ||
-                                           key === '/api/bid-packages' || key === 'bid-package-stats';
-                                  }
-                                });
-
-                                // Show completion toast with actual name from parsed PDF
                                 toast({
-                                  title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
-                                  description: pkg.status === 'completed'
-                                    ? `${actualName} is ready!`
-                                    : `Failed to process ${actualName}. Please try again.`,
-                                  variant: pkg.status === 'completed' ? 'default' : 'destructive',
-                                  duration: 8000,
+                                  title: 'Processing timeout',
+                                  description: 'Processing is taking longer than expected. Please refresh the page.',
+                                  variant: 'destructive',
                                 });
-
-                                if (pkg.status === 'completed' && pkg.id !== selectedBidPackageId) {
-                                  setSelectedBidPackageId(pkg.id);
-                                }
-                                return; // Exit polling
+                              }
+                            } catch (error) {
+                              console.error('Error checking bid package status:', error);
+                              if (attempts < maxAttempts) {
+                                setTimeout(checkStatus, 1000);
                               }
                             }
-                          }
+                          };
 
-                          if (attempts < maxAttempts) {
-                            setTimeout(checkStatus, 1000); // Check again in 1 second
-                          } else {
-                            console.log('Polling timeout reached');
-                            setProcessingBidPackage(null);
-                            toast({
-                              title: 'Processing timeout',
-                              description: 'Processing is taking longer than expected. Please refresh the page.',
-                              variant: 'destructive',
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Error checking bid package status:', error);
-                          if (attempts < maxAttempts) {
-                            setTimeout(checkStatus, 1000);
-                          }
-                        }
-                      };
+                          checkStatus();
+                        };
 
-                      checkStatus();
-                    };
+                        pollForCompletion();
+                    }}
+                  />
+                  <div className="text-xs text-gray-500 flex items-center">
+                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                    PDF or TXT format
+                  </div>
+                </div>
 
-                    pollForCompletion();
-                  }}
+                {/* Reasons Report Upload */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Reasons Report</h3>
+                  <ReasonsReportUpload
+                    onUploadSuccess={() => {
+                      queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
+                      queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                      toast({
+                        title: 'Historical data updated',
+                        description: 'Hold probabilities will now use this data for predictions.',
+                      });
+                    }}
                   />
                 </div>
               </div>
-              <div className="text-xs text-gray-500 flex items-center">
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                Supports NYC A220 bid packages (PDF or TXT format)
-              </div>
-            </TabsContent>
-            <TabsContent value="reasonsReport" className="space-y-4">
-              <ReasonsReportUpload
-                onUploadSuccess={() => {
-                  // Optionally close modal or show success message
-                  toast({
-                    title: 'Historical data updated',
-                    description: 'Hold probabilities will now use this data for predictions.',
-                  });
-                }}
-              />
             </TabsContent>
             <TabsContent value="dataOverview" className="space-y-4">
               <DataManagementPanel />

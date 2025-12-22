@@ -1,19 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from './ui/button';
-import { CloudUpload, FileText, Database } from 'lucide-react';
+import { CloudUpload, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ReasonsReportUploadProps {
   onUploadSuccess?: () => void;
-}
-
-interface UploadedReport {
-  month: string;
-  year: number;
-  base: string;
-  aircraft: string;
-  count: number;
-  uploadedAt: string;
 }
 
 export function ReasonsReportUpload({
@@ -21,29 +12,8 @@ export function ReasonsReportUpload({
 }: ReasonsReportUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedReports, setUploadedReports] = useState<UploadedReport[]>([]);
-  const [isLoadingReports, setIsLoadingReports] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  // Fetch uploaded reports on mount
-  useEffect(() => {
-    fetchUploadedReports();
-  }, []);
-
-  const fetchUploadedReports = async () => {
-    try {
-      const response = await fetch('/api/reasons-reports');
-      if (response.ok) {
-        const reports = await response.json();
-        setUploadedReports(reports);
-      }
-    } catch (error) {
-      console.error('Error fetching uploaded reports:', error);
-    } finally {
-      setIsLoadingReports(false);
-    }
-  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -126,9 +96,6 @@ export function ReasonsReportUpload({
         });
       }
 
-      // Refresh the uploaded reports list
-      fetchUploadedReports();
-
       // Call success callback
       if (onUploadSuccess) {
         onUploadSuccess();
@@ -153,19 +120,7 @@ export function ReasonsReportUpload({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="text-sm text-gray-600 space-y-2">
-        <p>
-          Upload a Delta Airlines Reasons Report (HTML file) to improve hold
-          probability predictions.
-        </p>
-        <p>
-          The system will extract historical award data and use it to calculate
-          more accurate hold probabilities based on actual seniority numbers
-          from past months.
-        </p>
-      </div>
-
+    <div className="space-y-3">
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
           isDragging
@@ -179,27 +134,23 @@ export function ReasonsReportUpload({
       >
         <div className="flex flex-col items-center">
           {isUploading ? (
-            <CloudUpload className="mx-auto h-12 w-12 text-blue-500 mb-3 animate-pulse" />
+            <CloudUpload className="mx-auto h-8 w-8 text-blue-500 mb-2 animate-pulse" />
           ) : (
-            <FileText className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+            <FileText className="mx-auto h-8 w-8 text-gray-400 mb-2" />
           )}
 
-          <p className="text-sm font-medium text-gray-700 mb-1">
+          <p className="text-sm text-gray-600 mb-2">
             {isUploading
-              ? 'Uploading and processing...'
+              ? 'Uploading...'
               : 'Drop HTML file here or click to browse'}
           </p>
 
-          <p className="text-xs text-gray-500 mb-3">
-            Accepts: Delta Reasons Report HTML files
-          </p>
-
           <Button
-            variant="outline"
-            className="text-blue-600 hover:text-blue-700 font-medium"
+            variant="link"
+            className="text-blue-600 hover:text-blue-700 font-medium p-0"
             disabled={isUploading}
           >
-            {isUploading ? 'Processing...' : 'Select File'}
+            Select File
           </Button>
         </div>
 
@@ -212,46 +163,9 @@ export function ReasonsReportUpload({
         />
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-        <p className="text-xs text-blue-800">
-          <strong>How it works:</strong> Historical award data is used to match
-          similar trips and predict hold probabilities based on actual seniority
-          numbers from previous months.
-        </p>
-      </div>
-
-      {/* Previously Uploaded Reports */}
-      <div className="border rounded-lg p-4 bg-gray-50">
-        <div className="flex items-center gap-2 mb-3">
-          <Database className="h-4 w-4 text-gray-600" />
-          <h3 className="text-sm font-semibold text-gray-700">
-            Previously Uploaded Reports
-          </h3>
-        </div>
-
-        {isLoadingReports ? (
-          <p className="text-xs text-gray-500">Loading...</p>
-        ) : uploadedReports.length === 0 ? (
-          <p className="text-xs text-gray-500">
-            No reports uploaded yet. Upload your first reasons report to get started.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {uploadedReports.map((report, index) => (
-              <div
-                key={index}
-                className="flex justify-between items-center bg-white rounded px-3 py-2 text-xs border"
-              >
-                <div className="font-medium text-gray-700">
-                  {report.month} {report.year} - {report.base} {report.aircraft}
-                </div>
-                <div className="text-gray-500">
-                  {report.count} awards
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="text-xs text-gray-500 flex items-center">
+        <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+        HTML format (Delta Reasons Report)
       </div>
     </div>
   );

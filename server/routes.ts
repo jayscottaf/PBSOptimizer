@@ -389,7 +389,18 @@ export async function registerRoutes(app: Express) {
       const packages = await storage.getBidPackages();
       const historyCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory);
       const linkedCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory).where(sql`linked_pairing_id IS NOT NULL`);
-      
+
+      // Get all months from bidHistory (for later comparison with packages)
+      const historyMonths = await db
+        .select({
+          month: bidHistory.month,
+          year: bidHistory.year,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(bidHistory)
+        .groupBy(bidHistory.month, bidHistory.year)
+        .orderBy(sql`${bidHistory.year} DESC, ${bidHistory.month}`);
+
       // Get reasons reports grouped by month/year/base/aircraft
       const reasonsReports = await db
         .select({
@@ -466,6 +477,14 @@ export async function registerRoutes(app: Express) {
         };
       });
       
+      // Find months in history that don't have a corresponding bid package
+      const packageMonthYears = new Set(
+        packages.map(p => `${normalizeMonth(p.month)}-${p.year}`)
+      );
+      const missingPackageMonths = historyMonths.filter(h =>
+        !packageMonthYears.has(`${normalizeMonth(h.month)}-${h.year}`)
+      );
+
       res.json({
         bidPackages: {
           total: packages.length,
@@ -476,6 +495,11 @@ export async function registerRoutes(app: Express) {
           total: historyCount[0]?.count || 0,
           linkedToBidPackage: linkedCount[0]?.count || 0,
           unlinked: (historyCount[0]?.count || 0) - (linkedCount[0]?.count || 0),
+          unlinkedMonths: missingPackageMonths.map(m => ({
+            month: m.month,
+            year: m.year,
+            count: m.count,
+          })),
         },
       });
     } catch (error) {
