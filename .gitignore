@@ -46,6 +46,3 @@ Thumbs.db
 
 # Vercel
 .vercel
-
-# Bundled serverless function output
-api/index.js
