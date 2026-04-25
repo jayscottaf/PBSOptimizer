@@ -325,13 +325,13 @@ export class PDFParser {
         // If the date range spans multiple months, we need to determine which month
         // contains the majority of the bid period
         if (startMonth !== endMonth || startYear !== endYear) {
-          // For bid packages, the month where most of the bid period occurs is typically
-          // the month that contains more days of the bid period
-          // Since bid periods often start late in one month and end early in the next,
-          // we'll use the end month as it typically contains more of the bid period
-          const monthYear = `${endMonth} ${endYear}`;
+          // Delta bid packages span "Mon 2 → next-Mon 1" (e.g. May 2 → June 1).
+          // The package is named after the START month — that's the month with
+          // ~30 of the 31 days. The previous code picked the end month, which
+          // mislabels every package by one month.
+          const monthYear = `${startMonth} ${startYear}`;
           console.log(
-            `Found bid package date from date range (using end month): ${monthYear}`
+            `Found bid package date from date range (using start month): ${monthYear}`
           );
           console.log(
             `Note: Date range spans ${startMonth} ${startYear} to ${endMonth} ${endYear}`

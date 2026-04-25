@@ -3187,9 +3187,9 @@ var PDFParser = class {
         const endMonth = dateRangeMatch[3];
         const endYear = dateRangeMatch[4];
         if (startMonth !== endMonth || startYear !== endYear) {
-          const monthYear = `${endMonth} ${endYear}`;
+          const monthYear = `${startMonth} ${startYear}`;
           console.log(
-            `Found bid package date from date range (using end month): ${monthYear}`
+            `Found bid package date from date range (using start month): ${monthYear}`
           );
           console.log(
             `Note: Date range spans ${startMonth} ${startYear} to ${endMonth} ${endYear}`
