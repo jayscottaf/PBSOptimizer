@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
+import { PairingModal } from './pairing-modal';
 
 type CalendarEvent = {
   id: number;
@@ -159,6 +160,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
   // Initialize to current date, will be updated when bid package loads
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [openPairingId, setOpenPairingId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   // Update calendar month when bid package data loads
@@ -641,9 +643,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             top: `${topOffset}px`,
                             height: '24px',
                           }}
-                          onClick={() =>
-                            handleRemoveFromCalendar(event.pairingId)
-                          }
+                          onClick={() => setOpenPairingId(event.pairingId)}
                         >
                           <div className="flex items-center justify-between h-full px-2 text-white text-sm font-bold">
                             <span className="truncate">
@@ -655,7 +655,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="opacity-0 group-hover:opacity-100 h-4 w-4 p-0 hover:bg-red-100 ml-1"
+                              aria-label="Remove from calendar"
+                              className="h-4 w-4 p-0 hover:bg-red-100 ml-1"
                               onClick={e => {
                                 e.stopPropagation();
                                 handleRemoveFromCalendar(event.pairingId);
@@ -983,6 +984,13 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {openPairingId !== null && (
+        <PairingModal
+          pairingId={openPairingId}
+          onClose={() => setOpenPairingId(null)}
+        />
       )}
     </div>
   );
