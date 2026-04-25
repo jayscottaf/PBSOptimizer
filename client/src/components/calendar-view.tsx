@@ -659,14 +659,19 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       const width = span * (100 / 7) - 1; // Span across days
 
                       // Build a label for each calendar day this week segment covers.
-                      // For trip day i (0-indexed), show that night's layover city.
-                      // The trip's last day has no overnight, so show the return-to-base.
+                      // For trip day i (0-indexed), show where that day ends —
+                      // the i-th layover city on layover days, and the route's
+                      // final airport on the trip's last day (no arrow prefix).
                       const layoverList = event.pairing.layovers ?? [];
                       const tripDays = event.pairing.pairingDays ?? span;
+                      const routeAirports =
+                        (event.pairing.route || '').match(/\b[A-Z]{3}\b/g) ?? [];
+                      const finalDestination =
+                        routeAirports[routeAirports.length - 1] || '';
                       const dayLabels = Array.from({ length: span }, (_, i) => {
                         const tripDayIdx = dayOffset + i;
                         if (tripDayIdx >= tripDays - 1) {
-                          return homeBase ? `→${homeBase}` : '→home';
+                          return finalDestination;
                         }
                         const city = layoverList[tripDayIdx]?.city || '';
                         return city.toUpperCase();
