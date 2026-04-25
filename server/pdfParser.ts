@@ -1,6 +1,7 @@
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import pdfParse from 'pdf-parse';
 import { storage } from './storage';
 import type { InsertPairing } from '../shared/schema';
 import { samplePdfText } from './samplePdfText';
@@ -943,26 +944,15 @@ export class PDFParser {
         throw new Error(`PDF file not found: ${filePath}`);
       }
 
-      // Use standalone Node.js worker to avoid tsx/ES module conflicts
-      const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, {
-        encoding: 'utf8',
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large PDFs
-      });
-
-      const lines = result.trim().split('\n');
-      const successIndex = lines.findIndex(line => line === 'SUCCESS');
-
-      if (successIndex === -1) {
-        throw new Error('PDF parsing worker did not report success');
-      }
-
-      const jsonResult = lines.slice(successIndex + 1).join('\n');
-      const parsed = JSON.parse(jsonResult);
-
+      // Parse in-process. The subprocess worker pattern was a local-dev workaround
+      // for tsx/ESM conflicts; on Vercel the serverless runtime can't shell out to
+      // a separate .cjs file that isn't bundled with the function.
+      const buffer = fs.readFileSync(filePath);
+      const data = await pdfParse(buffer);
       console.log(
-        `PDF parsed successfully: ${parsed.text.length} characters extracted`
+        `PDF parsed successfully: ${data.text.length} characters extracted`
       );
-      return parsed.text;
+      return data.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
       throw new Error(

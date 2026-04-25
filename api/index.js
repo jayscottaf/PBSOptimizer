@@ -2012,8 +2012,8 @@ PAY: 5:15  SIT/EDP: 0:15  CARVEOUTS: NONE  DH: 2`,
 }
 
 // server/pdfParser.ts
-import { execSync } from "child_process";
 import fs from "fs";
+import pdfParse from "pdf-parse";
 
 // server/holdProbabilityCalculator.ts
 import { and as and2, eq as eq2 } from "drizzle-orm";
@@ -3642,22 +3642,12 @@ var PDFParser = class {
       if (!fs.existsSync(filePath)) {
         throw new Error(`PDF file not found: ${filePath}`);
       }
-      const result = execSync(`node server/pdfParserWorker.cjs "${filePath}"`, {
-        encoding: "utf8",
-        maxBuffer: 10 * 1024 * 1024
-        // 10MB buffer for large PDFs
-      });
-      const lines = result.trim().split("\n");
-      const successIndex = lines.findIndex((line) => line === "SUCCESS");
-      if (successIndex === -1) {
-        throw new Error("PDF parsing worker did not report success");
-      }
-      const jsonResult = lines.slice(successIndex + 1).join("\n");
-      const parsed = JSON.parse(jsonResult);
+      const buffer = fs.readFileSync(filePath);
+      const data = await pdfParse(buffer);
       console.log(
-        `PDF parsed successfully: ${parsed.text.length} characters extracted`
+        `PDF parsed successfully: ${data.text.length} characters extracted`
       );
-      return parsed.text;
+      return data.text;
     } catch (error) {
       console.error("Error extracting text from PDF:", error);
       throw new Error(
