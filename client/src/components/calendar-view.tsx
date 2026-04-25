@@ -39,6 +39,14 @@ type CalendarEvent = {
     checkInTime?: string;
     pairingDays?: number; // Added for calculating working days
     layovers?: Array<{ city?: string; hotel?: string; duration?: string }> | null;
+    flightSegments?: Array<{
+      date?: string; // day letter A/B/C/D...
+      flightNumber?: string;
+      departure?: string;
+      departureTime?: string;
+      arrival?: string;
+      arrivalTime?: string;
+    }> | null;
   };
 };
 
@@ -658,23 +666,43 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       const leftOffset = startDayIndex * (100 / 7) + 0.5; // Percentage based positioning
                       const width = span * (100 / 7) - 1; // Span across days
 
-                      // Build a label for each calendar day this week segment covers.
-                      // For trip day i (0-indexed), show where that day ends —
-                      // the i-th layover city on layover days, and the route's
-                      // final airport on the trip's last day (no arrow prefix).
-                      const layoverList = event.pairing.layovers ?? [];
-                      const tripDays = event.pairing.pairingDays ?? span;
+                      // Per-day label = the city the pilot ends up in that
+                      // day. Group flight segments by day letter (A/B/C/D)
+                      // and take each day's last arrival. This handles the
+                      // case where a pilot stays in the same layover city
+                      // across multiple nights (e.g. IAH, IAH, SYR, LGA),
+                      // which the layovers array deduplicates.
+                      const segments = event.pairing.flightSegments ?? [];
+                      const grouped = segments.reduce<Record<string, typeof segments>>(
+                        (acc, seg) => {
+                          const d = (seg?.date || 'A').toUpperCase();
+                          (acc[d] ||= []).push(seg);
+                          return acc;
+                        },
+                        {}
+                      );
+                      const dayOrder = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+                      const dayEndpoints = dayOrder
+                        .filter(d => grouped[d])
+                        .map(d => {
+                          const last = grouped[d][grouped[d].length - 1];
+                          return (last?.arrival || '').toUpperCase();
+                        });
+
+                      // Fallback for older rows without flightSegments: use
+                      // the last 3-letter airport code from the route string.
                       const routeAirports =
                         (event.pairing.route || '').match(/\b[A-Z]{3}\b/g) ?? [];
                       const finalDestination =
                         routeAirports[routeAirports.length - 1] || '';
+                      const tripDays = event.pairing.pairingDays ?? span;
+
                       const dayLabels = Array.from({ length: span }, (_, i) => {
                         const tripDayIdx = dayOffset + i;
-                        if (tripDayIdx >= tripDays - 1) {
-                          return finalDestination;
-                        }
-                        const city = layoverList[tripDayIdx]?.city || '';
-                        return city.toUpperCase();
+                        const fromSegments = dayEndpoints[tripDayIdx];
+                        if (fromSegments) return fromSegments;
+                        if (tripDayIdx >= tripDays - 1) return finalDestination;
+                        return '';
                       });
 
                       return (

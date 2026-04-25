@@ -5871,7 +5871,8 @@ async function registerRoutes(app2) {
           tafb: pairings.tafb,
           checkInTime: pairings.checkInTime,
           pairingDays: pairings.pairingDays,
-          layovers: pairings.layovers
+          layovers: pairings.layovers,
+          flightSegments: pairings.flightSegments
         }
       }).from(userCalendarEvents).leftJoin(pairings, eq3(userCalendarEvents.pairingId, pairings.id)).where(
         and3(

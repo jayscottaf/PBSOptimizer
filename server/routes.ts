@@ -2520,6 +2520,7 @@ export async function registerRoutes(app: Express) {
             checkInTime: pairings.checkInTime,
             pairingDays: pairings.pairingDays,
             layovers: pairings.layovers,
+            flightSegments: pairings.flightSegments,
           },
         })
         .from(userCalendarEvents)
