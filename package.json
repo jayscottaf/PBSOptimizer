@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "build": "vite build",
-    "vercel-build": "vite build && esbuild api/index.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js --banner:js=\"import { createRequire as _createRequire } from 'module'; const require = _createRequire(import.meta.url);\"",
+    "vercel-build": "vite build && esbuild server/vercel-entry.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js --banner:js=\"import { createRequire as _createRequire } from 'module'; const require = _createRequire(import.meta.url);\"",
     "start": "cross-env NODE_ENV=production tsx app.ts",
     "check": "tsc",
     "db:push": "drizzle-kit push",
