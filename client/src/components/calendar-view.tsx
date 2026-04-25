@@ -668,10 +668,13 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
                       // Per-day label = the city the pilot ends up in that
                       // day. Group flight segments by day letter (A/B/C/D)
-                      // and take each day's last arrival. This handles the
-                      // case where a pilot stays in the same layover city
-                      // across multiple nights (e.g. IAH, IAH, SYR, LGA),
-                      // which the layovers array deduplicates.
+                      // and take each day's last arrival.
+                      //
+                      // Edge case: a long layover (>24h) means one calendar
+                      // day has no flights — segments may be A, C, D with
+                      // B missing. Walk every letter from first to last
+                      // present and carry the previous endpoint forward
+                      // when a day has no flights (still in same city).
                       const segments = event.pairing.flightSegments ?? [];
                       const grouped = segments.reduce<Record<string, typeof segments>>(
                         (acc, seg) => {
@@ -682,12 +685,25 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                         {}
                       );
                       const dayOrder = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-                      const dayEndpoints = dayOrder
-                        .filter(d => grouped[d])
-                        .map(d => {
-                          const last = grouped[d][grouped[d].length - 1];
-                          return (last?.arrival || '').toUpperCase();
-                        });
+                      const presentLetters = dayOrder.filter(d => grouped[d]);
+                      const firstIdx = presentLetters.length
+                        ? dayOrder.indexOf(presentLetters[0])
+                        : -1;
+                      const lastIdx = presentLetters.length
+                        ? dayOrder.indexOf(
+                            presentLetters[presentLetters.length - 1]
+                          )
+                        : -1;
+                      const dayEndpoints: string[] = [];
+                      let carry = '';
+                      for (let idx = firstIdx; idx >= 0 && idx <= lastIdx; idx++) {
+                        const letter = dayOrder[idx];
+                        if (grouped[letter]) {
+                          const last = grouped[letter][grouped[letter].length - 1];
+                          carry = (last?.arrival || carry).toUpperCase();
+                        }
+                        dayEndpoints.push(carry);
+                      }
 
                       // Fallback for older rows without flightSegments: use
                       // the last 3-letter airport code from the route string.
