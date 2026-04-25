@@ -78,16 +78,23 @@ async function recalculateHoldProbabilitiesOptimized(
     }
 
     // Calculate all hold probabilities in memory
-    const updates: Array<{ id: number; holdProbability: number; reasoning?: string[] }> = [];
+    const updates: Array<{
+      id: number;
+      holdProbability: number;
+      reasoning?: string[];
+    }> = [];
 
     // Use historical data if seniority number is provided
     const useHistoricalData = seniorityNumber !== undefined;
 
     for (const pairing of allPairings) {
       let holdProbabilityResult;
-      
+
       // Extract layover cities for location-based adjustments
-      const layoverCities = (pairing.layovers as any[])?.map((l: any) => l.city).filter((c: string) => c) || [];
+      const layoverCities =
+        (pairing.layovers as any[])
+          ?.map((l: any) => l.city)
+          .filter((c: string) => c) || [];
 
       if (useHistoricalData && seniorityNumber) {
         // Try historical calculation first (now with bid month for seasonal adjustments)
@@ -103,7 +110,10 @@ async function recalculateHoldProbabilitiesOptimized(
       } else {
         // Fall back to estimate-based calculation with location data
         const desirabilityScore =
-          HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidPackage.month);
+          HoldProbabilityCalculator.calculateDesirabilityScore(
+            pairing,
+            bidPackage.month
+          );
         const pairingFrequency =
           HoldProbabilityCalculator.calculatePairingFrequency(
             pairing.pairingNumber,
@@ -163,7 +173,9 @@ async function recalculateHoldProbabilitiesBackground(
   // Start recalculation in background without awaiting
   Promise.resolve().then(async () => {
     try {
-      console.log(`🔄 Background recalculation triggered for bid package ${bidPackageId}`);
+      console.log(
+        `🔄 Background recalculation triggered for bid package ${bidPackageId}`
+      );
       await recalculateHoldProbabilitiesOptimized(
         bidPackageId,
         seniorityPercentile,
@@ -290,7 +302,7 @@ export async function registerRoutes(app: Express) {
       const packages = await withDatabaseRetry(async () => {
         return await storage.getBidPackages();
       });
-      
+
       // Mark the most recent package as current (for UI display)
       const packagesWithCurrent = packages.map((pkg, index) => ({
         ...pkg,
@@ -334,13 +346,22 @@ export async function registerRoutes(app: Express) {
   const normalizeMonth = (month: string): string => {
     const upper = month.toUpperCase();
     const monthMap: Record<string, string> = {
-      JANUARY: 'JAN', FEBRUARY: 'FEB', MARCH: 'MAR', APRIL: 'APR',
-      MAY: 'MAY', JUNE: 'JUN', JULY: 'JUL', AUGUST: 'AUG',
-      SEPTEMBER: 'SEP', OCTOBER: 'OCT', NOVEMBER: 'NOV', DECEMBER: 'DEC',
+      JANUARY: 'JAN',
+      FEBRUARY: 'FEB',
+      MARCH: 'MAR',
+      APRIL: 'APR',
+      MAY: 'MAY',
+      JUNE: 'JUN',
+      JULY: 'JUL',
+      AUGUST: 'AUG',
+      SEPTEMBER: 'SEP',
+      OCTOBER: 'OCT',
+      NOVEMBER: 'NOV',
+      DECEMBER: 'DEC',
     };
     return monthMap[upper] || upper.substring(0, 3);
   };
-  
+
   // Normalize aircraft type to base code, stripping position suffix (A/B with or without hyphen)
   // Examples:
   //   A220, 220-A, 220-B, 220A, 220B -> 220
@@ -348,10 +369,12 @@ export async function registerRoutes(app: Express) {
   //   CR9, CR9-B, CR9A -> CR9
   //   CS1-A, CS1B -> CS1
   // Position: A = Captain, B = First Officer
-  const parseAircraftCode = (aircraft: string): { baseType: string; position: string | null } => {
+  const parseAircraftCode = (
+    aircraft: string
+  ): { baseType: string; position: string | null } => {
     // Remove ALL whitespace (not just trim) to handle "220 B" vs "220B" variations
     const normalized = aircraft.toUpperCase().replace(/\s+/g, '');
-    
+
     // Pattern 1: Any base code with position suffix (with or without hyphen)
     // Match: alphanumeric base + optional hyphen + A or B at end
     // Examples: "220-A", "220A", "73H-B", "73HB", "CR9A"
@@ -359,7 +382,7 @@ export async function registerRoutes(app: Express) {
     if (suffixMatch) {
       let baseType = suffixMatch[1];
       const position = suffixMatch[2];
-      
+
       // If base is purely numeric with letter prefix like "A220", strip the prefix
       const prefixNumeric = baseType.match(/^[A-Z](\d{3})$/);
       if (prefixNumeric) {
@@ -367,13 +390,13 @@ export async function registerRoutes(app: Express) {
       }
       return { baseType, position };
     }
-    
+
     // Pattern 2: Letter prefix like "A220" or "A350" (no position suffix)
     const prefixMatch = normalized.match(/^[A-Z](\d{3})$/);
     if (prefixMatch) {
       return { baseType: prefixMatch[1], position: null };
     }
-    
+
     // Pattern 3: Any alphanumeric code without position suffix (e.g., "73H", "CR9", "220")
     // Return as-is since there's no position suffix to strip
     return { baseType: normalized, position: null };
@@ -383,8 +406,13 @@ export async function registerRoutes(app: Express) {
   app.get('/api/data-health', async (req, res) => {
     try {
       const packages = await storage.getBidPackages();
-      const historyCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory);
-      const linkedCount = await db.select({ count: sql<number>`count(*)::int` }).from(bidHistory).where(sql`linked_pairing_id IS NOT NULL`);
+      const historyCount = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(bidHistory);
+      const linkedCount = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(bidHistory)
+        .where(sql`linked_pairing_id IS NOT NULL`);
 
       // Get all months from bidHistory (for later comparison with packages)
       const historyMonths = await db
@@ -408,45 +436,57 @@ export async function registerRoutes(app: Express) {
           linkedCount: sql<number>`count(linked_pairing_id)::int`,
         })
         .from(bidHistory)
-        .groupBy(bidHistory.month, bidHistory.year, bidHistory.base, bidHistory.aircraft);
-      
+        .groupBy(
+          bidHistory.month,
+          bidHistory.year,
+          bidHistory.base,
+          bidHistory.aircraft
+        );
+
       // Create lookup map for reasons reports using normalized aircraft base type
       // Key format: MONTH-YEAR-BASE-AIRCRAFT_BASE_TYPE
       // Also track per-position details
-      const reasonsMap = new Map<string, { 
-        count: number; 
-        linkedCount: number;
-        positions: { position: string; count: number; linkedCount: number }[];
-      }>();
-      
+      const reasonsMap = new Map<
+        string,
+        {
+          count: number;
+          linkedCount: number;
+          positions: { position: string; count: number; linkedCount: number }[];
+        }
+      >();
+
       for (const r of reasonsReports) {
         const { baseType, position } = parseAircraftCode(r.aircraft);
         const key = `${normalizeMonth(r.month)}-${r.year}-${r.base}-${baseType}`;
-        
+
         const existing = reasonsMap.get(key);
         if (existing) {
           existing.count += r.count;
           existing.linkedCount += r.linkedCount;
           if (position) {
-            existing.positions.push({ 
-              position: position === 'A' ? 'Captain' : 'First Officer', 
-              count: r.count, 
-              linkedCount: r.linkedCount 
+            existing.positions.push({
+              position: position === 'A' ? 'Captain' : 'First Officer',
+              count: r.count,
+              linkedCount: r.linkedCount,
             });
           }
         } else {
-          reasonsMap.set(key, { 
-            count: r.count, 
+          reasonsMap.set(key, {
+            count: r.count,
             linkedCount: r.linkedCount,
-            positions: position ? [{ 
-              position: position === 'A' ? 'Captain' : 'First Officer', 
-              count: r.count, 
-              linkedCount: r.linkedCount 
-            }] : []
+            positions: position
+              ? [
+                  {
+                    position: position === 'A' ? 'Captain' : 'First Officer',
+                    count: r.count,
+                    linkedCount: r.linkedCount,
+                  },
+                ]
+              : [],
           });
         }
       }
-      
+
       // Get current package: the most recently uploaded completed package
       // (packages are already sorted by uploadedAt desc, so find first completed one)
       const currentPackage = packages.find(p => p.status === 'completed');
@@ -464,7 +504,10 @@ export async function registerRoutes(app: Express) {
           base: p.base,
           aircraft: p.aircraft,
           status: p.status,
-          uploadedAt: p.uploadedAt instanceof Date ? p.uploadedAt.toISOString() : p.uploadedAt,
+          uploadedAt:
+            p.uploadedAt instanceof Date
+              ? p.uploadedAt.toISOString()
+              : p.uploadedAt,
           isCurrent: p.id === currentPackageId,
           hasReasonsReport: !!reasons,
           reasonsReportCount: reasons?.count || 0,
@@ -472,25 +515,28 @@ export async function registerRoutes(app: Express) {
           positions: reasons?.positions || [],
         };
       });
-      
+
       // Find months in history that don't have a corresponding bid package
       const packageMonthYears = new Set(
         packages.map(p => `${normalizeMonth(p.month)}-${p.year}`)
       );
-      const missingPackageMonths = historyMonths.filter(h =>
-        !packageMonthYears.has(`${normalizeMonth(h.month)}-${h.year}`)
+      const missingPackageMonths = historyMonths.filter(
+        h => !packageMonthYears.has(`${normalizeMonth(h.month)}-${h.year}`)
       );
 
       res.json({
         bidPackages: {
           total: packages.length,
-          current: currentPackage ? `${currentPackage.month} ${currentPackage.year}` : null,
+          current: currentPackage
+            ? `${currentPackage.month} ${currentPackage.year}`
+            : null,
           list: enrichedPackages,
         },
         historicalRecords: {
           total: historyCount[0]?.count || 0,
           linkedToBidPackage: linkedCount[0]?.count || 0,
-          unlinked: (historyCount[0]?.count || 0) - (linkedCount[0]?.count || 0),
+          unlinked:
+            (historyCount[0]?.count || 0) - (linkedCount[0]?.count || 0),
           unlinkedMonths: missingPackageMonths.map(m => ({
             month: m.month,
             year: m.year,
@@ -561,12 +607,14 @@ export async function registerRoutes(app: Express) {
       const duplicatePackage = existingPackages.find(pkg => {
         const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
         const pkgMonthNorm = normalizeMonth(pkg.month);
-        return pkgMonthNorm === uploadMonthNorm && 
-               pkg.year === parseInt(year) && 
-               pkg.base === base && 
-               pkgAircraftBase === uploadAircraftBase;
+        return (
+          pkgMonthNorm === uploadMonthNorm &&
+          pkg.year === parseInt(year) &&
+          pkg.base === base &&
+          pkgAircraftBase === uploadAircraftBase
+        );
       });
-      
+
       if (duplicatePackage) {
         console.log(
           `Replacing existing bid package for ${month} ${year} ${base} ${aircraft} (ID: ${duplicatePackage.id})`
@@ -588,165 +636,219 @@ export async function registerRoutes(app: Express) {
 
       const bidPackage = await storage.createBidPackage(bidPackageData);
 
-      // Parse file asynchronously and update status
-      // With memory storage, use buffer instead of path
-      pdfParser
-        .parseFile(req.file.buffer, bidPackage.id, req.file.mimetype)
-        .then(async () => {
+      // Parse file synchronously so processing completes before the serverless
+      // function terminates. On Vercel, the runtime is killed once the response
+      // is sent — background .then() chains never execute.
+      try {
+        await pdfParser.parseFile(
+          req.file.buffer,
+          bidPackage.id,
+          req.file.mimetype
+        );
+        console.log(`File parsing completed for bid package ${bidPackage.id}`);
+        // Status is set to 'completed' inside parseFile() after all batch inserts finish
+
+        // Link any existing unlinked bid_history records to the new pairings
+        try {
+          // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
+          const freshBidPackage = await storage.getBidPackage(bidPackage.id);
+          if (!freshBidPackage) {
+            console.error(
+              `Auto-linking: Could not find bid package ${bidPackage.id}`
+            );
+            return;
+          }
+
+          const fetchedPairings = await storage.getPairings(freshBidPackage.id);
           console.log(
-            `File parsing completed for bid package ${bidPackage.id}`
+            `Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`
           );
-          // Status is set to 'completed' inside parseFile() after all batch inserts finish
-          
-          // Link any existing unlinked bid_history records to the new pairings
-          try {
-            // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
-            const freshBidPackage = await storage.getBidPackage(bidPackage.id);
-            if (!freshBidPackage) {
-              console.error(`Auto-linking: Could not find bid package ${bidPackage.id}`);
-              return;
+
+          if (fetchedPairings.length > 0) {
+            // Find unlinked bid_history records that match this package
+            const { baseType: pkgAircraftBase } = parseAircraftCode(
+              freshBidPackage.aircraft
+            );
+            const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
+            console.log(
+              `Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`
+            );
+
+            // Get all unlinked history records
+            const unlinkedRecords = await db
+              .select()
+              .from(bidHistory)
+              .where(sql`linked_pairing_id IS NULL`);
+            console.log(
+              `Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`
+            );
+
+            // Build a map of pairing numbers for fast lookup
+            const pairingMap = new Map(
+              fetchedPairings.map(p => [p.pairingNumber, p])
+            );
+
+            let linkedCount = 0;
+            let matchingRecords = 0;
+            for (const record of unlinkedRecords) {
+              const { baseType: histAircraftBase } = parseAircraftCode(
+                record.aircraft
+              );
+              const histMonthNorm = normalizeMonth(record.month);
+
+              // Check if this record matches the bid package
+              if (
+                histMonthNorm === pkgMonthNorm &&
+                record.year === freshBidPackage.year &&
+                record.base === freshBidPackage.base &&
+                histAircraftBase === pkgAircraftBase
+              ) {
+                matchingRecords++;
+                // Find matching pairing by number
+                const matchingPairing = pairingMap.get(record.pairingNumber);
+                if (matchingPairing) {
+                  await db
+                    .update(bidHistory)
+                    .set({ linkedPairingId: matchingPairing.id })
+                    .where(sql`id = ${record.id}`);
+                  linkedCount++;
+                }
+              }
             }
-            
-            const fetchedPairings = await storage.getPairings(freshBidPackage.id);
-            console.log(`Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`);
-            
-            if (fetchedPairings.length > 0) {
-              // Find unlinked bid_history records that match this package
-              const { baseType: pkgAircraftBase } = parseAircraftCode(freshBidPackage.aircraft);
-              const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
-              console.log(`Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`);
-              
-              // Get all unlinked history records
-              const unlinkedRecords = await db
+
+            console.log(
+              `Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`
+            );
+
+            // After linking, check if there's a duplicate package with the same normalized aircraft (baseType + position)
+            const allPackages = await storage.getBidPackages();
+            const { baseType: freshAircraftBase, position: freshPosition } =
+              parseAircraftCode(freshBidPackage.aircraft);
+            const freshMonth = normalizeMonth(freshBidPackage.month);
+
+            const duplicates = allPackages.filter(pkg => {
+              if (pkg.id === freshBidPackage.id) return false;
+              const pkgMonth = normalizeMonth(pkg.month);
+              const { baseType: pkgAircraftBase, position: pkgPosition } =
+                parseAircraftCode(pkg.aircraft);
+              // Use normalized comparison: baseType + position to handle format differences
+              // e.g., "A220" vs "220", "220-A" vs "A220-A" should match if they're the same aircraft+position
+              return (
+                pkgMonth === freshMonth &&
+                pkg.year === freshBidPackage.year &&
+                pkg.base === freshBidPackage.base &&
+                pkgAircraftBase === freshAircraftBase &&
+                pkgPosition === freshPosition
+              );
+            });
+
+            if (duplicates.length > 0) {
+              console.log(
+                `Auto-linking: Found ${duplicates.length} duplicate packages to clean up`
+              );
+              for (const dup of duplicates) {
+                console.log(
+                  `Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`
+                );
+                try {
+                  // CRITICAL: Must unlink bid_history records BEFORE deleting pairings/package
+                  // Foreign key constraint on linked_pairing_id will block deletion otherwise
+                  const dupPairings = await storage.getPairings(dup.id);
+                  if (dupPairings.length > 0) {
+                    console.log(
+                      `Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`
+                    );
+
+                    // Unlink all bid_history records pointing to these pairings one by one
+                    for (const pairing of dupPairings) {
+                      await db
+                        .update(bidHistory)
+                        .set({ linkedPairingId: null })
+                        .where(sql`linked_pairing_id = ${pairing.id}`);
+                    }
+                    console.log(
+                      `Auto-linking: Successfully unlinked bid_history records`
+                    );
+                  }
+
+                  // Now safe to delete the package (will cascade delete pairings)
+                  await storage.deleteBidPackage(dup.id);
+                  console.log(
+                    `Auto-linking: Successfully deleted duplicate package ${dup.id}`
+                  );
+                } catch (deleteError) {
+                  console.error(
+                    `Auto-linking: Failed to delete duplicate package ${dup.id}:`,
+                    deleteError
+                  );
+                }
+              }
+
+              // Re-link bid_history records to the new package's pairings
+              console.log(
+                `Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`
+              );
+              const newPairingMap = new Map(
+                fetchedPairings.map(p => [p.pairingNumber, p])
+              );
+              const unlinkedAfterCleanup = await db
                 .select()
                 .from(bidHistory)
                 .where(sql`linked_pairing_id IS NULL`);
-              console.log(`Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`);
-              
-              // Build a map of pairing numbers for fast lookup
-              const pairingMap = new Map(fetchedPairings.map(p => [p.pairingNumber, p]));
-              
-              let linkedCount = 0;
-              let matchingRecords = 0;
-              for (const record of unlinkedRecords) {
-                const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
+
+              let relinkedCount = 0;
+              for (const record of unlinkedAfterCleanup) {
+                const { baseType: histAircraftBase, position: histPosition } =
+                  parseAircraftCode(record.aircraft);
                 const histMonthNorm = normalizeMonth(record.month);
-                
-                // Check if this record matches the bid package
-                if (histMonthNorm === pkgMonthNorm && 
-                    record.year === freshBidPackage.year && 
-                    record.base === freshBidPackage.base && 
-                    histAircraftBase === pkgAircraftBase) {
-                  matchingRecords++;
-                  // Find matching pairing by number
-                  const matchingPairing = pairingMap.get(record.pairingNumber);
+
+                // Must match month/year/base AND position to preserve Captain/FO segregation
+                if (
+                  histMonthNorm === freshMonth &&
+                  record.year === freshBidPackage.year &&
+                  record.base === freshBidPackage.base &&
+                  histAircraftBase === freshAircraftBase &&
+                  histPosition === freshPosition
+                ) {
+                  const matchingPairing = newPairingMap.get(
+                    record.pairingNumber
+                  );
                   if (matchingPairing) {
                     await db
                       .update(bidHistory)
                       .set({ linkedPairingId: matchingPairing.id })
                       .where(sql`id = ${record.id}`);
-                    linkedCount++;
+                    relinkedCount++;
                   }
                 }
               }
-              
-              console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
-              
-              // After linking, check if there's a duplicate package with the same normalized aircraft (baseType + position)
-              const allPackages = await storage.getBidPackages();
-              const { baseType: freshAircraftBase, position: freshPosition } = parseAircraftCode(freshBidPackage.aircraft);
-              const freshMonth = normalizeMonth(freshBidPackage.month);
-              
-              const duplicates = allPackages.filter(pkg => {
-                if (pkg.id === freshBidPackage.id) return false;
-                const pkgMonth = normalizeMonth(pkg.month);
-                const { baseType: pkgAircraftBase, position: pkgPosition } = parseAircraftCode(pkg.aircraft);
-                // Use normalized comparison: baseType + position to handle format differences
-                // e.g., "A220" vs "220", "220-A" vs "A220-A" should match if they're the same aircraft+position
-                return pkgMonth === freshMonth && 
-                       pkg.year === freshBidPackage.year && 
-                       pkg.base === freshBidPackage.base &&
-                       pkgAircraftBase === freshAircraftBase &&
-                       pkgPosition === freshPosition;
-              });
-              
-              if (duplicates.length > 0) {
-                console.log(`Auto-linking: Found ${duplicates.length} duplicate packages to clean up`);
-                for (const dup of duplicates) {
-                  console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`);
-                  try {
-                    // CRITICAL: Must unlink bid_history records BEFORE deleting pairings/package
-                    // Foreign key constraint on linked_pairing_id will block deletion otherwise
-                    const dupPairings = await storage.getPairings(dup.id);
-                    if (dupPairings.length > 0) {
-                      console.log(`Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`);
-                      
-                      // Unlink all bid_history records pointing to these pairings one by one
-                      for (const pairing of dupPairings) {
-                        await db
-                          .update(bidHistory)
-                          .set({ linkedPairingId: null })
-                          .where(sql`linked_pairing_id = ${pairing.id}`);
-                      }
-                      console.log(`Auto-linking: Successfully unlinked bid_history records`);
-                    }
-                    
-                    // Now safe to delete the package (will cascade delete pairings)
-                    await storage.deleteBidPackage(dup.id);
-                    console.log(`Auto-linking: Successfully deleted duplicate package ${dup.id}`);
-                  } catch (deleteError) {
-                    console.error(`Auto-linking: Failed to delete duplicate package ${dup.id}:`, deleteError);
-                  }
-                }
-                
-                // Re-link bid_history records to the new package's pairings
-                console.log(`Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`);
-                const newPairingMap = new Map(fetchedPairings.map(p => [p.pairingNumber, p]));
-                const unlinkedAfterCleanup = await db
-                  .select()
-                  .from(bidHistory)
-                  .where(sql`linked_pairing_id IS NULL`);
-                
-                let relinkedCount = 0;
-                for (const record of unlinkedAfterCleanup) {
-                  const { baseType: histAircraftBase, position: histPosition } = parseAircraftCode(record.aircraft);
-                  const histMonthNorm = normalizeMonth(record.month);
-                  
-                  // Must match month/year/base AND position to preserve Captain/FO segregation
-                  if (histMonthNorm === freshMonth && 
-                      record.year === freshBidPackage.year && 
-                      record.base === freshBidPackage.base && 
-                      histAircraftBase === freshAircraftBase &&
-                      histPosition === freshPosition) {
-                    const matchingPairing = newPairingMap.get(record.pairingNumber);
-                    if (matchingPairing) {
-                      await db
-                        .update(bidHistory)
-                        .set({ linkedPairingId: matchingPairing.id })
-                        .where(sql`id = ${record.id}`);
-                      relinkedCount++;
-                    }
-                  }
-                }
-                console.log(`Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || 'none'})`);
-              }
+              console.log(
+                `Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || 'none'})`
+              );
             }
-          } catch (linkError) {
-            console.error('Error linking existing bid_history records:', linkError);
           }
-        })
-        .catch(async error => {
+        } catch (linkError) {
           console.error(
-            `File parsing failed for bid package ${bidPackage.id}:`,
-            error
+            'Error linking existing bid_history records:',
+            linkError
           );
-          await storage.updateBidPackageStatus(bidPackage.id, 'failed');
+        }
+      } catch (parseError) {
+        console.error(
+          `File parsing failed for bid package ${bidPackage.id}:`,
+          parseError
+        );
+        await storage.updateBidPackageStatus(bidPackage.id, 'failed');
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to parse bid package PDF.',
         });
+      }
 
       res.json({
         success: true,
         bidPackage,
-        message: 'Bid package uploaded successfully. Processing has begun.',
+        message: 'Bid package uploaded and processed successfully.',
       });
     } catch (error) {
       console.error('Error uploading bid package:', error);
@@ -774,9 +876,8 @@ export async function registerRoutes(app: Express) {
 
         // Parse the HTML file from buffer
         const htmlContent = req.file.buffer.toString('utf-8');
-        const awards = await ReasonsReportParser.parseReasonsReportFromContent(
-          htmlContent
-        );
+        const awards =
+          await ReasonsReportParser.parseReasonsReportFromContent(htmlContent);
 
         // Extract metadata from HTML
         const metadata = ReasonsReportParser.extractMetadata(htmlContent);
@@ -791,31 +892,41 @@ export async function registerRoutes(app: Express) {
         // Find the matching bid package to look up pairing details
         // Use normalized aircraft type for matching (A220 matches 220-A and 220-B)
         const allPackages = await storage.getBidPackages();
-        const { baseType: metadataAircraftBase } = parseAircraftCode(metadata.aircraft);
+        const { baseType: metadataAircraftBase } = parseAircraftCode(
+          metadata.aircraft
+        );
         const matchingPackage = allPackages.find(pkg => {
           const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
-          return normalizeMonth(pkg.month) === normalizeMonth(metadata.month) && 
-                 pkg.year === metadata.year && 
-                 pkg.base === metadata.base && 
-                 pkgAircraftBase === metadataAircraftBase;
+          return (
+            normalizeMonth(pkg.month) === normalizeMonth(metadata.month) &&
+            pkg.year === metadata.year &&
+            pkg.base === metadata.base &&
+            pkgAircraftBase === metadataAircraftBase
+          );
         });
-        
+
         // Get all pairings from the matching package for efficient lookup
         let packagePairings: Pairing[] = [];
         if (matchingPackage) {
           packagePairings = await storage.getPairings(matchingPackage.id);
-          console.log(`Found matching bid package (ID: ${matchingPackage.id}) with ${packagePairings.length} pairings`);
+          console.log(
+            `Found matching bid package (ID: ${matchingPackage.id}) with ${packagePairings.length} pairings`
+          );
         } else {
-          console.log(`WARNING: No matching bid package found for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
-          console.log(`Historical records will be stored without leg/layover data from package`);
+          console.log(
+            `WARNING: No matching bid package found for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
+          );
+          console.log(
+            `Historical records will be stored without leg/layover data from package`
+          );
         }
-        
+
         // Create a map for fast pairing lookup
         const pairingMap = new Map<string, Pairing>();
         for (const p of packagePairings) {
           pairingMap.set(p.pairingNumber, p);
         }
-        
+
         // Helper function to compute leg signature from flight segments
         const computeLegSignature = (segments: any[]): string => {
           if (!segments || segments.length === 0) return '';
@@ -829,10 +940,14 @@ export async function registerRoutes(app: Express) {
           }
           return legs.join('-');
         };
-        
+
         // Helper function to get turn destination for 1-day trips
-        const getTurnDestination = (segments: any[], pairingDays: number): string | null => {
-          if (pairingDays !== 1 || !segments || segments.length === 0) return null;
+        const getTurnDestination = (
+          segments: any[],
+          pairingDays: number
+        ): string | null => {
+          if (pairingDays !== 1 || !segments || segments.length === 0)
+            return null;
           // For a turn, the destination is typically the furthest point from base
           // Usually the arrival of the first leg that's not a return
           const arrivals = segments.map((s: any) => s.arrival);
@@ -845,13 +960,15 @@ export async function registerRoutes(app: Express) {
           const uniqueDests = [...new Set(destinations)];
           return uniqueDests.length > 0 ? uniqueDests.join('-') : null;
         };
-        
+
         // Store awards in bidHistory table
         let storedCount = 0;
         let skippedCount = 0;
         let linkedCount = 0;
         let unlinkedCount = 0;
-        console.log(`Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
+        console.log(
+          `Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
+        );
 
         for (const award of awards) {
           try {
@@ -888,39 +1005,49 @@ export async function registerRoutes(app: Express) {
             const totalCredit = parseFloat(
               award.totalCredit.replace(':', '.').replace(/[^\d.]/g, '')
             );
-            
+
             // Look up matching pairing from bid package
             const matchingPairing = pairingMap.get(award.pairingNumber);
             let linkedPairingId: number | null = null;
             let layoverCitiesFromPackage: string | null = null;
             let turnDestination: string | null = null;
             let legSignature: string | null = null;
-            
+
             if (matchingPairing) {
               linkedPairingId = matchingPairing.id;
               linkedCount++;
-              
+
               // Extract layovers from pairing
-              const layovers = typeof matchingPairing.layovers === 'string' 
-                ? JSON.parse(matchingPairing.layovers) 
-                : matchingPairing.layovers;
+              const layovers =
+                typeof matchingPairing.layovers === 'string'
+                  ? JSON.parse(matchingPairing.layovers)
+                  : matchingPairing.layovers;
               if (Array.isArray(layovers) && layovers.length > 0) {
-                layoverCitiesFromPackage = layovers.map((l: any) => l.city).sort().join('-');
+                layoverCitiesFromPackage = layovers
+                  .map((l: any) => l.city)
+                  .sort()
+                  .join('-');
               }
-              
+
               // Extract flight segments and compute signatures
-              const segments = typeof matchingPairing.flightSegments === 'string'
-                ? JSON.parse(matchingPairing.flightSegments)
-                : matchingPairing.flightSegments;
-              
+              const segments =
+                typeof matchingPairing.flightSegments === 'string'
+                  ? JSON.parse(matchingPairing.flightSegments)
+                  : matchingPairing.flightSegments;
+
               if (Array.isArray(segments)) {
                 legSignature = computeLegSignature(segments);
-                turnDestination = getTurnDestination(segments, matchingPairing.pairingDays || award.pairingDays);
+                turnDestination = getTurnDestination(
+                  segments,
+                  matchingPairing.pairingDays || award.pairingDays
+                );
               }
-              
+
               // Update fingerprint with real data from package
               if (layoverCitiesFromPackage) {
-                fingerprint.layoverCities = layoverCitiesFromPackage.split('-').sort();
+                fingerprint.layoverCities = layoverCitiesFromPackage
+                  .split('-')
+                  .sort();
                 fingerprint.layoverPattern = layoverCitiesFromPackage;
               }
             } else {
@@ -949,7 +1076,9 @@ export async function registerRoutes(app: Express) {
               turnDestination,
               legSignature,
               tripFingerprint: fingerprint,
-              awardedAt: new Date(`${metadata.year}-${monthToNumber(metadata.month)}-01`),
+              awardedAt: new Date(
+                `${metadata.year}-${monthToNumber(metadata.month)}-01`
+              ),
             });
 
             storedCount++;
@@ -963,13 +1092,16 @@ export async function registerRoutes(app: Express) {
 
         // No need to clean up - file is in memory and will be garbage collected
 
-        console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`);
+        console.log(
+          `Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`
+        );
 
         res.json({
           success: true,
-          message: skippedCount > 0
-            ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package`
-            : `Reasons report processed: ${storedCount} awards stored, ${linkedCount} linked to bid package`,
+          message:
+            skippedCount > 0
+              ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package`
+              : `Reasons report processed: ${storedCount} awards stored, ${linkedCount} linked to bid package`,
           stats: {
             totalParsed: awards.length,
             stored: storedCount,
@@ -981,9 +1113,10 @@ export async function registerRoutes(app: Express) {
             month: metadata.month,
             year: metadata.year,
           },
-          warning: unlinkedCount > 0 && linkedCount === 0
-            ? `No matching bid package found for ${metadata.month} ${metadata.year}. Upload the bid package first for accurate leg/layover data.`
-            : undefined,
+          warning:
+            unlinkedCount > 0 && linkedCount === 0
+              ? `No matching bid package found for ${metadata.month} ${metadata.year}. Upload the bid package first for accurate leg/layover data.`
+              : undefined,
         });
       } catch (error) {
         console.error('Error processing reasons report:', error);
@@ -1014,10 +1147,7 @@ export async function registerRoutes(app: Express) {
           bidHistory.base,
           bidHistory.aircraft
         )
-        .orderBy(
-          sql`${bidHistory.year} desc`,
-          sql`${bidHistory.month} desc`
-        );
+        .orderBy(sql`${bidHistory.year} desc`, sql`${bidHistory.month} desc`);
 
       res.json(reports);
     } catch (error) {
@@ -1159,7 +1289,7 @@ export async function registerRoutes(app: Express) {
           .select()
           .from(pairings)
           .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
-        
+
         // Get bid package month for seasonal adjustments
         const [bidPkg] = await db
           .select({ month: bidPackages.month })
@@ -1171,8 +1301,11 @@ export async function registerRoutes(app: Express) {
         const seniorityValue = parseFloat(seniorityPercentile as string);
         for (const p of pairingsResult) {
           // Extract layover cities for location-based adjustments
-          const layoverCities = (p.layovers as any[])?.map((l: any) => l.city).filter((c: string) => c) || [];
-          
+          const layoverCities =
+            (p.layovers as any[])
+              ?.map((l: any) => l.city)
+              .filter((c: string) => c) || [];
+
           const desirability =
             HoldProbabilityCalculator.calculateDesirabilityScore(p, bidMonth);
           const freq = HoldProbabilityCalculator.calculatePairingFrequency(
@@ -1264,7 +1397,11 @@ export async function registerRoutes(app: Express) {
         const seniorityValue = parseFloat(seniorityValueRaw);
 
         // Check if we need to recalculate (only if pairings don't have stored probabilities)
-        const needsRecalc = result.pairings.some(p => (p as any).holdProbability === null || (p as any).holdProbability === undefined);
+        const needsRecalc = result.pairings.some(
+          p =>
+            (p as any).holdProbability === null ||
+            (p as any).holdProbability === undefined
+        );
 
         if (needsRecalc) {
           const allForPackage = await db
@@ -1274,7 +1411,10 @@ export async function registerRoutes(app: Express) {
 
           for (const p of result.pairings) {
             // Skip if this pairing already has a calculated probability
-            if ((p as any).holdProbability !== null && (p as any).holdProbability !== undefined) {
+            if (
+              (p as any).holdProbability !== null &&
+              (p as any).holdProbability !== undefined
+            ) {
               continue;
             }
 
@@ -1290,7 +1430,8 @@ export async function registerRoutes(app: Express) {
               pairingFrequency: freq,
               startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
               includesDeadheads: (p as any).deadheads || 0,
-              includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
+              includesWeekendOff:
+                HoldProbabilityCalculator.includesWeekendOff(p),
             });
             (p as any).holdProbability = hp.probability;
           }
@@ -1414,56 +1555,63 @@ export async function registerRoutes(app: Express) {
   app.get('/api/history/similar/:pairingId', async (req, res) => {
     try {
       const pairingId = parseInt(req.params.pairingId);
-      
+
       // Get the pairing
       const pairing = await db
         .select()
         .from(pairings)
         .where(eq(pairings.id, pairingId))
         .limit(1);
-      
+
       if (pairing.length === 0) {
         return res.status(404).json({ message: 'Pairing not found' });
       }
-      
+
       const currentPairing = pairing[0];
-      
+
       // Get bid package info for month/year
       const bidPackageResult = await db
         .select()
         .from(bidPackages)
         .where(eq(bidPackages.id, currentPairing.bidPackageId))
         .limit(1);
-      
+
       const bidPackage = bidPackageResult[0];
       // Normalize month to 3-letter uppercase format (e.g., "January" -> "JAN")
       const rawMonth = bidPackage?.month || 'JAN';
       const currentMonth = rawMonth.substring(0, 3).toUpperCase();
       const currentYear = bidPackage?.year || new Date().getFullYear();
-      
+
       // Ensure JSONB fields are properly parsed (Drizzle should do this, but be explicit)
       const parsedPairing = {
         ...currentPairing,
-        layovers: typeof currentPairing.layovers === 'string' 
-          ? JSON.parse(currentPairing.layovers) 
-          : currentPairing.layovers,
-        flightSegments: typeof currentPairing.flightSegments === 'string'
-          ? JSON.parse(currentPairing.flightSegments)
-          : currentPairing.flightSegments,
+        layovers:
+          typeof currentPairing.layovers === 'string'
+            ? JSON.parse(currentPairing.layovers)
+            : currentPairing.layovers,
+        flightSegments:
+          typeof currentPairing.flightSegments === 'string'
+            ? JSON.parse(currentPairing.flightSegments)
+            : currentPairing.flightSegments,
       };
-      
+
       // Use the canonical fingerprint creation from HoldProbabilityCalculator
-      const currentFingerprint = HoldProbabilityCalculator.createFingerprintFromPairing(parsedPairing);
+      const currentFingerprint =
+        HoldProbabilityCalculator.createFingerprintFromPairing(parsedPairing);
       // Add actual credit hours to fingerprint for accurate comparison
-      currentFingerprint.creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
-      
+      currentFingerprint.creditHours = parseFloat(
+        currentPairing.creditHours?.toString() || '0'
+      );
+
       // Extract layover info for display
-      const layoverCities = Array.isArray(parsedPairing.layovers) 
-        ? parsedPairing.layovers.map((l: any) => l.city).sort() 
+      const layoverCities = Array.isArray(parsedPairing.layovers)
+        ? parsedPairing.layovers.map((l: any) => l.city).sort()
         : [];
-      const creditHours = parseFloat(currentPairing.creditHours?.toString() || '0');
+      const creditHours = parseFloat(
+        currentPairing.creditHours?.toString() || '0'
+      );
       const pairingDays = currentPairing.pairingDays || 1;
-      
+
       // Compute turn destination for current pairing (for 1-day trip matching)
       let currentTurnDestination: string | null = null;
       let currentLegSignature: string | null = null;
@@ -1476,21 +1624,25 @@ export async function registerRoutes(app: Express) {
           legs.push(segments[i].arrival);
         }
         currentLegSignature = legs.join('-');
-        
+
         // Get turn destination (non-base airports)
         const base = segments[0]?.departure;
-        const destinations = segments.map((s: any) => s.arrival).filter((a: string) => a !== base);
+        const destinations = segments
+          .map((s: any) => s.arrival)
+          .filter((a: string) => a !== base);
         const uniqueDests = [...new Set(destinations)];
-        currentTurnDestination = uniqueDests.length > 0 ? uniqueDests.join('-') : null;
+        currentTurnDestination =
+          uniqueDests.length > 0 ? uniqueDests.join('-') : null;
       }
-      
+
       // Compute layover pattern for current pairing (for multi-day trip matching)
-      const currentLayoverPattern = layoverCities.length > 0 ? layoverCities.join('-') : 'none';
-      
+      const currentLayoverPattern =
+        layoverCities.length > 0 ? layoverCities.join('-') : 'none';
+
       // Get all historical data - fingerprint matching already ensures relevant trips match
       // No base/aircraft filter needed since similarity scoring handles relevance
       const historicalData = await db.select().from(bidHistory);
-      
+
       // Find similar matches using fingerprint comparison
       const matches: Array<{
         pairingNumber: string;
@@ -1512,7 +1664,7 @@ export async function registerRoutes(app: Express) {
         historicalDays: number;
         historicalCredit: string;
       }> = [];
-      
+
       for (const history of historicalData) {
         if (history.tripFingerprint) {
           // Parse historical fingerprint if it's a string (Drizzle may not auto-parse JSONB)
@@ -1524,31 +1676,41 @@ export async function registerRoutes(app: Express) {
               continue; // Skip invalid fingerprints
             }
           }
-          
+
           // CRITICAL: Override fingerprint values with authoritative record data
           // The stored fingerprint may have stale/incorrect values
-          
+
           // 1. Override pairingDays with the authoritative record value (for days hard filter)
           // If authoritative value is null/undefined/0, skip this record entirely
-          if (history.pairingDays !== undefined && history.pairingDays !== null && history.pairingDays > 0) {
+          if (
+            history.pairingDays !== undefined &&
+            history.pairingDays !== null &&
+            history.pairingDays > 0
+          ) {
             histFingerprint.pairingDays = history.pairingDays;
           } else {
             // Skip records with unknown/invalid days - can't reliably match them
             continue;
           }
-          
+
           // HARD FILTER: Skip records where days don't match
           // Days must be identical - a 3-day trip should only match other 3-day trips
           if (histFingerprint.pairingDays !== pairingDays) {
             continue; // Skip this historical record - days don't match
           }
-          
+
           // 2. Override layoverCities/layoverPattern with authoritative record data
           // Always prefer database values over stale fingerprint values
-          if (history.layoverCities !== undefined && history.layoverCities !== null) {
+          if (
+            history.layoverCities !== undefined &&
+            history.layoverCities !== null
+          ) {
             // Parse layover cities from format like "IAD-15 SNA-18" to ["IAD", "SNA"]
             let parsedCities: string[] = [];
-            if (typeof history.layoverCities === 'string' && history.layoverCities.length > 0) {
+            if (
+              typeof history.layoverCities === 'string' &&
+              history.layoverCities.length > 0
+            ) {
               parsedCities = history.layoverCities
                 .split(/\s+/)
                 .map(city => city.replace(/-\d+(\.\d+)?$/, '')) // Remove duration suffix
@@ -1556,27 +1718,34 @@ export async function registerRoutes(app: Express) {
             } else if (Array.isArray(history.layoverCities)) {
               parsedCities = history.layoverCities as string[];
             }
-            
+
             // Always override - even with empty array to replace stale data
             histFingerprint.layoverCities = parsedCities.sort();
-            histFingerprint.layoverPattern = parsedCities.length > 0 ? parsedCities.sort().join('-') : 'none';
+            histFingerprint.layoverPattern =
+              parsedCities.length > 0 ? parsedCities.sort().join('-') : 'none';
           }
-          
+
           // Ensure layoverCities is an array
           if (!Array.isArray(histFingerprint.layoverCities)) {
             histFingerprint.layoverCities = [];
           }
-          
+
           // 3. Add actual credit hours for more accurate matching
-          if (history.creditHours !== null && history.creditHours !== undefined) {
-            histFingerprint.creditHours = parseFloat(history.creditHours.toString());
+          if (
+            history.creditHours !== null &&
+            history.creditHours !== undefined
+          ) {
+            histFingerprint.creditHours = parseFloat(
+              history.creditHours.toString()
+            );
           }
-          
+
           // Check if this is the EXACT same pairing number from the same month/year
-          const isSamePairing = history.pairingNumber === currentPairing.pairingNumber && 
-                                 history.month === currentMonth && 
-                                 history.year === currentYear;
-          
+          const isSamePairing =
+            history.pairingNumber === currentPairing.pairingNumber &&
+            history.month === currentMonth &&
+            history.year === currentYear;
+
           // For ONE-DAY TRIPS: Match by turn destination (the airports visited)
           // This allows matching turns to the same city across different months
           // e.g., a BOS turn in January should match a BOS turn in December
@@ -1584,7 +1753,7 @@ export async function registerRoutes(app: Express) {
             // Get historical turn destination from the new field
             const histTurnDest = history.turnDestination;
             const histLegSig = history.legSignature;
-            
+
             // If historical record has leg signature, match by that (most accurate)
             // Otherwise, if it has turn destination, match by that
             // If neither exists (old data without bid package), skip unless same pairing number in same month
@@ -1604,17 +1773,19 @@ export async function registerRoutes(app: Express) {
               continue;
             }
           }
-          
+
           // For MULTI-DAY TRIPS: Use layover cities from package if available
           if (pairingDays > 1 && history.layoverCitiesFromPackage) {
             // Override fingerprint with accurate layover data from bid package
-            const packageLayovers = history.layoverCitiesFromPackage.split('-').sort();
+            const packageLayovers = history.layoverCitiesFromPackage
+              .split('-')
+              .sort();
             histFingerprint.layoverCities = packageLayovers;
             histFingerprint.layoverPattern = packageLayovers.join('-');
           }
-          
+
           let similarity: { score: number; confidence: string; breakdown: any };
-          
+
           if (isSamePairing) {
             // SAME pairing number from same bid package = 100% exact match always
             // This is the actual historical version of this exact pairing
@@ -1628,12 +1799,15 @@ export async function registerRoutes(app: Express) {
                 creditMatch: 100,
                 efficiencyMatch: 100,
                 seasonMatch: 100,
-              }
+              },
             };
           } else {
-            similarity = TripMatcher.calculateSimilarity(currentFingerprint, histFingerprint);
+            similarity = TripMatcher.calculateSimilarity(
+              currentFingerprint,
+              histFingerprint
+            );
           }
-          
+
           // Only include matches with >= 60% similarity
           if (similarity.score >= 60) {
             // Normalize layover cities for display (handle both string and array formats)
@@ -1649,10 +1823,12 @@ export async function registerRoutes(app: Express) {
                   .sort()
                   .join('-');
               } else if (Array.isArray(history.layoverCities)) {
-                displayLayovers = (history.layoverCities as string[]).sort().join('-');
+                displayLayovers = (history.layoverCities as string[])
+                  .sort()
+                  .join('-');
               }
             }
-            
+
             matches.push({
               pairingNumber: history.pairingNumber,
               month: history.month,
@@ -1669,32 +1845,35 @@ export async function registerRoutes(app: Express) {
           }
         }
       }
-      
+
       // Group matches by pairing number + month + year
       // This consolidates multiple awards of the same pairing (different pilots/dates)
-      const groupedMatches = new Map<string, {
-        pairingNumber: string;
-        month: string;
-        year: number;
-        similarity: number;
-        confidence: string;
-        breakdown: typeof matches[0]['breakdown'];
-        historicalLayovers: string;
-        historicalDays: number;
-        historicalCredit: string;
-        awards: Array<{ seniority: number; checkInDate?: string }>;
-        isExactPairing: boolean; // True if same pairing number as current
-      }>();
-      
+      const groupedMatches = new Map<
+        string,
+        {
+          pairingNumber: string;
+          month: string;
+          year: number;
+          similarity: number;
+          confidence: string;
+          breakdown: (typeof matches)[0]['breakdown'];
+          historicalLayovers: string;
+          historicalDays: number;
+          historicalCredit: string;
+          awards: Array<{ seniority: number; checkInDate?: string }>;
+          isExactPairing: boolean; // True if same pairing number as current
+        }
+      >();
+
       for (const match of matches) {
         const key = `${match.pairingNumber}-${match.month}-${match.year}`;
         const existing = groupedMatches.get(key);
-        
+
         if (existing) {
           // Add this award to the existing group
-          existing.awards.push({ 
-            seniority: match.juniorHolderSeniority, 
-            checkInDate: match.checkInDate 
+          existing.awards.push({
+            seniority: match.juniorHolderSeniority,
+            checkInDate: match.checkInDate,
           });
           // Keep the highest similarity score
           if (match.similarity > existing.similarity) {
@@ -1714,12 +1893,18 @@ export async function registerRoutes(app: Express) {
             historicalLayovers: match.historicalLayovers,
             historicalDays: match.historicalDays,
             historicalCredit: match.historicalCredit,
-            awards: [{ seniority: match.juniorHolderSeniority, checkInDate: match.checkInDate }],
-            isExactPairing: match.pairingNumber === currentPairing.pairingNumber,
+            awards: [
+              {
+                seniority: match.juniorHolderSeniority,
+                checkInDate: match.checkInDate,
+              },
+            ],
+            isExactPairing:
+              match.pairingNumber === currentPairing.pairingNumber,
           });
         }
       }
-      
+
       // Convert to array and sort:
       // 1. Exact pairing number matches first (historical versions of THIS pairing)
       // 2. Then by similarity (highest first)
@@ -1728,23 +1913,38 @@ export async function registerRoutes(app: Express) {
         // Exact pairing matches come first
         if (a.isExactPairing && !b.isExactPairing) return -1;
         if (!a.isExactPairing && b.isExactPairing) return 1;
-        
+
         // Then by similarity
         if (b.similarity !== a.similarity) return b.similarity - a.similarity;
-        
+
         // Then by most recent
         if (b.year !== a.year) return b.year - a.year;
-        const monthOrder = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const monthOrder = [
+          'JAN',
+          'FEB',
+          'MAR',
+          'APR',
+          'MAY',
+          'JUN',
+          'JUL',
+          'AUG',
+          'SEP',
+          'OCT',
+          'NOV',
+          'DEC',
+        ];
         return monthOrder.indexOf(b.month) - monthOrder.indexOf(a.month);
       });
-      
+
       // Format for response - include individual awards with date+seniority pairs
       const formattedMatches = sortedMatches.slice(0, 10).map(m => {
         // Format individual awards with date and seniority paired together
         const formattedAwards = m.awards
           .map(a => {
             // Parse format like "12/20 Sat 07:25" to extract date and day of week
-            const dateMatch = a.checkInDate?.match(/^(\d{2}\/\d{2})\s*(\w{3})?/);
+            const dateMatch = a.checkInDate?.match(
+              /^(\d{2}\/\d{2})\s*(\w{3})?/
+            );
             const date = dateMatch?.[1] || '';
             const dayOfWeek = dateMatch?.[2] || '';
             return {
@@ -1755,13 +1955,14 @@ export async function registerRoutes(app: Express) {
             };
           })
           .sort((a, b) => a.date.localeCompare(b.date)); // Sort by date
-        
+
         // Still compute date range for summary badge
         const dates = formattedAwards.map(a => a.date).filter(Boolean);
-        const dateRange = dates.length > 1 
-          ? `${dates[0]} - ${dates[dates.length - 1]}`
-          : dates[0] || '';
-        
+        const dateRange =
+          dates.length > 1
+            ? `${dates[0]} - ${dates[dates.length - 1]}`
+            : dates[0] || '';
+
         return {
           pairingNumber: m.pairingNumber,
           month: m.month,
@@ -1780,7 +1981,7 @@ export async function registerRoutes(app: Express) {
           dateRange, // e.g., "12/20 - 12/28" for multiple awards (for summary)
         };
       });
-      
+
       res.json({
         currentPairing: {
           pairingNumber: currentPairing.pairingNumber,
@@ -1799,7 +2000,8 @@ export async function registerRoutes(app: Express) {
   // Create/update user
   app.post('/api/user', async (req, res) => {
     try {
-      const { name, seniorityNumber, seniorityPercentile, base, aircraft } = req.body;
+      const { name, seniorityNumber, seniorityPercentile, base, aircraft } =
+        req.body;
 
       if (!seniorityNumber || !base || !aircraft) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -1870,7 +2072,9 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({
         message: 'Failed to add favorite',
         error:
-          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
+          process.env.NODE_ENV === 'development'
+            ? (error as Error).message
+            : undefined,
       });
     }
   });
@@ -1955,7 +2159,9 @@ export async function registerRoutes(app: Express) {
             ? error.message
             : 'Failed to add calendar event',
         error:
-          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
+          process.env.NODE_ENV === 'development'
+            ? (error as Error).message
+            : undefined,
       });
     }
   });
@@ -2021,7 +2227,9 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({
         message: 'Failed to fetch calendar events',
         error:
-          process.env.NODE_ENV === 'development' ? (error as Error).message : undefined,
+          process.env.NODE_ENV === 'development'
+            ? (error as Error).message
+            : undefined,
       });
     }
   });
@@ -2090,7 +2298,8 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
-      const { question, bidPackageId, seniorityPercentile, sessionId, userId } = req.body;
+      const { question, bidPackageId, seniorityPercentile, sessionId, userId } =
+        req.body;
 
       if (!question) {
         return res.status(400).json({ message: 'Question is required' });
@@ -2131,9 +2340,10 @@ export async function registerRoutes(app: Express) {
             message: question,
             bidPackageId: finalBidPackageId,
             userId: typeof userId === 'number' ? userId : undefined,
-            seniorityPercentile: typeof seniorityPercentile === 'number'
-              ? seniorityPercentile
-              : undefined,
+            seniorityPercentile:
+              typeof seniorityPercentile === 'number'
+                ? seniorityPercentile
+                : undefined,
             conversationHistory,
           });
 
@@ -2280,7 +2490,7 @@ export async function registerRoutes(app: Express) {
   app.get('/api/layover-locations', async (req, res) => {
     try {
       const bidPackageId = parseInt(req.query.bidPackageId as string);
-      
+
       if (!bidPackageId) {
         return res.status(400).json({ error: 'bidPackageId is required' });
       }
@@ -2291,7 +2501,7 @@ export async function registerRoutes(app: Express) {
         .where(eq(pairings.bidPackageId, bidPackageId));
 
       const uniqueLocations = new Set<string>();
-      
+
       for (const p of pairingsList) {
         if (p.layovers && Array.isArray(p.layovers)) {
           for (const layover of p.layovers) {

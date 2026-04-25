@@ -9,7 +9,8 @@
   "functions": {
     "api/index.js": {
       "includeFiles": "dist/public/**",
-      "excludeFiles": "{uploads/**,PBSOptimizer/**}"
+      "excludeFiles": "{uploads/**,PBSOptimizer/**}",
+      "maxDuration": 60
     }
   }
 }

@@ -4099,7 +4099,10 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId, seniorityPerc
           bidPackage.month
         );
       } else {
-        const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidPackage.month);
+        const desirabilityScore = HoldProbabilityCalculator.calculateDesirabilityScore(
+          pairing,
+          bidPackage.month
+        );
         const pairingFrequency = HoldProbabilityCalculator.calculatePairingFrequency(
           pairing.pairingNumber,
           allPairings
@@ -4142,7 +4145,9 @@ async function recalculateHoldProbabilitiesOptimized(bidPackageId, seniorityPerc
 async function recalculateHoldProbabilitiesBackground(bidPackageId, seniorityPercentile, seniorityNumber) {
   Promise.resolve().then(async () => {
     try {
-      console.log(`\u{1F504} Background recalculation triggered for bid package ${bidPackageId}`);
+      console.log(
+        `\u{1F504} Background recalculation triggered for bid package ${bidPackageId}`
+      );
       await recalculateHoldProbabilitiesOptimized(
         bidPackageId,
         seniorityPercentile,
@@ -4337,7 +4342,12 @@ async function registerRoutes(app2) {
         aircraft: bidHistory.aircraft,
         count: sql4`count(*)::int`,
         linkedCount: sql4`count(linked_pairing_id)::int`
-      }).from(bidHistory).groupBy(bidHistory.month, bidHistory.year, bidHistory.base, bidHistory.aircraft);
+      }).from(bidHistory).groupBy(
+        bidHistory.month,
+        bidHistory.year,
+        bidHistory.base,
+        bidHistory.aircraft
+      );
       const reasonsMap = /* @__PURE__ */ new Map();
       for (const r of reasonsReports) {
         const { baseType, position } = parseAircraftCode(r.aircraft);
@@ -4357,11 +4367,13 @@ async function registerRoutes(app2) {
           reasonsMap.set(key, {
             count: r.count,
             linkedCount: r.linkedCount,
-            positions: position ? [{
-              position: position === "A" ? "Captain" : "First Officer",
-              count: r.count,
-              linkedCount: r.linkedCount
-            }] : []
+            positions: position ? [
+              {
+                position: position === "A" ? "Captain" : "First Officer",
+                count: r.count,
+                linkedCount: r.linkedCount
+              }
+            ] : []
           });
         }
       }
@@ -4476,29 +4488,46 @@ async function registerRoutes(app2) {
         aircraft
       });
       const bidPackage = await storage.createBidPackage(bidPackageData);
-      pdfParser.parseFile(req.file.buffer, bidPackage.id, req.file.mimetype).then(async () => {
-        console.log(
-          `File parsing completed for bid package ${bidPackage.id}`
+      try {
+        await pdfParser.parseFile(
+          req.file.buffer,
+          bidPackage.id,
+          req.file.mimetype
         );
+        console.log(`File parsing completed for bid package ${bidPackage.id}`);
         try {
           const freshBidPackage = await storage.getBidPackage(bidPackage.id);
           if (!freshBidPackage) {
-            console.error(`Auto-linking: Could not find bid package ${bidPackage.id}`);
+            console.error(
+              `Auto-linking: Could not find bid package ${bidPackage.id}`
+            );
             return;
           }
           const fetchedPairings = await storage.getPairings(freshBidPackage.id);
-          console.log(`Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`);
+          console.log(
+            `Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`
+          );
           if (fetchedPairings.length > 0) {
-            const { baseType: pkgAircraftBase } = parseAircraftCode(freshBidPackage.aircraft);
+            const { baseType: pkgAircraftBase } = parseAircraftCode(
+              freshBidPackage.aircraft
+            );
             const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
-            console.log(`Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`);
+            console.log(
+              `Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`
+            );
             const unlinkedRecords = await db.select().from(bidHistory).where(sql4`linked_pairing_id IS NULL`);
-            console.log(`Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`);
-            const pairingMap = new Map(fetchedPairings.map((p) => [p.pairingNumber, p]));
+            console.log(
+              `Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`
+            );
+            const pairingMap = new Map(
+              fetchedPairings.map((p) => [p.pairingNumber, p])
+            );
             let linkedCount = 0;
             let matchingRecords = 0;
             for (const record of unlinkedRecords) {
-              const { baseType: histAircraftBase } = parseAircraftCode(record.aircraft);
+              const { baseType: histAircraftBase } = parseAircraftCode(
+                record.aircraft
+              );
               const histMonthNorm = normalizeMonth(record.month);
               if (histMonthNorm === pkgMonthNorm && record.year === freshBidPackage.year && record.base === freshBidPackage.base && histAircraftBase === pkgAircraftBase) {
                 matchingRecords++;
@@ -4509,7 +4538,9 @@ async function registerRoutes(app2) {
                 }
               }
             }
-            console.log(`Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`);
+            console.log(
+              `Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`
+            );
             const allPackages = await storage.getBidPackages();
             const { baseType: freshAircraftBase, position: freshPosition } = parseAircraftCode(freshBidPackage.aircraft);
             const freshMonth = normalizeMonth(freshBidPackage.month);
@@ -4520,56 +4551,84 @@ async function registerRoutes(app2) {
               return pkgMonth === freshMonth && pkg.year === freshBidPackage.year && pkg.base === freshBidPackage.base && pkgAircraftBase2 === freshAircraftBase && pkgPosition === freshPosition;
             });
             if (duplicates.length > 0) {
-              console.log(`Auto-linking: Found ${duplicates.length} duplicate packages to clean up`);
+              console.log(
+                `Auto-linking: Found ${duplicates.length} duplicate packages to clean up`
+              );
               for (const dup of duplicates) {
-                console.log(`Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`);
+                console.log(
+                  `Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`
+                );
                 try {
                   const dupPairings = await storage.getPairings(dup.id);
                   if (dupPairings.length > 0) {
-                    console.log(`Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`);
+                    console.log(
+                      `Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`
+                    );
                     for (const pairing of dupPairings) {
                       await db.update(bidHistory).set({ linkedPairingId: null }).where(sql4`linked_pairing_id = ${pairing.id}`);
                     }
-                    console.log(`Auto-linking: Successfully unlinked bid_history records`);
+                    console.log(
+                      `Auto-linking: Successfully unlinked bid_history records`
+                    );
                   }
                   await storage.deleteBidPackage(dup.id);
-                  console.log(`Auto-linking: Successfully deleted duplicate package ${dup.id}`);
+                  console.log(
+                    `Auto-linking: Successfully deleted duplicate package ${dup.id}`
+                  );
                 } catch (deleteError) {
-                  console.error(`Auto-linking: Failed to delete duplicate package ${dup.id}:`, deleteError);
+                  console.error(
+                    `Auto-linking: Failed to delete duplicate package ${dup.id}:`,
+                    deleteError
+                  );
                 }
               }
-              console.log(`Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`);
-              const newPairingMap = new Map(fetchedPairings.map((p) => [p.pairingNumber, p]));
+              console.log(
+                `Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`
+              );
+              const newPairingMap = new Map(
+                fetchedPairings.map((p) => [p.pairingNumber, p])
+              );
               const unlinkedAfterCleanup = await db.select().from(bidHistory).where(sql4`linked_pairing_id IS NULL`);
               let relinkedCount = 0;
               for (const record of unlinkedAfterCleanup) {
                 const { baseType: histAircraftBase, position: histPosition } = parseAircraftCode(record.aircraft);
                 const histMonthNorm = normalizeMonth(record.month);
                 if (histMonthNorm === freshMonth && record.year === freshBidPackage.year && record.base === freshBidPackage.base && histAircraftBase === freshAircraftBase && histPosition === freshPosition) {
-                  const matchingPairing = newPairingMap.get(record.pairingNumber);
+                  const matchingPairing = newPairingMap.get(
+                    record.pairingNumber
+                  );
                   if (matchingPairing) {
                     await db.update(bidHistory).set({ linkedPairingId: matchingPairing.id }).where(sql4`id = ${record.id}`);
                     relinkedCount++;
                   }
                 }
               }
-              console.log(`Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || "none"})`);
+              console.log(
+                `Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || "none"})`
+              );
             }
           }
         } catch (linkError) {
-          console.error("Error linking existing bid_history records:", linkError);
+          console.error(
+            "Error linking existing bid_history records:",
+            linkError
+          );
         }
-      }).catch(async (error) => {
+      } catch (parseError) {
         console.error(
           `File parsing failed for bid package ${bidPackage.id}:`,
-          error
+          parseError
         );
         await storage.updateBidPackageStatus(bidPackage.id, "failed");
-      });
+        return res.status(500).json({
+          success: false,
+          message: "Failed to parse bid package PDF."
+        });
+      }
       res.json({
         success: true,
         bidPackage,
-        message: "Bid package uploaded successfully. Processing has begun."
+        message: "Bid package uploaded and processed successfully."
       });
     } catch (error) {
       console.error("Error uploading bid package:", error);
@@ -4590,9 +4649,7 @@ async function registerRoutes(app2) {
         }
         console.log("Processing reasons report:", req.file.originalname);
         const htmlContent = req.file.buffer.toString("utf-8");
-        const awards = await ReasonsReportParser.parseReasonsReportFromContent(
-          htmlContent
-        );
+        const awards = await ReasonsReportParser.parseReasonsReportFromContent(htmlContent);
         const metadata = ReasonsReportParser.extractMetadata(htmlContent);
         if (!metadata) {
           return res.status(400).json({
@@ -4600,7 +4657,9 @@ async function registerRoutes(app2) {
           });
         }
         const allPackages = await storage.getBidPackages();
-        const { baseType: metadataAircraftBase } = parseAircraftCode(metadata.aircraft);
+        const { baseType: metadataAircraftBase } = parseAircraftCode(
+          metadata.aircraft
+        );
         const matchingPackage = allPackages.find((pkg) => {
           const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
           return normalizeMonth(pkg.month) === normalizeMonth(metadata.month) && pkg.year === metadata.year && pkg.base === metadata.base && pkgAircraftBase === metadataAircraftBase;
@@ -4608,10 +4667,16 @@ async function registerRoutes(app2) {
         let packagePairings = [];
         if (matchingPackage) {
           packagePairings = await storage.getPairings(matchingPackage.id);
-          console.log(`Found matching bid package (ID: ${matchingPackage.id}) with ${packagePairings.length} pairings`);
+          console.log(
+            `Found matching bid package (ID: ${matchingPackage.id}) with ${packagePairings.length} pairings`
+          );
         } else {
-          console.log(`WARNING: No matching bid package found for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
-          console.log(`Historical records will be stored without leg/layover data from package`);
+          console.log(
+            `WARNING: No matching bid package found for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
+          );
+          console.log(
+            `Historical records will be stored without leg/layover data from package`
+          );
         }
         const pairingMap = /* @__PURE__ */ new Map();
         for (const p of packagePairings) {
@@ -4629,7 +4694,8 @@ async function registerRoutes(app2) {
           return legs.join("-");
         };
         const getTurnDestination = (segments, pairingDays) => {
-          if (pairingDays !== 1 || !segments || segments.length === 0) return null;
+          if (pairingDays !== 1 || !segments || segments.length === 0)
+            return null;
           const arrivals = segments.map((s) => s.arrival);
           const departures = segments.map((s) => s.departure);
           const base = departures[0];
@@ -4641,7 +4707,9 @@ async function registerRoutes(app2) {
         let skippedCount = 0;
         let linkedCount = 0;
         let unlinkedCount = 0;
-        console.log(`Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`);
+        console.log(
+          `Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
+        );
         for (const award of awards) {
           try {
             const existingAward = await db.select().from(bidHistory).where(
@@ -4680,7 +4748,10 @@ async function registerRoutes(app2) {
               const segments = typeof matchingPairing.flightSegments === "string" ? JSON.parse(matchingPairing.flightSegments) : matchingPairing.flightSegments;
               if (Array.isArray(segments)) {
                 legSignature = computeLegSignature(segments);
-                turnDestination = getTurnDestination(segments, matchingPairing.pairingDays || award.pairingDays);
+                turnDestination = getTurnDestination(
+                  segments,
+                  matchingPairing.pairingDays || award.pairingDays
+                );
               }
               if (layoverCitiesFromPackage) {
                 fingerprint.layoverCities = layoverCitiesFromPackage.split("-").sort();
@@ -4710,7 +4781,9 @@ async function registerRoutes(app2) {
               turnDestination,
               legSignature,
               tripFingerprint: fingerprint,
-              awardedAt: /* @__PURE__ */ new Date(`${metadata.year}-${monthToNumber(metadata.month)}-01`)
+              awardedAt: /* @__PURE__ */ new Date(
+                `${metadata.year}-${monthToNumber(metadata.month)}-01`
+              )
             });
             storedCount++;
           } catch (error) {
@@ -4720,7 +4793,9 @@ async function registerRoutes(app2) {
             );
           }
         }
-        console.log(`Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`);
+        console.log(
+          `Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`
+        );
         res.json({
           success: true,
           message: skippedCount > 0 ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package` : `Reasons report processed: ${storedCount} awards stored, ${linkedCount} linked to bid package`,
@@ -4757,10 +4832,7 @@ async function registerRoutes(app2) {
         bidHistory.year,
         bidHistory.base,
         bidHistory.aircraft
-      ).orderBy(
-        sql4`${bidHistory.year} desc`,
-        sql4`${bidHistory.month} desc`
-      );
+      ).orderBy(sql4`${bidHistory.year} desc`, sql4`${bidHistory.month} desc`);
       res.json(reports);
     } catch (error) {
       console.error("Error fetching reasons reports:", error);
@@ -4957,7 +5029,9 @@ async function registerRoutes(app2) {
       const seniorityValueRaw = filters?.seniorityPercentile || filters?.seniorityPercentage;
       if (seniorityValueRaw) {
         const seniorityValue = parseFloat(seniorityValueRaw);
-        const needsRecalc = result.pairings.some((p) => p.holdProbability === null || p.holdProbability === void 0);
+        const needsRecalc = result.pairings.some(
+          (p) => p.holdProbability === null || p.holdProbability === void 0
+        );
         if (needsRecalc) {
           const allForPackage = await db.select().from(pairings).where(eq3(pairings.bidPackageId, bidPackageId));
           for (const p of result.pairings) {
@@ -5095,9 +5169,13 @@ async function registerRoutes(app2) {
         flightSegments: typeof currentPairing.flightSegments === "string" ? JSON.parse(currentPairing.flightSegments) : currentPairing.flightSegments
       };
       const currentFingerprint = HoldProbabilityCalculator.createFingerprintFromPairing(parsedPairing);
-      currentFingerprint.creditHours = parseFloat(currentPairing.creditHours?.toString() || "0");
+      currentFingerprint.creditHours = parseFloat(
+        currentPairing.creditHours?.toString() || "0"
+      );
       const layoverCities = Array.isArray(parsedPairing.layovers) ? parsedPairing.layovers.map((l) => l.city).sort() : [];
-      const creditHours = parseFloat(currentPairing.creditHours?.toString() || "0");
+      const creditHours = parseFloat(
+        currentPairing.creditHours?.toString() || "0"
+      );
       const pairingDays = currentPairing.pairingDays || 1;
       let currentTurnDestination = null;
       let currentLegSignature = null;
@@ -5149,7 +5227,9 @@ async function registerRoutes(app2) {
             histFingerprint.layoverCities = [];
           }
           if (history.creditHours !== null && history.creditHours !== void 0) {
-            histFingerprint.creditHours = parseFloat(history.creditHours.toString());
+            histFingerprint.creditHours = parseFloat(
+              history.creditHours.toString()
+            );
           }
           const isSamePairing = history.pairingNumber === currentPairing.pairingNumber && history.month === currentMonth && history.year === currentYear;
           if (pairingDays === 1) {
@@ -5187,7 +5267,10 @@ async function registerRoutes(app2) {
               }
             };
           } else {
-            similarity = TripMatcher.calculateSimilarity(currentFingerprint, histFingerprint);
+            similarity = TripMatcher.calculateSimilarity(
+              currentFingerprint,
+              histFingerprint
+            );
           }
           if (similarity.score >= 60) {
             let displayLayovers = "";
@@ -5240,7 +5323,12 @@ async function registerRoutes(app2) {
             historicalLayovers: match.historicalLayovers,
             historicalDays: match.historicalDays,
             historicalCredit: match.historicalCredit,
-            awards: [{ seniority: match.juniorHolderSeniority, checkInDate: match.checkInDate }],
+            awards: [
+              {
+                seniority: match.juniorHolderSeniority,
+                checkInDate: match.checkInDate
+              }
+            ],
             isExactPairing: match.pairingNumber === currentPairing.pairingNumber
           });
         }
@@ -5250,12 +5338,27 @@ async function registerRoutes(app2) {
         if (!a.isExactPairing && b.isExactPairing) return 1;
         if (b.similarity !== a.similarity) return b.similarity - a.similarity;
         if (b.year !== a.year) return b.year - a.year;
-        const monthOrder = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+        const monthOrder = [
+          "JAN",
+          "FEB",
+          "MAR",
+          "APR",
+          "MAY",
+          "JUN",
+          "JUL",
+          "AUG",
+          "SEP",
+          "OCT",
+          "NOV",
+          "DEC"
+        ];
         return monthOrder.indexOf(b.month) - monthOrder.indexOf(a.month);
       });
       const formattedMatches = sortedMatches.slice(0, 10).map((m) => {
         const formattedAwards = m.awards.map((a) => {
-          const dateMatch = a.checkInDate?.match(/^(\d{2}\/\d{2})\s*(\w{3})?/);
+          const dateMatch = a.checkInDate?.match(
+            /^(\d{2}\/\d{2})\s*(\w{3})?/
+          );
           const date = dateMatch?.[1] || "";
           const dayOfWeek = dateMatch?.[2] || "";
           return {
