@@ -183,8 +183,8 @@ export default function Dashboard() {
   }, [name, seniorityNumber, seniorityPercentile, base, aircraft, position, hasInitialized]);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortColumn, setSortColumn] = useState<string | null>('holdProbability');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);

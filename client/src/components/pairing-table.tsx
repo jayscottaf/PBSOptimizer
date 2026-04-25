@@ -420,32 +420,20 @@ export function PairingTable({
     }
   };
 
-  const getHoldProbabilityColor = (probability: number) => {
+  // Single source of truth for hold-probability color grading. Used for the
+  // progress fill, the percentage label, and the badge background so the
+  // signal is consistent across the cell.
+  const getHoldProbabilityBand = (probability: number) => {
     if (probability >= 80) {
-      return 'text-green-600';
+      return { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-100' };
     }
     if (probability >= 50) {
-      return 'text-yellow-600';
+      return { bar: 'bg-yellow-500', text: 'text-yellow-700', bg: 'bg-yellow-100' };
     }
-    return 'text-red-600';
-  };
-
-  const getProgressColor = (probability: number) => {
-    const seniorityPercentile = parseFloat(
-      localStorage.getItem('seniorityPercentile') || '50'
-    );
-
-    // Color based on seniority percentile ranges
-    if (seniorityPercentile <= 25) {
-      return 'bg-green-500';
+    if (probability >= 30) {
+      return { bar: 'bg-orange-500', text: 'text-orange-700', bg: 'bg-orange-100' };
     }
-    if (seniorityPercentile <= 50) {
-      return 'bg-yellow-500';
-    }
-    if (seniorityPercentile <= 75) {
-      return 'bg-orange-500';
-    }
-    return 'bg-red-500';
+    return { bar: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-100' };
   };
 
   // Ensure pairings is always an array
@@ -752,15 +740,18 @@ export function PairingTable({
                     })()}
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    {(() => {
+                      const band = getHoldProbabilityBand(pairing.holdProbability);
+                      return (
                     <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
                       <div className="flex-1 bg-gray-200 rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
                         <div
-                          className={`h-1.5 sm:h-2 rounded-full ${getProgressColor(pairing.holdProbability)}`}
+                          className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
                           style={{ width: `${pairing.holdProbability}%` }}
                         />
                       </div>
                       <span
-                        className={`text-xs font-medium ${getHoldProbabilityColor(pairing.holdProbability)} flex-shrink-0`}
+                        className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
                       >
                         {pairing.holdProbability}%
                       </span>
@@ -808,6 +799,8 @@ export function PairingTable({
                         ) : null;
                       })()}
                     </div>
+                      );
+                    })()}
                   </td>
                   {(showDeleteButton || showAddToCalendar) && (
                     <td className="py-2 px-4 text-center border-b">

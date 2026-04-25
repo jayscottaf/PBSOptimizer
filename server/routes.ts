@@ -29,6 +29,7 @@ import {
   userCalendarEvents,
 } from '../shared/schema';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
+import { buildHoldProbabilityBulkUpdate } from './holdProbabilityUpdate';
 import { openaiAssistant } from './openaiAssistant';
 import { ReasonsReportParser } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
@@ -133,19 +134,14 @@ async function recalculateHoldProbabilitiesOptimized(
       });
     }
 
-    // Batch update all pairings in chunks of 50
-    const batchSize = 50;
+    // Bulk update via a single CASE-based UPDATE per batch. This collapses
+    // thousands of round-trips to Neon into a handful of statements.
+    const batchSize = 500;
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize);
-      // Use straightforward per-row updates to avoid SQL builder edge-cases
-      for (const u of batch) {
-        await db
-          .update(pairings)
-          .set({
-            holdProbability: u.holdProbability,
-            holdProbabilityReasoning: u.reasoning,
-          })
-          .where(eq(pairings.id, u.id));
+      const stmt = buildHoldProbabilityBulkUpdate(batch);
+      if (stmt) {
+        await db.execute(stmt);
       }
     }
 
