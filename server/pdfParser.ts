@@ -1,7 +1,10 @@
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import pdfParse from 'pdf-parse';
+// Import the internal module directly. pdf-parse's index.js has a debug block
+// that runs at module load and tries to readFileSync a non-existent test PDF,
+// which throws ENOENT on any environment that isn't the package's own source dir.
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { storage } from './storage';
 import type { InsertPairing } from '../shared/schema';
 import { samplePdfText } from './samplePdfText';

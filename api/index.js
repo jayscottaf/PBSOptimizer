@@ -2013,7 +2013,7 @@ PAY: 5:15  SIT/EDP: 0:15  CARVEOUTS: NONE  DH: 2`,
 
 // server/pdfParser.ts
 import fs from "fs";
-import pdfParse from "pdf-parse";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 // server/holdProbabilityCalculator.ts
 import { and as and2, eq as eq2 } from "drizzle-orm";
