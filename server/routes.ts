@@ -598,34 +598,11 @@ export async function registerRoutes(app: Express) {
 
       const { name, month, year, base, aircraft } = req.body;
 
-      // Only delete bid package if one with same month/year/base/aircraft already exists
-      // This prevents duplicates while keeping historical packages
-      // Use normalized month and aircraft for comparison to handle format variations
-      const existingPackages = await storage.getBidPackages();
-      const { baseType: uploadAircraftBase } = parseAircraftCode(aircraft);
-      const uploadMonthNorm = normalizeMonth(month);
-      const duplicatePackage = existingPackages.find(pkg => {
-        const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
-        const pkgMonthNorm = normalizeMonth(pkg.month);
-        return (
-          pkgMonthNorm === uploadMonthNorm &&
-          pkg.year === parseInt(year) &&
-          pkg.base === base &&
-          pkgAircraftBase === uploadAircraftBase
-        );
-      });
-
-      if (duplicatePackage) {
-        console.log(
-          `Replacing existing bid package for ${month} ${year} ${base} ${aircraft} (ID: ${duplicatePackage.id})`
-        );
-        await storage.deleteBidPackage(duplicatePackage.id);
-      } else {
-        console.log(
-          `Adding new bid package for ${month} ${year} ${base} ${aircraft} (keeping ${existingPackages.length} existing packages)`
-        );
-      }
-
+      // Don't pre-check for duplicates here — month/year/base/aircraft from the
+      // client are placeholders until the parser extracts the real values from
+      // the PDF. Pre-checking would delete unrelated packages that happen to
+      // match the placeholder (e.g. "August 2025 NYC A220"). The post-parsing
+      // cleanup further down does the correct dedup using real metadata.
       const bidPackageData = insertBidPackageSchema.parse({
         name,
         month,

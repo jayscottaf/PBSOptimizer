@@ -10,6 +10,7 @@ import {
   varchar,
   json,
   unique,
+  date,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
@@ -37,6 +38,8 @@ export const bidPackages = pgTable('bid_packages', {
   status: text('status').notNull().default('processing'), // processing, completed, failed
   alvHours: decimal('alv_hours', { precision: 5, scale: 2 }), // Average Line Value hours
   alvTable: jsonb('alv_table'), // Full ALV table data as JSON
+  bidPeriodStart: date('bid_period_start'), // First day of bid period (e.g. May 2)
+  bidPeriodEnd: date('bid_period_end'), // Last day of bid period (e.g. June 1)
 });
 
 export const pairings = pgTable('pairings', {

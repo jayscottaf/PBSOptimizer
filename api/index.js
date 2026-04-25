@@ -218,7 +218,8 @@ import {
   jsonb,
   varchar,
   json,
-  unique
+  unique,
+  date
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -245,8 +246,12 @@ var bidPackages = pgTable("bid_packages", {
   // processing, completed, failed
   alvHours: decimal("alv_hours", { precision: 5, scale: 2 }),
   // Average Line Value hours
-  alvTable: jsonb("alv_table")
+  alvTable: jsonb("alv_table"),
   // Full ALV table data as JSON
+  bidPeriodStart: date("bid_period_start"),
+  // First day of bid period (e.g. May 2)
+  bidPeriodEnd: date("bid_period_end")
+  // Last day of bid period (e.g. June 1)
 });
 var pairings = pgTable("pairings", {
   id: serial("id").primaryKey(),
@@ -743,6 +748,12 @@ var DatabaseStorage = class {
     }
     if (data.alvHours !== void 0) {
       updateData.alvHours = data.alvHours.toString();
+    }
+    if (data.bidPeriodStart !== void 0) {
+      updateData.bidPeriodStart = data.bidPeriodStart;
+    }
+    if (data.bidPeriodEnd !== void 0) {
+      updateData.bidPeriodEnd = data.bidPeriodEnd;
     }
     if (data.alvTable !== void 0) {
       updateData.alvTable = data.alvTable;
@@ -3134,6 +3145,50 @@ var PDFParser = class {
 `);
     return { alvTable, defaultALV };
   }
+  extractBidPeriod(text2) {
+    const lines = text2.split("\n");
+    const monthMap = {
+      january: 0,
+      jan: 0,
+      february: 1,
+      feb: 1,
+      march: 2,
+      mar: 2,
+      april: 3,
+      apr: 3,
+      may: 4,
+      june: 5,
+      jun: 5,
+      july: 6,
+      jul: 6,
+      august: 7,
+      aug: 7,
+      september: 8,
+      sep: 8,
+      sept: 8,
+      october: 9,
+      oct: 9,
+      november: 10,
+      nov: 10,
+      december: 11,
+      dec: 11
+    };
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i].trim();
+      const m = line.match(
+        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s*[–-]\s*([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/
+      );
+      if (!m) continue;
+      const sm = monthMap[m[1].toLowerCase()];
+      const em = monthMap[m[4].toLowerCase()];
+      if (sm === void 0 || em === void 0) continue;
+      const startDate = new Date(parseInt(m[3]), sm, parseInt(m[2]));
+      const endDate = new Date(parseInt(m[6]), em, parseInt(m[5]));
+      const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return { startDate: iso(startDate), endDate: iso(endDate) };
+    }
+    return null;
+  }
   extractBidPackageDate(text2) {
     const lines = text2.split("\n");
     for (let i = 0; i < Math.min(20, lines.length); i++) {
@@ -3714,6 +3769,16 @@ var PDFParser = class {
         console.log(
           "Could not extract bid package date, proceeding with individual pairing dates only"
         );
+      }
+      const bidPeriod = this.extractBidPeriod(text2);
+      if (bidPeriod) {
+        console.log(
+          `Extracted bid period: ${bidPeriod.startDate} \u2192 ${bidPeriod.endDate}`
+        );
+        await storage.updateBidPackageInfo(bidPackageId, {
+          bidPeriodStart: bidPeriod.startDate,
+          bidPeriodEnd: bidPeriod.endDate
+        });
       }
       const { alvTable, defaultALV } = this.extractALVTable(text2);
       if (alvTable.length > 0 || defaultALV !== null) {
@@ -4452,24 +4517,6 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "No file uploaded" });
       }
       const { name, month, year, base, aircraft } = req.body;
-      const existingPackages = await storage.getBidPackages();
-      const { baseType: uploadAircraftBase } = parseAircraftCode(aircraft);
-      const uploadMonthNorm = normalizeMonth(month);
-      const duplicatePackage = existingPackages.find((pkg) => {
-        const { baseType: pkgAircraftBase } = parseAircraftCode(pkg.aircraft);
-        const pkgMonthNorm = normalizeMonth(pkg.month);
-        return pkgMonthNorm === uploadMonthNorm && pkg.year === parseInt(year) && pkg.base === base && pkgAircraftBase === uploadAircraftBase;
-      });
-      if (duplicatePackage) {
-        console.log(
-          `Replacing existing bid package for ${month} ${year} ${base} ${aircraft} (ID: ${duplicatePackage.id})`
-        );
-        await storage.deleteBidPackage(duplicatePackage.id);
-      } else {
-        console.log(
-          `Adding new bid package for ${month} ${year} ${base} ${aircraft} (keeping ${existingPackages.length} existing packages)`
-        );
-      }
       const bidPackageData = insertBidPackageSchema.parse({
         name,
         month,
@@ -5349,10 +5396,10 @@ async function registerRoutes(app2) {
           const dateMatch = a.checkInDate?.match(
             /^(\d{2}\/\d{2})\s*(\w{3})?/
           );
-          const date = dateMatch?.[1] || "";
+          const date2 = dateMatch?.[1] || "";
           const dayOfWeek = dateMatch?.[2] || "";
           return {
-            date,
+            date: date2,
             dayOfWeek,
             seniority: a.seniority,
             fullDate: a.checkInDate || ""

@@ -30,3 +30,8 @@ declare module 'pdf-parse' {
     options?: PDFParseOptions
   ): Promise<PDFData>;
 }
+
+declare module 'pdf-parse/lib/pdf-parse.js' {
+  import pdfParse from 'pdf-parse';
+  export default pdfParse;
+}

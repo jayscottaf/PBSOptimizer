@@ -199,12 +199,38 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+
+  // Prefer the bid period dates from the PDF when present (e.g. May 2 → June 1
+  // for a "May" Delta bid package). Falling back to the calendar month keeps
+  // older packages (uploaded before the schema change) working unchanged.
+  // Parse ISO date strings as local dates to avoid TZ shifts.
+  const parseLocalDate = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const bidStart = latestBidPackage?.bidPeriodStart
+    ? parseLocalDate(latestBidPackage.bidPeriodStart as string)
+    : null;
+  const bidEnd = latestBidPackage?.bidPeriodEnd
+    ? parseLocalDate(latestBidPackage.bidPeriodEnd as string)
+    : null;
+  const viewStart = bidStart ?? monthStart;
+  const viewEnd = bidEnd ?? monthEnd;
+
+  const calendarStart = startOfWeek(viewStart, { weekStartsOn: 0 }); // Sunday
+  const calendarEnd = endOfWeek(viewEnd, { weekStartsOn: 0 });
   const calendarDays = eachDayOfInterval({
     start: calendarStart,
     end: calendarEnd,
   });
+
+  const isInBidPeriod = (day: Date) => {
+    if (!bidStart || !bidEnd) {
+      return isSameMonth(day, currentDate);
+    }
+    const d = startOfDay(day).getTime();
+    return d >= startOfDay(bidStart).getTime() && d <= startOfDay(bidEnd).getTime();
+  };
 
   // Fetch calendar events for current month - using a wider range to catch carryover pairings
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
@@ -541,14 +567,14 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                 {/* Day numbers and basic layout */}
                 <div className="grid grid-cols-7 min-h-[120px]">
                   {week.map((day, _dayIndex) => {
-                    const isCurrentMonth = isSameMonth(day, currentDate);
+                    const inBidPeriod = isInBidPeriod(day);
                     const isToday = isSameDay(day, new Date());
 
                     return (
                       <div
                         key={day.toISOString()}
                         className={`p-2 border-r dark:border-gray-700 last:border-r-0 relative ${
-                          !isCurrentMonth
+                          !inBidPeriod
                             ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600'
                             : 'bg-white dark:bg-gray-900'
                         }`}
@@ -557,7 +583,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                           className={`text-lg font-semibold ${
                             isToday
                               ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center'
-                              : isCurrentMonth
+                              : inBidPeriod
                                 ? 'text-gray-900 dark:text-gray-100'
                                 : 'text-gray-400 dark:text-gray-600'
                           }`}

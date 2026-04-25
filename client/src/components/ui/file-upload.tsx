@@ -62,12 +62,16 @@ export function FileUpload({ onUpload }: FileUploadProps) {
     setIsUploading(true);
 
     try {
+      // Sentinel placeholders. The server's PDF parser overwrites month/year/
+      // base/aircraft with real values extracted from the PDF — these are only
+      // here to satisfy NOT NULL on initial INSERT, and chosen to not collide
+      // with any real bid package so post-parsing dedup doesn't false-match.
       const result = await api.uploadBidPackage(file, {
         name: file.name,
-        month: 'August', // Would be dynamically determined
-        year: 2025,
-        base: 'NYC',
-        aircraft: 'A220',
+        month: 'Pending',
+        year: 1970,
+        base: 'PENDING',
+        aircraft: 'PENDING',
       });
 
       toast({

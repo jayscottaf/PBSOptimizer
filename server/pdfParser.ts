@@ -1,4 +1,3 @@
-import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 // Import the internal module directly. pdf-parse's index.js has a debug block
@@ -245,6 +244,42 @@ export class PDFParser {
     console.log(`==============================\n`);
 
     return { alvTable, defaultALV };
+  }
+
+  private extractBidPeriod(
+    text: string
+  ): { startDate: string; endDate: string } | null {
+    const lines = text.split('\n');
+    const monthMap: { [key: string]: number } = {
+      january: 0, jan: 0,
+      february: 1, feb: 1,
+      march: 2, mar: 2,
+      april: 3, apr: 3,
+      may: 4,
+      june: 5, jun: 5,
+      july: 6, jul: 6,
+      august: 7, aug: 7,
+      september: 8, sep: 8, sept: 8,
+      october: 9, oct: 9,
+      november: 10, nov: 10,
+      december: 11, dec: 11,
+    };
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i].trim();
+      const m = line.match(
+        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s*[–-]\s*([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/
+      );
+      if (!m) continue;
+      const sm = monthMap[m[1].toLowerCase()];
+      const em = monthMap[m[4].toLowerCase()];
+      if (sm === undefined || em === undefined) continue;
+      const startDate = new Date(parseInt(m[3]), sm, parseInt(m[2]));
+      const endDate = new Date(parseInt(m[6]), em, parseInt(m[5]));
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { startDate: iso(startDate), endDate: iso(endDate) };
+    }
+    return null;
   }
 
   private extractBidPackageDate(text: string): string | null {
@@ -1041,6 +1076,19 @@ export class PDFParser {
         console.log(
           'Could not extract bid package date, proceeding with individual pairing dates only'
         );
+      }
+
+      // Extract bid period start/end dates (e.g. "May 02, 2026 – June 01, 2026")
+      // The calendar UI uses these as its view bounds when present.
+      const bidPeriod = this.extractBidPeriod(text);
+      if (bidPeriod) {
+        console.log(
+          `Extracted bid period: ${bidPeriod.startDate} → ${bidPeriod.endDate}`
+        );
+        await storage.updateBidPackageInfo(bidPackageId, {
+          bidPeriodStart: bidPeriod.startDate,
+          bidPeriodEnd: bidPeriod.endDate,
+        });
       }
 
       // Extract ALV (Average Line Value) table from the PDF

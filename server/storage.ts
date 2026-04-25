@@ -67,6 +67,8 @@ export interface IStorage {
       aircraft?: string;
       alvHours?: number;
       alvTable?: any;
+      bidPeriodStart?: string;
+      bidPeriodEnd?: string;
     }
   ): Promise<void>;
   deleteBidPackage(id: number): Promise<void>;
@@ -284,6 +286,8 @@ export class DatabaseStorage implements IStorage {
       aircraft?: string;
       alvHours?: number;
       alvTable?: any;
+      bidPeriodStart?: string;
+      bidPeriodEnd?: string;
     }
   ): Promise<void> {
     const updateData: any = {};
@@ -304,6 +308,12 @@ export class DatabaseStorage implements IStorage {
     }
     if (data.alvHours !== undefined) {
       updateData.alvHours = data.alvHours.toString();
+    }
+    if (data.bidPeriodStart !== undefined) {
+      updateData.bidPeriodStart = data.bidPeriodStart;
+    }
+    if (data.bidPeriodEnd !== undefined) {
+      updateData.bidPeriodEnd = data.bidPeriodEnd;
     }
     if (data.alvTable !== undefined) {
       updateData.alvTable = data.alvTable;
