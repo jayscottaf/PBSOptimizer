@@ -2519,6 +2519,7 @@ export async function registerRoutes(app: Express) {
             tafb: pairings.tafb,
             checkInTime: pairings.checkInTime,
             pairingDays: pairings.pairingDays,
+            layovers: pairings.layovers,
           },
         })
         .from(userCalendarEvents)

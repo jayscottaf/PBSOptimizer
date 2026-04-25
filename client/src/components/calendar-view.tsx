@@ -38,6 +38,7 @@ type CalendarEvent = {
     tafb: string;
     checkInTime?: string;
     pairingDays?: number; // Added for calculating working days
+    layovers?: Array<{ city?: string; hotel?: string; duration?: string }> | null;
   };
 };
 
@@ -328,14 +329,33 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     },
   });
 
-  // Extract destination codes from route for display
-  const getDestinationFromRoute = (route: string): string => {
-    const airports = route.split('-');
-    // Find the furthest destination (not the home base)
-    const destinations = airports.filter(
-      airport => airport !== 'JFK' && airport !== 'NYC'
+  // Pilot's home base (filters out LGA/JFK/EWR etc. from the displayed route).
+  const homeBase = (userProfile.base || '').toUpperCase();
+
+  // Build the label shown on a calendar pairing bar. Prefer the actual
+  // layovers list when present (e.g. "BOS · ATL" for a 3-day trip with two
+  // overnights). Fall back to scanning the route string when layovers are
+  // missing (older rows or 1-day turns with no overnight).
+  const getPairingLabel = (
+    pairing: CalendarEvent['pairing']
+  ): string => {
+    const layoverCities = (pairing.layovers ?? [])
+      .map(l => (l?.city || '').toUpperCase())
+      .filter(c => c && c !== homeBase);
+    if (layoverCities.length > 0) {
+      return Array.from(new Set(layoverCities)).join(' · ');
+    }
+    // Fallback: 1-day turn, or layovers field empty. Pick non-base airports
+    // from the route string. Use the pilot's actual base when set; otherwise
+    // fall back to the original NYC-area filter so legacy data still works.
+    const baseFilter = new Set(
+      homeBase ? [homeBase] : ['JFK', 'LGA', 'EWR', 'NYC']
     );
-    return destinations.length > 0 ? destinations[0] : airports[1] || '';
+    const airports = (pairing.route || '')
+      .split('-')
+      .map(a => a.trim().toUpperCase())
+      .filter(a => a && !baseFilter.has(a));
+    return airports.length > 0 ? Array.from(new Set(airports)).join(' · ') : '';
   };
 
   // Check for FAA crew rest violations
@@ -623,9 +643,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       const isViolation = crewRestViolations.some(
                         v => v.id === event.id
                       );
-                      const destination = getDestinationFromRoute(
-                        event.pairing.route
-                      );
+                      const destination = getPairingLabel(event.pairing);
 
                       const topOffset = 40 + eventIndex * 30; // Stack events vertically
                       const leftOffset = startDayIndex * (100 / 7) + 0.5; // Percentage based positioning

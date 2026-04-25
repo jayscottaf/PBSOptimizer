@@ -5870,7 +5870,8 @@ async function registerRoutes(app2) {
           blockHours: pairings.blockHours,
           tafb: pairings.tafb,
           checkInTime: pairings.checkInTime,
-          pairingDays: pairings.pairingDays
+          pairingDays: pairings.pairingDays,
+          layovers: pairings.layovers
         }
       }).from(userCalendarEvents).leftJoin(pairings, eq3(userCalendarEvents.pairingId, pairings.id)).where(
         and3(
