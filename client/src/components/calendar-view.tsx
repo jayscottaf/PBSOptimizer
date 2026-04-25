@@ -407,11 +407,18 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     const normalizedStart = startOfDay(displayStart);
     const normalizedEnd = startOfDay(displayEnd);
     const span = differenceInDays(normalizedEnd, normalizedStart) + 1;
-    
+
     const isStart =
       isSameDay(eventStart, displayStart) || isSameDay(eventStart, startDay);
 
-    return { span, isStart };
+    // Trip-day index (0-based) of the first visible day in this week segment.
+    // 0 when the trip starts this week; >0 when it carried over from a prior week.
+    const dayOffset = differenceInDays(
+      startOfDay(displayStart),
+      startOfDay(eventStart)
+    );
+
+    return { span, isStart, dayOffset };
   };
 
   const getEventsForWeek = (weekStartDay: Date): CalendarEvent[] => {
@@ -639,15 +646,31 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                         return null;
                       }
 
-                      const { span } = getEventSpan(event, week[startDayIndex]);
+                      const { span, dayOffset } = getEventSpan(
+                        event,
+                        week[startDayIndex]
+                      );
                       const isViolation = crewRestViolations.some(
                         v => v.id === event.id
                       );
-                      const destination = getPairingLabel(event.pairing);
 
                       const topOffset = 40 + eventIndex * 30; // Stack events vertically
                       const leftOffset = startDayIndex * (100 / 7) + 0.5; // Percentage based positioning
                       const width = span * (100 / 7) - 1; // Span across days
+
+                      // Build a label for each calendar day this week segment covers.
+                      // For trip day i (0-indexed), show that night's layover city.
+                      // The trip's last day has no overnight, so show the return-to-base.
+                      const layoverList = event.pairing.layovers ?? [];
+                      const tripDays = event.pairing.pairingDays ?? span;
+                      const dayLabels = Array.from({ length: span }, (_, i) => {
+                        const tripDayIdx = dayOffset + i;
+                        if (tripDayIdx >= tripDays - 1) {
+                          return homeBase ? `→${homeBase}` : '→home';
+                        }
+                        const city = layoverList[tripDayIdx]?.city || '';
+                        return city.toUpperCase();
+                      });
 
                       return (
                         <div
@@ -663,27 +686,38 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                           }}
                           onClick={() => setOpenPairingId(event.pairingId)}
                         >
-                          <div className="flex items-center justify-between h-full px-2 text-white text-sm font-bold">
-                            <span className="truncate">
-                              {event.pairing.pairingNumber}
-                            </span>
-                            <span className="text-xs font-normal ml-1 truncate">
-                              {destination}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label="Remove from calendar"
-                              className="h-4 w-4 p-0 hover:bg-red-100 ml-1"
-                              onClick={e => {
-                                e.stopPropagation();
-                                handleRemoveFromCalendar(event.pairingId);
-                              }}
-                              disabled={removeFromCalendarMutation.isPending}
-                            >
-                              <Trash2 className="h-3 w-3 text-white" />
-                            </Button>
+                          {/* Pairing number floats at the top-left so it doesn't
+                              steal space from the day-aligned layover segments. */}
+                          <span className="absolute top-0 left-1 text-[10px] font-bold leading-none text-white">
+                            {event.pairing.pairingNumber}
+                          </span>
+
+                          {/* One equal-width segment per visible day; each shows
+                              that day's overnight city (or home base on day N). */}
+                          <div className="flex h-full text-white text-xs">
+                            {dayLabels.map((label, i) => (
+                              <div
+                                key={i}
+                                className="flex-1 flex items-center justify-center px-1 truncate border-r border-blue-400/40 last:border-r-0"
+                              >
+                                {label}
+                              </div>
+                            ))}
                           </div>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label="Remove from calendar"
+                            className="absolute top-0 right-0 h-5 w-5 p-0 hover:bg-red-100"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleRemoveFromCalendar(event.pairingId);
+                            }}
+                            disabled={removeFromCalendarMutation.isPending}
+                          >
+                            <Trash2 className="h-3 w-3 text-white" />
+                          </Button>
 
                           {/* Tooltip on hover */}
                           <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
