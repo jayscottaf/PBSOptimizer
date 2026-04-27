@@ -4,6 +4,7 @@ build/
 uploads/
 migrations/
 package-lock.json
+api/index.js
 *.min.js
 *.min.css
 CLAUDE.md

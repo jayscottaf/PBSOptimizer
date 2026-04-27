@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Button } from './ui/button';
 import { CloudUpload, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiErrorMessage } from '@/lib/api';
 
 interface ReasonsReportUploadProps {
   onUploadSuccess?: () => void;
@@ -67,8 +68,9 @@ export function ReasonsReportUpload({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Upload failed');
+        throw new Error(
+          await getApiErrorMessage(response, 'Failed to upload reasons report')
+        );
       }
 
       const result = await response.json();

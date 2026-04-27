@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
 import { storage } from './storage';
 import { seedDatabase } from './seedData';
@@ -42,6 +42,30 @@ import {
   type Pairing,
 } from '../shared/schema';
 import * as fs from 'fs/promises';
+
+type ApiErrorCode =
+  | 'INVALID_FILE_TYPE'
+  | 'FILE_TOO_LARGE'
+  | 'MISSING_FILE'
+  | 'INVALID_UPLOAD_DATA'
+  | 'BID_PACKAGE_PARSE_FAILED'
+  | 'REASONS_METADATA_FAILED'
+  | 'REASONS_PROCESSING_FAILED'
+  | 'UPLOAD_FAILED';
+
+function sendApiError(
+  res: Response,
+  status: number,
+  message: string,
+  code: ApiErrorCode,
+  details?: unknown
+) {
+  return res.status(status).json({
+    message,
+    code,
+    ...(details ? { details } : {}),
+  });
+}
 
 // Optimized hold probability recalculation with batching
 async function recalculateHoldProbabilitiesOptimized(
@@ -194,7 +218,12 @@ const upload = multer({
     if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF and TXT files are allowed'));
+      cb(
+        Object.assign(new Error('Only PDF and TXT files are allowed'), {
+          code: 'INVALID_FILE_TYPE',
+          status: 400,
+        })
+      );
     }
   },
   limits: {
@@ -213,13 +242,60 @@ const uploadReasonsReport = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error('Only HTML files are allowed for reasons reports'));
+      cb(
+        Object.assign(
+          new Error('Only HTML files are allowed for reasons reports'),
+          {
+            code: 'INVALID_FILE_TYPE',
+            status: 400,
+          }
+        )
+      );
     }
   },
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
 });
+
+function handleMulterUpload(
+  middleware: (req: Request, res: Response, next: NextFunction) => void
+) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    middleware(req, res, error => {
+      if (!error) {
+        next();
+        return;
+      }
+
+      if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          sendApiError(
+            res,
+            413,
+            'File is too large. Maximum upload size is 10 MB.',
+            'FILE_TOO_LARGE'
+          );
+          return;
+        }
+
+        sendApiError(res, 400, error.message, 'UPLOAD_FAILED');
+        return;
+      }
+
+      const uploadError = error as Error & {
+        status?: number;
+        code?: ApiErrorCode;
+      };
+      sendApiError(
+        res,
+        uploadError.status || 400,
+        uploadError.message || 'Upload failed',
+        uploadError.code || 'UPLOAD_FAILED'
+      );
+    });
+  };
+}
 
 const searchFiltersSchema = z.object({
   bidPackageId: z.number().optional(),
@@ -413,6 +489,16 @@ export async function registerRoutes(app: Express) {
         .select({ count: sql<number>`count(*)::int` })
         .from(bidHistory)
         .where(sql`linked_pairing_id IS NOT NULL`);
+      const pairingCounts = await db
+        .select({
+          bidPackageId: pairings.bidPackageId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(pairings)
+        .groupBy(pairings.bidPackageId);
+      const pairingCountMap = new Map(
+        pairingCounts.map(row => [row.bidPackageId, row.count])
+      );
 
       // Get all months from bidHistory (for later comparison with packages)
       const historyMonths = await db
@@ -512,6 +598,7 @@ export async function registerRoutes(app: Express) {
           hasReasonsReport: !!reasons,
           reasonsReportCount: reasons?.count || 0,
           linkedRecords: reasons?.linkedCount || 0,
+          pairingCount: pairingCountMap.get(p.id) || 0,
           positions: reasons?.positions || [],
         };
       });
@@ -530,6 +617,10 @@ export async function registerRoutes(app: Express) {
           current: currentPackage
             ? `${currentPackage.month} ${currentPackage.year}`
             : null,
+          statusCounts: packages.reduce<Record<string, number>>((acc, p) => {
+            acc[p.status] = (acc[p.status] || 0) + 1;
+            return acc;
+          }, {}),
           list: enrichedPackages,
         },
         historicalRecords: {
@@ -590,10 +681,15 @@ export async function registerRoutes(app: Express) {
   });
 
   // Upload bid package PDF
-  app.post('/api/upload', upload.single('bidPackage'), async (req, res) => {
+  app.post('/api/upload', handleMulterUpload(upload.single('bidPackage')), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
+        return sendApiError(
+          res,
+          400,
+          'No bid package file was uploaded.',
+          'MISSING_FILE'
+        );
       }
 
       const { name, month, year, base, aircraft } = req.body;
@@ -816,10 +912,12 @@ export async function registerRoutes(app: Express) {
           parseError
         );
         await storage.updateBidPackageStatus(bidPackage.id, 'failed');
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to parse bid package PDF.',
-        });
+        return sendApiError(
+          res,
+          500,
+          'Failed to parse bid package PDF. Check that the file is a Delta PBS bid package PDF or TXT export.',
+          'BID_PACKAGE_PARSE_FAILED'
+        );
       }
 
       res.json({
@@ -830,11 +928,20 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error uploading bid package:', error);
       if (error instanceof z.ZodError) {
-        res
-          .status(400)
-          .json({ message: 'Invalid bid package data', errors: error.errors });
+        sendApiError(
+          res,
+          400,
+          'Invalid bid package upload details.',
+          'INVALID_UPLOAD_DATA',
+          error.errors
+        );
       } else {
-        res.status(500).json({ message: 'Failed to upload bid package' });
+        sendApiError(
+          res,
+          500,
+          'Failed to upload bid package.',
+          'UPLOAD_FAILED'
+        );
       }
     }
   });
@@ -842,11 +949,16 @@ export async function registerRoutes(app: Express) {
   // Upload reasons report (HTML)
   app.post(
     '/api/upload-reasons-report',
-    uploadReasonsReport.single('reasonsReport'),
+    handleMulterUpload(uploadReasonsReport.single('reasonsReport')),
     async (req, res) => {
       try {
         if (!req.file) {
-          return res.status(400).json({ message: 'No file uploaded' });
+          return sendApiError(
+            res,
+            400,
+            'No Reasons Report file was uploaded.',
+            'MISSING_FILE'
+          );
         }
 
         console.log('Processing reasons report:', req.file.originalname);
@@ -860,10 +972,12 @@ export async function registerRoutes(app: Express) {
         const metadata = ReasonsReportParser.extractMetadata(htmlContent);
 
         if (!metadata) {
-          return res.status(400).json({
-            message:
-              'Could not extract base/aircraft/month from HTML. Please check file format.',
-          });
+          return sendApiError(
+            res,
+            400,
+            'Could not extract base, aircraft, or month from the Reasons Report HTML. Check that this is a NAVBLUE Reasons Report export.',
+            'REASONS_METADATA_FAILED'
+          );
         }
 
         // Find the matching bid package to look up pairing details
@@ -1097,9 +1211,12 @@ export async function registerRoutes(app: Express) {
         });
       } catch (error) {
         console.error('Error processing reasons report:', error);
-        res
-          .status(500)
-          .json({ message: 'Failed to process reasons report', error });
+        sendApiError(
+          res,
+          500,
+          'Failed to process Reasons Report.',
+          'REASONS_PROCESSING_FAILED'
+        );
       }
     }
   );

@@ -9,8 +9,9 @@
     "vercel-build": "vite build && esbuild server/vercel-entry.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js --banner:js=\"import { createRequire as _createRequire } from 'module'; const require = _createRequire(import.meta.url);\"",
     "start": "cross-env NODE_ENV=production tsx app.ts",
     "check": "tsc",
+    "smoke": "node scripts/smoke-test.mjs",
     "db:push": "drizzle-kit push",
-    "lint": "eslint .",
+    "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

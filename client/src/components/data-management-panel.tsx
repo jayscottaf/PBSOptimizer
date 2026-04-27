@@ -31,6 +31,7 @@ interface BidPackageInfo {
   hasReasonsReport: boolean;
   reasonsReportCount: number;
   linkedRecords: number;
+  pairingCount: number;
   positions: PositionInfo[];
 }
 
@@ -44,6 +45,7 @@ interface DataHealthResponse {
   bidPackages: {
     total: number;
     current: string | null;
+    statusCounts?: Record<string, number>;
     list: BidPackageInfo[];
   };
   historicalRecords: {
@@ -112,13 +114,25 @@ export function DataManagementPanel() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return null;
+  }
 
   const { bidPackages, historicalRecords } = data;
 
   // Find the current package
   const currentPackage = bidPackages.list.find(pkg => pkg.isCurrent);
   const otherPackages = bidPackages.list.filter(pkg => !pkg.isCurrent);
+  const statusCounts = bidPackages.statusCounts || {};
+  const problemPackages = bidPackages.list.filter(
+    pkg =>
+      pkg.status === 'failed' ||
+      pkg.status === 'processing' ||
+      (pkg.status === 'completed' && pkg.pairingCount === 0)
+  );
+  const statusText = Object.entries(statusCounts)
+    .map(([status, count]) => `${count} ${status}`)
+    .join(', ');
 
   // Normalize month format: "January" or "JAN" -> "JAN"
   const normalizeMonth = (month: string): string => {
@@ -164,6 +178,11 @@ export function DataManagementPanel() {
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
               <div className="text-blue-600 dark:text-blue-400 font-medium">Bid Packages</div>
               <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{bidPackages.total}</div>
+              {statusText && (
+                <div className="text-xs text-blue-600 dark:text-blue-400">
+                  {statusText}
+                </div>
+              )}
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
               <div className="text-green-600 dark:text-green-400 font-medium">Historical Records</div>
@@ -175,6 +194,24 @@ export function DataManagementPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {problemPackages.length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardContent className="py-3">
+            <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+              <AlertCircle className="h-4 w-4 mt-0.5" />
+              <div className="text-sm">
+                <div className="font-medium">Data diagnostics need attention</div>
+                <div className="text-xs mt-1">
+                  {problemPackages.length} package
+                  {problemPackages.length > 1 ? 's' : ''} are failed,
+                  processing, or completed with no pairings.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Bid Packages */}
       <Card>
@@ -204,7 +241,8 @@ export function DataManagementPanel() {
                           <Badge variant="default" className="text-xs bg-blue-500">Current</Badge>
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {currentPackage.base} {currentPackage.aircraft}
+                          {currentPackage.base} {currentPackage.aircraft} |{' '}
+                          {currentPackage.pairingCount} pairings
                         </div>
                       </div>
                     </div>
@@ -230,6 +268,13 @@ export function DataManagementPanel() {
                       </Badge>
                     </div>
                   </div>
+
+                  {currentPackage.status === 'completed' &&
+                    currentPackage.pairingCount === 0 && (
+                      <div className="px-3 pb-3 text-xs text-red-600 dark:text-red-400">
+                        Completed package has no pairings. Re-upload or inspect parser logs.
+                      </div>
+                    )}
 
                   {/* Position breakdown for current */}
                   {currentPackage.positions.length > 0 && (
@@ -276,7 +321,7 @@ export function DataManagementPanel() {
                               <div>
                                 <div className="font-medium">{pkg.month} {pkg.year}</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {pkg.base} {pkg.aircraft}
+                                  {pkg.base} {pkg.aircraft} | {pkg.pairingCount} pairings
                                 </div>
                               </div>
                             </div>
@@ -290,7 +335,12 @@ export function DataManagementPanel() {
                               ) : (
                                 <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                               )}
-                              <Badge variant="outline" className="text-xs">{pkg.status}</Badge>
+                              <Badge
+                                variant={pkg.status === 'completed' ? 'outline' : 'secondary'}
+                                className={`text-xs ${pkg.status === 'failed' ? 'border-red-300 text-red-700 dark:text-red-300' : ''}`}
+                              >
+                                {pkg.status}
+                              </Badge>
                               <ChevronDown className={`h-4 w-4 transition-transform ${expandedPackages.has(pkg.id) ? 'rotate-180' : ''}`} />
                             </div>
                           </button>

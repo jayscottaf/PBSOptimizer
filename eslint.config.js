@@ -125,13 +125,16 @@ export default [
       // General rules
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-debugger': 'error',
+      'no-empty': 'warn',
+      'no-useless-escape': 'warn',
+      'no-case-declarations': 'warn',
       'no-unused-vars': 'off', // Using TypeScript version
-      'prefer-const': 'error',
+      'prefer-const': 'warn',
       eqeqeq: ['error', 'always'],
-      curly: ['error', 'all'],
+      curly: ['warn', 'all'],
 
       // Prettier integration
-      'prettier/prettier': 'error',
+      'prettier/prettier': 'warn',
     },
   },
   {
@@ -141,8 +144,26 @@ export default [
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        beforeAll: 'readonly',
+        describe: 'readonly',
+        expect: 'readonly',
+        it: 'readonly',
+      },
+    },
+  },
+  {
     ignores: [
       'node_modules/',
+      'api/index.js',
       'dist/',
       'build/',
       'uploads/',

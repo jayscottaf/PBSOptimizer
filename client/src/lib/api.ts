@@ -82,6 +82,23 @@ interface SearchPairingsResponse {
 
 const API_BASE = ''; // Assuming API_BASE is defined elsewhere or is an empty string for local context.
 
+export async function getApiErrorMessage(
+  response: Response,
+  fallback = response.statusText || 'Request failed'
+): Promise<string> {
+  const text = await response.text();
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const data = JSON.parse(text) as { message?: string; error?: string };
+    return data.message || data.error || fallback;
+  } catch {
+    return text;
+  }
+}
+
 export const api = {
   // Bid packages
   getBidPackages: async (): Promise<BidPackage[]> => {
@@ -226,8 +243,9 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || response.statusText);
+      throw new Error(
+        await getApiErrorMessage(response, 'Failed to upload bid package')
+      );
     }
 
     return response.json();
