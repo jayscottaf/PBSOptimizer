@@ -51,8 +51,11 @@ export function FiltersPanel({
   }, [bidPackageId]);
 
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
+    const filterKey = String(key);
     const numericValue =
-      key.includes('Min') || key.includes('Max') ? parseFloat(value) : value;
+      filterKey.includes('Min') || filterKey.includes('Max')
+        ? parseFloat(value)
+        : value;
     onFiltersChange({ [key]: numericValue });
   };
 

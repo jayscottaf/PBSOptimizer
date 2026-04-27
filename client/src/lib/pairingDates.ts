@@ -2,6 +2,12 @@
  * Utility functions for parsing pairing effective dates and calculating valid start dates
  */
 
+declare global {
+  interface Window {
+    __rangePairingLogCount?: number;
+  }
+}
+
 const MONTH_MAP: { [key: string]: number } = {
   JAN: 0,
   FEB: 1,
@@ -42,7 +48,9 @@ export function parseEffectiveDates(
   effectiveDates: string,
   year: number
 ): ParsedEffectiveDates | null {
-  if (!effectiveDates) return null;
+  if (!effectiveDates) {
+    return null;
+  }
 
   const result: ParsedEffectiveDates = {
     type: 'single',
@@ -54,7 +62,7 @@ export function parseEffectiveDates(
   // Check if it's a range (contains hyphen)
   // Handle formats like "OCT14-OCT.29", "OCT14-OCT. 29", "OCT14-OCT29"
   const rangeMatch = effectiveDates.match(
-    /([A-Z]{3})(\d{1,2})\s*-\s*([A-Z]{3})[\.\s]*(\d{1,2})/
+    /([A-Z]{3})(\d{1,2})\s*-\s*([A-Z]{3})[.\s]*(\d{1,2})/
   );
 
   if (rangeMatch) {
@@ -74,7 +82,9 @@ export function parseEffectiveDates(
   } else {
     // Single date format: OCT12 ONLY or just OCT12
     const singleMatch = effectiveDates.match(/([A-Z]{3})(\d{1,2})/);
-    if (!singleMatch) return null;
+    if (!singleMatch) {
+      return null;
+    }
 
     const month = MONTH_MAP[singleMatch[1]];
     const day = parseInt(singleMatch[2]);
@@ -131,7 +141,9 @@ export function calculateValidStartDates(
   pairingDays: number
 ): Date[] {
   const parsed = parseEffectiveDates(effectiveDates, year);
-  if (!parsed) return [];
+  if (!parsed) {
+    return [];
+  }
 
   const validDates: Date[] = [];
 

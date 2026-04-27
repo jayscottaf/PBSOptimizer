@@ -399,7 +399,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   const getEventSpan = (
     event: CalendarEvent,
     startDay: Date
-  ): { span: number; isStart: boolean } => {
+  ): { span: number; isStart: boolean; dayOffset: number } => {
     const eventStart = new Date(event.startDate);
     const eventEnd = new Date(event.endDate);
     const weekStart = startOfWeek(startDay, { weekStartsOn: 0 });
@@ -716,8 +716,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       const dayLabels = Array.from({ length: span }, (_, i) => {
                         const tripDayIdx = dayOffset + i;
                         const fromSegments = dayEndpoints[tripDayIdx];
-                        if (fromSegments) return fromSegments;
-                        if (tripDayIdx >= tripDays - 1) return finalDestination;
+                        if (fromSegments) {
+                          return fromSegments;
+                        }
+                        if (tripDayIdx >= tripDays - 1) {
+                          return finalDestination;
+                        }
                         return '';
                       });
 
