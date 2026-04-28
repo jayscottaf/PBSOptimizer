@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
+import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -305,7 +306,11 @@ export function PairingChat({
     }
 
     try {
-      const result = await api.analyzePairings(input.trim(), bidPackageId, sessionId);
+      const result = await api.analyzePairings(
+        input.trim(),
+        bidPackageId,
+        sessionId
+      );
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -391,6 +396,21 @@ export function PairingChat({
     }
   };
 
+  const isPlaceholderPackageValue = (value?: string | null) =>
+    !value || value.trim().toUpperCase() === 'PENDING';
+
+  const formatBidPackageLabel = (bidPackage: BidPackage) => {
+    const parts = [
+      !isPlaceholderPackageValue(bidPackage.base) ? bidPackage.base : null,
+      !isPlaceholderPackageValue(bidPackage.aircraft)
+        ? bidPackage.aircraft
+        : null,
+      bidPackage.month,
+    ].filter(Boolean);
+
+    return `${parts.join(' ')} Bid Package`;
+  };
+
   const parsePairingsFromMessage = (content: string, messageData?: any) => {
     const pairings = [];
 
@@ -437,10 +457,6 @@ export function PairingChat({
   const formatMessageWithPairings = (content: string, messageData?: any) => {
     const pairings = parsePairingsFromMessage(content, messageData);
 
-    if (pairings.length === 0) {
-      return <span className="whitespace-pre-wrap text-sm">{content}</span>;
-    }
-
     // Create a map of pairing numbers to pairing objects for quick lookup
     const pairingMap = new Map();
     pairings.forEach(pairing => {
@@ -449,55 +465,258 @@ export function PairingChat({
       }
     });
 
-    // Split content and replace pairing numbers with interactive elements
-    const parts = [];
-    const remainingContent = content;
-    let keyCounter = 0;
+    const renderInline = (text: string, keyPrefix: string): ReactNode[] => {
+      const nodes: ReactNode[] = [];
+      const boldPattern = /(\*\*[^*]+\*\*)/g;
+      let boldIndex = 0;
+      let segmentIndex = 0;
+      let boldMatch;
 
-    // Find all pairing number patterns in the text
-    const pairingPattern = /\b(\d{4,5})\b/g;
-    let lastIndex = 0;
-    let match;
+      const pushPairingAwareText = (segment: string, prefix: string) => {
+        const pairingPattern = /\b(\d{4,5})\b/g;
+        let lastIndex = 0;
+        let match;
+        let tokenIndex = 0;
 
-    while ((match = pairingPattern.exec(content)) !== null) {
-      const pairingNumber = match[1];
-      const pairing = pairingMap.get(pairingNumber);
+        while ((match = pairingPattern.exec(segment)) !== null) {
+          const pairingNumber = match[1];
+          const pairing = pairingMap.get(pairingNumber);
 
-      if (pairing) {
-        // Add text before the pairing
-        if (match.index > lastIndex) {
-          parts.push(
-            <span key={`text-${keyCounter++}`}>
-              {content.substring(lastIndex, match.index)}
-            </span>
+          if (!pairing) {
+            continue;
+          }
+
+          if (match.index > lastIndex) {
+            nodes.push(
+              <Fragment key={`${prefix}-text-${tokenIndex++}`}>
+                {segment.substring(lastIndex, match.index)}
+              </Fragment>
+            );
+          }
+
+          nodes.push(
+            <PairingDisplay
+              key={`${prefix}-pairing-${tokenIndex++}-${pairingNumber}`}
+              pairing={pairing}
+              displayText={pairingNumber}
+            />
+          );
+
+          lastIndex = match.index + match[0].length;
+        }
+
+        if (lastIndex < segment.length) {
+          nodes.push(
+            <Fragment key={`${prefix}-text-${tokenIndex++}`}>
+              {segment.substring(lastIndex)}
+            </Fragment>
+          );
+        }
+      };
+
+      while ((boldMatch = boldPattern.exec(text)) !== null) {
+        if (boldMatch.index > boldIndex) {
+          pushPairingAwareText(
+            text.substring(boldIndex, boldMatch.index),
+            `${keyPrefix}-${segmentIndex++}`
           );
         }
 
-        // Add the interactive pairing element
-        parts.push(
-          <PairingDisplay
-            key={`pairing-${keyCounter++}-${pairingNumber}`}
-            pairing={pairing}
-            displayText={pairingNumber}
-          />
+        const boldText = boldMatch[0].slice(2, -2);
+        nodes.push(
+          <strong
+            key={`${keyPrefix}-bold-${segmentIndex++}`}
+            className="font-semibold text-slate-50"
+          >
+            {renderInline(boldText, `${keyPrefix}-bold-inner-${segmentIndex}`)}
+          </strong>
         );
-
-        lastIndex = match.index + match[0].length;
+        boldIndex = boldMatch.index + boldMatch[0].length;
       }
-    }
 
-    // Add remaining text
-    if (lastIndex < content.length) {
-      parts.push(
-        <span key={`text-${keyCounter++}`}>{content.substring(lastIndex)}</span>
+      if (boldIndex < text.length) {
+        pushPairingAwareText(
+          text.substring(boldIndex),
+          `${keyPrefix}-${segmentIndex++}`
+        );
+      }
+
+      return nodes.length > 0 ? nodes : [text];
+    };
+
+    const renderTable = (tableLines: string[], key: string) => {
+      const rows = tableLines
+        .map(line =>
+          line
+            .trim()
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map(cell => cell.trim())
+        )
+        .filter(row => row.some(Boolean));
+
+      const header = rows[0] || [];
+      const bodyRows = rows
+        .slice(1)
+        .filter(row => !row.every(cell => /^:?-{3,}:?$/.test(cell)));
+
+      return (
+        <div
+          key={key}
+          className="my-4 max-w-full overflow-x-auto rounded-md border border-slate-700"
+        >
+          <table className="min-w-full text-left text-xs">
+            <thead className="bg-slate-900 text-slate-200">
+              <tr>
+                {header.map((cell, index) => (
+                  <th
+                    key={`${key}-head-${index}`}
+                    className="whitespace-nowrap px-3 py-2 font-semibold"
+                  >
+                    {renderInline(cell, `${key}-head-${index}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 bg-slate-950/60">
+              {bodyRows.map((row, rowIndex) => (
+                <tr key={`${key}-row-${rowIndex}`}>
+                  {row.map((cell, cellIndex) => (
+                    <td
+                      key={`${key}-cell-${rowIndex}-${cellIndex}`}
+                      className="align-top px-3 py-2 text-slate-300"
+                    >
+                      {renderInline(
+                        cell,
+                        `${key}-cell-${rowIndex}-${cellIndex}`
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       );
-    }
+    };
 
-    return parts.length > 0 ? (
-      <div className="whitespace-pre-wrap text-sm">{parts}</div>
-    ) : (
-      <span className="whitespace-pre-wrap text-sm">{content}</span>
-    );
+    const renderMarkdown = () => {
+      const lines = content.split('\n');
+      const blocks: ReactNode[] = [];
+      let index = 0;
+
+      while (index < lines.length) {
+        const line = lines[index];
+        const trimmed = line.trim();
+        const key = `block-${index}`;
+
+        if (!trimmed) {
+          index += 1;
+          continue;
+        }
+
+        if (trimmed.startsWith('```')) {
+          const codeLines = [];
+          index += 1;
+          while (
+            index < lines.length &&
+            !lines[index].trim().startsWith('```')
+          ) {
+            codeLines.push(lines[index]);
+            index += 1;
+          }
+          index += 1;
+          blocks.push(
+            <pre
+              key={key}
+              className="my-4 max-w-full overflow-x-auto rounded-md border border-slate-700 bg-slate-950 p-3 text-xs leading-relaxed text-slate-100"
+            >
+              <code>{codeLines.join('\n')}</code>
+            </pre>
+          );
+          continue;
+        }
+
+        if (
+          trimmed.startsWith('|') &&
+          index + 1 < lines.length &&
+          /^\s*\|?[\s:|-]+\|[\s:|-]+\|?\s*$/.test(lines[index + 1])
+        ) {
+          const tableLines = [];
+          while (index < lines.length && lines[index].trim().startsWith('|')) {
+            tableLines.push(lines[index]);
+            index += 1;
+          }
+          blocks.push(renderTable(tableLines, key));
+          continue;
+        }
+
+        const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const headingClass =
+            level <= 2
+              ? 'mt-5 mb-2 text-base font-semibold text-slate-50'
+              : 'mt-4 mb-2 text-sm font-semibold text-slate-100';
+          blocks.push(
+            <div key={key} className={headingClass}>
+              {renderInline(headingMatch[2], `${key}-heading`)}
+            </div>
+          );
+          index += 1;
+          continue;
+        }
+
+        if (/^[-*•]\s+/.test(trimmed)) {
+          const items = [];
+          while (
+            index < lines.length &&
+            /^[-*•]\s+/.test(lines[index].trim())
+          ) {
+            items.push(lines[index].trim().replace(/^[-*•]\s+/, ''));
+            index += 1;
+          }
+          blocks.push(
+            <ul
+              key={key}
+              className="my-3 list-disc space-y-1.5 pl-5 text-sm text-slate-300"
+            >
+              {items.map((item, itemIndex) => (
+                <li key={`${key}-item-${itemIndex}`}>
+                  {renderInline(item, `${key}-item-${itemIndex}`)}
+                </li>
+              ))}
+            </ul>
+          );
+          continue;
+        }
+
+        const paragraphLines = [trimmed];
+        index += 1;
+        while (
+          index < lines.length &&
+          lines[index].trim() &&
+          !lines[index].trim().startsWith('```') &&
+          !lines[index].trim().startsWith('|') &&
+          !/^(#{1,4})\s+/.test(lines[index].trim()) &&
+          !/^[-*•]\s+/.test(lines[index].trim())
+        ) {
+          paragraphLines.push(lines[index].trim());
+          index += 1;
+        }
+
+        blocks.push(
+          <p key={key} className="my-2 text-sm leading-7 text-slate-300">
+            {renderInline(paragraphLines.join(' '), `${key}-paragraph`)}
+          </p>
+        );
+      }
+
+      return blocks;
+    };
+
+    return <div className="space-y-1">{renderMarkdown()}</div>;
   };
 
   return (
@@ -551,16 +770,18 @@ export function PairingChat({
       )}
 
       {/* Main Chat Interface */}
-      <Card className="flex-1 flex flex-col min-h-0">
+      <Card className="flex-1 flex flex-col min-h-0 bg-slate-950/80 border-slate-800">
         <CardHeader className="pb-4 flex-shrink-0">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Bot className="h-5 w-5 text-blue-600" />
-              <span>Pairing Analysis Assistant</span>
+          <CardTitle className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Bot className="h-5 w-5 text-blue-500 flex-shrink-0" />
+              <span className="leading-tight">Pairing Analysis Assistant</span>
               {currentBidPackage && (
-                <Badge variant="secondary" className="text-xs">
-                  {currentBidPackage.base} {currentBidPackage.aircraft}{' '}
-                  {currentBidPackage.month} Bid Package
+                <Badge
+                  variant="secondary"
+                  className="max-w-full whitespace-normal rounded-full bg-slate-800 px-3 py-1 text-xs leading-snug text-slate-100"
+                >
+                  {formatBidPackageLabel(currentBidPackage)}
                 </Badge>
               )}
             </div>
@@ -592,7 +813,7 @@ export function PairingChat({
         <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
           <div
-            className={`flex-1 overflow-y-auto space-y-4 pb-4 ${compact ? 'px-2' : 'px-4'}`}
+            className={`flex-1 overflow-y-auto space-y-4 pb-28 pt-1 ${compact ? 'px-3' : 'px-4'}`}
           >
             {messages.map(message => (
               <div
@@ -600,15 +821,15 @@ export function PairingChat({
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  className={`rounded-lg px-4 py-3 ${
                     message.type === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-900'
+                      ? 'max-w-[85%] bg-blue-600 text-white'
+                      : `${compact ? 'max-w-[96%]' : 'max-w-[90%]'} border border-slate-800 bg-slate-900 text-slate-100 shadow-sm`
                   }`}
                 >
-                  <div className="flex items-start space-x-2">
+                  <div className="flex items-start gap-3">
                     {message.type === 'assistant' && (
-                      <Bot className="h-4 w-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                      <Bot className="h-4 w-4 mt-1 text-blue-400 flex-shrink-0" />
                     )}
                     {message.type === 'user' && (
                       <User className="h-4 w-4 mt-0.5 text-white flex-shrink-0" />
@@ -630,7 +851,7 @@ export function PairingChat({
                         className={`text-xs mt-1 ${
                           message.type === 'user'
                             ? 'text-blue-200'
-                            : 'text-gray-500'
+                            : 'text-slate-500'
                         }`}
                       >
                         {formatTimestamp(message.timestamp)}
@@ -643,11 +864,11 @@ export function PairingChat({
 
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-gray-100 rounded-lg px-4 py-2">
+                <div className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
                   <div className="flex items-center space-x-2">
-                    <Bot className="h-4 w-4 text-blue-600" />
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <span className="text-sm text-gray-600">Analyzing...</span>
+                    <Bot className="h-4 w-4 text-blue-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                    <span className="text-sm text-slate-300">Analyzing...</span>
                   </div>
                 </div>
               </div>
@@ -657,7 +878,9 @@ export function PairingChat({
           </div>
 
           {/* Input */}
-          <div className={`border-t flex-shrink-0 ${compact ? 'p-2' : 'p-4'}`}>
+          <div
+            className={`border-t border-slate-800 flex-shrink-0 bg-slate-950 ${compact ? 'p-2' : 'p-4'}`}
+          >
             <form onSubmit={handleSubmit} className="flex space-x-2">
               <Input
                 value={input}
