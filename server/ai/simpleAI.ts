@@ -90,8 +90,9 @@ export class SimpleAI {
         messages,
       });
 
-      const response =
+      const rawResponse =
         completion.choices[0]?.message?.content || 'No response generated';
+      const response = this.sanitizeCoachResponse(rawResponse);
 
       console.log('[SimpleAI] Response generated');
 
@@ -177,6 +178,19 @@ TERMINOLOGY:
 ${coachKnowledge}
 
 Be helpful, analyze the data thoroughly, and give specific recommendations with pairing numbers.`;
+  }
+
+  /**
+   * Keep Phase 0 bidding-coach output aligned with the product boundary even
+   * when the model drifts into overconfident phrasing.
+   */
+  private sanitizeCoachResponse(response: string): string {
+    return response
+      .replace(/\bEnsures\b/g, 'Gives PBS a path to')
+      .replace(/\bensures\b/g, 'gives PBS a path to')
+      .replace(/\bwill still get\b/gi, 'may still be considered for')
+      .replace(/\bcopy-and-paste-ready\b/gi, 'review-ready')
+      .replace(/\bcopy paste ready\b/gi, 'review-ready');
   }
 
   /**
