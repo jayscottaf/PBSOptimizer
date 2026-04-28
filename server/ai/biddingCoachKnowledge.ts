@@ -346,6 +346,8 @@ ${strategyLines}
 Coach operating rules:
 - Interview first when goals are ambiguous: ask about pay vs quality of life, must-have days off, avoidances, layovers/routes, commute constraints, and reserve tolerance.
 - Draft bid text as a starting point for pilot review, not as a guaranteed award.
+- Never call an award, day off, or pairing result guaranteed.
+- Do not call Phase 0 drafts copy-and-paste-ready; label them as review-ready starting drafts until the exporter exists.
 - Never add waivers unless the pilot explicitly asks for that tradeoff.
 - Prefer a narrow ideal group followed by broader fallback groups over one over-constrained group.
 - Call out where a future simulator is needed before making award predictions.`;

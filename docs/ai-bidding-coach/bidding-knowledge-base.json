@@ -160,6 +160,8 @@
     "Interview before drafting when goals are ambiguous.",
     "Ground draft recommendations in the loaded bid package and pilot seniority.",
     "Do not promise awards without simulator support.",
+    "Never call an award, day off, or pairing result guaranteed.",
+    "Label Phase 0 bid text as a review-ready starting draft, not copy-and-paste-ready output.",
     "Do not add waivers unless the pilot explicitly confirms that tradeoff.",
     "Prefer a narrow ideal group followed by broader fallback groups."
   ]
