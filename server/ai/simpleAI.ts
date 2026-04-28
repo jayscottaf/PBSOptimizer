@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai';
 import type { IStorage } from '../storage';
+import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -55,7 +56,10 @@ export class SimpleAI {
       const pairingsContext = this.buildPairingsContext(pairings);
 
       // Build system prompt
-      const systemPrompt = this.buildSystemPrompt(bidPackage, query.seniorityPercentile);
+      const systemPrompt = this.buildSystemPrompt(
+        bidPackage,
+        query.seniorityPercentile
+      );
 
       // Build messages
       const messages: any[] = [
@@ -86,7 +90,8 @@ export class SimpleAI {
         messages,
       });
 
-      const response = completion.choices[0]?.message?.content || 'No response generated';
+      const response =
+        completion.choices[0]?.message?.content || 'No response generated';
 
       console.log('[SimpleAI] Response generated');
 
@@ -100,7 +105,8 @@ export class SimpleAI {
     } catch (error) {
       console.error('[SimpleAI] Error:', error);
       return {
-        response: 'I encountered an error processing your request. Please try again.',
+        response:
+          'I encountered an error processing your request. Please try again.',
       };
     }
   }
@@ -111,7 +117,7 @@ export class SimpleAI {
   private buildPairingsContext(pairings: any[]): string {
     const lines = ['AVAILABLE PAIRINGS:'];
 
-    pairings.forEach((p) => {
+    pairings.forEach(p => {
       // Parse layovers
       const layovers = Array.isArray(p.layovers) ? p.layovers : [];
       const layoverInfo = layovers
@@ -129,14 +135,20 @@ export class SimpleAI {
   /**
    * Build system prompt with context
    */
-  private buildSystemPrompt(bidPackage: any, seniorityPercentile?: number): string {
+  private buildSystemPrompt(
+    bidPackage: any,
+    seniorityPercentile?: number
+  ): string {
     const packageInfo = bidPackage
       ? `${bidPackage.month} ${bidPackage.year} - ${bidPackage.base} ${bidPackage.aircraft}`
       : 'Unknown package';
 
-    const seniorityInfo = seniorityPercentile !== undefined
-      ? `The pilot's seniority is ${seniorityPercentile}% (lower is more senior).`
-      : '';
+    const seniorityInfo =
+      seniorityPercentile !== undefined
+        ? `The pilot's seniority is ${seniorityPercentile}% (lower is more senior).`
+        : '';
+
+    const coachKnowledge = buildBiddingCoachKnowledgeContext();
 
     return `You are an expert PBS (Preferential Bidding System) analyst for Delta Airlines pilots.
 
@@ -161,6 +173,8 @@ TERMINOLOGY:
 - Hold Probability: Likelihood of getting the pairing (0-100%)
 - Efficiency: Credit/Block ratio (higher = more pay per flight hour)
 - Layover: Rest period between flight days
+
+${coachKnowledge}
 
 Be helpful, analyze the data thoroughly, and give specific recommendations with pairing numbers.`;
   }
