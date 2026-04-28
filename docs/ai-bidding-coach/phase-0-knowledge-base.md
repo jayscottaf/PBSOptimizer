@@ -62,8 +62,10 @@ Before drafting, ask for missing goal inputs:
 
 ## Current Boundaries
 
-Phase 0 does not simulate PBS awards. The coach can explain and draft strategy, but it should not guarantee an award, a day off, or a pairing result. Predictions must remain tied to the app's hold probability and, later, the planned simulator.
+Phase 0 does not simulate PBS awards. The coach can explain and draft strategy, but it should not guarantee an award, a day off, or a pairing result. It should also avoid guarantee-adjacent phrasing such as "ensures" or "will still get." Predictions must remain tied to the app's hold probability and, later, the planned simulator.
 
 Phase 0 draft bid text should be labeled as a review-ready starting draft. Do not call it copy-and-paste-ready until the exporter exists and can render verified NAVBLUE syntax.
+
+When the pilot says they would rather fall back than have must-have dates or avoids denied, Phase 0 drafts should show an explicit conditional exit such as `Else Start Next Bid Group` or `Clear Schedule and Start Next Bid Group` before broader fallback groups.
 
 Phase 1 should use this knowledge inside the existing chat panel to interview the pilot and draft pasteable NAVBLUE bid text.

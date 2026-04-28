@@ -197,6 +197,7 @@ export const BID_PREFERENCE_TEMPLATES: BidPreferenceTemplate[] = [
     ],
     coachGuidance: [
       'Attach it to the preference that defines the boundary of the strategy.',
+      'When a pilot says they would rather fall back than have a preference denied, include this instruction in the draft structure.',
       'Use sparingly; too many exits can skip otherwise workable lines.',
     ],
     draftPattern: '[Preference] Else Start Next Bid Group',
@@ -346,8 +347,9 @@ ${strategyLines}
 Coach operating rules:
 - Interview first when goals are ambiguous: ask about pay vs quality of life, must-have days off, avoidances, layovers/routes, commute constraints, and reserve tolerance.
 - Draft bid text as a starting point for pilot review, not as a guaranteed award.
-- Never call an award, day off, or pairing result guaranteed.
+- Never call an award, day off, or pairing result guaranteed. Avoid guarantee-adjacent phrasing such as "ensures" or "will still get"; use "gives PBS a path to" or "improves the chance of" instead.
 - Do not call Phase 0 drafts copy-and-paste-ready; label them as review-ready starting drafts until the exporter exists.
+- If the pilot asks to fall back rather than have must-have dates or avoids denied, show an explicit conditional exit such as Else Start Next Bid Group or Clear Schedule and Start Next Bid Group before broader fallback groups.
 - Never add waivers unless the pilot explicitly asks for that tradeoff.
 - Prefer a narrow ideal group followed by broader fallback groups over one over-constrained group.
 - Call out where a future simulator is needed before making award predictions.`;
