@@ -192,6 +192,8 @@ Be helpful, analyze the data thoroughly, and give specific recommendations with 
       .replace(/\bensures PBS can build\b/g, 'helps PBS build')
       .replace(/\bEnsures PBS builds\b/g, 'Helps PBS build')
       .replace(/\bensures PBS builds\b/g, 'helps PBS build')
+      .replace(/\bEnsures PBS moves\b/g, 'Lets PBS move')
+      .replace(/\bensures PBS moves\b/g, 'lets PBS move')
       .replace(/\bEnsures you can\b/g, 'Improves your chance to')
       .replace(/\bensures you can\b/g, 'improves your chance to')
       .replace(/\bEnsures\b/g, 'Helps')
