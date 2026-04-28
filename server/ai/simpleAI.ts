@@ -185,12 +185,33 @@ Be helpful, analyze the data thoroughly, and give specific recommendations with 
    * when the model drifts into overconfident phrasing.
    */
   private sanitizeCoachResponse(response: string): string {
-    return response
-      .replace(/\bEnsures\b/g, 'Gives PBS a path to')
-      .replace(/\bensures\b/g, 'gives PBS a path to')
+    const sanitized = response
+      .replace(/\bEnsures that if\b/g, 'Sets up the fallback so if')
+      .replace(/\bensures that if\b/g, 'sets up the fallback so if')
+      .replace(/\bEnsures PBS can build\b/g, 'Helps PBS build')
+      .replace(/\bensures PBS can build\b/g, 'helps PBS build')
+      .replace(/\bEnsures PBS builds\b/g, 'Helps PBS build')
+      .replace(/\bensures PBS builds\b/g, 'helps PBS build')
+      .replace(/\bEnsures you can\b/g, 'Improves your chance to')
+      .replace(/\bensures you can\b/g, 'improves your chance to')
+      .replace(/\bEnsures\b/g, 'Helps')
+      .replace(/\bensures\b/g, 'helps')
       .replace(/\bwill still get\b/gi, 'may still be considered for')
       .replace(/\bcopy-and-paste-ready\b/gi, 'review-ready')
       .replace(/\bcopy paste ready\b/gi, 'review-ready');
+
+    const looksLikeBidDraft =
+      /\b(NAVBLUE|Prefer Off|Award Pairings|Bid Group)\b/i.test(sanitized);
+    const alreadyHasGuaranteeNote =
+      /\b(no guarantee|not guaranteed|not a guarantee|no result is guaranteed)\b/i.test(
+        sanitized
+      );
+
+    if (looksLikeBidDraft && !alreadyHasGuaranteeNote) {
+      return `${sanitized}\n\nNote: This is a review-ready starting draft, not a guarantee of an award, day off, or pairing result.`;
+    }
+
+    return sanitized;
   }
 
   /**
