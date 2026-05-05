@@ -1993,7 +1993,7 @@ export default function Dashboard() {
 
       {/* AI Assistant Modal */}
       <Dialog open={showAIAssistant} onOpenChange={setShowAIAssistant}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+        <DialogContent className="h-[80vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden p-0 sm:p-6 flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-green-600" />
@@ -2004,7 +2004,7 @@ export default function Dashboard() {
               and analyze your options
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden min-h-0">
+          <div className="flex-1 overflow-hidden min-h-0 min-w-0">
             {currentUser && latestBidPackage ? (
               <PairingChat bidPackageId={bidPackageId} />
             ) : (

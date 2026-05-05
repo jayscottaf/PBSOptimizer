@@ -564,7 +564,7 @@ export function PairingChat({
       return (
         <div
           key={key}
-          className="my-4 max-w-full overflow-x-auto rounded-md border border-slate-700"
+          className="my-4 max-w-full min-w-0 overflow-x-auto rounded-md border border-slate-700"
         >
           <table className="min-w-full text-left text-xs">
             <thead className="bg-slate-900 text-slate-200">
@@ -630,7 +630,7 @@ export function PairingChat({
           blocks.push(
             <pre
               key={key}
-              className="my-4 max-w-full overflow-x-auto rounded-md border border-slate-700 bg-slate-950 p-3 text-xs leading-relaxed text-slate-100"
+              className="my-4 max-w-full min-w-0 overflow-x-auto rounded-md border border-slate-700 bg-slate-950 p-3 text-xs leading-relaxed text-slate-100"
             >
               <code>{codeLines.join('\n')}</code>
             </pre>
@@ -707,7 +707,10 @@ export function PairingChat({
         }
 
         blocks.push(
-          <p key={key} className="my-2 text-sm leading-7 text-slate-300">
+          <p
+            key={key}
+            className="my-2 min-w-0 break-words text-sm leading-7 text-slate-300"
+          >
             {renderInline(paragraphLines.join(' '), `${key}-paragraph`)}
           </p>
         );
@@ -716,14 +719,14 @@ export function PairingChat({
       return blocks;
     };
 
-    return <div className="space-y-1">{renderMarkdown()}</div>;
+    return <div className="min-w-0 max-w-full space-y-1 break-words">{renderMarkdown()}</div>;
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 overflow-hidden">
       {/* Conversation Sidebar - Hidden in compact mode */}
       {!compact && showConversations && (
-        <Card className="w-80 mr-4 flex flex-col">
+        <Card className="mr-4 flex w-80 flex-shrink-0 flex-col overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
               <span className="text-sm">Conversations</span>
@@ -742,10 +745,10 @@ export function PairingChat({
                 <Button
                   key={conv.sessionId}
                   variant={conv.sessionId === sessionId ? 'secondary' : 'ghost'}
-                  className="w-full justify-start h-auto p-3 text-left"
+                  className="w-full justify-start h-auto p-3 text-left min-w-0"
                   onClick={() => loadConversation(conv.sessionId)}
                 >
-                  <div className="flex flex-col items-start w-full">
+                  <div className="flex min-w-0 flex-col items-start w-full">
                     <div className="font-medium text-sm truncate w-full">
                       {conv.title}
                     </div>
@@ -770,7 +773,7 @@ export function PairingChat({
       )}
 
       {/* Main Chat Interface */}
-      <Card className="flex-1 flex flex-col min-h-0 bg-slate-950/80 border-slate-800">
+      <Card className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden bg-slate-950/80 border-slate-800">
         <CardHeader className="pb-4 flex-shrink-0">
           <CardTitle className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -785,7 +788,7 @@ export function PairingChat({
                 </Badge>
               )}
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-shrink-0 items-center space-x-2">
               {!compact && (
                 <Button
                   variant="ghost"
@@ -810,39 +813,39 @@ export function PairingChat({
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0 min-w-0 overflow-hidden">
           {/* Messages */}
           <div
-            className={`flex-1 overflow-y-auto space-y-4 pb-28 pt-1 ${compact ? 'px-3' : 'px-4'}`}
+            className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden space-y-4 pb-28 pt-1 ${compact ? 'px-3' : 'px-4'}`}
           >
             {messages.map(message => (
               <div
                 key={message.id}
-                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex min-w-0 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`rounded-lg px-4 py-3 ${
+                  className={`min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-3 ${
                     message.type === 'user'
-                      ? 'max-w-[85%] bg-blue-600 text-white'
+                      ? 'w-fit max-w-[85%] bg-blue-600 text-white'
                       : `${compact ? 'max-w-[96%]' : 'max-w-[90%]'} border border-slate-800 bg-slate-900 text-slate-100 shadow-sm`
                   }`}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     {message.type === 'assistant' && (
                       <Bot className="h-4 w-4 mt-1 text-blue-400 flex-shrink-0" />
                     )}
                     {message.type === 'user' && (
                       <User className="h-4 w-4 mt-0.5 text-white flex-shrink-0" />
                     )}
-                    <div className="flex-1">
-                      <div>
+                    <div className="min-w-0 flex-1">
+                      <div className="min-w-0 max-w-full break-words">
                         {message.type === 'assistant' ? (
                           formatMessageWithPairings(
                             message.content,
                             message.data
                           )
                         ) : (
-                          <span className="whitespace-pre-wrap text-sm">
+                          <span className="whitespace-pre-wrap break-words text-sm">
                             {message.content}
                           </span>
                         )}
@@ -863,8 +866,8 @@ export function PairingChat({
             ))}
 
             {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+              <div className="flex min-w-0 justify-start">
+                <div className="max-w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
                   <div className="flex items-center space-x-2">
                     <Bot className="h-4 w-4 text-blue-400" />
                     <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
@@ -886,7 +889,7 @@ export function PairingChat({
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder="Ask about your pairings..."
-                className="flex-1"
+                className="min-w-0 flex-1"
                 disabled={isLoading}
               />
               <Button
