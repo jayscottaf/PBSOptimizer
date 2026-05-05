@@ -35,6 +35,7 @@ interface PairingTableProps {
   };
   onPageChange?: (page: number) => void;
   conflicts?: Map<number, ConflictInfo>;
+  showHeader?: boolean;
 }
 
 export function PairingTable({
@@ -50,6 +51,7 @@ export function PairingTable({
   pagination,
   onPageChange,
   conflicts = new Map(),
+  showHeader = true,
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -440,21 +442,23 @@ export function PairingTable({
   const safePairings = Array.isArray(pairings) ? pairings : [];
 
   return (
-    <Card>
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pairing Results</h3>
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {safePairings.length} pairings
-          </span>
-          <Button
-            variant="link"
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Export CSV
-          </Button>
+    <Card className={!showHeader ? 'border-0 rounded-none shadow-none' : undefined}>
+      {showHeader && (
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pairing Results</h3>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Showing {safePairings.length} pairings
+            </span>
+            <Button
+              variant="link"
+              className="text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Export CSV
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">

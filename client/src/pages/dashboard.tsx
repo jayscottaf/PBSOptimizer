@@ -1600,12 +1600,21 @@ export default function Dashboard() {
                     {' '}
                     {/* Ensure results section takes remaining space */}
                     <Card className="h-full flex flex-col">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-lg font-medium flex items-center gap-2">
-                          <Search className="h-5 w-5 text-muted-foreground" />
-                          Pairing Results
-                        </CardTitle>
-                        <div className="flex items-center space-x-2">
+                      <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                          <CardTitle className="text-lg font-medium flex items-center gap-2">
+                            <Search className="h-5 w-5 text-muted-foreground" />
+                            Pairing Results
+                          </CardTitle>
+                          <span className="text-sm text-gray-500">
+                            {latestBidPackage
+                              ? `${latestBidPackage.month} ${latestBidPackage.year} - `
+                              : ''}
+                            {filteredDisplayPairings.length} pairings
+                            {hideConflicts && conflictMap.size > 0 ? ` (${conflictMap.size} hidden)` : ''}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
                           {/* Only show cache status when it's actually useful */}
                           {(isPrefetching ||
                             !isFullCacheReady ||
@@ -1722,12 +1731,12 @@ export default function Dashboard() {
                               Updating...
                             </span>
                           )}
-                          <span className="text-sm text-gray-500">
-                            {latestBidPackage
-                              ? `${latestBidPackage.month} ${latestBidPackage.year} - `
-                              : ''}
-                            {filteredDisplayPairings.length} pairings {hideConflicts && conflictMap.size > 0 ? `(${conflictMap.size} hidden)` : ''}
-                          </span>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            Export CSV
+                          </Button>
                         </div>
                       </CardHeader>
                       <CardContent className="flex-1 overflow-auto p-0">
@@ -1741,8 +1750,8 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
-                        <div className="space-y-3 p-4">
-                          {conflictMap.size > 0 && (
+                        {conflictMap.size > 0 && (
+                          <div className="space-y-3 p-4">
                             <div className="flex items-center gap-2">
                               <label className="flex items-center gap-2 text-sm cursor-pointer">
                                 <input
@@ -1756,8 +1765,8 @@ export default function Dashboard() {
                                 </span>
                               </label>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                         <PairingTable
                           pairings={filteredDisplayPairings || []}
                           onSort={handleSort}
@@ -1765,6 +1774,7 @@ export default function Dashboard() {
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
                           conflicts={conflictMap}
+                          showHeader={false}
                         />
                       </CardContent>
                     </Card>
