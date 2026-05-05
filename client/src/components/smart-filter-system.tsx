@@ -262,6 +262,10 @@ export function SmartFilterSystem({
 
   const [selectedFunction, setSelectedFunction] = useState<string>('');
   const [selectedData, setSelectedData] = useState<string>('');
+  const rotationNumber =
+    activeFilters
+      .find(filter => filter.key === 'rotationNumber')
+      ?.value?.toString() || '';
   
   // Build dynamic filter options (layovers handled separately with multi-select)
   const allFilterOptions = React.useMemo(() => {
@@ -506,6 +510,24 @@ export function SmartFilterSystem({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Rotation Number Filter */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Rotation #
+          </label>
+          <input
+            value={rotationNumber}
+            onChange={e => {
+              const value = e.target.value.trim();
+              onFiltersChange({ rotationNumber: value || undefined });
+            }}
+            placeholder="Any rotation..."
+            inputMode="numeric"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            data-testid="input-rotation-number"
+          />
         </div>
 
         {/* Add Filter Button (hidden; auto-applies on selection) */}

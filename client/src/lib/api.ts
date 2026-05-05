@@ -44,6 +44,7 @@ export interface SearchFilters {
   [key: string]: string | number | Date[] | string[] | undefined;
   bidPackageId?: number;
   search?: string;
+  rotationNumber?: string;
   creditMin?: number;
   creditMax?: number;
   blockMin?: number;

@@ -73,6 +73,7 @@ import { useTheme } from 'next-themes';
 interface SearchFilters {
   [key: string]: string | number | Date[] | string[] | undefined;
   search?: string;
+  rotationNumber?: string;
   creditMin?: number;
   creditMax?: number;
   blockMin?: number;
@@ -105,6 +106,7 @@ interface Pairing {
 export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const [filters, setFilters] = useState<SearchFilters>({});
+  const filtersRef = useRef<SearchFilters>({});
   const [debouncedFilters, setDebouncedFilters] = useState<SearchFilters>({});
   const [activeFilters, setActiveFilters] = useState<
     Array<{ key: string; label: string; value: any }>
@@ -135,6 +137,10 @@ export default function Dashboard() {
   }, []);
 
   // Enhanced debouncing with request deduplication
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedFilters(filters);
@@ -913,19 +919,19 @@ export default function Dashboard() {
       }
     });
 
-    let mergedAfter: any = {};
-    setFilters(prev => {
-      const merged: any = { ...prev, ...processedFilters };
-      // drop cleared keys so they don't persist silently
-      Object.keys(merged).forEach(k => {
-        if (merged[k] === undefined || merged[k] === null || merged[k] === '') {
-          delete merged[k];
-        }
-      });
-      mergedAfter = merged;
-
-      return merged;
+    const mergedAfter: any = { ...filtersRef.current, ...processedFilters };
+    // drop cleared keys so they don't persist silently
+    Object.keys(mergedAfter).forEach(k => {
+      if (
+        mergedAfter[k] === undefined ||
+        mergedAfter[k] === null ||
+        mergedAfter[k] === ''
+      ) {
+        delete mergedAfter[k];
+      }
     });
+    filtersRef.current = mergedAfter;
+    setFilters(mergedAfter);
 
     // Update activeFilters to reflect the FULL merged filter set
     const updatedActiveFilters: Array<{
@@ -964,6 +970,9 @@ export default function Dashboard() {
           case 'holdProbabilityMin':
             label = `Hold: ≥${value}%`;
             break;
+          case 'rotationNumber':
+            label = `Rotation #: ${value}`;
+            break;
           case 'pairingDaysMin':
             label = `Days: ≥${value}`;
             break;
@@ -991,6 +1000,7 @@ export default function Dashboard() {
   };
 
   const clearAllFilters = () => {
+    filtersRef.current = {};
     setFilters({});
     setActiveFilters([]);
     setHideConflicts(false);
@@ -1116,6 +1126,15 @@ export default function Dashboard() {
           const pairingNum = pairing.pairingNumber?.toString().toLowerCase() || '';
           const route = pairing.route?.toString().toLowerCase() || '';
           if (!pairingNum.includes(searchLower) && !route.includes(searchLower)) {
+            return false;
+          }
+        }
+
+        // Rotation number filter
+        if (filters.rotationNumber) {
+          const rotationLower = filters.rotationNumber.toLowerCase();
+          const pairingNum = pairing.pairingNumber?.toString().toLowerCase() || '';
+          if (!pairingNum.includes(rotationLower)) {
             return false;
           }
         }

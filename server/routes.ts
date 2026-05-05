@@ -300,6 +300,7 @@ function handleMulterUpload(
 const searchFiltersSchema = z.object({
   bidPackageId: z.number().optional(),
   search: z.string().optional(),
+  rotationNumber: z.string().optional(),
   creditMin: z.number().optional(),
   creditMax: z.number().optional(),
   blockMin: z.number().optional(),

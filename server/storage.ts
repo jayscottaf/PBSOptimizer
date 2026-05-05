@@ -85,6 +85,7 @@ export interface IStorage {
   searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
+    rotationNumber?: string;
     creditMin?: number;
     creditMax?: number;
     blockMin?: number;
@@ -102,6 +103,7 @@ export interface IStorage {
   searchPairingsWithPagination(filters: {
     bidPackageId?: number;
     search?: string;
+    rotationNumber?: string;
     creditMin?: number;
     creditMax?: number;
     blockMin?: number;
@@ -408,6 +410,7 @@ export class DatabaseStorage implements IStorage {
   async searchPairings(filters: {
     bidPackageId?: number;
     search?: string;
+    rotationNumber?: string;
     creditMin?: number;
     creditMax?: number;
     blockMin?: number;
@@ -441,6 +444,10 @@ export class DatabaseStorage implements IStorage {
             like(pairings.fullTextBlock, `%${filters.search}%`)
           )
         );
+      }
+
+      if (filters.rotationNumber) {
+        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
       }
 
       if (filters.creditMin !== undefined) {
@@ -553,6 +560,7 @@ export class DatabaseStorage implements IStorage {
   async searchPairingsWithPagination(filters: {
     bidPackageId?: number;
     search?: string;
+    rotationNumber?: string;
     creditMin?: number;
     creditMax?: number;
     blockMin?: number;
@@ -639,6 +647,10 @@ export class DatabaseStorage implements IStorage {
             like(pairings.fullTextBlock, `%${filters.search}%`)
           )
         );
+      }
+
+      if (filters.rotationNumber) {
+        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
       }
 
       if (filters.creditMin !== undefined) {
@@ -871,6 +883,7 @@ export class DatabaseStorage implements IStorage {
   async getAllPairingsForBidPackage(filters: {
     bidPackageId: number;
     search?: string;
+    rotationNumber?: string;
     creditMin?: number;
     creditMax?: number;
     blockMin?: number;
@@ -925,6 +938,10 @@ export class DatabaseStorage implements IStorage {
             like(pairings.fullTextBlock, `%${filters.search}%`)
           )
         );
+      }
+
+      if (filters.rotationNumber) {
+        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
       }
 
       if (filters.creditMin !== undefined) {
