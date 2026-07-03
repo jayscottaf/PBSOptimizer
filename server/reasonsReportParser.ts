@@ -5,16 +5,19 @@ export interface TripFingerprint {
   pairingDays: number;
   layoverCities: string[];
   layoverPattern: string;
-  checkInDayOfWeek: number;
   checkInTimeOfDay: string;
   checkOutTimeOfDay: string;
   checkInMonth: number;
   creditBucket: number;
   creditHours?: number; // Actual credit hours for more accurate matching
-  isCommutable: boolean;
-  isWeekendTrip: boolean;
   includesWeekend: boolean;
   efficiencyBucket: number;
+  // Only derivable when a concrete check-in date is known (Reasons Report
+  // awards). Bid-package pairings run on many effective dates, so their
+  // fingerprints omit these instead of carrying made-up values.
+  checkInDayOfWeek?: number;
+  isCommutable?: boolean;
+  isWeekendTrip?: boolean;
 }
 
 export interface PairingAward {

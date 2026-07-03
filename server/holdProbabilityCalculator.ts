@@ -16,9 +16,7 @@ interface HoldProbabilityParams {
   seniorityPercentile: number; // 0-100 (lower is more senior)
   desirabilityScore: number; // 0-100
   pairingFrequency: number; // number of times trip appears
-  startsOnWeekend: boolean;
   includesDeadheads: number;
-  includesWeekendOff: boolean;
   bidMonth?: string; // Optional bid package month for seasonal adjustments
   layoverCities?: string[]; // Optional layover cities for location-based adjustments
 }
@@ -119,16 +117,12 @@ export class HoldProbabilityCalculator {
       // Fall back to estimate-based calculation with location data
       const desirabilityScore = this.calculateDesirabilityScore(pairing, bidMonth);
       const pairingFrequency = 1; // Can't determine without all pairings
-      const startsOnWeekend = this.startsOnWeekend(pairing);
-      const includesWeekendOff = this.includesWeekendOff(pairing);
 
       return this.calculateHoldProbability({
         seniorityPercentile,
         desirabilityScore,
         pairingFrequency,
-        startsOnWeekend,
         includesDeadheads: pairing.deadheads || 0,
-        includesWeekendOff,
         bidMonth,
         layoverCities,
       });
@@ -156,6 +150,21 @@ export class HoldProbabilityCalculator {
       const matches: HistoricalMatch[] = [];
 
       for (const history of historicalData) {
+        // Coverage/open-time awards are forced onto (or picked up by) pilots
+        // regardless of seniority-based bidding, so they say nothing about
+        // holdability and would make trips look easier to hold than they are.
+        if (history.awardType && /coverage|open/i.test(history.awardType)) {
+          continue;
+        }
+        // Days is a hard filter (same rule as TripMatcher.findBestMatches):
+        // a 2-day trip must not inherit hold evidence from a 4-day lookalike.
+        const historyFingerprint = history.tripFingerprint as TripFingerprint | null;
+        if (
+          historyFingerprint?.pairingDays !== undefined &&
+          historyFingerprint.pairingDays !== currentFingerprint.pairingDays
+        ) {
+          continue;
+        }
         if (history.tripFingerprint) {
           const similarity = TripMatcher.calculateSimilarity(
             currentFingerprint,
@@ -280,13 +289,10 @@ export class HoldProbabilityCalculator {
       pairingDays,
       layoverCities,
       layoverPattern: layoverCities.join('-'),
-      checkInDayOfWeek: 0, // Can be enhanced if we parse effectiveDates
       checkInTimeOfDay,
       checkOutTimeOfDay,
       checkInMonth,
       creditBucket: Math.floor(creditHours / 2) * 2,
-      isCommutable: false, // Can be enhanced
-      isWeekendTrip: false,
       includesWeekend: pairingDays >= 3,
       efficiencyBucket: Math.floor((creditHours / pairingDays) * 2) / 2,
     };
@@ -415,9 +421,7 @@ export class HoldProbabilityCalculator {
       seniorityPercentile,
       desirabilityScore: this.calculateDesirabilityScore(pairing),
       pairingFrequency: 1,
-      startsOnWeekend: false,
       includesDeadheads: pairing.deadheads || 0,
-      includesWeekendOff: false,
     });
   }
 
@@ -441,9 +445,7 @@ export class HoldProbabilityCalculator {
       seniorityPercentile,
       desirabilityScore,
       pairingFrequency,
-      startsOnWeekend,
       includesDeadheads,
-      includesWeekendOff,
       bidMonth,
       layoverCities,
     } = params;
@@ -552,7 +554,6 @@ export class HoldProbabilityCalculator {
       if (
         desirabilityScore < 30 &&
         pairingFrequency >= 4 &&
-        startsOnWeekend &&
         includesDeadheads >= 2
       ) {
         baseProbability = 50;
@@ -571,9 +572,6 @@ export class HoldProbabilityCalculator {
     }
     if (includesDeadheads >= 3) {
       reasoning.push('• Many deadheads - less competition');
-    }
-    if (startsOnWeekend && seniorityPercentile > 50) {
-      reasoning.push('• Weekend start - less popular with senior pilots');
     }
 
     // Location-based adjustments (seasonal layover desirability)
@@ -603,12 +601,9 @@ export class HoldProbabilityCalculator {
       }
     }
 
-    // Add small randomization for realism only for non-senior cases
-    const randomAdjustment =
-      seniorityPercentile <= 10 ? 0 : (Math.random() - 0.5) * 6; // -3 to +3
     let finalProbability = Math.max(
       0,
-      Math.min(100, baseProbability + randomAdjustment + locationAdjustment)
+      Math.min(100, baseProbability + locationAdjustment)
     );
 
     // Enforce seniority floor if applicable
@@ -627,9 +622,7 @@ export class HoldProbabilityCalculator {
       console.log(`  Seniority Percentile: ${seniorityPercentile}%`);
       console.log(`  Desirability Score: ${desirabilityScore}`);
       console.log(`  Pairing Frequency: ${pairingFrequency}`);
-      console.log(`  Starts on Weekend: ${startsOnWeekend}`);
       console.log(`  Deadheads: ${includesDeadheads}`);
-      console.log(`  Weekend Off: ${includesWeekendOff}`);
       console.log(`  Result: ${roundedProbability}% - ${label}`);
       reasoning.forEach(reason => console.log(`  ${reason}`));
     }
@@ -685,11 +678,6 @@ export class HoldProbabilityCalculator {
     // Deadheads reduce desirability
     score -= deadheads * 8;
 
-    // Weekend starts reduce desirability for most pilots
-    if (pairing.startsOnWeekend) {
-      score -= 10;
-    }
-
     // Location-based desirability (seasonal adjustment)
     if (bidMonth && pairing.layovers && Array.isArray(pairing.layovers)) {
       const layoverCities = pairing.layovers
@@ -706,24 +694,6 @@ export class HoldProbabilityCalculator {
 
     // Clamp to 0-100 range
     return Math.max(0, Math.min(100, Math.round(score)));
-  }
-
-  /**
-   * Determine if pairing starts on weekend
-   */
-  static startsOnWeekend(pairing: any): boolean {
-    // This would need to be implemented based on your pairing data structure
-    // For now, return false as a placeholder
-    return false;
-  }
-
-  /**
-   * Determine if pairing includes weekend off
-   */
-  static includesWeekendOff(pairing: any): boolean {
-    // This would need to be implemented based on your pairing data structure
-    // For now, return false as a placeholder
-    return false;
   }
 
   /**

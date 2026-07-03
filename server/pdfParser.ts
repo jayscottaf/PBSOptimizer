@@ -70,17 +70,11 @@ export class PDFParser {
         pairing.pairingNumber,
         allPairings
       );
-    const startsOnWeekend = HoldProbabilityCalculator.startsOnWeekend(pairing);
-    const includesWeekendOff =
-      HoldProbabilityCalculator.includesWeekendOff(pairing);
-
     const result = HoldProbabilityCalculator.calculateHoldProbability({
       seniorityPercentile,
       desirabilityScore,
       pairingFrequency,
-      startsOnWeekend,
       includesDeadheads: pairing.deadheads,
-      includesWeekendOff,
       bidMonth,
       layoverCities,
     });

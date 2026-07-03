@@ -143,19 +143,12 @@ async function recalculateHoldProbabilitiesOptimized(
             pairing.pairingNumber,
             allPairings
           );
-        const startsOnWeekend =
-          HoldProbabilityCalculator.startsOnWeekend(pairing);
-        const includesWeekendOff =
-          HoldProbabilityCalculator.includesWeekendOff(pairing);
-
         holdProbabilityResult =
           HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile,
             desirabilityScore,
             pairingFrequency,
-            startsOnWeekend,
             includesDeadheads: pairing.deadheads || 0,
-            includesWeekendOff,
             bidMonth: bidPackage.month,
             layoverCities,
           });
@@ -1411,9 +1404,7 @@ export async function registerRoutes(app: Express) {
             seniorityPercentile: seniorityValue,
             desirabilityScore: desirability,
             pairingFrequency: freq,
-            startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
             includesDeadheads: p.deadheads || 0,
-            includesWeekendOff: HoldProbabilityCalculator.includesWeekendOff(p),
             bidMonth,
             layoverCities,
           });
@@ -1523,10 +1514,7 @@ export async function registerRoutes(app: Express) {
               seniorityPercentile: seniorityValue,
               desirabilityScore: desirability,
               pairingFrequency: freq,
-              startsOnWeekend: HoldProbabilityCalculator.startsOnWeekend(p),
               includesDeadheads: (p as any).deadheads || 0,
-              includesWeekendOff:
-                HoldProbabilityCalculator.includesWeekendOff(p),
             });
             (p as any).holdProbability = hp.probability;
           }

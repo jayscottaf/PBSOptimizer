@@ -130,7 +130,7 @@ export class TripMatcher {
 
     breakdown.timeMatch = timeScore;
 
-    // 4. Season match (10% weight) - compare seasons for seasonal preference patterns
+    // 4. Season match (15% weight) - compare seasons for seasonal preference patterns
     const season1 = this.getSeason(trip1.checkInMonth);
     const season2 = this.getSeason(trip2.checkInMonth);
     
