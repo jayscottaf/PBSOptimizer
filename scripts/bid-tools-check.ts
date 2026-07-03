@@ -1,5 +1,6 @@
 import { simulateBid } from '../server/lib/bidSimulator';
 import { exportBid } from '../server/lib/bidExporter';
+import { executeCoachTool } from '../server/ai/coachTools';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -119,6 +120,29 @@ assert(e2.warnings.some(w => w.includes('Else Start Next or Clear Schedule')), '
 assert(e2.warnings.some(w => w.includes('never place a Start Next in the last bid group')), 'warns on Start Next in last group');
 assert(e2.warnings.some(w => w.includes('forced to the bottom')), 'warns on CSSN not last in its group');
 assert(e2.warnings.some(w => w.includes('No reserve bid group')), 'warns on missing reserve group');
+
+// 9) Coach tool executor: valid call, bad JSON, malformed bid
+const toolCtx = { pairings, alv: 40 };
+const sim = executeCoachTool(
+  'simulate_bid',
+  JSON.stringify({ bid: bid1, alv: 40 }),
+  toolCtx
+) as any;
+assert(
+  typeof sim.totalCredit === 'number' && Array.isArray(sim.caveats),
+  'executeCoachTool simulate_bid returns compact result'
+);
+const exp = executeCoachTool('export_bid', JSON.stringify({ bid: bid5 }), toolCtx) as any;
+assert(
+  typeof exp.text === 'string' && exp.text.includes('Start Pairings'),
+  'executeCoachTool export_bid returns text'
+);
+const badJson = executeCoachTool('simulate_bid', '{not json', toolCtx) as any;
+assert(!!badJson.error, 'executeCoachTool reports bad JSON as error, not throw');
+const badBid = executeCoachTool('simulate_bid', '{"bid": {"nope": true}}', toolCtx) as any;
+assert(!!badBid.error, 'executeCoachTool reports malformed bid as error');
+const unknownTool = executeCoachTool('do_magic', '{"bid":{"groups":[]}}', toolCtx) as any;
+assert(!!unknownTool.error, 'executeCoachTool rejects unknown tool names');
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

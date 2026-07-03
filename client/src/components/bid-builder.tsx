@@ -41,9 +41,16 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Ban,
+  CalendarOff,
   ClipboardCopy,
+  Gauge,
   Play,
   Plus,
+  ShieldCheck,
+  SkipForward,
+  Sparkles,
+  Target,
   Trash2,
 } from 'lucide-react';
 
@@ -65,6 +72,125 @@ const PREFERENCE_LABELS: Record<PreferenceKind, string> = {
   setConditionCredit: 'Set Condition (credit window)',
   clearScheduleStartNext: 'Clear Schedule and Start Next',
 };
+
+/** Visual identity per preference type: icon + accent for fast scanning. */
+const PREFERENCE_STYLE: Record<
+  PreferenceKind,
+  { icon: typeof Target; accent: string; chip: string }
+> = {
+  award: {
+    icon: Target,
+    accent: 'border-l-emerald-500',
+    chip: 'text-emerald-600 dark:text-emerald-400',
+  },
+  avoid: {
+    icon: Ban,
+    accent: 'border-l-red-500',
+    chip: 'text-red-600 dark:text-red-400',
+  },
+  preferOff: {
+    icon: CalendarOff,
+    accent: 'border-l-sky-500',
+    chip: 'text-sky-600 dark:text-sky-400',
+  },
+  setConditionCredit: {
+    icon: Gauge,
+    accent: 'border-l-purple-500',
+    chip: 'text-purple-600 dark:text-purple-400',
+  },
+  clearScheduleStartNext: {
+    icon: SkipForward,
+    accent: 'border-l-gray-400',
+    chip: 'text-gray-600 dark:text-gray-400',
+  },
+};
+
+interface BidTemplate {
+  id: string;
+  label: string;
+  description: string;
+  build: () => DraftBid;
+}
+
+/**
+ * Quick-start drafts modeled on the coach's strategy archetypes. Each is a
+ * legal structure (negatives before awards, fallback award, trailing
+ * reserve group) the pilot then tunes.
+ */
+const BID_TEMPLATES: BidTemplate[] = [
+  {
+    id: 'quality-of-life',
+    label: 'Quality of Life',
+    description:
+      'No early check-ins, favor 2-3 day trips, broad fallback so PBS can still complete the line.',
+    build: () => ({
+      groups: [
+        {
+          type: 'pairings',
+          preferences: [
+            { type: 'avoid', filter: { checkInHourMax: 5 } },
+            {
+              type: 'award',
+              filter: { pairingDaysMin: 2, pairingDaysMax: 3 },
+              limit: 4,
+            },
+            { type: 'award' },
+          ],
+        },
+        { type: 'reserve', preferences: [] },
+      ],
+    }),
+  },
+  {
+    id: 'maximize-credit',
+    label: 'Maximize Credit',
+    description:
+      'Max Credit window with an exit (caps can apply), high daily-credit trips first, broad fallback.',
+    build: () => ({
+      groups: [
+        {
+          type: 'pairings',
+          preferences: [
+            {
+              type: 'setConditionCredit',
+              creditWindow: 'max',
+              elseStartNext: true,
+            },
+            { type: 'award', filter: { averageDailyCreditMin: 5.5 } },
+            { type: 'award' },
+          ],
+        },
+        {
+          type: 'pairings',
+          preferences: [{ type: 'award' }],
+        },
+        { type: 'reserve', preferences: [] },
+      ],
+    }),
+  },
+  {
+    id: 'commuter',
+    label: 'Commuter Friendly',
+    description:
+      'Late check-ins (10:00+), longer trips to cut commute legs, broad fallback.',
+    build: () => ({
+      groups: [
+        {
+          type: 'pairings',
+          preferences: [
+            { type: 'avoid', filter: { checkInHourMax: 9 } },
+            {
+              type: 'award',
+              filter: { pairingDaysMin: 3, pairingDaysMax: 4 },
+            },
+            { type: 'award' },
+          ],
+        },
+        { type: 'reserve', preferences: [] },
+      ],
+    }),
+  },
+];
 
 // DraftBid is plain JSON data, so a JSON round-trip is a safe deep clone
 function cloneBid(bid: DraftBid): DraftBid {
@@ -264,6 +390,7 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
   const [form, setForm] = useState<PreferenceFormState>({ ...EMPTY_FORM });
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [exported, setExported] = useState<BidExportResult | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   useEffect(() => {
     try {
@@ -360,6 +487,17 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
     }
   };
 
+  const applyTemplate = (template: BidTemplate) => {
+    setBid(template.build());
+    setSimulation(null);
+    setExported(null);
+    setShowTemplates(false);
+    toast({
+      title: `${template.label} template loaded`,
+      description: 'Tune the preferences, then Simulate.',
+    });
+  };
+
   if (!bidPackageId) {
     return (
       <Card>
@@ -371,13 +509,46 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
     );
   }
 
+  const templatesVisible = showTemplates || preferenceCount === 0;
+
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="space-y-4">
+      {/* How it works strip */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm">
+        <span className="flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+            1
+          </span>
+          Build your bid groups
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+            2
+          </span>
+          Simulate against this month's pairings
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+            3
+          </span>
+          Copy the NAVBLUE text into PBS
+        </span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
       {/* Builder column */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Draft Bid</h2>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTemplates(v => !v)}
+              title="Start from a strategy template"
+            >
+              <Sparkles className="h-4 w-4 mr-1" /> Templates
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -406,6 +577,34 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
             </Button>
           </div>
         </div>
+
+        {templatesVisible && (
+          <Card className="border-dashed">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                Start from a strategy
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 sm:grid-cols-3">
+              {BID_TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="rounded-lg border p-3 text-left transition-colors hover:border-primary hover:bg-accent"
+                >
+                  <span className="block text-sm font-medium">
+                    {template.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {template.description}
+                  </span>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {bid.groups.map((group: BidGroup, groupIndex: number) => (
           <Card key={groupIndex}>
@@ -446,13 +645,22 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                     </p>
                   )}
                   {group.preferences.map(
-                    (pref: BidPreference, prefIndex: number) => (
+                    (pref: BidPreference, prefIndex: number) => {
+                      const style = PREFERENCE_STYLE[pref.type];
+                      const PrefIcon = style.icon;
+                      return (
                       <div
                         key={prefIndex}
-                        className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm"
+                        className={`flex items-center gap-2 rounded border border-l-4 ${style.accent} px-2 py-1.5 text-sm`}
                       >
+                        <PrefIcon
+                          className={`h-4 w-4 shrink-0 ${style.chip}`}
+                        />
                         <span className="flex-1">
-                          {prefIndex + 1}. {summarizePreference(pref)}
+                          <span className="mr-1.5 text-xs text-muted-foreground">
+                            {prefIndex + 1}.
+                          </span>
+                          {summarizePreference(pref)}
                         </span>
                         <Button
                           variant="ghost"
@@ -492,7 +700,8 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                    )
+                      );
+                    }
                   )}
 
                   {addingToGroup === groupIndex ? (
@@ -806,6 +1015,25 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
           </Button>
         </div>
 
+        {!simulation && !exported && (
+          <Card className="border-dashed">
+            <CardContent className="flex items-start gap-3 py-6 text-sm text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <p className="font-medium text-foreground">
+                  Test before you bid.
+                </p>
+                <p className="mt-1">
+                  Simulate runs your draft against every pairing in this
+                  package and predicts what you could hold at your seniority.
+                  Export produces the NAVBLUE text to enter into PBS — with
+                  warnings for structural mistakes the guides call out.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {simulation && (
           <Card>
             <CardHeader className="py-3">
@@ -943,6 +1171,7 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
             </CardContent>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );

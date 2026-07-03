@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import type { IStorage } from '../storage';
 import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
 import { buildPreferenceHistoryContext } from './reasonsMiner';
+import { COACH_TOOL_DEFINITIONS, executeCoachTool } from './coachTools';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -98,16 +99,52 @@ export class SimpleAI {
 
       console.log('[SimpleAI] Sending to GPT-4.1...');
 
-      // Call GPT-4.1
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4.1',
-        temperature: 0.7,
-        max_completion_tokens: 2000,
-        messages,
-      });
+      // Tool-calling loop: the coach may call simulate_bid / export_bid to
+      // ground its draft before answering. Bounded rounds prevent runaway.
+      const toolContext = {
+        pairings,
+        alv: bidPackage?.alvHours
+          ? parseFloat(String(bidPackage.alvHours))
+          : undefined,
+      };
+      const MAX_TOOL_ROUNDS = 4;
+      let rawResponse = 'No response generated';
 
-      const rawResponse =
-        completion.choices[0]?.message?.content || 'No response generated';
+      for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4.1',
+          temperature: 0.7,
+          max_completion_tokens: 2000,
+          messages,
+          tools: COACH_TOOL_DEFINITIONS,
+        });
+
+        const choice = completion.choices[0]?.message;
+        if (!choice) break;
+
+        const toolCalls = choice.tool_calls;
+        if (!toolCalls || toolCalls.length === 0 || round === MAX_TOOL_ROUNDS) {
+          rawResponse = choice.content || rawResponse;
+          break;
+        }
+
+        messages.push(choice);
+        for (const call of toolCalls) {
+          if (call.type !== 'function') continue;
+          console.log(`[SimpleAI] Tool call: ${call.function.name}`);
+          const result = executeCoachTool(
+            call.function.name,
+            call.function.arguments,
+            toolContext
+          );
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
+          });
+        }
+      }
+
       const response = this.sanitizeCoachResponse(rawResponse);
 
       console.log('[SimpleAI] Response generated');
@@ -195,6 +232,11 @@ TERMINOLOGY:
 ${coachKnowledge}
 
 ${historyContext}
+
+TOOLS YOU CAN CALL:
+- simulate_bid: evaluate a structured draft bid against this bid package. Returns predicted awards with hold probabilities, credit totals, and explicit caveats.
+- export_bid: render a draft bid to review-ready NAVBLUE text with structure warnings.
+When the pilot wants a bid drafted: interview briefly if goals are unclear, construct the DraftBid JSON (negatives BEFORE awards, specific before general, exits in every group except the last, reserve group last), call simulate_bid, refine if the result is weak (empty awards, incomplete line, inert preferences), then call export_bid and present the final text inside a code block along with the simulation summary and its caveats. Never present a draft you have not simulated.
 
 Be helpful, analyze the data thoroughly, and give specific recommendations with pairing numbers.`;
   }

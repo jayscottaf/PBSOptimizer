@@ -138,12 +138,16 @@ function validate(bid: DraftBid): string[] {
   const warnings: string[] = [];
   bid.groups.forEach((group: BidGroup, index: number) => {
     const isLast = index === bid.groups.length - 1;
+    const nextGroup = bid.groups[index + 1];
     const hasExit = group.preferences.some(
       p => p.type === 'clearScheduleStartNext' || p.elseStartNext
     );
-    if (!isLast && !hasExit) {
+    // The exit requirement applies between consecutive groups of the same
+    // type; a pairings group followed by a trailing reserve group is the
+    // standard structure and needs no exit (Handbook p148).
+    if (!isLast && nextGroup?.type === group.type && !hasExit) {
       warnings.push(
-        `Group ${index + 1}: PBS will not accept multiple bid groups unless every group except the last has Else Start Next or Clear Schedule and Start Next (Handbook p148).`
+        `Group ${index + 1}: PBS will not accept multiple ${group.type} bid groups unless every one except the last has Else Start Next or Clear Schedule and Start Next (Handbook p148).`
       );
     }
     if (isLast && group.preferences.some(p => p.type === 'clearScheduleStartNext')) {

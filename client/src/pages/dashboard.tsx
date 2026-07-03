@@ -1497,6 +1497,7 @@ export default function Dashboard() {
                       }
                     }}
                     className={`${activeTab === 'favorites' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'text-gray-600 dark:text-gray-400'}`}
+                    title="Favorites"
                   >
                     <Star className="h-4 w-4" />
                   </Button>
@@ -1505,6 +1506,7 @@ export default function Dashboard() {
                     size="sm"
                     onClick={() => setActiveTab('calendar')}
                     className={`${activeTab === 'calendar' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}
+                    title="Calendar"
                   >
                     <Calendar className="h-4 w-4" />
                   </Button>
