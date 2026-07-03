@@ -32,6 +32,7 @@ import {
   Moon,
   Sun,
   Monitor,
+  ClipboardList,
 } from 'lucide-react';
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
@@ -44,6 +45,7 @@ import { SmartFilterSystem } from '@/components/smart-filter-system';
 import { NetworkStatus } from '@/components/network-status';
 import { ReasonsReportUpload } from '@/components/reasons-report-upload';
 import { DataManagementPanel } from '@/components/data-management-panel';
+import { BidBuilder } from '@/components/bid-builder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cacheKeyForPairings,
@@ -1507,6 +1509,19 @@ export default function Dashboard() {
                     <Calendar className="h-4 w-4" />
                   </Button>
                   <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setActiveTab(
+                        activeTab === 'bidBuilder' ? 'dashboard' : 'bidBuilder'
+                      )
+                    }
+                    className={`${activeTab === 'bidBuilder' ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}
+                    title="Bid Builder"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
@@ -1864,6 +1879,13 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent
+              value="bidBuilder"
+              className="flex-1 overflow-auto p-1"
+            >
+              <BidBuilder bidPackageId={bidPackageId} />
             </TabsContent>
           </Tabs>
         </div>

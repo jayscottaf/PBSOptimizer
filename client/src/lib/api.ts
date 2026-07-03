@@ -6,6 +6,13 @@ import {
   saveFullPairingsCache,
   loadFullPairingsCache,
 } from './offlineCache';
+import type { DraftBid, SimulationResult } from '@shared/bidTypes';
+
+export interface BidExportResult {
+  text: string;
+  lines: string[];
+  warnings: string[];
+}
 export interface BidPackage {
   id: number;
   name: string;
@@ -104,6 +111,26 @@ export const api = {
   // Bid packages
   getBidPackages: async (): Promise<BidPackage[]> => {
     const response = await apiRequest('GET', '/api/bid-packages');
+    return response.json();
+  },
+
+  // Bid builder: simulate a structured draft bid against a bid package
+  simulateBid: async (
+    bidPackageId: number,
+    bid: DraftBid,
+    opts?: { alv?: number; threshold?: number }
+  ): Promise<SimulationResult> => {
+    const response = await apiRequest('POST', '/api/bid/simulate', {
+      bidPackageId,
+      bid,
+      ...opts,
+    });
+    return response.json();
+  },
+
+  // Bid builder: render a draft bid to review-ready NAVBLUE text
+  exportBid: async (bid: DraftBid): Promise<BidExportResult> => {
+    const response = await apiRequest('POST', '/api/bid/export', { bid });
     return response.json();
   },
 
