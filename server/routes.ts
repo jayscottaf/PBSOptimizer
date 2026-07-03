@@ -20,6 +20,7 @@ import {
   asc,
   desc,
   inArray,
+  type SQL,
 } from 'drizzle-orm';
 import {
   pairings,
@@ -37,7 +38,6 @@ import multer from 'multer';
 import { z } from 'zod';
 import {
   insertBidPackageSchema,
-  insertPairingSchema,
   bidHistory,
   reasonsReportPreferences,
   type Pairing,
@@ -118,6 +118,23 @@ async function recalculateHoldProbabilitiesOptimized(
     // Use historical data if seniority number is provided
     const useHistoricalData = seniorityNumber !== undefined;
 
+    // Fetch base/aircraft history once and precompute pairing frequency once,
+    // instead of re-querying/re-scanning per pairing (was an N+1 / O(n^2)
+    // pattern that made "optimized" recalculation the opposite of optimized).
+    const historicalData = useHistoricalData
+      ? await db
+          .select()
+          .from(bidHistory)
+          .where(
+            and(
+              eq(bidHistory.base, bidPackage.base),
+              eq(bidHistory.aircraft, bidPackage.aircraft)
+            )
+          )
+      : [];
+    const frequencyMap =
+      HoldProbabilityCalculator.buildPairingFrequencyMap(allPairings);
+
     for (const pairing of allPairings) {
       let holdProbabilityResult;
 
@@ -130,12 +147,11 @@ async function recalculateHoldProbabilitiesOptimized(
       if (useHistoricalData && seniorityNumber) {
         // Try historical calculation first (now with bid month for seasonal adjustments)
         holdProbabilityResult =
-          await HoldProbabilityCalculator.calculateHoldProbabilityWithHistory(
+          HoldProbabilityCalculator.calculateHoldProbabilityWithHistory(
             pairing,
             seniorityNumber,
             seniorityPercentile,
-            bidPackage.base,
-            bidPackage.aircraft,
+            historicalData,
             bidPackage.month
           );
       } else {
@@ -145,11 +161,7 @@ async function recalculateHoldProbabilitiesOptimized(
             pairing,
             bidPackage.month
           );
-        const pairingFrequency =
-          HoldProbabilityCalculator.calculatePairingFrequency(
-            pairing.pairingNumber,
-            allPairings
-          );
+        const pairingFrequency = frequencyMap.get(pairing.pairingNumber) || 0;
         holdProbabilityResult =
           HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile,
@@ -188,27 +200,37 @@ async function recalculateHoldProbabilitiesOptimized(
   }
 }
 
-// Background recalculation function (non-blocking)
-async function recalculateHoldProbabilitiesBackground(
+// Tracks in-flight recalculations per bid package so concurrent requests for
+// the same package coalesce onto one run instead of racing separate batch
+// UPDATEs against each other with different seniority values.
+const inFlightRecalculations = new Map<number, Promise<void>>();
+
+// Runs (and awaits) recalculation, serialized per bid package. Must be
+// awaited by the caller before responding — a fire-and-forget
+// `.then()` here never completes once the HTTP response is sent on a
+// serverless runtime like Vercel, which kills the function immediately after.
+async function recalculateHoldProbabilitiesSerialized(
   bidPackageId: number,
   seniorityPercentile: number,
   seniorityNumber?: number
-) {
-  // Start recalculation in background without awaiting
-  Promise.resolve().then(async () => {
-    try {
-      console.log(
-        `🔄 Background recalculation triggered for bid package ${bidPackageId}`
-      );
-      await recalculateHoldProbabilitiesOptimized(
-        bidPackageId,
-        seniorityPercentile,
-        seniorityNumber
-      );
-    } catch (error) {
-      console.error('Background hold probability recalculation failed:', error);
+): Promise<void> {
+  const existing = inFlightRecalculations.get(bidPackageId);
+  if (existing) {
+    await existing;
+  }
+
+  const run = recalculateHoldProbabilitiesOptimized(
+    bidPackageId,
+    seniorityPercentile,
+    seniorityNumber
+  ).finally(() => {
+    if (inFlightRecalculations.get(bidPackageId) === run) {
+      inFlightRecalculations.delete(bidPackageId);
     }
   });
+
+  inFlightRecalculations.set(bidPackageId, run);
+  await run;
 }
 
 // Configure multer for file uploads - use memory storage for serverless
@@ -297,24 +319,6 @@ function handleMulterUpload(
   };
 }
 
-const searchFiltersSchema = z.object({
-  bidPackageId: z.number().optional(),
-  search: z.string().optional(),
-  rotationNumber: z.string().optional(),
-  creditMin: z.number().optional(),
-  creditMax: z.number().optional(),
-  blockMin: z.number().optional(),
-  blockMax: z.number().optional(),
-  tafb: z.string().optional(),
-  tafbMin: z.number().optional(),
-  tafbMax: z.number().optional(),
-  holdProbabilityMin: z.number().optional(),
-  pairingDays: z.number().optional(),
-  pairingDaysMin: z.number().optional(),
-  pairingDaysMax: z.number().optional(),
-  efficiency: z.number().optional(),
-});
-
 // Use the new circuit breaker-enabled database execution
 const withDatabaseRetry = executeWithRetry;
 
@@ -357,6 +361,9 @@ export async function registerRoutes(app: Express) {
 
   // Seed database endpoint (development only)
   app.post('/api/seed', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ message: 'Not available in production' });
+    }
     try {
       await seedDatabase();
       res.json({ success: true, message: 'Database seeded successfully' });
@@ -379,6 +386,27 @@ export async function registerRoutes(app: Express) {
       const packages = await withDatabaseRetry(async () => {
         return await storage.getBidPackages();
       });
+
+      // Opportunistic sweep: a package can get stuck in 'processing' forever
+      // if the server crashes or a serverless invocation is killed mid-parse.
+      // There's no cron here, so catch it lazily on the list endpoint the
+      // dashboard already polls, instead of leaving pilots staring at a
+      // progress bar that will never move.
+      const STUCK_PROCESSING_THRESHOLD_MS = 15 * 60 * 1000;
+      const now = Date.now();
+      for (const pkg of packages) {
+        if (
+          pkg.status === 'processing' &&
+          now - new Date(pkg.uploadedAt).getTime() > STUCK_PROCESSING_THRESHOLD_MS
+        ) {
+          console.warn(
+            `Bid package ${pkg.id} has been stuck in 'processing' for over 15 minutes — marking failed`
+          );
+          await storage.updateBidPackageStatus(pkg.id, 'failed');
+          await storage.deletePairingsForBidPackage(pkg.id);
+          pkg.status = 'failed';
+        }
+      }
 
       // Mark the most recent package as current (for UI display)
       const packagesWithCurrent = packages.map((pkg, index) => ({
@@ -642,33 +670,6 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Progress stream via Server-Sent Events
-  app.get('/api/progress/stream', async (req, res) => {
-    try {
-      const bidPackageId = parseInt((req.query.bidPackageId as string) || '');
-      if (!bidPackageId) {
-        return res.status(400).end('bidPackageId required');
-      }
-
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders?.();
-
-      const { registerProgressClient, removeProgressClient } = await import(
-        './progress'
-      );
-      registerProgressClient(bidPackageId, res);
-
-      req.on('close', () => {
-        removeProgressClient(bidPackageId, res);
-        res.end();
-      });
-    } catch (error) {
-      res.status(500).end('failed to open stream');
-    }
-  });
-
   // Get bid package statistics (C/B ratio ranges, etc.)
   app.get('/api/bid-packages/:id/stats', async (req, res) => {
     try {
@@ -690,6 +691,21 @@ export async function registerRoutes(app: Express) {
           400,
           'No bid package file was uploaded.',
           'MISSING_FILE'
+        );
+      }
+
+      // multer's fileFilter only checked the client-supplied mimetype header,
+      // which is trivially spoofable. Sniff the actual PDF magic bytes for
+      // anything claiming to be a PDF before handing it to the parser.
+      if (
+        req.file.mimetype === 'application/pdf' &&
+        req.file.buffer.subarray(0, 5).toString('latin1') !== '%PDF-'
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'File does not appear to be a valid PDF.',
+          'INVALID_FILE_TYPE'
         );
       }
 
@@ -727,10 +743,14 @@ export async function registerRoutes(app: Express) {
           // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
           const freshBidPackage = await storage.getBidPackage(bidPackage.id);
           if (!freshBidPackage) {
-            console.error(
+            // Throw (not `return`) so this is caught by the enclosing
+            // catch below and auto-linking is skipped as best-effort —
+            // a bare `return` here previously exited the whole route
+            // handler before the success response was sent, hanging the
+            // client's upload request until it timed out.
+            throw new Error(
               `Auto-linking: Could not find bid package ${bidPackage.id}`
             );
-            return;
           }
 
           const fetchedPairings = await storage.getPairings(freshBidPackage.id);
@@ -764,6 +784,11 @@ export async function registerRoutes(app: Express) {
 
             let linkedCount = 0;
             let matchingRecords = 0;
+            // Group history record ids by target pairing so we can issue one
+            // UPDATE per pairing instead of one per matched history record —
+            // this loop can otherwise be hundreds of sequential round-trips
+            // inside the synchronous upload request.
+            const recordIdsByPairingId = new Map<number, number[]>();
             for (const record of unlinkedRecords) {
               const { baseType: histAircraftBase } = parseAircraftCode(
                 record.aircraft
@@ -781,13 +806,19 @@ export async function registerRoutes(app: Express) {
                 // Find matching pairing by number
                 const matchingPairing = pairingMap.get(record.pairingNumber);
                 if (matchingPairing) {
-                  await db
-                    .update(bidHistory)
-                    .set({ linkedPairingId: matchingPairing.id })
-                    .where(sql`id = ${record.id}`);
+                  const ids = recordIdsByPairingId.get(matchingPairing.id) || [];
+                  ids.push(record.id);
+                  recordIdsByPairingId.set(matchingPairing.id, ids);
                   linkedCount++;
                 }
               }
+            }
+
+            for (const [pairingId, recordIds] of recordIdsByPairingId) {
+              await db
+                .update(bidHistory)
+                .set({ linkedPairingId: pairingId })
+                .where(inArray(bidHistory.id, recordIds));
             }
 
             console.log(
@@ -871,6 +902,7 @@ export async function registerRoutes(app: Express) {
                 .where(sql`linked_pairing_id IS NULL`);
 
               let relinkedCount = 0;
+              const relinkRecordIdsByPairingId = new Map<number, number[]>();
               for (const record of unlinkedAfterCleanup) {
                 const { baseType: histAircraftBase, position: histPosition } =
                   parseAircraftCode(record.aircraft);
@@ -888,13 +920,19 @@ export async function registerRoutes(app: Express) {
                     record.pairingNumber
                   );
                   if (matchingPairing) {
-                    await db
-                      .update(bidHistory)
-                      .set({ linkedPairingId: matchingPairing.id })
-                      .where(sql`id = ${record.id}`);
+                    const ids =
+                      relinkRecordIdsByPairingId.get(matchingPairing.id) || [];
+                    ids.push(record.id);
+                    relinkRecordIdsByPairingId.set(matchingPairing.id, ids);
                     relinkedCount++;
                   }
                 }
+              }
+              for (const [pairingId, recordIds] of relinkRecordIdsByPairingId) {
+                await db
+                  .update(bidHistory)
+                  .set({ linkedPairingId: pairingId })
+                  .where(inArray(bidHistory.id, recordIds));
               }
               console.log(
                 `Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || 'none'})`
@@ -1361,17 +1399,19 @@ export async function registerRoutes(app: Express) {
       // Do not mutate DB on seniority changes; compute per-request below
 
       // Build all conditions first, then apply with and()
-      const conditions = [
+      const conditions: (SQL<unknown> | undefined)[] = [
         eq(pairings.bidPackageId, parseInt(bidPackageId as string)),
       ];
 
       if (search) {
-        conditions.push(sql`
-          pairingNumber ILIKE ${`%${search}%`} OR
-          base ILIKE ${`%${search}%`} OR
-          aircraft ILIKE ${`%${search}%`} OR
-          notes ILIKE ${`%${search}%`}
-        `);
+        conditions.push(
+          or(
+            like(pairings.route, `%${search}%`),
+            like(pairings.pairingNumber, `%${search}%`),
+            like(pairings.effectiveDates, `%${search}%`),
+            like(pairings.fullTextBlock, `%${search}%`)
+          )
+        );
       }
       if (creditMin) {
         conditions.push(gte(pairings.creditHours, creditMin as string));
@@ -1388,11 +1428,34 @@ export async function registerRoutes(app: Express) {
       if (tafb) {
         conditions.push(eq(pairings.tafb, tafb as string));
       }
+      // TAFB min/max compare as minutes, not raw text (handles 'HH:MM' and decimal formats)
       if (tafbMin) {
-        conditions.push(gte(pairings.tafb, tafbMin as string));
+        const minMins = parseFloat(tafbMin as string) * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) >= ${minMins}
+        `);
       }
       if (tafbMax) {
-        conditions.push(lte(pairings.tafb, tafbMax as string));
+        const maxMins = parseFloat(tafbMax as string) * 60;
+        conditions.push(sql`
+          (
+            CASE
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
+                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
+              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
+                floor((${pairings.tafb}::numeric) * 60)
+              ELSE 0
+            END
+          ) <= ${maxMins}
+        `);
       }
       if (holdProbabilityMin) {
         conditions.push(
@@ -1440,6 +1503,8 @@ export async function registerRoutes(app: Express) {
         const bidMonth = bidPkg?.month;
 
         const seniorityValue = parseFloat(seniorityPercentile as string);
+        const frequencyMap =
+          HoldProbabilityCalculator.buildPairingFrequencyMap(allForPackage);
         for (const p of pairingsResult) {
           // Extract layover cities for location-based adjustments
           const layoverCities =
@@ -1449,10 +1514,7 @@ export async function registerRoutes(app: Express) {
 
           const desirability =
             HoldProbabilityCalculator.calculateDesirabilityScore(p, bidMonth);
-          const freq = HoldProbabilityCalculator.calculatePairingFrequency(
-            p.pairingNumber,
-            allForPackage
-          );
+          const freq = frequencyMap.get(p.pairingNumber) || 0;
           const hp = HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile: seniorityValue,
             desirabilityScore: desirability,
@@ -1607,6 +1669,8 @@ export async function registerRoutes(app: Express) {
             .from(pairings)
             .where(eq(pairings.bidPackageId, bidPackageId));
 
+          const frequencyMap =
+            HoldProbabilityCalculator.buildPairingFrequencyMap(allForPackage);
           for (const p of result.pairings) {
             // Skip if this pairing already has a calculated probability
             if (
@@ -1618,10 +1682,7 @@ export async function registerRoutes(app: Express) {
 
             const desirability =
               HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
-            const freq = HoldProbabilityCalculator.calculatePairingFrequency(
-              (p as any).pairingNumber,
-              allForPackage as any
-            );
+            const freq = frequencyMap.get((p as any).pairingNumber) || 0;
             const hp = HoldProbabilityCalculator.calculateHoldProbability({
               seniorityPercentile: seniorityValue,
               desirabilityScore: desirability,
@@ -2202,12 +2263,26 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
+      const parsedSeniorityNumber = parseInt(seniorityNumber);
+      if (Number.isNaN(parsedSeniorityNumber)) {
+        return res.status(400).json({ error: 'Invalid seniorityNumber' });
+      }
+
+      // users.seniorityPercentile is an integer column — round, don't just
+      // truncate via parseFloat, or a value like "47.6" 500s on insert.
+      let parsedPercentile = 50;
+      if (seniorityPercentile !== undefined && seniorityPercentile !== null && seniorityPercentile !== '') {
+        const rounded = Math.round(Number(seniorityPercentile));
+        if (Number.isNaN(rounded)) {
+          return res.status(400).json({ error: 'Invalid seniorityPercentile' });
+        }
+        parsedPercentile = rounded;
+      }
+
       const user = await storage.createOrUpdateUser({
         name,
-        seniorityNumber: parseInt(seniorityNumber),
-        seniorityPercentile: seniorityPercentile
-          ? parseFloat(seniorityPercentile)
-          : 50,
+        seniorityNumber: parsedSeniorityNumber,
+        seniorityPercentile: parsedPercentile,
         base,
         aircraft,
       });
@@ -2219,25 +2294,76 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Link a new device to the pilot's existing profile using their sync PIN.
+  // This is how the app stays login-free while still syncing across devices:
+  // there is exactly one canonical user, and the PIN is the only thing that
+  // proves "this new browser belongs to the same pilot."
+  app.post('/api/user/link-device', async (req, res) => {
+    try {
+      const { pin } = req.body;
+
+      if (!pin || typeof pin !== 'string') {
+        return res.status(400).json({ error: 'Missing pin' });
+      }
+
+      const user = await storage.getUserByPin(pin);
+
+      if (!user) {
+        return res.status(404).json({ error: 'Invalid PIN' });
+      }
+
+      res.json(user);
+    } catch (error) {
+      console.error('Error linking device:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Set or change the sync PIN used to link additional devices.
+  app.patch('/api/user/pin', async (req, res) => {
+    try {
+      const { userId, pin } = req.body;
+
+      if (!userId || !pin || typeof pin !== 'string') {
+        return res.status(400).json({ error: 'Missing userId or pin' });
+      }
+
+      const user = await storage.setSyncPin(parseInt(userId), pin);
+      res.json(user);
+    } catch (error) {
+      console.error('Error setting sync pin:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // Recalculate hold probabilities with historical data
   app.post('/api/recalculate-probabilities', async (req, res) => {
     try {
       const { bidPackageId, seniorityPercentile, seniorityNumber } = req.body;
 
-      if (!bidPackageId || seniorityPercentile === undefined) {
-        return res.status(400).json({ error: 'Missing required fields' });
+      const parsedPercentile = Number(seniorityPercentile);
+      if (!bidPackageId || seniorityPercentile === undefined || Number.isNaN(parsedPercentile)) {
+        return res.status(400).json({ error: 'Missing or invalid required fields' });
+      }
+      const parsedSeniorityNumber =
+        seniorityNumber === undefined ? undefined : Number(seniorityNumber);
+      if (parsedSeniorityNumber !== undefined && Number.isNaN(parsedSeniorityNumber)) {
+        return res.status(400).json({ error: 'Invalid seniorityNumber' });
       }
 
-      // Trigger recalculation in background
-      recalculateHoldProbabilitiesBackground(
+      // Awaited (not fire-and-forget): on serverless platforms the function
+      // is killed once the response is sent, so a detached background task
+      // never finishes. Serialized per bid package to avoid concurrent runs
+      // racing each other's batch UPDATEs.
+      await recalculateHoldProbabilitiesSerialized(
         bidPackageId,
-        seniorityPercentile,
-        seniorityNumber
+        parsedPercentile,
+        parsedSeniorityNumber
       );
 
-      res.json({ success: true, message: 'Recalculation started' });
+      res.json({ success: true, message: 'Recalculation completed' });
     } catch (error) {
-      console.error('Error triggering recalculation:', error);
+      console.error('Error recalculating hold probabilities:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -2463,10 +2589,17 @@ export async function registerRoutes(app: Express) {
 
   app.post('/api/chat-history', async (req, res) => {
     try {
-      const { sessionId, bidPackageId, messageType, content, messageData } =
-        req.body;
+      const {
+        sessionId,
+        userId,
+        bidPackageId,
+        messageType,
+        content,
+        messageData,
+      } = req.body;
       const savedMessage = await storage.saveChatMessage({
         sessionId,
+        userId: typeof userId === 'number' ? userId : undefined,
         bidPackageId,
         messageType,
         content,
@@ -2490,14 +2623,32 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // List a pilot's past AI-coach conversation sessions, so a newly linked
+  // device can see and reopen conversations started elsewhere.
+  app.get('/api/chat-history/user/:userId/sessions', async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const sessions = await storage.getChatSessionsForUser(userId);
+      res.json(sessions);
+    } catch (error) {
+      console.error('Error fetching chat sessions for user:', error);
+      res.status(500).json({ message: 'Failed to fetch chat sessions' });
+    }
+  });
+
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
       const { question, bidPackageId, seniorityPercentile, sessionId, userId } =
         req.body;
 
-      if (!question) {
+      if (!question || typeof question !== 'string') {
         return res.status(400).json({ message: 'Question is required' });
+      }
+      if (question.length > 4000) {
+        return res.status(400).json({
+          message: 'Question is too long — please ask something shorter.',
+        });
       }
 
       // Extract bidPackageId from question if it contains "bid package #25" pattern
@@ -2521,14 +2672,19 @@ export async function registerRoutes(app: Express) {
           const { SimpleAI } = await import('./ai/simpleAI');
           const simpleAI = new SimpleAI(storage);
 
-          // Get conversation history if sessionId provided
+          // Get conversation history if sessionId provided. Capped to the
+          // most recent messages — sending an ever-growing full transcript
+          // on every message balloons token usage and cost as a session goes on.
           let conversationHistory: any[] = [];
+          const MAX_HISTORY_MESSAGES = 8;
           if (sessionId) {
             const history = await storage.getChatHistory(sessionId);
-            conversationHistory = history.map(msg => ({
-              role: msg.messageType === 'user' ? 'user' : 'assistant',
-              content: msg.content,
-            }));
+            conversationHistory = history
+              .slice(-MAX_HISTORY_MESSAGES)
+              .map(msg => ({
+                role: msg.messageType === 'user' ? 'user' : 'assistant',
+                content: msg.content,
+              }));
           }
 
           const result = await simpleAI.query({
@@ -2586,34 +2742,6 @@ export async function registerRoutes(app: Express) {
       res
         .status(500)
         .json({ message: 'Failed to get response from PBS Assistant' });
-    }
-  });
-
-  // Endpoint for bulk pairing creation (used by PDF parser)
-  app.post('/api/pairings/bulk', async (req, res) => {
-    try {
-      const { bidPackageId, pairings } = req.body;
-
-      const createdPairings = [];
-      for (const pairingData of pairings) {
-        const pairing = await storage.createPairing({
-          ...pairingData,
-          bidPackageId,
-        });
-        createdPairings.push(pairing);
-      }
-
-      // Update bid package status to completed
-      await storage.updateBidPackageStatus(bidPackageId, 'completed');
-
-      res.json({
-        success: true,
-        count: createdPairings.length,
-        pairings: createdPairings,
-      });
-    } catch (error) {
-      console.error('Error creating bulk pairings:', error);
-      res.status(500).json({ message: 'Failed to create pairings' });
     }
   });
 

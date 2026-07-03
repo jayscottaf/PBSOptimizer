@@ -1,9 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { Pairing, BidPackage } from '@/lib/api';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { BarChart2 } from 'lucide-react';
-import { api } from '@/lib/api';
 
 type AvgByDaysStats = Record<number, { credit: number; block: number; count?: number }>;
 
@@ -73,12 +72,6 @@ export function StatsPanel({
   bidPackageStats,
   onTripLengthFilter,
 }: StatsPanelProps) {
-  const [streamProgress, setStreamProgress] = useState<{
-    percent: number;
-    processed?: number;
-    total?: number;
-  } | null>(null);
-  const esRef = useRef<EventSource | null>(null);
   const stats = useMemo<ComputedStats>(() => {
     if (!pairings || !Array.isArray(pairings) || pairings.length === 0) {
       return {
@@ -247,60 +240,17 @@ export function StatsPanel({
     };
   }, [pairings, statistics, bidPackageStats]);
 
-  // Show processing status for current bid package
+  // Show processing status for current bid package. There's no reliable way
+  // to know the expected pairing count until parsing finishes, so this is an
+  // indeterminate indicator rather than a percentage — a real total was
+  // previously guessed via a hardcoded fallback (534) that was wrong for
+  // most fleets, driven by an SSE stream that couldn't work in production
+  // anyway (parsing runs synchronously inside the upload request, so there's
+  // no separate process left to push updates from by the time a stream could
+  // connect). The client instead polls GET /api/bid-packages/:id for status.
   const isProcessing = bidPackage?.status === 'processing';
   const isFailed = bidPackage?.status === 'failed';
-  const expectedTotalBase = 534;
-  const totalFromStream =
-    streamProgress?.total && streamProgress.total > 0
-      ? streamProgress.total
-      : undefined;
-  const expectedTotal = totalFromStream ?? expectedTotalBase;
-  const computedPct = Math.min(
-    (stats.totalPairings / expectedTotal) * 100,
-    100
-  );
-  const progressPercentage =
-    typeof streamProgress?.percent === 'number'
-      ? Math.min(Math.max(streamProgress.percent, 0), 100)
-      : computedPct;
-  const displayTotalPairings =
-    isProcessing &&
-    (streamProgress?.processed !== undefined ||
-      typeof streamProgress?.percent === 'number')
-      ? streamProgress?.processed !== undefined
-        ? streamProgress.processed!
-        : Math.round((progressPercentage / 100) * expectedTotal)
-      : stats.totalPairings;
-
-  // Open SSE stream while processing to update progress live
-  useEffect(() => {
-    if (isProcessing && bidPackage?.id && !esRef.current) {
-      const es: EventSource = api.openProgressStream(
-        bidPackage.id,
-        (data: any) => {
-          if (typeof data?.percent === 'number') {
-            setStreamProgress({
-              percent: data.percent,
-              processed: data?.processed,
-              total: data?.total,
-            });
-          }
-          if (data?.status === 'completed' || data?.status === 'failed') {
-            es.close();
-            esRef.current = null;
-          }
-        }
-      );
-      esRef.current = es;
-    }
-    return () => {
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
-      }
-    };
-  }, [isProcessing, bidPackage?.id]);
+  const displayTotalPairings = stats.totalPairings;
 
   if (hideHeader) {
     return (
@@ -308,10 +258,10 @@ export function StatsPanel({
         {isProcessing && (
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-              <span>Processing bid package</span>
-              <span>{Math.round(progressPercentage)}%</span>
+              <span>Processing bid package…</span>
+              <span>{displayTotalPairings} pairings saved so far</span>
             </div>
-            <Progress value={progressPercentage} className="h-2" />
+            <Progress value={undefined} className="h-2 animate-pulse" />
           </div>
         )}
         {isFailed && (
@@ -485,10 +435,10 @@ export function StatsPanel({
         {isProcessing && (
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-              <span>Processing bid package</span>
-              <span>{Math.round(progressPercentage)}%</span>
+              <span>Processing bid package…</span>
+              <span>{displayTotalPairings} pairings saved so far</span>
             </div>
-            <Progress value={progressPercentage} className="h-2" />
+            <Progress value={undefined} className="h-2 animate-pulse" />
           </div>
         )}
         {isFailed && (

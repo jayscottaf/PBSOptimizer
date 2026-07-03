@@ -20,9 +20,14 @@ import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCa
 interface PairingModalProps {
   pairingId: number;
   onClose: () => void;
+  currentUser?: {
+    id: number;
+    base: string;
+    aircraft: string;
+  };
 }
 
-export function PairingModal({ pairingId, onClose }: PairingModalProps) {
+export function PairingModal({ pairingId, onClose, currentUser }: PairingModalProps) {
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isAddedToCalendar, setIsAddedToCalendar] = useState(false);
@@ -46,8 +51,8 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
   });
 
   // Get user's base and aircraft for filtering
-  const userBase = typeof window !== 'undefined' ? localStorage.getItem('base') || 'NYC' : 'NYC';
-  const userAircraft = typeof window !== 'undefined' ? localStorage.getItem('aircraft') || 'A220' : 'A220';
+  const userBase = currentUser?.base || 'NYC';
+  const userAircraft = currentUser?.aircraft || 'A220';
 
   // Use fingerprint-based matching instead of pairing number
   const { data: similarHistoryData } = useQuery({
@@ -87,24 +92,16 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
 
   // Check if this pairing is already in user's favorites
   const { data: userFavorites = [] } = useQuery({
-    queryKey: ['favorites'],
+    queryKey: ['favorites', currentUser?.id],
     queryFn: async () => {
+      if (!currentUser) return [];
       try {
-        const seniorityNumber =
-          localStorage.getItem('seniorityNumber') || '15860';
-        const base = localStorage.getItem('base') || 'NYC';
-        const aircraft = localStorage.getItem('aircraft') || 'A220';
-        const user = await api.createOrUpdateUser({
-          seniorityNumber: parseInt(seniorityNumber),
-          base,
-          aircraft,
-        });
-        return await api.getFavorites(user.id);
+        return await api.getFavorites(currentUser.id);
       } catch (error) {
         return [];
       }
     },
-    enabled: !!pairingId,
+    enabled: !!pairingId && !!currentUser,
   });
 
   // Update isFavorited state when favorites data changes
@@ -542,16 +539,14 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   return;
                 }
 
-                const seniorityNumber =
-                  localStorage.getItem('seniorityNumber') || '15860';
-                const base = localStorage.getItem('base') || 'NYC';
-                const aircraft = localStorage.getItem('aircraft') || 'A220';
-
-                const user = await api.createOrUpdateUser({
-                  seniorityNumber: parseInt(seniorityNumber),
-                  base,
-                  aircraft,
-                });
+                if (!currentUser) {
+                  toast({
+                    title: 'Profile Required',
+                    description: 'Please complete your profile before adding pairings to your calendar.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
 
                 // Extract effective dates from fullTextBlock if available
                 let effectiveDates = pairing.effectiveDates || '';
@@ -640,7 +635,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
 
                 addToCalendarMutation.mutate({
-                  userId: user.id,
+                  userId: currentUser.id,
                   pairingId: pairing.id,
                   startDate,
                   endDate,
@@ -677,21 +672,21 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                 return;
               } // Prevent double-adding
 
+              if (!currentUser) {
+                toast({
+                  title: 'Profile Required',
+                  description: 'Please complete your profile before adding favorites.',
+                  variant: 'destructive',
+                });
+                return;
+              }
+
               try {
                 setIsAddingFavorite(true);
-                const seniorityNumber =
-                  localStorage.getItem('seniorityNumber') || '15860';
-                const base = localStorage.getItem('base') || 'NYC';
-                const aircraft = localStorage.getItem('aircraft') || 'A220';
-                const user = await api.createOrUpdateUser({
-                  seniorityNumber: parseInt(seniorityNumber),
-                  base,
-                  aircraft,
-                });
-                await api.addFavorite(user.id, pairingId);
+                await api.addFavorite(currentUser.id, pairingId);
                 setIsFavorited(true);
                 queryClient.invalidateQueries({
-                  queryKey: ['favorites', user.id],
+                  queryKey: ['favorites', currentUser.id],
                 });
                 queryClient.invalidateQueries({ queryKey: ['favorites'] }); // Also invalidate the modal's favorites query
               } catch (error) {
@@ -759,16 +754,15 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                   onClick={async () => {
                     try {
                       setShowDateChooser(false);
-                      const seniorityNumber =
-                        localStorage.getItem('seniorityNumber') || '15860';
-                      const base = localStorage.getItem('base') || 'NYC';
-                      const aircraft =
-                        localStorage.getItem('aircraft') || 'A220';
-                      const user = await api.createOrUpdateUser({
-                        seniorityNumber: parseInt(seniorityNumber),
-                        base,
-                        aircraft,
-                      });
+
+                      if (!currentUser) {
+                        toast({
+                          title: 'Profile Required',
+                          description: 'Please complete your profile before adding pairings to your calendar.',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
 
                       const starts = dateOptions.filter(
                         d => selectedDates[d.getTime()]
@@ -791,7 +785,7 @@ export function PairingModal({ pairingId, onClose }: PairingModalProps) {
                           : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
 
                         await api.addToCalendar(
-                          user.id,
+                          currentUser.id,
                           pairing.id,
                           dutyStart,
                           dutyEnd

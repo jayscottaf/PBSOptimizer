@@ -1,6 +1,4 @@
-import { db } from './db';
 import { bidHistory } from '../shared/schema';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
 import {
@@ -85,21 +83,23 @@ export class HoldProbabilityCalculator {
 
   /**
    * Calculate hold probability using historical data when available
-   * Now includes bid month for seasonal adjustments
+   * Now includes bid month for seasonal adjustments.
+   *
+   * `historicalData` should be pre-fetched once (for the base/aircraft) by
+   * the caller and reused across every pairing in a batch — fetching it
+   * per-pairing here turned batch recalculation into an N+1 query pattern.
    */
-  static async calculateHoldProbabilityWithHistory(
+  static calculateHoldProbabilityWithHistory(
     pairing: any,
     seniorityNumber: number,
     seniorityPercentile: number,
-    base: string,
-    aircraft: string,
+    historicalData: (typeof bidHistory.$inferSelect)[],
     bidMonth?: string
-  ): Promise<HoldProbabilityResult> {
-    // Try to find historical matches
-    const historicalMatches = await this.findHistoricalMatches(
+  ): HoldProbabilityResult {
+    // Find matches against the pre-fetched historical data
+    const historicalMatches = this.findHistoricalMatches(
       pairing,
-      base,
-      aircraft
+      historicalData
     );
 
     // Extract layover cities for location-based adjustments
@@ -130,22 +130,16 @@ export class HoldProbabilityCalculator {
   }
 
   /**
-   * Find historical matches for a pairing
+   * Find historical matches for a pairing against pre-fetched history rows
+   * for the relevant base/aircraft.
    */
-  private static async findHistoricalMatches(
+  private static findHistoricalMatches(
     pairing: any,
-    base: string,
-    aircraft: string
-  ): Promise<HistoricalMatch[]> {
+    historicalData: (typeof bidHistory.$inferSelect)[]
+  ): HistoricalMatch[] {
     try {
       // Create trip fingerprint from current pairing
       const currentFingerprint = this.createFingerprintFromPairing(pairing);
-
-      // Get all historical data for this base/aircraft
-      const historicalData = await db
-        .select()
-        .from(bidHistory)
-        .where(and(eq(bidHistory.base, base), eq(bidHistory.aircraft, aircraft)));
 
       const matches: HistoricalMatch[] = [];
 
@@ -704,5 +698,18 @@ export class HoldProbabilityCalculator {
     allPairings: any[]
   ): number {
     return allPairings.filter(p => p.pairingNumber === pairingNumber).length;
+  }
+
+  /**
+   * Build a pairingNumber -> count map once, so callers looping over every
+   * pairing in a bid package don't each re-scan the whole array
+   * (calculatePairingFrequency is O(n) per call; called per-pairing that's O(n^2)).
+   */
+  static buildPairingFrequencyMap(allPairings: any[]): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const p of allPairings) {
+      map.set(p.pairingNumber, (map.get(p.pairingNumber) || 0) + 1);
+    }
+    return map;
   }
 }

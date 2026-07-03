@@ -214,10 +214,21 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   // Prefer the bid period dates from the PDF when present (e.g. May 2 → June 1
   // for a "May" Delta bid package). Falling back to the calendar month keeps
   // older packages (uploaded before the schema change) working unchanged.
-  // Parse ISO date strings as local dates to avoid TZ shifts.
-  const parseLocalDate = (iso: string) => {
-    const [y, m, d] = iso.split('-').map(Number);
-    return new Date(y, m - 1, d);
+  // The bid_period_start/end columns have stored both ISO ('YYYY-MM-DD') and
+  // human-readable ('January 31, 2026') strings depending on when the
+  // package was parsed, so this needs to handle both instead of assuming ISO
+  // and silently producing an Invalid Date for the other format.
+  const parseLocalDate = (raw: string): Date | null => {
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      // Parse as local date components (not `new Date(iso)`) to avoid the
+      // UTC-midnight interpretation shifting the date by a day depending on
+      // the browser's timezone.
+      const [, y, m, d] = isoMatch;
+      return new Date(Number(y), Number(m) - 1, Number(d));
+    }
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime()) ? null : parsed;
   };
   const bidStart = latestBidPackage?.bidPeriodStart
     ? parseLocalDate(latestBidPackage.bidPeriodStart as string)
@@ -468,13 +479,16 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     return sum + (event.pairing?.pairingDays || 0);
   }, 0);
 
-  // Calculate days off (total days in month minus working days)
-  const daysInMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth() + 1,
-    0
-  ).getDate();
-  const totalDaysOff = daysInMonth - totalWorkingDays;
+  // Calculate days off against the actual bid period length, not the
+  // calendar month — Delta bid periods routinely span month boundaries
+  // (e.g. "May 2" to "June 1"), so using the calendar month's day count
+  // under/over-counted days off for most packages.
+  const bidPeriodDays =
+    Math.round(
+      (startOfDay(viewEnd).getTime() - startOfDay(viewStart).getTime()) /
+        (24 * 60 * 60 * 1000)
+    ) + 1;
+  const totalDaysOff = bidPeriodDays - totalWorkingDays;
 
   const ratio = totalBlockHours > 0 ? totalCreditHours / totalBlockHours : 0;
 
@@ -543,6 +557,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             variant="outline"
             size="sm"
             onClick={() => navigateMonth('prev')}
+            aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -550,7 +565,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             <h2 className="text-2xl font-bold">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               {bidPackageId && latestBidPackage
                 ? `Bid Package: ${latestBidPackage.month} ${latestBidPackage.year}`
                 : 'Calendar View'}
@@ -560,6 +575,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             variant="outline"
             size="sm"
             onClick={() => navigateMonth('next')}
+            aria-label="Next month"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -800,7 +816,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
               <CardTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 Monthly Overview
               </CardTitle>
-              <span className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-600">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
                 {format(currentDate, 'MMMM yyyy')} performance metrics
               </span>
             </div>
@@ -815,10 +831,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📋
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         Total Pairings
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">This month</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">This month</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -837,8 +853,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       ⏱️
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">Credit Hours</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">ALV: {userALV.toFixed(0)}h</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Credit Hours</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">ALV: {userALV.toFixed(0)}h</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -855,7 +871,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Progress</span>
                     <span>{totalCreditHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
@@ -878,29 +894,26 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       🛫
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">Block Hours</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">Flight time</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Block Hours</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Flight time</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                       {totalBlockHours.toFixed(2)}
                     </div>
-                    <div className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
-                      +12h
-                    </div>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Progress</span>
-                    <span>{totalBlockHours.toFixed(1)}/85</span>
+                    <span>{totalBlockHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-orange-500 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${Math.min((totalBlockHours / 85) * 100, 100)}%`,
+                        width: `${Math.min((totalBlockHours / userALV) * 100, 100)}%`,
                       }}
                     ></div>
                   </div>
@@ -917,8 +930,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📅
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">Days Working</div>
-                      <div className="text-xs text-green-600">+40%</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Days Working</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -928,15 +940,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Progress</span>
-                    <span>{totalWorkingDays}/30</span>
+                    <span>{totalWorkingDays}/{bidPeriodDays}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-purple-500 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${Math.min((totalWorkingDays / 30) * 100, 100)}%`,
+                        width: `${Math.min((totalWorkingDays / bidPeriodDays) * 100, 100)}%`,
                       }}
                     ></div>
                   </div>
@@ -951,8 +963,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       🏖️
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">Days Off</div>
-                      <div className="text-xs text-emerald-600">+60%</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Days Off</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -962,15 +973,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Progress</span>
-                    <span>{totalDaysOff}/30</span>
+                    <span>{totalDaysOff}/{bidPeriodDays}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${Math.min((totalDaysOff / 30) * 100, 100)}%`,
+                        width: `${Math.min((totalDaysOff / bidPeriodDays) * 100, 100)}%`,
                       }}
                     ></div>
                   </div>
@@ -985,7 +996,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📊
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         Credit/Block Ratio
                       </div>
                       <div
@@ -1009,7 +1020,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     </div>
                     <div className="flex items-center gap-1 justify-end">
                       <div className={`w-2 h-2 ${ratioDotColor} rounded-full`}></div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-600">({ratioLabel})</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">({ratioLabel})</span>
                     </div>
                   </div>
                 </div>

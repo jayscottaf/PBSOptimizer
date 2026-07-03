@@ -18,8 +18,7 @@ npm run build            # Build both frontend and backend
 Create a `.env` file with:
 ```
 DATABASE_URL=postgresql://... # Neon PostgreSQL connection string
-OPENAI_API_KEY=sk-...        # OpenAI API key for chat features
-OPENAI_ASSISTANT_ID=asst_... # OpenAI Assistant ID
+OPENAI_API_KEY=sk-...        # OpenAI API key for the AI bidding coach chat
 PORT=5000                     # Server port (default: 5000)
 NODE_ENV=development          # development or production
 ```
@@ -62,15 +61,17 @@ npm run format:check     # Check formatting without changes
 
 **API Routes** (`server/routes.ts`):
 - RESTful API endpoints under `/api/*`
-- WebSocket support for real-time progress updates during PDF parsing
 - PDF upload and parsing handled via multer middleware
 - Hold probability recalculation triggered after pairing operations
 
-**PDF Processing** (`server/pdfParser.ts`, `server/openaiAssistant.ts`):
-- Parses Delta Airlines PBS PDF bid packages
-- Extracts pairing data (flight segments, credit hours, layovers, etc.)
-- Uses OpenAI Assistant API for intelligent text extraction
-- Progress tracking via WebSocket connections
+**PDF Processing** (`server/pdfParser.ts`):
+- Parses Delta Airlines PBS PDF bid packages synchronously within the `/api/upload` request (required for serverless — the function is killed once a response is sent, so background processing after that point never runs)
+- Extracts pairing data (flight segments, credit hours, layovers, etc.) via regex-based text parsing (`pdf-parse`) — no OpenAI call in this path
+- The client polls `GET /api/bid-packages/:id` for status while a package's `status` is `processing`; there's no separate progress-streaming mechanism
+
+**AI Bidding Coach** (`server/ai/simpleAI.ts`, `server/openaiAssistant.ts`):
+- `SimpleAI` sends the bid package's pairings plus the pilot's question to `gpt-4.1` for the main chat experience
+- `openaiAssistant.ts` is a simpler fallback used when no bid package is loaded yet
 
 **Hold Probability Calculation** (`server/holdProbabilityCalculator.ts`):
 - Calculates likelihood of getting a pairing based on:

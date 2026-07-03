@@ -158,10 +158,10 @@ export class SimpleAI {
       };
     } catch (error) {
       console.error('[SimpleAI] Error:', error);
-      return {
-        response:
-          'I encountered an error processing your request. Please try again.',
-      };
+      // Rethrow (don't swallow): the caller classifies rate-limit /
+      // context-length errors into specific user-facing messages, and a
+      // caught-here-and-returned generic string made that dead code.
+      throw error;
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,15 +37,33 @@ import {
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
 import { PairingTable } from '@/components/pairing-table';
-import { PairingChat } from '@/components/pairing-chat';
-import { FiltersPanel } from '@/components/filters-panel';
 import { PairingModal } from '@/components/pairing-modal';
-import { CalendarView } from '@/components/calendar-view';
 import { SmartFilterSystem } from '@/components/smart-filter-system';
 import { NetworkStatus } from '@/components/network-status';
-import { ReasonsReportUpload } from '@/components/reasons-report-upload';
-import { DataManagementPanel } from '@/components/data-management-panel';
-import { BidBuilder } from '@/components/bid-builder';
+
+// Code-split: these are only needed once the pilot opens the Calendar tab,
+// the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
+// no reason to ship them in the initial bundle everyone downloads just to see
+// the pairing table.
+const PairingChat = lazy(() =>
+  import('@/components/pairing-chat').then(m => ({ default: m.PairingChat }))
+);
+const CalendarView = lazy(() =>
+  import('@/components/calendar-view').then(m => ({ default: m.CalendarView }))
+);
+const ReasonsReportUpload = lazy(() =>
+  import('@/components/reasons-report-upload').then(m => ({
+    default: m.ReasonsReportUpload,
+  }))
+);
+const DataManagementPanel = lazy(() =>
+  import('@/components/data-management-panel').then(m => ({
+    default: m.DataManagementPanel,
+  }))
+);
+const BidBuilder = lazy(() =>
+  import('@/components/bid-builder').then(m => ({ default: m.BidBuilder }))
+);
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cacheKeyForPairings,
@@ -69,7 +87,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { useUploadBidPackage } from '@/hooks/useUploadBidPackage'; // Assuming this hook exists
 import { toast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
 interface SearchFilters {
@@ -105,6 +122,12 @@ interface Pairing {
   // ... other properties
 }
 
+// Stable reference for useQuery's `data: x = []` destructuring default —
+// without this, a new [] literal is created every render while the query is
+// unresolved, which (combined with an effect keyed on that value) triggers
+// React's "Maximum update depth exceeded" infinite-loop warning.
+const EMPTY_ARRAY: any[] = [];
+
 export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const [filters, setFilters] = useState<SearchFilters>({});
@@ -116,27 +139,120 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showFilters, setShowFilters] = useState(false);
   const [showQuickStats, setShowQuickStats] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [hideConflicts, setHideConflicts] = useState(false);
-  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const [conflictMap, setConflictMap] = useState<Map<number, ConflictInfo>>(new Map());
 
   const queryClient = useQueryClient();
-  
-  // Ref to track upload polling interval for cleanup
-  const uploadPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Ref to track the single upload-status poller for cleanup
   const uploadPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track processing bid package for persistent indicator
   const [processingBidPackage, setProcessingBidPackage] = useState<{id: number; name: string} | null>(null);
-  
+
+  // Auto-expand the mobile Quick Stats card while a package is processing —
+  // it was collapsed by default, so a pilot uploading on mobile could miss
+  // the progress indicator entirely unless they happened to tap "Show".
+  useEffect(() => {
+    if (processingBidPackage) {
+      setShowQuickStats(true);
+    }
+  }, [processingBidPackage]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
       if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
     };
   }, []);
+
+  // Single consolidated mechanism for tracking upload/parse completion —
+  // there used to be three: an SSE stream (never worked in production,
+  // since the server parses synchronously within the /api/upload request
+  // so there's no separate process left running to emit progress from), a
+  // dead unused interval poller, and this recursive poller with no unmount
+  // cleanup. By the time /api/upload resolves, parsing has already finished
+  // (it's awaited server-side), so this poller is mostly a defensive
+  // fallback for the rare case the response is lost after the DB write.
+  const pollBidPackageStatus = useCallback(
+    (bidPackageId: number, attempt = 0) => {
+      const maxAttempts = 60; // 60s at 1s intervals
+      fetch(`/api/bid-packages/${bidPackageId}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(pkg => {
+          if (!pkg) {
+            throw new Error('status check failed');
+          }
+
+          if (pkg.status === 'processing') {
+            if (pkg.month && pkg.year) {
+              setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
+            }
+            if (attempt < maxAttempts) {
+              uploadPollTimeoutRef.current = setTimeout(
+                () => pollBidPackageStatus(bidPackageId, attempt + 1),
+                1000
+              );
+            } else {
+              setProcessingBidPackage(null);
+              toast({
+                title: 'Processing timeout',
+                description: 'Processing is taking longer than expected. Please refresh the page.',
+                variant: 'destructive',
+              });
+            }
+            return;
+          }
+
+          // Terminal state (completed or failed)
+          const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
+          setProcessingBidPackage(null);
+
+          queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+          queryClient.invalidateQueries({ queryKey: ['data-health'] });
+          queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
+          queryClient.invalidateQueries({
+            predicate: query => {
+              const key = query.queryKey[0];
+              return (
+                key === 'pairings' ||
+                key === 'initial-pairings' ||
+                key === '/api/pairings' ||
+                key === '/api/pairings/search' ||
+                key === '/api/bid-packages' ||
+                key === 'bid-package-stats'
+              );
+            },
+          });
+
+          toast({
+            title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
+            description:
+              pkg.status === 'completed'
+                ? `${actualName} is ready!`
+                : `Failed to process ${actualName}. Please try again.`,
+            variant: pkg.status === 'completed' ? 'default' : 'destructive',
+            duration: 8000,
+          });
+
+          if (pkg.status === 'completed') {
+            setSelectedBidPackageId(pkg.id);
+          }
+        })
+        .catch(() => {
+          if (attempt < maxAttempts) {
+            uploadPollTimeoutRef.current = setTimeout(
+              () => pollBidPackageStatus(bidPackageId, attempt + 1),
+              1000
+            );
+          } else {
+            setProcessingBidPackage(null);
+          }
+        });
+    },
+    [queryClient, toast]
+  );
 
   // Enhanced debouncing with request deduplication
   useEffect(() => {
@@ -170,6 +286,35 @@ export default function Dashboard() {
     return localStorage.getItem('position') || '';
   });
 
+  // currentUser is the last-synced profile snapshot — set only by an
+  // explicit "Save Profile" or "Link Device" action, never by in-progress
+  // typing in the profile modal. This is what the rest of the app (favorites,
+  // calendar, pairing queries) treats as "who the pilot is," decoupled from
+  // whatever's currently in the form inputs.
+  type CurrentUser = {
+    id: number;
+    name?: string;
+    seniorityNumber: number;
+    seniorityPercentile?: number;
+    base: string;
+    aircraft: string;
+  };
+  const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(() => {
+    const savedId = localStorage.getItem('userId');
+    if (!savedId) return undefined;
+    const savedSeniorityNumber = localStorage.getItem('seniorityNumber');
+    if (!savedSeniorityNumber) return undefined;
+    const savedPercentile = localStorage.getItem('seniorityPercentile');
+    return {
+      id: parseInt(savedId),
+      name: localStorage.getItem('name') || undefined,
+      seniorityNumber: parseInt(savedSeniorityNumber),
+      seniorityPercentile: savedPercentile ? parseFloat(savedPercentile) : undefined,
+      base: localStorage.getItem('base') || '',
+      aircraft: localStorage.getItem('aircraft') || '',
+    };
+  });
+
   // Track if this is the initial load to prevent overwriting saved values
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -189,6 +334,37 @@ export default function Dashboard() {
       localStorage.setItem('position', position);
     }
   }, [name, seniorityNumber, seniorityPercentile, base, aircraft, position, hasInitialized]);
+
+  // Applies a profile returned by the server (from Save Profile or Link
+  // Device) to both the form inputs and the synced currentUser snapshot.
+  const applyProfile = useCallback((user: any) => {
+    setCurrentUser({
+      id: user.id,
+      name: user.name || undefined,
+      seniorityNumber: user.seniorityNumber,
+      seniorityPercentile: user.seniorityPercentile ?? undefined,
+      base: user.base,
+      aircraft: user.aircraft,
+    });
+    setName(user.name || '');
+    setSeniorityNumber(String(user.seniorityNumber));
+    setSeniorityPercentile(
+      user.seniorityPercentile !== null && user.seniorityPercentile !== undefined
+        ? String(user.seniorityPercentile)
+        : ''
+    );
+    setBase(user.base);
+    setAircraft(user.aircraft);
+    localStorage.setItem('userId', String(user.id));
+  }, []);
+
+  // "Link this device" (sync PIN entry on a fresh device) state
+  const [linkPin, setLinkPin] = useState('');
+  const [isLinkingDevice, setIsLinkingDevice] = useState(false);
+
+  // Sync PIN settings state (for an already-linked device to set/change it)
+  const [syncPinDraft, setSyncPinDraft] = useState('');
+  const [isSavingPin, setIsSavingPin] = useState(false);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
   const [sortColumn, setSortColumn] = useState<string | null>('holdProbability');
@@ -220,88 +396,8 @@ export default function Dashboard() {
     checkProfile();
   }, [hasInitialized, seniorityNumber, base, aircraft]);
 
-  const { mutate: uploadMutation, data: uploadedPackage } = useUploadBidPackage(
-    {
-      onUploadProgress: setUploadProgress,
-      onSuccess: data => {
-        // Clear any existing polling
-        if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
-        if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
 
-        // Invalidate queries to refresh UI after upload
-        queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
-        queryClient.invalidateQueries({ queryKey: ['data-health'] });
-
-        // Poll for processing completion and refresh again
-        const uploadedBidPackageId = data?.bidPackage?.id;
-        const uploadedBidPackageName = data?.bidPackage?.month && data?.bidPackage?.year
-          ? `${data.bidPackage.month} ${data.bidPackage.year}`
-          : 'Bid Package';
-
-        if (uploadedBidPackageId) {
-          // Set processing state for persistent indicator
-          setProcessingBidPackage({ id: uploadedBidPackageId, name: uploadedBidPackageName });
-
-          uploadPollIntervalRef.current = setInterval(async () => {
-            try {
-              const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
-              if (response.ok) {
-                const pkg = await response.json();
-                if (pkg.status === 'completed' || pkg.status === 'failed') {
-                  if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
-                  if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
-                  uploadPollIntervalRef.current = null;
-                  uploadPollTimeoutRef.current = null;
-
-                  // Clear processing state
-                  setProcessingBidPackage(null);
-
-                  // Refresh all relevant queries using partial key matching
-                  queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
-                  queryClient.invalidateQueries({ queryKey: ['data-health'] });
-                  // Use predicate to match all pairing and bid-package related queries
-                  queryClient.invalidateQueries({
-                    predicate: (query) => {
-                      const key = query.queryKey[0];
-                      return key === 'pairings' || key === 'initial-pairings' ||
-                             key === '/api/pairings' || key === '/api/pairings/search' ||
-                             key === '/api/bid-packages' || key === 'bid-package-stats';
-                    }
-                  });
-
-                  // Show completion toast with longer duration
-                  toast({
-                    title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
-                    description: pkg.status === 'completed'
-                      ? `${uploadedBidPackageName} is ready. View updated data in Data Overview.`
-                      : `Failed to process ${uploadedBidPackageName}. Please try again.`,
-                    variant: pkg.status === 'completed' ? 'default' : 'destructive',
-                    duration: 8000, // Show for 8 seconds
-                  });
-                }
-              }
-            } catch (err) {
-              console.error('Error polling bid package status:', err);
-            }
-          }, 2000); // Poll every 2 seconds
-
-          // Stop polling after 2 minutes max
-          uploadPollTimeoutRef.current = setTimeout(() => {
-            if (uploadPollIntervalRef.current) clearInterval(uploadPollIntervalRef.current);
-            uploadPollIntervalRef.current = null;
-            uploadPollTimeoutRef.current = null;
-            setProcessingBidPackage(null);
-          }, 120000);
-        }
-      },
-    }
-  );
-
-  const handleFileUpload = (file: File) => {
-    uploadMutation({ file });
-  };
-
-  const { data: bidPackages = [], refetch: refetchBidPackages } = useQuery({
+  const { data: bidPackages = EMPTY_ARRAY, refetch: refetchBidPackages } = useQuery({
     queryKey: ['bidPackages'],
     queryFn: api.getBidPackages,
     staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
@@ -311,10 +407,35 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
-  // Find the latest bid package (prefer completed, fall back to most recent by uploadedAt if none are completed)
+  // Explicit pilot choice from the bid-package selector. Persisted so the
+  // choice survives a reload instead of silently reverting to "newest."
+  const [selectedBidPackageId, setSelectedBidPackageId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('selectedBidPackageId');
+    return saved ? parseInt(saved) : null;
+  });
+
+  useEffect(() => {
+    if (selectedBidPackageId !== null && selectedBidPackageId !== undefined) {
+      localStorage.setItem('selectedBidPackageId', String(selectedBidPackageId));
+    }
+  }, [selectedBidPackageId]);
+
+  // Find the active bid package: the pilot's explicit selection if it still
+  // exists, otherwise fall back to auto-picking (prefer completed, then most
+  // recent by uploadedAt) — previously there was no way to view anything
+  // other than whichever package happened to be newest.
   const latestBidPackage = React.useMemo(() => {
     if (!bidPackages || bidPackages.length === 0) {
       return null;
+    }
+
+    if (selectedBidPackageId !== null && selectedBidPackageId !== undefined) {
+      const selected = (bidPackages as any[]).find(
+        pkg => pkg.id === selectedBidPackageId
+      );
+      if (selected) {
+        return selected;
+      }
     }
 
     const packagesArray = (bidPackages as any[]).slice();
@@ -334,7 +455,7 @@ export default function Dashboard() {
 
     // Fallback: return the most recent package regardless of status
     return packagesArray[0];
-  }, [bidPackages]);
+  }, [bidPackages, selectedBidPackageId]);
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
   // Check if we have any completed bid packages
@@ -361,24 +482,6 @@ export default function Dashboard() {
 
   // Removed redundant initial query to prevent duplicate API calls
 
-  // Query for user data with enhanced caching
-  const { data: currentUser } = useQuery({
-    queryKey: ['user', seniorityNumber, base, aircraft],
-    queryFn: async () => {
-      return await api.createOrUpdateUser({
-        seniorityNumber: parseInt(seniorityNumber),
-        base,
-        aircraft,
-      });
-    },
-    enabled: !!seniorityNumber,
-    staleTime: 30 * 60 * 1000, // User data is stable for 30 minutes
-    gcTime: 60 * 60 * 1000, // Keep in memory for 1 hour
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
-
   // Only update loading state when user manually changes seniority in profile
   React.useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -399,6 +502,7 @@ export default function Dashboard() {
   const {
     data: pairingsResponse,
     isLoading: isLoadingPairings,
+    isError: isPairingsError,
     refetch: refetchPairings,
   } = useQuery({
     queryKey: [
@@ -704,7 +808,7 @@ export default function Dashboard() {
   // Debug logs removed after verification
 
   // Query for calendar events to detect conflicts
-  const { data: calendarEventsData = [] } = useQuery({
+  const { data: calendarEventsData = EMPTY_ARRAY } = useQuery({
     queryKey: ['calendarEvents', currentUser?.id],
     queryFn: async () => {
       if (!currentUser) {
@@ -726,13 +830,9 @@ export default function Dashboard() {
     gcTime: 10 * 60 * 1000,
   });
 
-  // Update calendar events state
-  React.useEffect(() => {
-    setCalendarEvents(calendarEventsData);
-  }, [calendarEventsData]);
 
   // Query for user's favorites with enhanced caching
-  const { data: favorites = [], refetch: refetchFavorites } = useQuery({
+  const { data: favorites = EMPTY_ARRAY, refetch: refetchFavorites } = useQuery({
     queryKey: ['favorites', currentUser?.id],
     queryFn: async () => {
       if (!currentUser) {
@@ -884,6 +984,73 @@ export default function Dashboard() {
     }
   };
 
+  // Shared comparator so any pairing list (main table, favorites) sorts the
+  // same way when the pilot clicks a column header.
+  const comparePairings = useCallback(
+    (a: any, b: any, column: string | null, direction: 'asc' | 'desc') => {
+      let aVal: any, bVal: any;
+
+      switch (column) {
+        case 'creditHours':
+          aVal = parseFloat(a.creditHours?.toString() || '0');
+          bVal = parseFloat(b.creditHours?.toString() || '0');
+          break;
+        case 'blockHours':
+          aVal = parseFloat(a.blockHours?.toString() || '0');
+          bVal = parseFloat(b.blockHours?.toString() || '0');
+          break;
+        case 'holdProbability':
+          aVal = a.holdProbability || 0;
+          bVal = b.holdProbability || 0;
+          break;
+        case 'pairingDays':
+          aVal = a.pairingDays || 0;
+          bVal = b.pairingDays || 0;
+          break;
+        case 'creditBlockRatio':
+          aVal =
+            parseFloat(a.creditHours?.toString() || '0') /
+            (parseFloat(a.blockHours?.toString() || '0') || 1);
+          bVal =
+            parseFloat(b.creditHours?.toString() || '0') /
+            (parseFloat(b.blockHours?.toString() || '0') || 1);
+          break;
+        case 'tafb': {
+          const parseTimeTafb = (tafb: string) => {
+            if (!tafb) return 0;
+            if (tafb.includes(':')) {
+              const [hours, minutes] = tafb.split(':').map(Number);
+              return hours * 60 + minutes;
+            }
+            return parseFloat(tafb) * 60;
+          };
+          aVal = parseTimeTafb(a.tafb?.toString() || '0');
+          bVal = parseTimeTafb(b.tafb?.toString() || '0');
+          break;
+        }
+        default:
+          aVal = a.pairingNumber || '';
+          bVal = b.pairingNumber || '';
+      }
+
+      if (direction === 'asc') {
+        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else {
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      }
+    },
+    []
+  );
+
+  // The favorites list is a separate fetch from the main pairing table, so
+  // clicking a sort header while on the Favorites tab previously changed
+  // global sort state without visibly re-sorting anything on screen.
+  const sortedFavorites = useMemo(() => {
+    return [...favorites].sort((a, b) =>
+      comparePairings(a, b, sortColumn, sortDirection)
+    );
+  }, [favorites, sortColumn, sortDirection, comparePairings]);
+
   const handleFiltersChange = (newFilters: SearchFilters) => {
     // Process the new filters to handle range objects
     const processedFilters: SearchFilters = {};
@@ -947,16 +1114,19 @@ export default function Dashboard() {
         : processedFilters;
 
     Object.entries(sourceForLabels).forEach(([key, value]) => {
-      // Skip preferredDaysOff from active filters display
-      if (key === 'preferredDaysOff') {
-        return;
-      }
-
       if (value !== undefined && value !== null && value !== '') {
         let label = '';
 
         // Generate appropriate labels for different filter types
         switch (key) {
+          case 'preferredDaysOff': {
+            const count = Array.isArray(value) ? value.length : 0;
+            if (count === 0) {
+              return;
+            }
+            label = `Days Off: ${count} selected`;
+            break;
+          }
           case 'creditMin':
             label = `Credit: ≥${value}:00`;
             break;
@@ -1006,6 +1176,11 @@ export default function Dashboard() {
     setFilters({});
     setActiveFilters([]);
     setHideConflicts(false);
+    // SmartFilterSystem tracks its own local state for Days Off / Layover
+    // selections (needed for its "N selected" buttons). Bumping this key
+    // remounts it with fresh state so those buttons don't keep showing a
+    // stale selection count after the query itself has been cleared.
+    setFilterResetKey(k => k + 1);
   };
 
   const handleTripLengthFilter = (days: number) => {
@@ -1208,65 +1383,11 @@ export default function Dashboard() {
     const sorted = filtered;
 
     // Apply sorting only - filters are already applied when the cache was created
-    sorted.sort((a, b) => {
-      let aVal: any, bVal: any;
-
-      switch (sortColumn) {
-        case 'creditHours':
-          aVal = parseFloat(a.creditHours?.toString() || '0');
-          bVal = parseFloat(b.creditHours?.toString() || '0');
-          break;
-        case 'blockHours':
-          aVal = parseFloat(a.blockHours?.toString() || '0');
-          bVal = parseFloat(b.blockHours?.toString() || '0');
-          break;
-        case 'holdProbability':
-          aVal = a.holdProbability || 0;
-          bVal = b.holdProbability || 0;
-          break;
-        case 'pairingDays':
-          aVal = a.pairingDays || 0;
-          bVal = b.pairingDays || 0;
-          break;
-        case 'creditBlockRatio':
-          aVal =
-            parseFloat(a.creditHours?.toString() || '0') /
-            (parseFloat(a.blockHours?.toString() || '0') || 1);
-          bVal =
-            parseFloat(b.creditHours?.toString() || '0') /
-            (parseFloat(b.blockHours?.toString() || '0') || 1);
-          break;
-        case 'tafb': {
-          // Convert TAFB to minutes for proper sorting
-          const parseTimeTafb = (tafb: string) => {
-            if (!tafb) {
-              return 0;
-            }
-            if (tafb.includes(':')) {
-              const [hours, minutes] = tafb.split(':').map(Number);
-              return hours * 60 + minutes;
-            }
-            return parseFloat(tafb) * 60;
-          };
-          aVal = parseTimeTafb(a.tafb?.toString() || '0');
-          bVal = parseTimeTafb(b.tafb?.toString() || '0');
-          break;
-        }
-        default:
-          aVal = a.pairingNumber || '';
-          bVal = b.pairingNumber || '';
-      }
-
-      if (sortDirection === 'asc') {
-        return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      } else {
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
-      }
-    });
+    sorted.sort((a, b) => comparePairings(a, b, sortColumn, sortDirection));
 
     console.log(`After filtering and sorting: ${sorted.length} pairings`);
     return sorted;
-  }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings]);
+  }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings, comparePairings]);
 
   // Use sorted pairings if available, otherwise use regular pairings
   // BUT: if layoverLocations filter is active, bypass cache and use API response directly
@@ -1312,8 +1433,12 @@ export default function Dashboard() {
       return result;
     }
     
-    // Otherwise use cached data if available
-    if (isFullCacheReady && sortedPairings.length > 0) {
+    // Otherwise use cached data if available. Trust sortedPairings even when
+    // it's empty — an empty result can legitimately mean "filters (e.g.
+    // Preferred Days Off) excluded everything," and falling back to the raw
+    // unfiltered `pairings` in that case would show pairings the pilot asked
+    // to exclude.
+    if (isFullCacheReady) {
       return sortedPairings;
     }
     return pairings;
@@ -1329,18 +1454,13 @@ export default function Dashboard() {
 
   // Calculate conflicts when pairings or calendar events change
   React.useEffect(() => {
-    if (displayPairings && displayPairings.length > 0 && calendarEvents.length > 0 && latestBidPackage) {
-      const conflicts = detectConflicts(displayPairings, calendarEvents, latestBidPackage.year);
+    if (displayPairings && displayPairings.length > 0 && calendarEventsData.length > 0 && latestBidPackage) {
+      const conflicts = detectConflicts(displayPairings, calendarEventsData, latestBidPackage.year);
       setConflictMap(conflicts);
     } else {
       setConflictMap(new Map());
     }
-  }, [displayPairings, calendarEvents, latestBidPackage]);
-
-  // Mocking selectedBidPackageId for the polling logic in the modal
-  const [selectedBidPackageId, setSelectedBidPackageId] = useState<
-    string | null
-  >(null);
+  }, [displayPairings, calendarEventsData, latestBidPackage]);
 
   // Update the quick stats to use filtered pairings instead of raw response
   const quickStats = React.useMemo(() => {
@@ -1350,7 +1470,7 @@ export default function Dashboard() {
 
     const totalPairings = filteredDisplayPairings.length;
     // Calculate stats from filtered pairings
-    const likelyToHold = filteredDisplayPairings.filter(p => (p.holdProbability || 0) >= 0.7).length;
+    const likelyToHold = filteredDisplayPairings.filter(p => (p.holdProbability || 0) >= 70).length;
     const highCredit = filteredDisplayPairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
 
     return {
@@ -1389,6 +1509,7 @@ export default function Dashboard() {
             variant="ghost"
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen className="h-4 w-4" />
@@ -1482,47 +1603,24 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <TabsList className="grid grid-cols-1 sm:w-auto">
-                    <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                  <TabsList className="sm:w-auto">
+                    <TabsTrigger value="dashboard" className="flex items-center gap-1.5">
+                      <Search className="h-4 w-4" />
+                      <span className="hidden sm:inline">Dashboard</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="favorites" className="flex items-center gap-1.5">
+                      <Star className="h-4 w-4" />
+                      <span className="hidden sm:inline">Favorites</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar" className="flex items-center gap-1.5">
+                      <Calendar className="h-4 w-4" />
+                      <span className="hidden sm:inline">Calendar</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="bidBuilder" className="flex items-center gap-1.5">
+                      <ClipboardList className="h-4 w-4" />
+                      <span className="hidden sm:inline">Bid Builder</span>
+                    </TabsTrigger>
                   </TabsList>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      // Toggle between showing all pairings and favorites
-                      if (activeTab === 'favorites') {
-                        setActiveTab('dashboard');
-                      } else {
-                        setActiveTab('favorites');
-                      }
-                    }}
-                    className={`${activeTab === 'favorites' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'text-gray-600 dark:text-gray-400'}`}
-                    title="Favorites"
-                  >
-                    <Star className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActiveTab('calendar')}
-                    className={`${activeTab === 'calendar' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}
-                    title="Calendar"
-                  >
-                    <Calendar className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setActiveTab(
-                        activeTab === 'bidBuilder' ? 'dashboard' : 'bidBuilder'
-                      )
-                    }
-                    className={`${activeTab === 'bidBuilder' ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'}`}
-                    title="Bid Builder"
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1596,7 +1694,7 @@ export default function Dashboard() {
                     {showQuickStats && (
                       <CardContent>
                         <StatsPanel
-                          pairings={sortedPairings.length > 0 ? sortedPairings : (displayPairings || [])}
+                          pairings={displayPairings || []}
                           bidPackage={latestBidPackage}
                           statistics={effectiveStatistics}
                           bidPackageStats={bidPackageStats}
@@ -1621,6 +1719,7 @@ export default function Dashboard() {
                         Filters
                       </h3>
                       <SmartFilterSystem
+                        key={filterResetKey}
                         pairings={pairings || []}
                         onFiltersChange={handleFiltersChange}
                         activeFilters={activeFilters}
@@ -1642,10 +1741,41 @@ export default function Dashboard() {
                             <Search className="h-5 w-5 text-muted-foreground" />
                             Pairing Results
                           </CardTitle>
+                          {bidPackages.length > 1 ? (
+                            <Select
+                              value={latestBidPackage ? String(latestBidPackage.id) : undefined}
+                              onValueChange={value => setSelectedBidPackageId(parseInt(value))}
+                            >
+                              <SelectTrigger
+                                className="h-8 w-auto min-w-[180px] text-sm"
+                                data-testid="select-bid-package"
+                              >
+                                <SelectValue placeholder="Select bid package" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(bidPackages as any[])
+                                  .slice()
+                                  .sort(
+                                    (a, b) =>
+                                      new Date(b.uploadedAt).getTime() -
+                                      new Date(a.uploadedAt).getTime()
+                                  )
+                                  .map(pkg => (
+                                    <SelectItem key={pkg.id} value={String(pkg.id)}>
+                                      {pkg.month} {pkg.year} · {pkg.base} {pkg.aircraft}
+                                      {pkg.status !== 'completed' ? ` (${pkg.status})` : ''}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-sm text-gray-500">
+                              {latestBidPackage
+                                ? `${latestBidPackage.month} ${latestBidPackage.year}`
+                                : ''}
+                            </span>
+                          )}
                           <span className="text-sm text-gray-500">
-                            {latestBidPackage
-                              ? `${latestBidPackage.month} ${latestBidPackage.year} - `
-                              : ''}
                             {filteredDisplayPairings.length} pairings
                             {hideConflicts && conflictMap.size > 0 ? ` (${conflictMap.size} hidden)` : ''}
                           </span>
@@ -1811,6 +1941,10 @@ export default function Dashboard() {
                           onPairingClick={handlePairingClick}
                           conflicts={conflictMap}
                           showHeader={false}
+                          isLoading={isLoadingPairings}
+                          isError={isPairingsError}
+                          onRetry={() => refetchPairings()}
+                          hasActiveFilters={activeFilters.length > 0 || hideConflicts}
                         />
                       </CardContent>
                     </Card>
@@ -1835,7 +1969,7 @@ export default function Dashboard() {
                   <CardContent className="flex-1 overflow-auto p-0">
                     {favorites.length > 0 ? (
                       <PairingTable
-                        pairings={favorites}
+                        pairings={sortedFavorites}
                         onSort={handleSort}
                         sortColumn={sortColumn || ''}
                         sortDirection={sortDirection}
@@ -1844,6 +1978,7 @@ export default function Dashboard() {
                         onDeleteFavorite={handleDeleteFavorite}
                         showAddToCalendar={true}
                         currentUser={currentUser}
+                        bidPackageYear={latestBidPackage?.year}
                         conflicts={conflictMap}
                       />
                     ) : (
@@ -1866,10 +2001,19 @@ export default function Dashboard() {
             {/* Calendar Tab */}
             <TabsContent value="calendar" className="flex-1 overflow-auto">
               {currentUser ? (
-                <CalendarView
-                  userId={currentUser.id}
-                  bidPackageId={bidPackageId}
-                />
+                <Suspense
+                  fallback={
+                    <div className="text-center py-8">
+                      <Calendar className="mx-auto h-16 w-16 text-gray-300" />
+                      <p className="mt-2 text-sm text-gray-500">Loading calendar…</p>
+                    </div>
+                  }
+                >
+                  <CalendarView
+                    userId={currentUser.id}
+                    bidPackageId={bidPackageId}
+                  />
+                </Suspense>
               ) : (
                 <div className="text-center py-8">
                   <Calendar className="mx-auto h-16 w-16 text-gray-300" />
@@ -1887,7 +2031,9 @@ export default function Dashboard() {
               value="bidBuilder"
               className="flex-1 overflow-auto p-1"
             >
-              <BidBuilder bidPackageId={bidPackageId} />
+              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+                <BidBuilder bidPackageId={bidPackageId} />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </div>
@@ -1898,6 +2044,7 @@ export default function Dashboard() {
         <PairingModal
           pairingId={selectedPairing.id}
           onClose={() => setSelectedPairing(null)}
+          currentUser={currentUser}
         />
       )}
 
@@ -1922,97 +2069,15 @@ export default function Dashboard() {
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bid Package</h3>
                   <FileUpload
                     onUpload={(file, result) => {
-                        console.log('File uploaded:', file, result);
                         setShowUploadModal(false);
                         refetchBidPackages();
                         queryClient.invalidateQueries({ queryKey: ['data-health'] });
 
-                        // Get bid package ID from result
                         const uploadedBidPackageId = result?.bidPackage?.id;
-
-                        // Set processing state - use generic name initially since actual month/year comes from PDF parsing
                         if (uploadedBidPackageId) {
                           setProcessingBidPackage({ id: uploadedBidPackageId, name: 'bid package' });
+                          pollBidPackageStatus(uploadedBidPackageId);
                         }
-
-                        // Poll for completion and refresh data
-                        const pollForCompletion = async () => {
-                          let attempts = 0;
-                          const maxAttempts = 120; // 120 seconds max for longer processing
-
-                          const checkStatus = async () => {
-                            attempts++;
-                            try {
-                              if (uploadedBidPackageId) {
-                                const response = await fetch(`/api/bid-packages/${uploadedBidPackageId}`);
-                                if (response.ok) {
-                                  const pkg = await response.json();
-
-                                  // Update banner with actual month/year from parsed PDF
-                                  if (pkg.month && pkg.year && pkg.status === 'processing') {
-                                    setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
-                                  }
-
-                                  if (pkg.status === 'completed' || pkg.status === 'failed') {
-                                    const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
-
-                                    // Clear processing state
-                                    setProcessingBidPackage(null);
-
-                                    // Refresh all data
-                                    queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
-                                    queryClient.invalidateQueries({ queryKey: ['data-health'] });
-                                    queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
-                                    queryClient.invalidateQueries({
-                                      predicate: (query) => {
-                                        const key = query.queryKey[0];
-                                        return key === 'pairings' || key === 'initial-pairings' ||
-                                               key === '/api/pairings' || key === '/api/pairings/search' ||
-                                               key === '/api/bid-packages' || key === 'bid-package-stats';
-                                      }
-                                    });
-
-                                    // Show completion toast with actual name from parsed PDF
-                                    toast({
-                                      title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
-                                      description: pkg.status === 'completed'
-                                        ? `${actualName} is ready!`
-                                        : `Failed to process ${actualName}. Please try again.`,
-                                      variant: pkg.status === 'completed' ? 'default' : 'destructive',
-                                      duration: 8000,
-                                    });
-
-                                    if (pkg.status === 'completed' && pkg.id !== selectedBidPackageId) {
-                                      setSelectedBidPackageId(pkg.id);
-                                    }
-                                    return; // Exit polling
-                                  }
-                                }
-                              }
-
-                              if (attempts < maxAttempts) {
-                                setTimeout(checkStatus, 1000); // Check again in 1 second
-                              } else {
-                                console.log('Polling timeout reached');
-                                setProcessingBidPackage(null);
-                                toast({
-                                  title: 'Processing timeout',
-                                  description: 'Processing is taking longer than expected. Please refresh the page.',
-                                  variant: 'destructive',
-                                });
-                              }
-                            } catch (error) {
-                              console.error('Error checking bid package status:', error);
-                              if (attempts < maxAttempts) {
-                                setTimeout(checkStatus, 1000);
-                              }
-                            }
-                          };
-
-                          checkStatus();
-                        };
-
-                        pollForCompletion();
                     }}
                   />
                   <div className="text-xs text-gray-500 flex items-center">
@@ -2024,21 +2089,25 @@ export default function Dashboard() {
                 {/* Reasons Report Upload */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Reasons Report</h3>
-                  <ReasonsReportUpload
-                    onUploadSuccess={() => {
-                      queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
-                      queryClient.invalidateQueries({ queryKey: ['data-health'] });
-                      toast({
-                        title: 'Historical data updated',
-                        description: 'Hold probabilities will now use this data for predictions.',
-                      });
-                    }}
-                  />
+                  <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+                    <ReasonsReportUpload
+                      onUploadSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
+                        queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                        toast({
+                          title: 'Historical data updated',
+                          description: 'Hold probabilities will now use this data for predictions.',
+                        });
+                      }}
+                    />
+                  </Suspense>
                 </div>
               </div>
             </TabsContent>
             <TabsContent value="dataOverview" className="space-y-4">
-              <DataManagementPanel />
+              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+                <DataManagementPanel />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </DialogContent>
@@ -2059,7 +2128,15 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="flex-1 overflow-hidden min-h-0 min-w-0">
             {currentUser && latestBidPackage ? (
-              <PairingChat bidPackageId={bidPackageId} />
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    Loading AI assistant…
+                  </div>
+                }
+              >
+                <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} />
+              </Suspense>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
@@ -2087,6 +2164,7 @@ export default function Dashboard() {
                 size="sm"
                 onClick={() => setShowMobileAI(false)}
                 className="p-1 h-8 w-8"
+                aria-label="Close AI Assistant"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -2095,7 +2173,15 @@ export default function Dashboard() {
             {/* Chat content - takes full remaining space */}
             <div className="flex-1 overflow-hidden">
               {currentUser && latestBidPackage ? (
-                <PairingChat bidPackageId={bidPackageId} compact={true} />
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      Loading AI assistant…
+                    </div>
+                  }
+                >
+                  <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} compact={true} />
+                </Suspense>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 p-4">
                   <div className="text-center">
@@ -2133,6 +2219,51 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto pr-2 flex-1">
+            {!currentUser && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-3 space-y-2">
+                <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                  Already set up on another device?
+                </div>
+                <p className="text-xs text-blue-800 dark:text-blue-300">
+                  Enter your sync PIN to load your existing profile, favorites, calendar, and AI chat history instead of starting fresh.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={linkPin}
+                    onChange={e => setLinkPin(e.target.value)}
+                    placeholder="Sync PIN"
+                    className="bg-white dark:bg-gray-900"
+                  />
+                  <Button
+                    variant="secondary"
+                    disabled={!linkPin || isLinkingDevice}
+                    onClick={async () => {
+                      setIsLinkingDevice(true);
+                      try {
+                        const user = await api.linkDevice(linkPin);
+                        applyProfile(user);
+                        setLinkPin('');
+                        toast({
+                          title: 'Device Linked',
+                          description: 'Your profile has been loaded onto this device.',
+                        });
+                        setShowProfileModal(false);
+                      } catch (error: any) {
+                        toast({
+                          title: 'Link Failed',
+                          description: error?.message || 'That PIN did not match any profile.',
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setIsLinkingDevice(false);
+                      }
+                    }}
+                  >
+                    Link Device
+                  </Button>
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">
                 Name
@@ -2235,6 +2366,49 @@ export default function Dashboard() {
               </select>
               <p className="text-xs text-gray-500 mt-1">Position A or B (matches ALV table)</p>
             </div>
+            {currentUser && (
+              <div className="border-t pt-4 mt-4">
+                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Sync PIN
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Set a PIN, then enter it on any other device to load this same profile, favorites, calendar, and chat history there.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={syncPinDraft}
+                    onChange={e => setSyncPinDraft(e.target.value)}
+                    placeholder="Choose a PIN"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!syncPinDraft || isSavingPin}
+                    onClick={async () => {
+                      setIsSavingPin(true);
+                      try {
+                        await api.setSyncPin(currentUser.id, syncPinDraft);
+                        toast({
+                          title: 'Sync PIN Saved',
+                          description: 'Use this PIN to link your other devices.',
+                        });
+                        setSyncPinDraft('');
+                      } catch (error: any) {
+                        toast({
+                          title: 'Error',
+                          description: error?.message || 'Failed to save sync PIN.',
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setIsSavingPin(false);
+                      }
+                    }}
+                  >
+                    Save PIN
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="border-t pt-4 mt-4">
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Appearance
@@ -2349,8 +2523,8 @@ export default function Dashboard() {
                   }
 
                   try {
-                    // Create or update user in database
-                    await api.createOrUpdateUser({
+                    // Create or update the one canonical user in the database
+                    const savedUser = await api.createOrUpdateUser({
                       name: name || undefined,
                       seniorityNumber: parseInt(seniorityNumber),
                       seniorityPercentile: seniorityPercentile
@@ -2359,9 +2533,7 @@ export default function Dashboard() {
                       base,
                       aircraft,
                     });
-
-                    // Invalidate user query to refresh
-                    queryClient.invalidateQueries({ queryKey: ['user'] });
+                    applyProfile(savedUser);
 
                     toast({
                       title: 'Profile Saved',

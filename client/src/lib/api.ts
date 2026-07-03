@@ -227,25 +227,6 @@ export const api = {
     return { total: rows.length, cached: true };
   },
 
-  // Progress stream (SSE)
-  openProgressStream: (
-    bidPackageId: number,
-    onMessage: (data: any) => void
-  ): EventSource => {
-    const es = new EventSource(
-      `/api/progress/stream?bidPackageId=${bidPackageId}`
-    );
-    es.onmessage = e => {
-      try {
-        const data = JSON.parse(e.data);
-        onMessage(data);
-      } catch {
-        // Ignore JSON parsing errors
-      }
-    };
-    return es;
-  },
-
   uploadBidPackage: async (
     file: File,
     data: {
@@ -330,7 +311,12 @@ export const api = {
       return data;
     } catch (error) {
       console.error('Error searching pairings:', error);
-      // Offline: try cached
+      // Offline/read failure: fall back to cache if we have one for this
+      // exact query. Otherwise rethrow — silently resolving to an empty
+      // list here made a genuine fetch failure indistinguishable from "no
+      // pairings match," so React Query's error state was never reachable
+      // and the table just rendered the misleading "upload a bid package"
+      // empty state instead of a retry prompt.
       const key = cacheKeyForPairings(filters.bidPackageId, filters, userId);
       const cached = await loadFullPairingsCache<Pairing[]>(key);
       if (cached) {
@@ -343,14 +329,7 @@ export const api = {
           },
         };
       }
-      return {
-        pairings: [],
-        statistics: {
-          likelyToHold: 0,
-          highCredit: 0,
-          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
-        },
-      };
+      throw error;
     }
   },
 
@@ -368,6 +347,26 @@ export const api = {
     aircraft: string;
   }) => {
     const response = await apiRequest('POST', '/api/user', data);
+    return response.json();
+  },
+
+  // Link this device to an existing profile using its sync PIN.
+  linkDevice: async (pin: string) => {
+    const response = await apiRequest('POST', '/api/user/link-device', { pin });
+    return response.json();
+  },
+
+  // Set or change the sync PIN used to link additional devices.
+  setSyncPin: async (userId: number, pin: string) => {
+    const response = await apiRequest('PATCH', '/api/user/pin', { userId, pin });
+    return response.json();
+  },
+
+  getChatSessionsForUser: async (userId: number) => {
+    const response = await apiRequest(
+      'GET',
+      `/api/chat-history/user/${userId}/sessions`
+    );
     return response.json();
   },
 
@@ -557,6 +556,7 @@ export const api = {
 
   async saveChatMessage(data: {
     sessionId: string;
+    userId?: number;
     bidPackageId?: number;
     messageType: 'user' | 'assistant';
     content: string;

@@ -19,8 +19,11 @@ function logger(level: string, message: string) {
 }
 
 const app = express();
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+// PDF/HTML uploads go through multer (capped separately, see routes.ts) —
+// this limit only needs to cover JSON bodies like bulk pairing inserts and
+// chat messages. 50mb on an unauthenticated API was an easy DoS vector.
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -68,8 +71,8 @@ async function initialize() {
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || 'Internal Server Error';
+      console.error(err);
       res.status(status).json({ message });
-      throw err;
     });
 
     // importantly only setup vite in development and after

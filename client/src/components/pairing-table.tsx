@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Eye, Bookmark, Star, X, Calendar, Info, AlertTriangle } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
 import { useState } from 'react';
@@ -14,6 +15,8 @@ import { api } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import type { ConflictInfo } from '@/lib/conflictDetection';
+import { calculateValidStartDates } from '@/lib/pairingDates';
+import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCalculator';
 
 interface PairingTableProps {
   pairings: Pairing[];
@@ -25,6 +28,7 @@ interface PairingTableProps {
   onDeleteFavorite?: (pairingId: number) => void;
   showAddToCalendar?: boolean;
   currentUser?: any;
+  bidPackageYear?: number;
   pagination?: {
     page: number;
     limit: number;
@@ -36,6 +40,10 @@ interface PairingTableProps {
   onPageChange?: (page: number) => void;
   conflicts?: Map<number, ConflictInfo>;
   showHeader?: boolean;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+  hasActiveFilters?: boolean;
 }
 
 export function PairingTable({
@@ -48,13 +56,41 @@ export function PairingTable({
   onDeleteFavorite,
   showAddToCalendar = false,
   currentUser,
+  bidPackageYear,
   pagination,
   onPageChange,
   conflicts = new Map(),
   showHeader = true,
+  isLoading = false,
+  isError = false,
+  onRetry,
+  hasActiveFilters = false,
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
+
+  // Column headers are sortable via plain onClick <th>s with no keyboard
+  // access or aria-sort — this spreads onto each one to fix both without
+  // duplicating the toggle-direction logic seven times.
+  const handleSortClick = (column: string) => {
+    onSort(column, sortColumn === column && sortDirection === 'desc' ? 'asc' : 'desc');
+  };
+  const sortHeaderProps = (column: string) => ({
+    onClick: () => handleSortClick(column),
+    onKeyDown: (e: React.KeyboardEvent<HTMLTableCellElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleSortClick(column);
+      }
+    },
+    role: 'columnheader' as const,
+    tabIndex: 0,
+    'aria-sort': (sortColumn === column
+      ? sortDirection === 'asc'
+        ? 'ascending'
+        : 'descending'
+      : 'none') as React.AriaAttributes['aria-sort'],
+  });
 
   // Format route with day-by-day grouping, layover highlighting, and DH markers
   const formatRouteDisplay = (pairing: Pairing) => {
@@ -332,72 +368,81 @@ export function PairingTable({
     }
 
     try {
-      // Parse effective dates similar to pairing modal logic
-      const effectiveDateStr = pairing.effectiveDates;
-      const currentYear = new Date().getFullYear();
+      const year = bidPackageYear || new Date().getFullYear();
 
-      const monthMap: { [key: string]: number } = {
-        JAN: 0,
-        FEB: 1,
-        MAR: 2,
-        APR: 3,
-        MAY: 4,
-        JUN: 5,
-        JUL: 6,
-        AUG: 7,
-        SEP: 8,
-        OCT: 9,
-        NOV: 10,
-        DEC: 11,
-      };
+      // Extract the full EFFECTIVE date range (incl. day-of-week and
+      // specific-date EXCEPT exclusions) from the full pairing text, same as
+      // the pairing detail modal — using pairing.effectiveDates alone misses
+      // exceptions and this table has no bid-package-year context of its own.
+      let effectiveDates = pairing.effectiveDates || '';
+      if (pairing.fullTextBlock) {
+        let dateRange = '';
+        let dayOfWeekExceptions = '';
+        let specificDateExceptions = '';
 
-      // Function to parse a single date like "SEP10" or "31AUG"
-      const parseSingleDate = (dateStr: string) => {
-        const match = dateStr.match(/(\d{1,2})([A-Z]{3})|([A-Z]{3})(\d{1,2})/);
-        if (match) {
-          const [, dayFirst, monthFirst, monthSecond, daySecond] = match;
-          const day = dayFirst || daySecond;
-          const month = monthFirst || monthSecond;
+        const effectiveMatch = pairing.fullTextBlock.match(
+          /EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i
+        );
+        if (effectiveMatch) {
+          dateRange = effectiveMatch[1].trim();
+        }
 
-          if (month in monthMap && day) {
-            return new Date(currentYear, monthMap[month], parseInt(day));
+        const dayOfWeekMatch = pairing.fullTextBlock.match(
+          /(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i
+        );
+        if (dayOfWeekMatch) {
+          dayOfWeekExceptions = dayOfWeekMatch[1].trim();
+        }
+
+        const specificDateMatch = pairing.fullTextBlock.match(
+          /EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i
+        );
+        if (specificDateMatch) {
+          specificDateExceptions = specificDateMatch[1].trim();
+        }
+
+        if (dateRange) {
+          effectiveDates = dateRange;
+          if (dayOfWeekExceptions || specificDateExceptions) {
+            const allExceptions = [dayOfWeekExceptions, specificDateExceptions]
+              .filter(Boolean)
+              .join(' ');
+            effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
           }
         }
-        return null;
-      };
-
-      let startDate: Date | null = null;
-
-      // Check for date range format "01SEP-30SEP"
-      const rangeMatch = effectiveDateStr.match(
-        /(\d{1,2})([A-Z]{3})-(\d{1,2})([A-Z]{3})/
-      );
-      if (rangeMatch) {
-        const [, startDay, startMonth] = rangeMatch;
-        if (startMonth in monthMap) {
-          startDate = new Date(
-            currentYear,
-            monthMap[startMonth],
-            parseInt(startDay)
-          );
-        }
-      } else {
-        // Try parsing as single date
-        startDate = parseSingleDate(effectiveDateStr);
       }
 
-      if (!startDate) {
+      const pairingDays = pairing.pairingDays || 1;
+      const possibleStartDates = calculateValidStartDates(
+        effectiveDates,
+        year,
+        pairingDays
+      );
+
+      if (possibleStartDates.length === 0) {
         toast({
           title: 'Error',
-          description: 'Could not parse effective date',
+          description: 'Could not parse any valid dates from pairing',
           variant: 'destructive',
         });
         return;
       }
 
-      const pairingDays = pairing.pairingDays || 1;
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + pairingDays - 1);
+      const baseDate = possibleStartDates[0];
+      const segments = pairing.flightSegments || [];
+      const startDate = segments.length > 0
+        ? calculateDutyStartTime(baseDate, segments[0])
+        : baseDate;
+      const endDate = segments.length > 0
+        ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
+        : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+
+      if (possibleStartDates.length > 1) {
+        toast({
+          title: 'Multiple dates found',
+          description: `This pairing runs on ${possibleStartDates.length} start dates — added the earliest (${baseDate.toLocaleDateString()}). Open the pairing details to add the others.`,
+        });
+      }
 
       addToCalendarMutation.mutate({
         userId: currentUser.id,
@@ -466,18 +511,24 @@ export function PairingTable({
             <tr>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'pairingNumber',
-                    sortColumn === 'pairingNumber' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('pairingNumber')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Pairing #</span>
                   {sortColumn === 'pairingNumber' && (
+                    <span className="text-blue-600 flex-shrink-0">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                {...sortHeaderProps('holdProbability')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span className="truncate">Hold %</span>
+                  {sortColumn === 'holdProbability' && (
                     <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
@@ -489,14 +540,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'creditHours',
-                    sortColumn === 'creditHours' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('creditHours')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Credit</span>
@@ -509,14 +553,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'blockHours',
-                    sortColumn === 'blockHours' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('blockHours')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Block</span>
@@ -529,14 +566,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'tafb',
-                    sortColumn === 'tafb' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('tafb')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">TAFB</span>
@@ -549,14 +579,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'pairingDays',
-                    sortColumn === 'pairingDays' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('pairingDays')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">Days</span>
@@ -569,39 +592,11 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'creditBlockRatio',
-                    sortColumn === 'creditBlockRatio' &&
-                      sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
+                {...sortHeaderProps('creditBlockRatio')}
               >
                 <div className="flex items-center space-x-1">
                   <span className="truncate">C/B Ratio</span>
                   {sortColumn === 'creditBlockRatio' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={() =>
-                  onSort(
-                    'holdProbability',
-                    sortColumn === 'holdProbability' && sortDirection === 'desc'
-                      ? 'asc'
-                      : 'desc'
-                  )
-                }
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Hold %</span>
-                  {sortColumn === 'holdProbability' && (
                     <span className="text-blue-600 flex-shrink-0">
                       {sortDirection === 'asc' ? '↑' : '↓'}
                     </span>
@@ -621,13 +616,47 @@ export function PairingTable({
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-            {safePairings.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`skeleton-${i}`}>
+                  <td colSpan={showDeleteButton ? 10 : 9} className="px-4 py-3">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                  </td>
+                </tr>
+              ))
+            ) : isError ? (
+              <tr>
+                <td
+                  colSpan={showDeleteButton ? 10 : 9}
+                  className="px-6 py-8 text-center"
+                >
+                  <p className="text-red-600 dark:text-red-400 font-medium">
+                    Couldn't load pairings.
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Check your connection and try again.
+                  </p>
+                  {onRetry && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={onRetry}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ) : safePairings.length === 0 ? (
               <tr>
                 <td
                   colSpan={showDeleteButton ? 10 : 9}
                   className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                 >
-                  No pairings found. Upload a bid package to get started.
+                  {hasActiveFilters
+                    ? 'No pairings match your filters. Try clearing some to see more results.'
+                    : 'No pairings found. Upload a bid package to get started.'}
                 </td>
               </tr>
             ) : (
@@ -646,32 +675,85 @@ export function PairingTable({
                         <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                       )}
                       {conflicts.has(pairing.id) && (
-                        <div className="relative group">
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            type="button"
-                            className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
-                            tabIndex={-1}
-                            title="Conflicts with calendar"
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              type="button"
+                              className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
+                              aria-label="Conflicts with calendar"
+                            >
+                              <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            onClick={e => e.stopPropagation()}
+                            className="w-auto bg-gray-900 text-white border-gray-600 text-xs px-3 py-2"
                           >
-                            <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                          </button>
-                          {/* CSS-based tooltip - positioned above */}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                            <div className="bg-gray-900 text-white text-xs rounded px-3 py-2 whitespace-nowrap shadow-lg">
-                              {(() => {
-                                const conflictData = conflicts.get(pairing.id);
-                                if (!conflictData?.conflicts || conflictData.conflicts.length === 0) {
-                                  return 'Conflicts with calendar';
-                                }
-                                const first = conflictData.conflicts[0];
-                                return `${first.calendarPairingNumber || 'Pairing'} (${first.calendarStartDate})`;
-                              })()}
-                            </div>
-                          </div>
-                        </div>
+                            {(() => {
+                              const conflictData = conflicts.get(pairing.id);
+                              if (!conflictData?.conflicts || conflictData.conflicts.length === 0) {
+                                return 'Conflicts with calendar';
+                              }
+                              const first = conflictData.conflicts[0];
+                              return `${first.calendarPairingNumber || 'Pairing'} (${first.calendarStartDate})`;
+                            })()}
+                          </PopoverContent>
+                        </Popover>
                       )}
                     </div>
+                  </td>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    {(() => {
+                      const band = getHoldProbabilityBand(pairing.holdProbability);
+                      return (
+                    <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
+                      <div className="flex-1 bg-gray-200 rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
+                        <div
+                          className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
+                          style={{ width: `${pairing.holdProbability}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
+                      >
+                        {pairing.holdProbability}%
+                      </span>
+                      {(() => {
+                        const hasReasoning = pairing.holdProbabilityReasoning && pairing.holdProbabilityReasoning.length > 0;
+                        return hasReasoning ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-shrink-0 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded inline-flex items-center cursor-pointer"
+                                aria-label="Why this hold probability"
+                              >
+                                <Info className="w-3 h-3 text-blue-500" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              onClick={e => e.stopPropagation()}
+                              className="w-80 bg-gray-900 text-white border-gray-600 p-3"
+                            >
+                              <div className="space-y-2">
+                                <div className="font-semibold text-sm border-b border-gray-700 pb-2">
+                                  Hold Probability: {pairing.holdProbability}%
+                                </div>
+                                {pairing.holdProbabilityReasoning?.map((reason, idx) => (
+                                  <div key={idx} className="text-xs text-gray-100 leading-relaxed">
+                                    {reason}
+                                  </div>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : null;
+                      })()}
+                    </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4">
                     <div
@@ -715,23 +797,20 @@ export function PairingTable({
                       let colorClass = '';
                       let bgClass = '';
 
-                      // Use seniority percentile for color coding if available
-                      const seniorityPercentile = parseFloat(
-                        localStorage.getItem('seniorityPercentile') || '50'
-                      );
-
-                      if (seniorityPercentile <= 25) {
-                        colorClass = 'text-green-700';
-                        bgClass = 'bg-green-100';
-                      } else if (seniorityPercentile <= 50) {
-                        colorClass = 'text-yellow-700';
-                        bgClass = 'bg-yellow-100';
-                      } else if (seniorityPercentile <= 75) {
-                        colorClass = 'text-orange-700';
-                        bgClass = 'bg-orange-100';
+                      // Band on the ratio itself (matches the fixed cutoffs used
+                      // for the "Credit/Block Ratio Quality" stats elsewhere).
+                      if (ratio >= 1.3) {
+                        colorClass = 'text-green-700 dark:text-green-400';
+                        bgClass = 'bg-green-100 dark:bg-green-950';
+                      } else if (ratio >= 1.2) {
+                        colorClass = 'text-yellow-700 dark:text-yellow-400';
+                        bgClass = 'bg-yellow-100 dark:bg-yellow-950';
+                      } else if (ratio >= 1.1) {
+                        colorClass = 'text-orange-700 dark:text-orange-400';
+                        bgClass = 'bg-orange-100 dark:bg-orange-950';
                       } else {
-                        colorClass = 'text-red-700';
-                        bgClass = 'bg-red-100';
+                        colorClass = 'text-red-700 dark:text-red-400';
+                        bgClass = 'bg-red-100 dark:bg-red-950';
                       }
 
                       return (
@@ -740,69 +819,6 @@ export function PairingTable({
                         >
                           {ratio.toFixed(2)}
                         </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    {(() => {
-                      const band = getHoldProbabilityBand(pairing.holdProbability);
-                      return (
-                    <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
-                      <div className="flex-1 bg-gray-200 rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
-                        <div
-                          className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
-                          style={{ width: `${pairing.holdProbability}%` }}
-                        />
-                      </div>
-                      <span
-                        className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
-                      >
-                        {pairing.holdProbability}%
-                      </span>
-                      {(() => {
-                        const hasReasoning = pairing.holdProbabilityReasoning && pairing.holdProbabilityReasoning.length > 0;
-                        return hasReasoning ? (
-                            <div className="relative inline-flex group">
-                              <button
-                                type="button"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex-shrink-0 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded inline-flex items-center cursor-pointer"
-                              >
-                                <Info className="w-3 h-3 text-blue-500" />
-                              </button>
-                              {/* Simple CSS-based tooltip - positioned below for first rows, above for others */}
-                              <div className={`absolute z-[100] ${
-                                index < 2
-                                  ? 'top-full mt-2'
-                                  : 'bottom-full mb-2'
-                                } left-1/2 transform -translate-x-1/2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none`}>
-                                <div className="bg-gray-900 text-white p-3 rounded-lg shadow-2xl border border-gray-600 min-w-[280px] max-w-sm">
-                                  <div className="space-y-2">
-                                    <div className="font-semibold text-sm border-b border-gray-700 pb-2">
-                                      Hold Probability: {pairing.holdProbability}%
-                                    </div>
-                                    {pairing.holdProbabilityReasoning?.map((reason, idx) => (
-                                      <div key={idx} className="text-xs text-gray-100 leading-relaxed">
-                                        {reason}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  {/* Arrow pointing up for bottom tooltip, down for top tooltip */}
-                                  {index < 2 ? (
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-px">
-                                      <div className="border-8 border-transparent border-b-gray-900"></div>
-                                    </div>
-                                  ) : (
-                                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
-                                      <div className="border-8 border-transparent border-t-gray-900"></div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                        ) : null;
-                      })()}
-                    </div>
                       );
                     })()}
                   </td>
@@ -820,6 +836,7 @@ export function PairingTable({
                             disabled={addToCalendarMutation.isPending}
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             title="Add to Calendar"
+                            aria-label="Add to Calendar"
                           >
                             <Calendar className="h-4 w-4" />
                           </Button>
@@ -836,6 +853,7 @@ export function PairingTable({
                               }}
                               className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
                               title="Remove from favorites"
+                              aria-label="Remove from favorites"
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -855,6 +873,7 @@ export function PairingTable({
                             onDeleteFavorite(pairing.id);
                           }
                         }}
+                        aria-label="Remove from favorites"
                       >
                         <X className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
                       </Button>

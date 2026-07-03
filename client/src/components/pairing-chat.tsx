@@ -36,11 +36,13 @@ interface ConversationSummary {
 
 interface PairingChatProps {
   bidPackageId?: number;
+  userId?: number;
   compact?: boolean; // For mobile optimization
 }
 
 export function PairingChat({
   bidPackageId,
+  userId,
   compact = false,
 }: PairingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -78,7 +80,8 @@ export function PairingChat({
       setSessionId(newSessionId);
     }
     loadConversationList();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // Load chat history when session ID is available
   useEffect(() => {
@@ -108,6 +111,29 @@ export function PairingChat({
 
   const loadConversationList = async () => {
     try {
+      // Once we know who the pilot is, the server's session list is the
+      // source of truth — it's what makes conversations started on other
+      // devices show up here too. Fall back to the localStorage-only list
+      // (pre-sync devices, or offline) when there's no linked profile yet.
+      if (userId !== null && userId !== undefined) {
+        try {
+          const sessions = await api.getChatSessionsForUser(userId);
+          setConversations(
+            sessions.map((s: any) => ({
+              sessionId: s.sessionId,
+              title: s.preview.substring(0, 50) + (s.preview.length > 50 ? '...' : ''),
+              lastMessage: s.preview,
+              lastActivity: new Date(s.lastMessageAt),
+              messageCount: 0,
+            }))
+          );
+          return;
+        } catch (error) {
+          console.error('Failed to load server-side chat sessions:', error);
+          // fall through to the localStorage-based list below
+        }
+      }
+
       // Get all stored session IDs from localStorage
       const storedSessions = JSON.parse(
         localStorage.getItem('conversationSessions') || '[]'
@@ -190,6 +216,7 @@ export function PairingChat({
         try {
           await api.saveChatMessage({
             sessionId,
+            userId,
             bidPackageId,
             messageType: 'assistant',
             content: welcomeMessage.content,
@@ -291,6 +318,7 @@ export function PairingChat({
     try {
       await api.saveChatMessage({
         sessionId,
+        userId,
         bidPackageId,
         messageType: 'user',
         content: userMessage.content,
@@ -326,6 +354,7 @@ export function PairingChat({
       try {
         await api.saveChatMessage({
           sessionId,
+          userId,
           bidPackageId,
           messageType: 'assistant',
           content: assistantMessage.content,
@@ -356,6 +385,7 @@ export function PairingChat({
       try {
         await api.saveChatMessage({
           sessionId,
+          userId,
           bidPackageId,
           messageType: 'assistant',
           content: errorMessage.content,
@@ -795,6 +825,7 @@ export function PairingChat({
                   size="sm"
                   onClick={() => setShowConversations(!showConversations)}
                   title="Show conversations"
+                  aria-label="Show conversations"
                 >
                   <MessageSquare className="h-4 w-4" />
                 </Button>
@@ -804,6 +835,7 @@ export function PairingChat({
                 size="sm"
                 onClick={startNewConversation}
                 title="Start a new conversation"
+                aria-label="Start a new conversation"
                 className={compact ? 'px-2' : ''}
               >
                 <Plus className="h-4 w-4" />
@@ -896,6 +928,7 @@ export function PairingChat({
                 type="submit"
                 disabled={isLoading || !input.trim()}
                 size="icon"
+                aria-label="Send message"
               >
                 <Send className="h-4 w-4" />
               </Button>

@@ -45,15 +45,18 @@ const parseNullable = (value: any): number =>
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   createOrUpdateUser(userData: {
+    name?: string;
     seniorityNumber: number;
     seniorityPercentile?: number;
     base: string;
     aircraft: string;
   }): Promise<User>;
   getUserBySeniority(seniorityNumber: number): Promise<User | undefined>;
+  getPrimaryUser(): Promise<User | undefined>;
+  getUserByPin(pin: string): Promise<User | undefined>;
+  setSyncPin(userId: number, pin: string): Promise<User>;
 
   // Bid Package operations
   createBidPackage(bidPackage: InsertBidPackage): Promise<BidPackage>;
@@ -75,10 +78,12 @@ export interface IStorage {
     }
   ): Promise<void>;
   deleteBidPackage(id: number): Promise<void>;
+  deletePairingsForBidPackage(bidPackageId: number): Promise<void>;
   clearAllData(): Promise<void>;
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
+  createPairingsBatch(pairingsData: InsertPairing[]): Promise<Pairing[]>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(
@@ -103,48 +108,6 @@ export interface IStorage {
     efficiency?: number; // Added for efficiency filter
   }): Promise<Pairing[]>;
 
-  searchPairingsWithPagination(filters: {
-    bidPackageId?: number;
-    search?: string;
-    rotationNumber?: string;
-    creditMin?: number;
-    creditMax?: number;
-    blockMin?: number;
-    blockMax?: number;
-    tafb?: string;
-    tafbMin?: number;
-    tafbMax?: number;
-    holdProbabilityMin?: number;
-    pairingDays?: number;
-    pairingDaysMin?: number;
-    pairingDaysMax?: number;
-    efficiency?: number;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }): Promise<{
-    pairings: Pairing[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-      hasNext: boolean;
-      hasPrev: boolean;
-    };
-    statistics: {
-      likelyToHold: number;
-      highCredit: number;
-      ratioBreakdown: {
-        excellent: number;
-        good: number;
-        average: number;
-        poor: number;
-      };
-    };
-  }>;
-
   // Bid History operations
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
   getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]>;
@@ -168,6 +131,9 @@ export interface IStorage {
   saveChatMessage(message: InsertChatHistory): Promise<ChatMessage>;
   getChatHistory(sessionId: string): Promise<ChatMessage[]>;
   clearChatHistory(sessionId: string): Promise<void>;
+  getChatSessionsForUser(
+    userId: number
+  ): Promise<{ sessionId: string; lastMessageAt: Date; preview: string }[]>;
 
   // Calendar events
   addUserCalendarEvent(
@@ -195,11 +161,6 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    // This method is kept for compatibility but not used in PBS app
-    return undefined;
-  }
-
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
@@ -212,13 +173,14 @@ export class DatabaseStorage implements IStorage {
     base: string;
     aircraft: string;
   }): Promise<User> {
-    const existingUser = await this.getUserBySeniority(
-      userData.seniorityNumber
-    );
+    // This app is single-user: identity is the one canonical row (by id),
+    // never a lookup by seniorityNumber, which changes every bid month.
+    const existingUser = await this.getPrimaryUser();
 
     if (existingUser) {
       // Update existing user - only update fields that are provided
       const updateData: any = {
+        seniorityNumber: userData.seniorityNumber,
         base: userData.base,
         aircraft: userData.aircraft,
         updatedAt: new Date(),
@@ -235,11 +197,11 @@ export class DatabaseStorage implements IStorage {
       const [updatedUser] = await db
         .update(users)
         .set(updateData)
-        .where(eq(users.seniorityNumber, userData.seniorityNumber))
+        .where(eq(users.id, existingUser.id))
         .returning();
       return updatedUser;
     } else {
-      // Create new user
+      // Create the one canonical user
       const newUserData: InsertUser = {
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
@@ -254,6 +216,28 @@ export class DatabaseStorage implements IStorage {
 
       return await this.createUser(newUserData);
     }
+  }
+
+  async getPrimaryUser(): Promise<User | undefined> {
+    const [user] = await db.select().from(users).orderBy(users.id).limit(1);
+    return user || undefined;
+  }
+
+  async getUserByPin(pin: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.syncPin, pin));
+    return user || undefined;
+  }
+
+  async setSyncPin(userId: number, pin: string): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ syncPin: pin, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
   }
 
   async getUserBySeniority(seniorityNumber: number): Promise<User | undefined> {
@@ -339,6 +323,31 @@ export class DatabaseStorage implements IStorage {
     await db.update(bidPackages).set(updateData).where(eq(bidPackages.id, id));
   }
 
+  // Removes any pairings already inserted for a bid package whose parse
+  // failed partway through, without deleting the bid package row itself
+  // (it stays visible in the UI with status 'failed').
+  async deletePairingsForBidPackage(bidPackageId: number): Promise<void> {
+    const pairingIds = await db
+      .select({ id: pairings.id })
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+    const pairingIdArray = pairingIds.map(p => p.id);
+
+    if (pairingIdArray.length > 0) {
+      await db
+        .delete(userFavorites)
+        .where(inArray(userFavorites.pairingId, pairingIdArray));
+      await db
+        .delete(userCalendarEvents)
+        .where(inArray(userCalendarEvents.pairingId, pairingIdArray));
+    }
+
+    await db.delete(pairings).where(eq(pairings.bidPackageId, bidPackageId));
+    console.log(
+      `Deleted ${pairingIdArray.length} partial pairing(s) for failed bid package ${bidPackageId}`
+    );
+  }
+
   async deleteBidPackage(id: number): Promise<void> {
     // Delete associated data in the correct order (foreign key constraints)
     await db.delete(chatHistory).where(eq(chatHistory.bidPackageId, id));
@@ -379,6 +388,15 @@ export class DatabaseStorage implements IStorage {
   async createPairing(pairing: InsertPairing): Promise<Pairing> {
     const [newPairing] = await db.insert(pairings).values(pairing).returning();
     return newPairing;
+  }
+
+  async createPairingsBatch(
+    pairingsData: InsertPairing[]
+  ): Promise<Pairing[]> {
+    if (pairingsData.length === 0) {
+      return [];
+    }
+    return await db.insert(pairings).values(pairingsData).returning();
   }
 
   async getPairings(bidPackageId?: number): Promise<Pairing[]> {
@@ -566,330 +584,9 @@ export class DatabaseStorage implements IStorage {
         .orderBy(asc(pairings.pairingNumber));
     } catch (error) {
       console.error('Error in searchPairings:', error);
-      return [];
-    }
-  }
-
-  async searchPairingsWithPagination(filters: {
-    bidPackageId?: number;
-    search?: string;
-    rotationNumber?: string;
-    creditMin?: number;
-    creditMax?: number;
-    blockMin?: number;
-    blockMax?: number;
-    tafb?: string;
-    tafbMin?: number;
-    tafbMax?: number;
-    holdProbabilityMin?: number;
-    pairingDays?: number;
-    pairingDaysMin?: number;
-    pairingDaysMax?: number;
-    efficiency?: number;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }): Promise<{
-    pairings: Pairing[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-      hasNext: boolean;
-      hasPrev: boolean;
-    };
-    statistics: {
-      likelyToHold: number;
-      highCredit: number;
-      ratioBreakdown: {
-        excellent: number;
-        good: number;
-        average: number;
-        poor: number;
-      };
-    };
-  }> {
-    try {
-      const conditions = [];
-      const page = filters.page || 1;
-      const limit = Math.min(filters.limit || 50, 100); // Cap at 100 items per page
-      const offset = (page - 1) * limit;
-
-      // Always require bidPackageId for safety
-      if (!filters.bidPackageId) {
-        console.error('Bid package ID is required for pairing search');
-        return {
-          pairings: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            totalPages: 0,
-            hasNext: false,
-            hasPrev: false,
-          },
-          statistics: {
-            likelyToHold: 0,
-            highCredit: 0,
-            ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
-          },
-        };
-      }
-
-      conditions.push(eq(pairings.bidPackageId, filters.bidPackageId));
-
-      console.log(`searchPairingsWithPagination: bidPackageId=${filters.bidPackageId}, page=${page}, limit=${limit}`);
-
-      // Debug: Check total count in database for this bid package
-      const debugCount = await db
-        .select({ count: sql`count(*)` })
-        .from(pairings)
-        .where(eq(pairings.bidPackageId, filters.bidPackageId))
-        .execute();
-      console.log(`searchPairingsWithPagination: Database has ${debugCount[0]?.count || 0} total pairings for bid package ${filters.bidPackageId}`);
-
-      // Add all the existing filter conditions (copy from searchPairings method)
-      if (filters.search) {
-        conditions.push(
-          or(
-            like(pairings.route, `%${filters.search}%`),
-            like(pairings.pairingNumber, `%${filters.search}%`),
-            like(pairings.effectiveDates, `%${filters.search}%`),
-            like(pairings.fullTextBlock, `%${filters.search}%`)
-          )
-        );
-      }
-
-      if (filters.rotationNumber) {
-        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
-      }
-
-      if (filters.creditMin !== undefined) {
-        conditions.push(
-          sql`CAST(${pairings.creditHours} AS DECIMAL) >= ${filters.creditMin}`
-        );
-      }
-
-      if (filters.creditMax !== undefined) {
-        conditions.push(
-          sql`CAST(${pairings.creditHours} AS DECIMAL) <= ${filters.creditMax}`
-        );
-      }
-
-      if (filters.blockMin !== undefined) {
-        conditions.push(
-          sql`CAST(${pairings.blockHours} AS DECIMAL) >= ${filters.blockMin}`
-        );
-      }
-      if (filters.blockMax !== undefined) {
-        conditions.push(
-          sql`CAST(${pairings.blockHours} AS DECIMAL) <= ${filters.blockMax}`
-        );
-      }
-
-      if (filters.holdProbabilityMin !== undefined) {
-        conditions.push(
-          gte(pairings.holdProbability, filters.holdProbabilityMin)
-        );
-      }
-
-      if (filters.pairingDays !== undefined) {
-        conditions.push(eq(pairings.pairingDays, filters.pairingDays));
-      }
-
-      if (filters.pairingDaysMin !== undefined) {
-        conditions.push(gte(pairings.pairingDays, filters.pairingDaysMin));
-      }
-
-      if (filters.pairingDaysMax !== undefined) {
-        conditions.push(lte(pairings.pairingDays, filters.pairingDaysMax));
-      }
-
-      // TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
-      if (filters.tafbMin !== undefined) {
-        const minMins = filters.tafbMin * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) >= ${minMins}
-        `);
-      }
-      if (filters.tafbMax !== undefined) {
-        const maxMins = filters.tafbMax * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) <= ${maxMins}
-        `);
-      }
-
-      // We will compute total rows using a window function in the main select
-
-      // Calculate statistics for the entire filtered dataset
-      const statsQuery = db
-        .select({
-          likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
-          highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
-          totalCount: sql<number>`cast(count(*) as integer)`,
-          excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
-          good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
-          average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
-          poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`,
-        })
-        .from(pairings)
-        .where(and(...conditions));
-
-      const [stats] = await statsQuery.execute();
-
-      // Build the main query with pagination and sorting
-      const sortColumn = filters.sortBy || 'pairingNumber';
-      const sortDirection = filters.sortOrder === 'desc' ? desc : asc;
-
-      // Map sortBy to actual column names
-      const sortColumnMap: Record<string, any> = {
-        pairingNumber: pairings.pairingNumber,
-        creditHours: pairings.creditHours,
-        blockHours: pairings.blockHours,
-        holdProbability: pairings.holdProbability,
-        pairingDays: pairings.pairingDays,
-        route: pairings.route,
-      };
-
-      // Computed SQL expressions
-      const efficiencyExpr = sql`(CAST(${pairings.creditHours} AS numeric) / NULLIF(CAST(${pairings.blockHours} AS numeric), 0))`;
-      const tafbMinutesExpr = sql`
-        (
-          CASE
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-              (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
-              (split_part(${pairings.tafb}::text, '.', 1)::int * 60 + split_part(${pairings.tafb}::text, '.', 2)::int)
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+$' THEN
-              (${pairings.tafb}::int * 60)
-            ELSE 0
-          END
-        )`;
-
-      // Apply efficiency filter at the SQL layer if provided
-      if (filters.efficiency !== undefined) {
-        conditions.push(sql`${efficiencyExpr} >= ${filters.efficiency}`);
-      }
-
-      const sortColumnField =
-        sortColumn === 'creditBlockRatio'
-          ? efficiencyExpr
-          : sortColumn === 'tafb'
-            ? tafbMinutesExpr
-            : sortColumnMap[sortColumn] || pairings.pairingNumber;
-
-      // Build the complete query in one chain with a lean projection (exclude large JSON/text fields)
-      const pairingsResult = await db
-        .select({
-          id: pairings.id,
-          bidPackageId: pairings.bidPackageId,
-          pairingNumber: pairings.pairingNumber,
-          effectiveDates: pairings.effectiveDates,
-          route: pairings.route,
-          creditHours: pairings.creditHours,
-          blockHours: pairings.blockHours,
-          tafb: pairings.tafb,
-          fdp: pairings.fdp,
-          payHours: pairings.payHours,
-          sitEdpPay: pairings.sitEdpPay,
-          carveouts: pairings.carveouts,
-          checkInTime: pairings.checkInTime,
-          deadheads: pairings.deadheads,
-          layovers: pairings.layovers,
-          flightSegments: pairings.flightSegments,
-          holdProbability: pairings.holdProbability,
-          pairingDays: pairings.pairingDays,
-          fullTextBlock: pairings.fullTextBlock,
-          totalCount: sql<number>`count(*) over()`,
-        })
-        .from(pairings)
-        .where(and(...conditions))
-        .orderBy(sortDirection(sortColumnField))
-        .limit(limit)
-        .offset(offset)
-        .execute();
-
-      // Apply efficiency filter (credit/block ratio) after database query if needed
-      // Derive total from window function (0 if no rows)
-      const total =
-        pairingsResult.length > 0
-          ? ((pairingsResult[0] as any).totalCount as number)
-          : 0;
-      const totalPages = Math.ceil(total / limit);
-
-      console.log(`searchPairingsWithPagination: Query returned ${pairingsResult.length} rows, total=${total}, totalPages=${totalPages}`);
-
-      // Strip totalCount from rows to satisfy Pairing shape
-      let finalResults = (pairingsResult as any[]).map(r => {
-        const { totalCount, ...rest } = r;
-        return rest;
-      }) as Pairing[];
-      if (filters.efficiency !== undefined) {
-        finalResults = finalResults.filter(pairing => {
-          const creditHours = parseFloat(pairing.creditHours.toString());
-          const blockHours = parseFloat(pairing.blockHours.toString());
-          const efficiency = blockHours > 0 ? creditHours / blockHours : 0;
-          return efficiency >= filters.efficiency!;
-        });
-      }
-
-      return {
-        pairings: finalResults,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages,
-          hasNext: page < totalPages,
-          hasPrev: page > 1,
-        },
-        statistics: {
-          likelyToHold: stats.likelyToHold,
-          highCredit: stats.highCredit,
-          ratioBreakdown: {
-            excellent: stats.excellent,
-            good: stats.good,
-            average: stats.average,
-            poor: stats.poor,
-          },
-        },
-      };
-    } catch (error) {
-      console.error('Error in searchPairingsWithPagination:', error);
-      return {
-        pairings: [],
-        pagination: {
-          page: 1,
-          limit: 50,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false,
-        },
-        statistics: {
-          likelyToHold: 0,
-          highCredit: 0,
-          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
-        },
-      };
+      // Rethrow instead of returning [] — a DB error should surface as a
+      // failure, not be indistinguishable from "no pairings match."
+      throw error;
     }
   }
 
@@ -1140,14 +837,11 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error('Error in getAllPairingsForBidPackage:', error);
-      return {
-        pairings: [],
-        statistics: {
-          likelyToHold: 0,
-          highCredit: 0,
-          ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
-        },
-      };
+      // Rethrow instead of returning an empty result — this is the primary
+      // data path for the whole app, and swallowing DB errors here made a
+      // genuine outage indistinguishable from "this bid package has no
+      // pairings," which the client rendered as a normal empty state.
+      throw error;
     }
   }
 
@@ -1272,6 +966,37 @@ export class DatabaseStorage implements IStorage {
     await db.delete(chatHistory).where(eq(chatHistory.sessionId, sessionId));
   }
 
+  async getChatSessionsForUser(
+    userId: number
+  ): Promise<{ sessionId: string; lastMessageAt: Date; preview: string }[]> {
+    const rows = await db
+      .select()
+      .from(chatHistory)
+      .where(eq(chatHistory.userId, userId))
+      .orderBy(asc(chatHistory.createdAt));
+
+    const bySession = new Map<
+      string,
+      { sessionId: string; lastMessageAt: Date; preview: string }
+    >();
+    for (const row of rows) {
+      const existing = bySession.get(row.sessionId);
+      if (!existing) {
+        bySession.set(row.sessionId, {
+          sessionId: row.sessionId,
+          lastMessageAt: row.createdAt,
+          preview: row.content.slice(0, 120),
+        });
+      } else {
+        existing.lastMessageAt = row.createdAt;
+      }
+    }
+
+    return Array.from(bySession.values()).sort(
+      (a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime()
+    );
+  }
+
   // Enhanced analytics operations for OpenAI token optimization
   async getTopEfficientPairings(
     bidPackageId: number,
@@ -1360,9 +1085,14 @@ export class DatabaseStorage implements IStorage {
       totalPairings: allPairings.length,
       maxCredit: topPairings[0]?.creditHours || 0,
       avgCreditHours:
-        allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) /
-        allPairings.length,
-      minCredit: Math.min(...allPairings.map(p => parseDecimal(p.creditHours))),
+        allPairings.length === 0
+          ? 0
+          : allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) /
+            allPairings.length,
+      minCredit:
+        allPairings.length === 0
+          ? 0
+          : Math.min(...allPairings.map(p => parseDecimal(p.creditHours))),
     };
 
     return { pairings: topPairings, stats };
@@ -1435,9 +1165,11 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Calculate credit/block ratio breakdown using percentile-based categorization
-    const minRatio = Math.min(...ratios);
-    const maxRatio = Math.max(...ratios);
+    // Calculate credit/block ratio breakdown using percentile-based categorization.
+    // `ratios` can be empty if every pairing has 0 block hours — guard against
+    // Math.min/max on an empty array (Infinity/-Infinity).
+    const minRatio = ratios.length > 0 ? Math.min(...ratios) : 1.0;
+    const maxRatio = ratios.length > 0 ? Math.max(...ratios) : 1.0;
     const range = maxRatio - minRatio;
 
     const ratioBreakdown = allPairings.reduce(
@@ -1651,17 +1383,24 @@ export class DatabaseStorage implements IStorage {
     return {
       totalPairings: allPairings.length,
       deadheadCount: deadheadPairings.length,
-      deadheadPercentage: (deadheadPairings.length / allPairings.length) * 100,
+      deadheadPercentage:
+        allPairings.length === 0
+          ? 0
+          : (deadheadPairings.length / allPairings.length) * 100,
       avgCreditWithDeadhead:
-        deadheadPairings.reduce(
-          (sum, p) => sum + parseDecimal(p.creditHours),
-          0
-        ) / deadheadPairings.length,
+        deadheadPairings.length === 0
+          ? 0
+          : deadheadPairings.reduce(
+              (sum, p) => sum + parseDecimal(p.creditHours),
+              0
+            ) / deadheadPairings.length,
       avgCreditWithoutDeadhead:
-        nonDeadheadPairings.reduce(
-          (sum, p) => sum + parseDecimal(p.creditHours),
-          0
-        ) / nonDeadheadPairings.length,
+        nonDeadheadPairings.length === 0
+          ? 0
+          : nonDeadheadPairings.reduce(
+              (sum, p) => sum + parseDecimal(p.creditHours),
+              0
+            ) / nonDeadheadPairings.length,
       topDeadheadPairings: deadheadPairings
         .sort(
           (a: any, b: any) =>
@@ -1688,8 +1427,11 @@ export class DatabaseStorage implements IStorage {
         acc[key] = { count: 0, totalCredit: 0, totalBlock: 0, pairings: [] };
       }
       acc[key].count++;
-      acc[key].totalCredit += p.creditHours;
-      acc[key].totalBlock += p.blockHours;
+      // creditHours/blockHours are decimal columns returned as strings by
+      // Drizzle — `+=` on a string does concatenation, not addition, and
+      // silently produces NaN once divided below. Parse before accumulating.
+      acc[key].totalCredit += parseDecimal(p.creditHours);
+      acc[key].totalBlock += parseDecimal(p.blockHours);
       acc[key].pairings.push({
         pairingNumber: p.pairingNumber,
         creditHours: p.creditHours,
@@ -1715,8 +1457,10 @@ export class DatabaseStorage implements IStorage {
         ([, a]: [string, any], [, b]: [string, any]) => b.count - a.count
       )[0]?.[0],
       avgDuration:
-        allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) /
-        allPairings.length,
+        allPairings.length === 0
+          ? 0
+          : allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) /
+            allPairings.length,
     };
   }
 

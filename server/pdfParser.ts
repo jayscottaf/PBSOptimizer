@@ -52,7 +52,7 @@ export class PDFParser {
   // Calculate hold probability using new tiered logic with seasonal adjustments
   private calculateHoldProbability(
     pairing: ParsedPairing,
-    allPairings: ParsedPairing[],
+    pairingFrequency: number,
     userSeniorityPercentile?: number,
     bidMonth?: string
   ): number {
@@ -65,11 +65,6 @@ export class PDFParser {
 
     const desirabilityScore =
       HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidMonth);
-    const pairingFrequency =
-      HoldProbabilityCalculator.calculatePairingFrequency(
-        pairing.pairingNumber,
-        allPairings
-      );
     const result = HoldProbabilityCalculator.calculateHoldProbability({
       seniorityPercentile,
       desirabilityScore,
@@ -1115,93 +1110,90 @@ export class PDFParser {
         `Successfully parsed ${parsedPairings.length} pairings from PDF`
       );
 
+      if (parsedPairings.length === 0) {
+        // A wrong/empty document parsed to zero pairings — fail the parse
+        // rather than marking it 'completed'. Previously this became an
+        // empty-but-"completed" package that could get auto-selected as the
+        // pilot's current bid package.
+        throw new Error(
+          'No pairings could be extracted from this file. Please verify it is a valid Delta PBS bid package.'
+        );
+      }
+
       // Get bid package month for seasonal hold probability adjustments
       const bidPackageInfo = await storage.getBidPackage(bidPackageId);
       const bidMonth = bidPackageInfo?.month;
       
       // Calculate hold probabilities now that we have all pairings
       console.log(`Calculating hold probabilities (month: ${bidMonth || 'unknown'})...`);
+      const frequencyMap =
+        HoldProbabilityCalculator.buildPairingFrequencyMap(parsedPairings);
       for (const pairing of parsedPairings) {
         pairing.holdProbability = this.calculateHoldProbability(
           pairing,
-          parsedPairings,
+          frequencyMap.get(pairing.pairingNumber) || 0,
           userSeniorityPercentile,
           bidMonth
         );
       }
 
-      // Save pairings to database in batches for better performance
+      // Save pairings to database in batches for better performance.
+      // Progress used to be streamed over SSE, but that can't work once the
+      // request handler awaits this whole parse synchronously (see the
+      // comment in routes.ts) — there's no separate long-lived process left
+      // to push updates from. The client instead polls GET
+      // /api/bid-packages/:id, which reads status directly from the DB row
+      // updated at the end of this method.
       const batchSize = 50;
-      const total = parsedPairings.length;
-      let processed = 0;
-      const emit = async (status: 'processing' | 'completed' | 'failed') => {
-        try {
-          const { emitProgress } = await import('./progress');
-          const percent =
-            total === 0
-              ? 0
-              : Math.min(Math.round((processed / total) * 100), 100);
-          emitProgress(bidPackageId, { status, processed, total, percent });
-        } catch {
-          // Ignore progress emit errors
-        }
-      };
-
-      await emit('processing');
       for (let i = 0; i < parsedPairings.length; i += batchSize) {
         const batch = parsedPairings.slice(i, i + batchSize);
 
-        for (const pairing of batch) {
-          const pairingData: InsertPairing = {
-            bidPackageId,
-            pairingNumber: pairing.pairingNumber,
-            effectiveDates: pairing.effectiveDates,
-            route: pairing.route || 'TBD',
-            creditHours: pairing.creditHours,
-            blockHours: pairing.blockHours,
-            tafb: pairing.tafb,
-            fdp: pairing.fdp || undefined,
-            payHours: pairing.payHours || undefined,
-            sitEdpPay: pairing.sitEdpPay || undefined,
-            carveouts: pairing.carveouts || undefined,
-            deadheads: pairing.deadheads,
-            layovers: pairing.layovers,
-            flightSegments: pairing.flightSegments,
-            fullTextBlock: pairing.fullTextBlock,
-            holdProbability: pairing.holdProbability,
-            pairingDays: pairing.pairingDays,
-            checkInTime: pairing.checkInTime,
-          };
+        const batchData: InsertPairing[] = batch.map(pairing => ({
+          bidPackageId,
+          pairingNumber: pairing.pairingNumber,
+          effectiveDates: pairing.effectiveDates,
+          route: pairing.route || 'TBD',
+          creditHours: pairing.creditHours,
+          blockHours: pairing.blockHours,
+          tafb: pairing.tafb,
+          fdp: pairing.fdp || undefined,
+          payHours: pairing.payHours || undefined,
+          sitEdpPay: pairing.sitEdpPay || undefined,
+          carveouts: pairing.carveouts || undefined,
+          deadheads: pairing.deadheads,
+          layovers: pairing.layovers,
+          flightSegments: pairing.flightSegments,
+          fullTextBlock: pairing.fullTextBlock,
+          holdProbability: pairing.holdProbability,
+          pairingDays: pairing.pairingDays,
+          checkInTime: pairing.checkInTime,
+        }));
 
-          await storage.createPairing(pairingData);
-        }
+        // One INSERT per batch instead of one per row — this was 500+
+        // sequential round-trips to Neon on a full bid package.
+        await storage.createPairingsBatch(batchData);
 
         console.log(
           `Saved batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(parsedPairings.length / batchSize)} (${batch.length} pairings)`
         );
-        processed += batch.length;
-        await emit('processing');
       }
 
       // Update bid package status to completed
       await storage.updateBidPackageStatus(bidPackageId, 'completed');
-      processed = total;
-      await emit('completed');
 
       console.log(`File parsing completed for bid package ${bidPackageId}`);
     } catch (error) {
       console.error('Error parsing file:', error);
       await storage.updateBidPackageStatus(bidPackageId, 'failed');
       try {
-        const { emitProgress } = await import('./progress');
-        emitProgress(bidPackageId, {
-          status: 'failed',
-          processed: 0,
-          total: 0,
-          percent: 0,
-        });
-      } catch {
-        // Ignore progress emit errors
+        // Clean up any pairings inserted before the failure so a retry
+        // doesn't leave orphaned partial data sitting under the failed package.
+        await storage.deletePairingsForBidPackage(bidPackageId);
+      } catch (cleanupError) {
+        console.error(
+          `Failed to clean up partial pairings for bid package ${bidPackageId}:`,
+          cleanupError
+        );
       }
       throw error;
     } finally {

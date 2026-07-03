@@ -190,6 +190,19 @@ export function SmartFilterSystem({
     }
   }, [bidPackageId]);
 
+  // Days Off is applied directly (not through activeFilters chips) but can
+  // still be cleared from outside this component — e.g. removing its "Days
+  // Off: N selected" chip in the dashboard's Active Filters row. Without
+  // this, the "N selected" button here would keep showing a stale count
+  // after the underlying filter was already cleared elsewhere.
+  useEffect(() => {
+    const stillActive = activeFilters.some(f => f.key === 'preferredDaysOff');
+    if (!stillActive && selectedDaysOff.length > 0) {
+      setSelectedDaysOff([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilters]);
+
   // Handle layover location toggle (multi-select)
   const toggleLayoverCity = (city: string) => {
     const newSelection = selectedLayovers.includes(city)

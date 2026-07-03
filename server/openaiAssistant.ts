@@ -19,7 +19,7 @@ export class OpenAIAssistantService {
 
       // Use chat completion instead of Assistant API
       const completion = await openai.chat.completions.create({
-        model: 'gpt-5',
+        model: 'gpt-4.1',
         messages: [
           {
             role: 'system',
@@ -50,7 +50,7 @@ Provide helpful, conversational responses with clear explanations. When discussi
             content: question,
           },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         temperature: 0.7,
       });
 
