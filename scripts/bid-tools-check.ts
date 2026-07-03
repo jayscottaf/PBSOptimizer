@@ -2,6 +2,11 @@ import { simulateBid } from '../server/lib/bidSimulator';
 import { exportBid } from '../server/lib/bidExporter';
 import { executeCoachTool } from '../server/ai/coachTools';
 import { ReasonsReportParser } from '../server/reasonsReportParser';
+import {
+  computeEmpiricalHold,
+  percentileWithin,
+  normalizeMonth3,
+} from '../server/lib/empiricalHold';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -221,6 +226,57 @@ assert(
     metadata?.year === 2026,
   'metadata extracted from NBSP-containing title'
 );
+
+// 11) Empirical hold probability: percentile math and period-curve logic
+const roster = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+assert(percentileWithin(roster, 100) === 10, 'most senior roster member is 10th percentile');
+assert(percentileWithin(roster, 1000) === 100, 'most junior roster member is 100th percentile');
+assert(percentileWithin(roster, 550) === 50, 'mid-roster seniority is 50th percentile');
+assert(normalizeMonth3('February') === 'FEB' && normalizeMonth3('NOV ') === 'NOV', 'month normalization handles full names and padding');
+
+const rosters = new Map<string, number[]>([
+  ['JUL-2024', roster],
+  ['JUL-2025', roster],
+  ['JAN-2026', roster],
+  ['JUL-2026', roster],
+]);
+// Junior-most holders at 80th percentile (800) in three periods, 40th in one
+const empMatches = [
+  { seniorityNumber: 800, month: 'JUL', year: 2024, similarity: 90 },
+  { seniorityNumber: 300, month: 'JUL', year: 2024, similarity: 90 },
+  { seniorityNumber: 800, month: 'JUL', year: 2025, similarity: 85 },
+  { seniorityNumber: 400, month: 'JAN', year: 2026, similarity: 80 },
+  { seniorityNumber: 800, month: 'JUL', year: 2026, similarity: 95 },
+];
+const empSenior = computeEmpiricalHold({
+  userPercentile: 50,
+  matches: empMatches,
+  rosters,
+  bidMonth: 'July',
+});
+// 50th percentile beats the boundary in 3 of 4 periods → (3+1)/(4+2) = 67%
+assert(empSenior !== null && empSenior.probability === 67, 'senior-enough pilot gets smoothed 3-of-4-period probability');
+assert(!!empSenior?.reasoning.some(r => r.includes('JUL specifically')), 'seasonal same-month evidence noted in reasoning');
+const empJunior = computeEmpiricalHold({
+  userPercentile: 95,
+  matches: empMatches,
+  rosters,
+  bidMonth: 'July',
+});
+// 95th percentile beats no boundary → (0+1)/(4+2) = 17%
+assert(empJunior !== null && empJunior.probability === 17, 'too-junior pilot gets smoothed 0-of-4-period probability');
+const empSparse = computeEmpiricalHold({
+  userPercentile: 50,
+  matches: empMatches.slice(0, 2), // one period only
+  rosters,
+});
+assert(empSparse === null, 'fewer than 3 periods of evidence returns null (fall back to legacy model)');
+const empLowSim = computeEmpiricalHold({
+  userPercentile: 50,
+  matches: empMatches.map(m => ({ ...m, similarity: 40 })),
+  rosters,
+});
+assert(empLowSim === null, 'low-similarity evidence is ignored entirely');
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

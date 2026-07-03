@@ -121,6 +121,7 @@ export interface IStorage {
     aircraft?: string;
     limit?: number;
   }): Promise<ReasonsReportPreference[]>;
+  getCategoryRosters(base: string): Promise<Map<string, number[]>>;
 
   // User favorites
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
@@ -879,6 +880,28 @@ export class DatabaseStorage implements IStorage {
       insertedCount += inserted.length;
     }
     return insertedCount;
+  }
+
+  /**
+   * The full roster of category bidders per bid period, from Reasons Report
+   * data: every pilot who appears in a period's report, sorted ascending by
+   * seniority number. Keyed "JUL-2026". This is what makes seniority numbers
+   * comparable across years — percentile-within-period instead of raw number.
+   */
+  async getCategoryRosters(base: string): Promise<Map<string, number[]>> {
+    const rows = await db.execute(sql`
+      SELECT year, month,
+             array_agg(DISTINCT pilot_seniority_number ORDER BY pilot_seniority_number) AS seniorities
+      FROM reasons_report_preferences
+      WHERE base = ${base} AND pilot_seniority_number IS NOT NULL
+      GROUP BY year, month
+    `);
+    const rosters = new Map<string, number[]>();
+    for (const row of rows.rows as any[]) {
+      const month = String(row.month).trim().slice(0, 3).toUpperCase();
+      rosters.set(`${month}-${row.year}`, row.seniorities as number[]);
+    }
+    return rosters;
   }
 
   async getReasonsReportPreferences(filter?: {

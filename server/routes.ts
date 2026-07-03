@@ -119,20 +119,27 @@ async function recalculateHoldProbabilitiesOptimized(
     // Use historical data if seniority number is provided
     const useHistoricalData = seniorityNumber !== undefined;
 
-    // Fetch base/aircraft history once and precompute pairing frequency once,
-    // instead of re-querying/re-scanning per pairing (was an N+1 / O(n^2)
-    // pattern that made "optimized" recalculation the opposite of optimized).
+    // Fetch base history once and precompute pairing frequency once, instead
+    // of re-querying/re-scanning per pairing (was an N+1 / O(n^2) pattern
+    // that made "optimized" recalculation the opposite of optimized).
+    // Aircraft is matched on normalized base type: packages say "A220" while
+    // Reasons Reports say "220-B" — an exact-string filter returns nothing.
+    const pkgAircraftBase = parseAircraftCode(bidPackage.aircraft).baseType;
     const historicalData = useHistoricalData
-      ? await db
-          .select()
-          .from(bidHistory)
-          .where(
-            and(
-              eq(bidHistory.base, bidPackage.base),
-              eq(bidHistory.aircraft, bidPackage.aircraft)
-            )
-          )
+      ? (
+          await db
+            .select()
+            .from(bidHistory)
+            .where(eq(bidHistory.base, bidPackage.base))
+        ).filter(
+          h => parseAircraftCode(h.aircraft).baseType === pkgAircraftBase
+        )
       : [];
+    // Period rosters make seniority numbers comparable across years —
+    // the empirical hold path needs them to convert awards to percentiles.
+    const rosters = useHistoricalData
+      ? await storage.getCategoryRosters(bidPackage.base)
+      : new Map<string, number[]>();
     const frequencyMap =
       HoldProbabilityCalculator.buildPairingFrequencyMap(allPairings);
 
@@ -153,7 +160,8 @@ async function recalculateHoldProbabilitiesOptimized(
             seniorityNumber,
             seniorityPercentile,
             historicalData,
-            bidPackage.month
+            bidPackage.month,
+            rosters
           );
       } else {
         // Fall back to estimate-based calculation with location data

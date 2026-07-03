@@ -1,6 +1,7 @@
 import { bidHistory } from '../shared/schema';
 import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
+import { computeEmpiricalHold, type RosterMap } from './lib/empiricalHold';
 import {
   calculateLayoverDesirability,
   getLocationCompetitionAdjustment,
@@ -94,16 +95,38 @@ export class HoldProbabilityCalculator {
     seniorityNumber: number,
     seniorityPercentile: number,
     historicalData: (typeof bidHistory.$inferSelect)[],
-    bidMonth?: string
+    bidMonth?: string,
+    rosters?: RosterMap
   ): HoldProbabilityResult {
-    // Find matches against the pre-fetched historical data
+    // Find matches against the pre-fetched historical data. The empirical
+    // path wants the full evidence set, not just the top 10.
     const historicalMatches = this.findHistoricalMatches(
       pairing,
-      historicalData
+      historicalData,
+      rosters ? 500 : 10
     );
 
     // Extract layover cities for location-based adjustments
     const layoverCities = pairing.layovers?.map((l: any) => l.city).filter((c: string) => c) || [];
+
+    // Preferred path: percentile-based estimate from observed awards across
+    // bid periods. Needs period rosters (from Reasons Reports) and at least
+    // 3 periods of matching evidence; otherwise fall through.
+    if (rosters && rosters.size > 0 && historicalMatches.length > 0) {
+      const empirical = computeEmpiricalHold({
+        userPercentile: seniorityPercentile,
+        matches: historicalMatches,
+        rosters,
+        bidMonth,
+      });
+      if (empirical) {
+        return {
+          probability: empirical.probability,
+          label: this.getProbabilityLabel(empirical.probability),
+          reasoning: empirical.reasoning,
+        };
+      }
+    }
 
     if (historicalMatches.length > 0) {
       // Use historical data
@@ -135,7 +158,8 @@ export class HoldProbabilityCalculator {
    */
   private static findHistoricalMatches(
     pairing: any,
-    historicalData: (typeof bidHistory.$inferSelect)[]
+    historicalData: (typeof bidHistory.$inferSelect)[],
+    limit = 10
   ): HistoricalMatch[] {
     try {
       // Create trip fingerprint from current pairing
@@ -181,7 +205,7 @@ export class HoldProbabilityCalculator {
       // Sort by similarity (highest first)
       matches.sort((a, b) => b.similarity - a.similarity);
 
-      return matches.slice(0, 10); // Return top 10 matches
+      return matches.slice(0, limit);
     } catch (error) {
       console.error('Error finding historical matches:', error);
       return [];

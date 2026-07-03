@@ -16,17 +16,20 @@ export function buildHoldProbabilityBulkUpdate(
     return null;
   }
 
+  // Explicit casts: the serverless driver binds parameters without type
+  // hints, and Postgres cannot infer a CASE result type when every branch
+  // is an untyped parameter ("expression is of type text").
   const probWhens = updates.map(
-    u => sql`WHEN ${u.id} THEN ${u.holdProbability}`
+    u => sql`WHEN ${u.id}::int THEN ${u.holdProbability}::int`
   );
 
   const reasoningWhens = updates.map(u =>
     u.reasoning !== undefined
-      ? sql`WHEN ${u.id} THEN ${JSON.stringify(u.reasoning)}::jsonb`
-      : sql`WHEN ${u.id} THEN hold_probability_reasoning`
+      ? sql`WHEN ${u.id}::int THEN ${JSON.stringify(u.reasoning)}::jsonb`
+      : sql`WHEN ${u.id}::int THEN hold_probability_reasoning`
   );
 
-  const ids = updates.map(u => sql`${u.id}`);
+  const ids = updates.map(u => sql`${u.id}::int`);
 
   return sql`UPDATE pairings SET hold_probability = CASE id ${sql.join(
     probWhens,
