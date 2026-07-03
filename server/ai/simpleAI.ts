@@ -173,7 +173,7 @@ TERMINOLOGY:
 - TAFB: Time Away From Base
 - Hold Probability: Likelihood of getting the pairing (0-100%)
 - Efficiency: Credit/Block ratio (higher = more pay per flight hour)
-- Layover: Rest period between flight days
+- Layover: Overnight stay at an away station between duty days (city and duration shown in the data)
 
 ${coachKnowledge}
 
@@ -199,6 +199,16 @@ Be helpful, analyze the data thoroughly, and give specific recommendations with 
       .replace(/\bEnsures\b/g, 'Helps')
       .replace(/\bensures\b/g, 'helps')
       .replace(/\bwill still get\b/gi, 'may still be considered for')
+      .replace(/\bguarantees that\b/gi, 'makes it more likely that')
+      .replace(/\bGuarantees\b/g, 'Improves the odds of')
+      .replace(/\bguarantees\b/g, 'improves the odds of')
+      .replace(/(?<!\bnot\s)(?<!\bnever\s)(?<!\bno\s)\bguaranteed\b/gi, 'likely')
+      .replace(/\byou'll get\b/gi, 'you may get')
+      .replace(/\bwill get\b/gi, 'may get')
+      .replace(/\bwill be awarded\b/gi, 'may be awarded')
+      .replace(/\bwill hold\b/gi, 'should have a good chance to hold')
+      .replace(/\bLocks in\b/g, 'Aims to secure')
+      .replace(/\blocks in\b/g, 'aims to secure')
       .replace(/\bcopy-and-paste-ready\b/gi, 'review-ready')
       .replace(/\bcopy paste ready\b/gi, 'review-ready');
 
