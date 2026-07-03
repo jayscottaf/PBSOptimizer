@@ -1,6 +1,7 @@
 import { simulateBid } from '../server/lib/bidSimulator';
 import { exportBid } from '../server/lib/bidExporter';
 import { executeCoachTool } from '../server/ai/coachTools';
+import { ReasonsReportParser } from '../server/reasonsReportParser';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -143,6 +144,83 @@ const badBid = executeCoachTool('simulate_bid', '{"bid": {"nope": true}}', toolC
 assert(!!badBid.error, 'executeCoachTool reports malformed bid as error');
 const unknownTool = executeCoachTool('do_magic', '{"bid":{"groups":[]}}', toolCtx) as any;
 assert(!!unknownTool.error, 'executeCoachTool rejects unknown tool names');
+
+// 10) Reasons pane parser against the real composite export format
+// (NYC-220-B JUL 2026): NBSP spacing, per-pilot sections, real vocabulary.
+const NB = '\u00A0';
+const pad = (s: string) => s.replace(/ /g, NB);
+const compositeFixture = `<html><head><title>NYC-220-B JUL${NB}2026 Composite Report</title></head><body>
+${pad('Seniority            05105      Category NYC-220-B            GRENIER  084785700')}<br />
+${pad('Minimum window ')}&lt;062:00&gt;${pad('   Threshold ')}&lt;082:00&gt;${pad('             Maximum window ')}&lt;082:00&gt;<br />
+${pad('Category:1/176 Regular:1/139 Reserve:0(above)/37')}<br />
+Pre-Awards<br />
+<SPAN Class="PBSEvent">${pad('  7781       2026-06-21 15:40    2026-06-25 15:01 (000:00)  ')}</SPAN><br />
+&lt;&lt;${pad(' Current Bid ')}&gt;&gt;<br />
+${pad('   1.   Pairing Bid Group')}<br />
+${pad('   2.     Avoid Pairings If Pairing Total Credit ')}&gt;${pad(' 000:00')}<br />
+${pad('   Honored')}<br />
+${pad('   3.     Prefer Off Jul 2, 2026, Jul 3, 2026')}<br />
+${pad('   Honored')}<br />
+${pad('          Award Pairings')}<br />
+${pad('   Filtered by bid number 2: 494')}<br />
+${pad('  (0 Awarded, 494 Matching, Running total: 064:10)')}<br />
+--------------------------------------------------------------------------------<br />
+${pad('Seniority            07014      Category NYC-220-B            LIGOCKI  061806300')}<br />
+${pad('Minimum window ')}&lt;062:00&gt;${pad('   Threshold ')}&lt;062:00&gt;${pad('             Maximum window ')}&lt;072:00&gt;<br />
+${pad('   6.     Award Pairings If Pairing Number 7773 Departing On Jul 7, 2026')}<br />
+<SPAN Class="PBSEvent">${pad('  7773       2026-07-07 14:45    2026-07-07 23:29 (006:23)   (B)')}</SPAN><br />
+${pad('   Schedule is complete')}<br />
+${pad('  (1 Awarded, 1 Matching, Running total: 065:58)')}<br />
+</body></html>`;
+
+const pane = ReasonsReportParser.parseReasonsPane(compositeFixture);
+const grenierAvoid = pane.preferences.find(
+  p => p.pilotSeniorityNumber === 5105 && p.preferenceNumber === 2
+);
+const ligockiAward = pane.preferences.find(
+  p => p.pilotSeniorityNumber === 7014 && p.preferenceNumber === 6
+);
+assert(pane.preferences.length >= 3, 'composite fixture yields preferences');
+assert(
+  !!grenierAvoid && grenierAvoid.outcome === 'Honored',
+  'NBSP-padded Avoid preference attributed to pilot 05105 and Honored'
+);
+assert(
+  grenierAvoid?.pilotEmployeeNumber === '084785700' &&
+    grenierAvoid?.pilotName === 'GRENIER',
+  'pilot employee number and name captured from section header'
+);
+assert(
+  grenierAvoid?.windowInfo === 'Window 062:00-082:00, Threshold 082:00',
+  'per-pilot credit window and threshold captured'
+);
+assert(
+  !!ligockiAward &&
+    ligockiAward.outcome === 'Schedule is complete' &&
+    ligockiAward.awardedPairingNumbers.length === 1 &&
+    ligockiAward.awardedPairingNumbers[0] === '7773',
+  'award event line yields pairing 7773 (and not date fragments like 2026)'
+);
+assert(
+  !!ligockiAward?.outcomeDetail?.includes('(1 Awarded, 1 Matching'),
+  'running-total stats line attached as outcome detail'
+);
+assert(
+  pane.preferences.every(
+    p =>
+      !p.awardedPairingNumbers.includes('2026') &&
+      !p.awardedPairingNumbers.includes('7781')
+  ),
+  'pre-award events and date years never leak into awarded pairings'
+);
+const metadata = ReasonsReportParser.extractMetadata(compositeFixture);
+assert(
+  metadata?.base === 'NYC' &&
+    metadata?.aircraft === '220-B' &&
+    metadata?.month === 'JUL' &&
+    metadata?.year === 2026,
+  'metadata extracted from NBSP-containing title'
+);
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

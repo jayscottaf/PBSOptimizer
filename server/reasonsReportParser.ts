@@ -48,6 +48,15 @@ export interface ParsedPreferenceReason {
   outcome: string;
   outcomeDetail: string | null;
   awardedPairingNumbers: string[];
+  // Composite reports contain one Reasons section per pilot; these carry the
+  // section's identity so outcomes can be attributed. Null for single-pilot
+  // exports that have no section headers.
+  pilotSeniorityNumber: number | null;
+  pilotEmployeeNumber: string | null;
+  pilotName: string | null;
+  // The pilot's credit-window header line ("Window 062:00-082:00, Threshold
+  // 082:00") — real per-pilot threshold data the simulator otherwise guesses.
+  windowInfo: string | null;
 }
 
 export interface ParsedReasonsPane {
@@ -71,6 +80,9 @@ const REASON_PHRASES = [
   'Block is complete',
   'Buddy cannot take pairing',
   'Could Not Build Complete Line with Pairing',
+  // Real composite exports say "Filtered by bid number 2: 494" rather than
+  // the documented "Filtered by higher bid" — keep both.
+  'Filtered by bid number',
   'Filtered by higher bid',
   'Followed By sequence not found',
   'Forgotten',
@@ -85,6 +97,9 @@ const REASON_PHRASES = [
   'Partially honored',
   'Prevents assignment of minimum GDO',
   'Restricted location',
+  // Real exports use "Schedule is complete" where the guides document
+  // "Block is complete".
+  'Schedule is complete',
   'Too many above',
   'Violates green on green',
 ] as const;
@@ -99,6 +114,25 @@ const BANNER_PATTERNS = [
   /Affected\s+by\s+SLG/i,
   /Affected\s+by\s+Coverage/i,
 ];
+
+// Composite reports contain one Reasons section per pilot, each opened by a
+// header like "Seniority  05105  Category NYC-220-B  GRENIER  084785700".
+// Names can contain spaces and hyphens (DIAZ GOMEZ, SCOTT-BENNETT).
+const PILOT_HEADER = /^Seniority\s+(\d{3,5})\s+Category\s+(\S+)\s+(.+?)\s+(\d{6,9})$/;
+
+// "Minimum window <062:00>  Threshold <082:00>  Maximum window <082:00>"
+const WINDOW_LINE =
+  /Minimum\s+window\s+<(\d{1,3}:\d{2})>\s+Threshold\s+<(\d{1,3}:\d{2})>\s+Maximum\s+window\s+<(\d{1,3}:\d{2})>/;
+
+// An award event under a preference: pairing number followed by check-in and
+// check-out timestamps, e.g. "7773  2026-07-07 14:45  2026-07-07 23:29 (006:23) (B)".
+// Anchored to this shape so date fragments like "2026" are never mistaken for
+// pairing numbers.
+const AWARD_EVENT_LINE =
+  /^(\d{4,5})\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\d{4}-\d{2}-\d{2}/;
+
+// "(1 Awarded, 1 Matching, Running total: 065:58)"
+const STATS_LINE = /^\((\d+)\s+Awarded,\s+(\d+)\s+Matching,\s+Running\s+total:/;
 
 export class ReasonsReportParser {
   /**
@@ -162,18 +196,17 @@ export class ReasonsReportParser {
 
   /**
    * Parse the Reasons pane: per-preference outcomes plus top-of-report
-   * banners. This is vocabulary-driven (see navblue-rules.md section 5) and
-   * defensive - it returns empty results rather than guessing when the
-   * document does not contain a recognizable Reasons section.
-   *
-   * NOTE: written against the documented report structure; validate against
-   * a real composite report export and tighten the patterns when one is
-   * available. Pilot identity attachment (which pilot a preference block
-   * belongs to in a composite report) also needs a real sample.
+   * banners. Validated against a real NAVBLUE composite export (NYC-220-B
+   * JUL 2026): sections per pilot, NBSP-as-spacing, and outcome vocabulary
+   * that differs from the documented phrases in places. Returns empty
+   * results rather than guessing when the document has no recognizable
+   * Reasons content.
    */
   static parseReasonsPane(htmlContent: string): ParsedReasonsPane {
     const $ = cheerio.load(htmlContent);
-    const text = $('body').text();
+    // Real exports pad with non-breaking spaces (\xA0) instead of spaces;
+    // normalize so every regex and phrase match below sees plain spaces.
+    const text = $('body').text().replace(/\u00A0/g, ' ');
     const lines = text
       .split(/\r?\n/)
       .map(line => line.trim())
@@ -190,6 +223,12 @@ export class ReasonsReportParser {
 
     const preferences: ParsedPreferenceReason[] = [];
     let current: ParsedPreferenceReason | null = null;
+    // Identity of the pilot section we're inside (composite reports); stays
+    // null for single-pilot exports with no section headers.
+    let pilotSeniorityNumber: number | null = null;
+    let pilotEmployeeNumber: string | null = null;
+    let pilotName: string | null = null;
+    let windowInfo: string | null = null;
 
     const finalize = () => {
       if (current) {
@@ -199,6 +238,22 @@ export class ReasonsReportParser {
     };
 
     for (const line of lines) {
+      const headerMatch = line.match(PILOT_HEADER);
+      if (headerMatch) {
+        finalize();
+        pilotSeniorityNumber = parseInt(headerMatch[1], 10);
+        pilotName = headerMatch[3].trim();
+        pilotEmployeeNumber = headerMatch[4];
+        windowInfo = null;
+        continue;
+      }
+
+      const windowMatch = line.match(WINDOW_LINE);
+      if (windowMatch) {
+        windowInfo = `Window ${windowMatch[1]}-${windowMatch[3]}, Threshold ${windowMatch[2]}`;
+        continue;
+      }
+
       const prefMatch = line.match(PREFERENCE_LINE);
       if (prefMatch) {
         finalize();
@@ -208,10 +263,29 @@ export class ReasonsReportParser {
           outcome: 'Unknown',
           outcomeDetail: null,
           awardedPairingNumbers: [],
+          pilotSeniorityNumber,
+          pilotEmployeeNumber,
+          pilotName,
+          windowInfo,
         };
         continue;
       }
       if (!current) continue;
+
+      // Award events produced by this preference (PBSEvent lines)
+      const awardMatch = line.match(AWARD_EVENT_LINE);
+      if (awardMatch) {
+        current.awardedPairingNumbers.push(awardMatch[1]);
+        continue;
+      }
+
+      // "(N Awarded, M Matching, Running total: ...)" — attach as detail
+      if (STATS_LINE.test(line)) {
+        current.outcomeDetail = current.outcomeDetail
+          ? `${current.outcomeDetail}; ${line}`
+          : line;
+        continue;
+      }
 
       const reason = REASON_PHRASES.find(phrase =>
         line.toLowerCase().includes(phrase.toLowerCase())
@@ -221,11 +295,6 @@ export class ReasonsReportParser {
         const idx = line.toLowerCase().indexOf(reason.toLowerCase());
         const detail = line.slice(idx + reason.length).replace(/^[:\s-]+/, '');
         current.outcomeDetail = detail.length > 0 ? detail : null;
-      }
-      // Pairing numbers listed under a preference (awards it produced)
-      const pairingTokens = line.match(/\b\d{4,5}\b/g);
-      if (pairingTokens && (reason === 'Honored' || /award/i.test(line))) {
-        current.awardedPairingNumbers.push(...pairingTokens);
       }
     }
     finalize();

@@ -867,11 +867,18 @@ export class DatabaseStorage implements IStorage {
     records: InsertReasonsReportPreference[]
   ): Promise<number> {
     if (records.length === 0) return 0;
-    const inserted = await db
-      .insert(reasonsReportPreferences)
-      .values(records)
-      .returning({ id: reasonsReportPreferences.id });
-    return inserted.length;
+    // A composite report yields thousands of rows (14 columns each); one
+    // giant INSERT overflows the Neon bind-parameter limit, so batch it.
+    const batchSize = 200;
+    let insertedCount = 0;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const inserted = await db
+        .insert(reasonsReportPreferences)
+        .values(records.slice(i, i + batchSize))
+        .returning({ id: reasonsReportPreferences.id });
+      insertedCount += inserted.length;
+    }
+    return insertedCount;
   }
 
   async getReasonsReportPreferences(filter?: {

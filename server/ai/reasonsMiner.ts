@@ -13,6 +13,9 @@ const DENIED_OUTCOMES = [
   'Not used',
   'Bid denied',
   'Below Reduced Lower Limit Cutoff',
+  // Real composite exports: seniority took it — the clearest denial signal
+  'Awarded to senior bidder',
+  'Awarded to senior shadow bidder',
 ];
 
 const HONORED_OUTCOMES = ['Honored', 'Partially honored'];
@@ -64,7 +67,12 @@ export function buildPreferenceHistoryContext(
     }
     if (Array.isArray(record.reportBanners)) {
       for (const banner of record.reportBanners as string[]) {
-        banners.add(banner);
+        // reportBanners also carries each pilot's credit-window line
+        // ("Window 062:00-082:00, Threshold 082:00"); only true report
+        // flags belong in the "flagged" prompt line.
+        if (/^Affected\s+by/i.test(banner)) {
+          banners.add(banner);
+        }
       }
     }
   }

@@ -8,6 +8,7 @@ import type { IStorage } from '../storage';
 import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
 import { buildPreferenceHistoryContext } from './reasonsMiner';
 import { COACH_TOOL_DEFINITIONS, executeCoachTool } from './coachTools';
+import { parseAircraftCode } from '../lib/aircraft';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -57,16 +58,27 @@ export class SimpleAI {
       // Build the context with ALL pairing data
       const pairingsContext = this.buildPairingsContext(pairings);
 
-      // Pilot's own preference-outcome history (empty string when none)
+      // Pilot's own preference-outcome history (empty string when none).
+      // Bid packages say "A220" while Reasons Reports say "220-B", so fetch
+      // by base and match aircraft on the normalized base type instead of
+      // filtering on the raw string (which would silently return nothing).
       let historyContext = '';
       try {
-        const preferenceHistory =
-          await this.storage.getReasonsReportPreferences({
-            base: bidPackage?.base,
-            aircraft: bidPackage?.aircraft,
-            limit: 300,
-          });
-        historyContext = buildPreferenceHistoryContext(preferenceHistory);
+        const fetched = await this.storage.getReasonsReportPreferences({
+          base: bidPackage?.base,
+          limit: 2000,
+        });
+        const pkgAircraftBase = bidPackage?.aircraft
+          ? parseAircraftCode(bidPackage.aircraft).baseType
+          : null;
+        const preferenceHistory = pkgAircraftBase
+          ? fetched.filter(
+              r => parseAircraftCode(r.aircraft).baseType === pkgAircraftBase
+            )
+          : fetched;
+        historyContext = buildPreferenceHistoryContext(
+          preferenceHistory.slice(0, 1500)
+        );
       } catch (error) {
         console.warn('[SimpleAI] Preference history unavailable:', error);
       }
