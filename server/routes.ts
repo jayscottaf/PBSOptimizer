@@ -39,8 +39,12 @@ import {
   insertBidPackageSchema,
   insertPairingSchema,
   bidHistory,
+  reasonsReportPreferences,
   type Pairing,
 } from '../shared/schema';
+import { simulateBid } from './lib/bidSimulator';
+import { exportBid } from './lib/bidExporter';
+import type { DraftBid } from '../shared/bidTypes';
 import * as fs from 'fs/promises';
 
 type ApiErrorCode =
@@ -51,7 +55,10 @@ type ApiErrorCode =
   | 'BID_PACKAGE_PARSE_FAILED'
   | 'REASONS_METADATA_FAILED'
   | 'REASONS_PROCESSING_FAILED'
-  | 'UPLOAD_FAILED';
+  | 'UPLOAD_FAILED'
+  | 'INVALID_SIMULATION_REQUEST'
+  | 'INVALID_EXPORT_REQUEST'
+  | 'NOT_FOUND';
 
 function sendApiError(
   res: Response,
@@ -1181,6 +1188,51 @@ export async function registerRoutes(app: Express) {
           `Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`
         );
 
+        // Parse the Reasons pane (per-preference outcomes) when present.
+        // Replace any previously stored outcomes for the same report month
+        // so re-uploads do not duplicate rows.
+        let preferencesParsed = 0;
+        try {
+          const pane = ReasonsReportParser.parseReasonsPane(htmlContent);
+          if (pane.preferences.length > 0) {
+            await db
+              .delete(reasonsReportPreferences)
+              .where(
+                and(
+                  eq(reasonsReportPreferences.month, metadata.month),
+                  eq(reasonsReportPreferences.year, metadata.year),
+                  eq(reasonsReportPreferences.base, metadata.base),
+                  eq(reasonsReportPreferences.aircraft, metadata.aircraft)
+                )
+              );
+            preferencesParsed = await storage.createReasonsReportPreferences(
+              pane.preferences.map(pref => ({
+                month: metadata.month,
+                year: metadata.year,
+                base: metadata.base,
+                aircraft: metadata.aircraft,
+                pilotSeniorityNumber: null,
+                pilotEmployeeNumber: null,
+                preferenceNumber: pref.preferenceNumber,
+                preferenceText: pref.preferenceText,
+                outcome: pref.outcome,
+                outcomeDetail: pref.outcomeDetail,
+                awardedPairingNumbers: pref.awardedPairingNumbers,
+                reportBanners: pane.banners,
+              }))
+            );
+            console.log(
+              `Reasons pane: ${preferencesParsed} preference outcomes stored (banners: ${pane.banners.join(', ') || 'none'})`
+            );
+          } else {
+            console.log(
+              'Reasons pane: no per-preference outcomes recognized in this report format'
+            );
+          }
+        } catch (error) {
+          console.error('Reasons pane parsing failed (non-fatal):', error);
+        }
+
         res.json({
           success: true,
           message:
@@ -1191,6 +1243,7 @@ export async function registerRoutes(app: Express) {
             totalParsed: awards.length,
             stored: storedCount,
             skipped: skippedCount,
+            preferencesParsed,
             linked: linkedCount,
             unlinked: unlinkedCount,
             base: metadata.base,
@@ -1417,6 +1470,65 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching pairings:', error);
       res.status(500).json({ message: 'Failed to fetch pairings' });
+    }
+  });
+
+  // Simulate a structured draft bid against a bid package (static first
+  // pass - see server/lib/bidSimulator.ts for what is and is not modeled)
+  app.post('/api/bid/simulate', async (req, res) => {
+    try {
+      const { bidPackageId, bid, alv, threshold, aircraftCategory } =
+        req.body as {
+          bidPackageId: number;
+          bid: DraftBid;
+          alv?: number;
+          threshold?: number;
+          aircraftCategory?: 'narrowbody' | 'widebody';
+        };
+      if (!bidPackageId || !bid || !Array.isArray(bid.groups)) {
+        return sendApiError(
+          res,
+          400,
+          'bidPackageId and bid.groups are required.',
+          'INVALID_SIMULATION_REQUEST'
+        );
+      }
+      const bidPackage = await storage.getBidPackage(bidPackageId);
+      if (!bidPackage) {
+        return sendApiError(res, 404, 'Bid package not found.', 'NOT_FOUND');
+      }
+      const packagePairings = await storage.getPairings(bidPackageId);
+      const packageAlv =
+        alv ??
+        (bidPackage.alvHours ? parseFloat(String(bidPackage.alvHours)) : undefined);
+      const result = simulateBid(bid, packagePairings, {
+        alv: packageAlv,
+        threshold,
+        aircraftCategory,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Error simulating bid:', error);
+      res.status(500).json({ message: 'Failed to simulate bid' });
+    }
+  });
+
+  // Render a structured draft bid to review-ready NAVBLUE preference text
+  app.post('/api/bid/export', async (req, res) => {
+    try {
+      const { bid } = req.body as { bid: DraftBid };
+      if (!bid || !Array.isArray(bid.groups)) {
+        return sendApiError(
+          res,
+          400,
+          'bid.groups is required.',
+          'INVALID_EXPORT_REQUEST'
+        );
+      }
+      res.json(exportBid(bid));
+    } catch (error) {
+      console.error('Error exporting bid:', error);
+      res.status(500).json({ message: 'Failed to export bid' });
     }
   });
 

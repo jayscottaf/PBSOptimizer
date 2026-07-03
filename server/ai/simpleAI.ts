@@ -6,6 +6,7 @@
 import OpenAI from 'openai';
 import type { IStorage } from '../storage';
 import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
+import { buildPreferenceHistoryContext } from './reasonsMiner';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -55,10 +56,25 @@ export class SimpleAI {
       // Build the context with ALL pairing data
       const pairingsContext = this.buildPairingsContext(pairings);
 
+      // Pilot's own preference-outcome history (empty string when none)
+      let historyContext = '';
+      try {
+        const preferenceHistory =
+          await this.storage.getReasonsReportPreferences({
+            base: bidPackage?.base,
+            aircraft: bidPackage?.aircraft,
+            limit: 300,
+          });
+        historyContext = buildPreferenceHistoryContext(preferenceHistory);
+      } catch (error) {
+        console.warn('[SimpleAI] Preference history unavailable:', error);
+      }
+
       // Build system prompt
       const systemPrompt = this.buildSystemPrompt(
         bidPackage,
-        query.seniorityPercentile
+        query.seniorityPercentile,
+        historyContext
       );
 
       // Build messages
@@ -138,7 +154,8 @@ export class SimpleAI {
    */
   private buildSystemPrompt(
     bidPackage: any,
-    seniorityPercentile?: number
+    seniorityPercentile?: number,
+    historyContext = ''
   ): string {
     const packageInfo = bidPackage
       ? `${bidPackage.month} ${bidPackage.year} - ${bidPackage.base} ${bidPackage.aircraft}`
@@ -176,6 +193,8 @@ TERMINOLOGY:
 - Layover: Overnight stay at an away station between duty days (city and duration shown in the data)
 
 ${coachKnowledge}
+
+${historyContext}
 
 Be helpful, analyze the data thoroughly, and give specific recommendations with pairing numbers.`;
   }

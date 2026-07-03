@@ -1,0 +1,102 @@
+/**
+ * Structured draft-bid model shared by the bid simulator, the NAVBLUE
+ * exporter, and the /api/bid/* endpoints.
+ *
+ * This models the subset of NAVBLUE preference grammar the app can evaluate
+ * against parsed bid-package data (see docs/ai-bidding-coach/
+ * navblue-rules.md for the full grammar). Fields the parser does not yet
+ * extract (day-of-week duty, redeyes, positions) are intentionally absent -
+ * add them here only once pairings carry the data.
+ */
+
+export type CreditWindowType = 'normal' | 'min' | 'max' | 'mid';
+
+/**
+ * Attribute filter applied to pairings. All present fields must match
+ * (logical AND, mirroring NAVBLUE's multiple-conditions-in-one-preference
+ * semantics); array fields match if any element matches (OR within a
+ * condition).
+ */
+export interface PairingFilter {
+  pairingNumbers?: string[];
+  pairingDaysMin?: number;
+  pairingDaysMax?: number;
+  /** Match if the pairing has a layover in any of these cities. */
+  layoverCities?: string[];
+  creditMin?: number;
+  creditMax?: number;
+  blockMin?: number;
+  blockMax?: number;
+  /** Check-in hour of day, 0-23 inclusive bounds. */
+  checkInHourMin?: number;
+  checkInHourMax?: number;
+  deadheadsMax?: number;
+  /** Average daily credit = creditHours / pairingDays. */
+  averageDailyCreditMin?: number;
+  averageDailyCreditMax?: number;
+}
+
+export interface BidPreference {
+  type:
+    | 'award'
+    | 'avoid'
+    | 'preferOff'
+    | 'setConditionCredit'
+    | 'clearScheduleStartNext';
+  /** For award/avoid. */
+  filter?: PairingFilter;
+  /**
+   * For preferOff: ISO dates (YYYY-MM-DD), listed most-important FIRST
+   * (Denial Mode drops items from the end of the list).
+   */
+  preferOffDates?: string[];
+  /** For setConditionCredit. */
+  creditWindow?: CreditWindowType;
+  /** Award only: cap on pairings awarded by this preference. */
+  limit?: number;
+  /** Attachable to avoid/preferOff/setConditionCredit. */
+  elseStartNext?: boolean;
+}
+
+export interface BidGroup {
+  type: 'pairings' | 'reserve';
+  preferences: BidPreference[];
+}
+
+export interface DraftBid {
+  groups: BidGroup[];
+}
+
+/** One pairing the simulator predicts could land on the line. */
+export interface SimulatedAward {
+  pairingNumber: string;
+  creditHours: number;
+  pairingDays: number;
+  holdProbability: number | null;
+  /** 1-based index of the Award preference (within its group) that took it. */
+  awardedByPreference: number;
+  groupIndex: number;
+}
+
+export interface SimulationGroupResult {
+  groupIndex: number;
+  type: 'pairings' | 'reserve';
+  poolAfterNegatives: number;
+  awards: SimulatedAward[];
+  creditFromAwards: number;
+  /** Preferences that matched nothing, with the reason. */
+  inertPreferences: Array<{ preferenceIndex: number; reason: string }>;
+}
+
+export interface SimulationResult {
+  /** Awards from the first group that completes, or the best attempt. */
+  awards: SimulatedAward[];
+  totalCredit: number;
+  /** Sum of credit weighted by hold probability - the realistic expectation. */
+  expectedCredit: number;
+  lineComplete: boolean;
+  window: { min: number; max: number; threshold: number; alv: number };
+  groupResults: SimulationGroupResult[];
+  /** Engine behaviors this static pass does NOT model. Always read these. */
+  caveats: string[];
+}

@@ -41,6 +41,65 @@ export interface ReasonsReportMetadata {
   year: number;
 }
 
+/** One bid preference and its outcome from the Reasons pane. */
+export interface ParsedPreferenceReason {
+  preferenceNumber: number;
+  preferenceText: string;
+  outcome: string;
+  outcomeDetail: string | null;
+  awardedPairingNumbers: string[];
+}
+
+export interface ParsedReasonsPane {
+  banners: string[];
+  preferences: ParsedPreferenceReason[];
+}
+
+/**
+ * NAVBLUE per-preference reason vocabulary (docs/ai-bidding-coach/
+ * navblue-rules.md section 5). Ordered longest-first so the most specific
+ * phrase wins.
+ */
+const REASON_PHRASES = [
+  'Awarded for coverage under a different bid',
+  'Awarded to senior shadow bidder',
+  'Awarded to senior bidder',
+  'Awarded by previous bids',
+  'Below Reduced Lower Limit Cutoff',
+  'Beyond bid limit',
+  'Bid denied',
+  'Block is complete',
+  'Buddy cannot take pairing',
+  'Could Not Build Complete Line with Pairing',
+  'Filtered by higher bid',
+  'Followed By sequence not found',
+  'Forgotten',
+  'Honored',
+  'Item overlaps with another',
+  'Needed for Legality',
+  'No pairings available',
+  'Not considered',
+  'Not honored',
+  'Not used',
+  'Over maximum credits for period',
+  'Partially honored',
+  'Prevents assignment of minimum GDO',
+  'Restricted location',
+  'Too many above',
+  'Violates green on green',
+] as const;
+
+const PREFERENCE_LINE = new RegExp(
+  String.raw`^\s*(\d{1,3})[.):]?\s+((?:Award Pairings|Avoid Pairings|Prefer Off|Set Condition|Start Pairings|Start Reserve|Clear Schedule|Else Start Next|Waive|Slide Vacation|Vacation GDO|Reserve GDO).*)$`,
+  'i'
+);
+
+const BANNER_PATTERNS = [
+  /Affected\s+by\s+Denial\s+Mode/i,
+  /Affected\s+by\s+SLG/i,
+  /Affected\s+by\s+Coverage/i,
+];
+
 export class ReasonsReportParser {
   /**
    * Parse a Delta Airlines Reasons Report HTML file
@@ -99,6 +158,84 @@ export class ReasonsReportParser {
     });
 
     return awards;
+  }
+
+  /**
+   * Parse the Reasons pane: per-preference outcomes plus top-of-report
+   * banners. This is vocabulary-driven (see navblue-rules.md section 5) and
+   * defensive - it returns empty results rather than guessing when the
+   * document does not contain a recognizable Reasons section.
+   *
+   * NOTE: written against the documented report structure; validate against
+   * a real composite report export and tighten the patterns when one is
+   * available. Pilot identity attachment (which pilot a preference block
+   * belongs to in a composite report) also needs a real sample.
+   */
+  static parseReasonsPane(htmlContent: string): ParsedReasonsPane {
+    const $ = cheerio.load(htmlContent);
+    const text = $('body').text();
+    const lines = text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const banners: string[] = [];
+    for (const pattern of BANNER_PATTERNS) {
+      const hit = lines.find(line => pattern.test(line));
+      if (hit) {
+        const match = hit.match(pattern);
+        if (match) banners.push(match[0]);
+      }
+    }
+
+    const preferences: ParsedPreferenceReason[] = [];
+    let current: ParsedPreferenceReason | null = null;
+
+    const finalize = () => {
+      if (current) {
+        preferences.push(current);
+        current = null;
+      }
+    };
+
+    for (const line of lines) {
+      const prefMatch = line.match(PREFERENCE_LINE);
+      if (prefMatch) {
+        finalize();
+        current = {
+          preferenceNumber: parseInt(prefMatch[1], 10),
+          preferenceText: prefMatch[2].trim(),
+          outcome: 'Unknown',
+          outcomeDetail: null,
+          awardedPairingNumbers: [],
+        };
+        continue;
+      }
+      if (!current) continue;
+
+      const reason = REASON_PHRASES.find(phrase =>
+        line.toLowerCase().includes(phrase.toLowerCase())
+      );
+      if (reason && current.outcome === 'Unknown') {
+        current.outcome = reason;
+        const idx = line.toLowerCase().indexOf(reason.toLowerCase());
+        const detail = line.slice(idx + reason.length).replace(/^[:\s-]+/, '');
+        current.outcomeDetail = detail.length > 0 ? detail : null;
+      }
+      // Pairing numbers listed under a preference (awards it produced)
+      const pairingTokens = line.match(/\b\d{4,5}\b/g);
+      if (pairingTokens && (reason === 'Honored' || /award/i.test(line))) {
+        current.awardedPairingNumbers.push(...pairingTokens);
+      }
+    }
+    finalize();
+
+    // Dedupe pairing numbers per preference
+    for (const pref of preferences) {
+      pref.awardedPairingNumbers = [...new Set(pref.awardedPairingNumbers)];
+    }
+
+    return { banners, preferences };
   }
 
   /**
@@ -175,8 +312,12 @@ export class ReasonsReportParser {
       checkOutTimeOfDay = 'afternoon';
     else if (checkOutHour >= 17) checkOutTimeOfDay = 'evening';
 
-    // Calculate day of week (simplified - would need actual date calculation)
-    const checkInDayOfWeek = checkInDay % 7;
+    // The check-in string carries the weekday name ("10/12 Sun 13:24");
+    // use it directly instead of deriving from the day number.
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const dayName = checkInMatch ? checkInMatch[3].toLowerCase() : '';
+    const namedDay = dayNames.indexOf(dayName);
+    const checkInDayOfWeek = namedDay !== -1 ? namedDay : checkInDay % 7;
 
     // Parse credit hours - format is "21:20" meaning 21 hours 20 minutes
     const creditHours = parseFloat(

@@ -3,6 +3,7 @@ import {
   bidPackages,
   pairings,
   bidHistory,
+  reasonsReportPreferences,
   userFavorites,
   chatHistory,
   userCalendarEvents,
@@ -14,6 +15,8 @@ import {
   type InsertPairing,
   type BidHistory,
   type InsertBidHistory,
+  type ReasonsReportPreference,
+  type InsertReasonsReportPreference,
   type UserFavorite,
   type InsertUserFavorite,
   type ChatMessage,
@@ -145,6 +148,16 @@ export interface IStorage {
   // Bid History operations
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
   getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]>;
+
+  // Reasons Report per-preference outcomes
+  createReasonsReportPreferences(
+    records: InsertReasonsReportPreference[]
+  ): Promise<number>;
+  getReasonsReportPreferences(filter?: {
+    base?: string;
+    aircraft?: string;
+    limit?: number;
+  }): Promise<ReasonsReportPreference[]>;
 
   // User favorites
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
@@ -1154,6 +1167,40 @@ export class DatabaseStorage implements IStorage {
       .from(bidHistory)
       .where(eq(bidHistory.pairingNumber, pairingNumber))
       .orderBy(desc(bidHistory.awardedAt));
+  }
+
+  async createReasonsReportPreferences(
+    records: InsertReasonsReportPreference[]
+  ): Promise<number> {
+    if (records.length === 0) return 0;
+    const inserted = await db
+      .insert(reasonsReportPreferences)
+      .values(records)
+      .returning({ id: reasonsReportPreferences.id });
+    return inserted.length;
+  }
+
+  async getReasonsReportPreferences(filter?: {
+    base?: string;
+    aircraft?: string;
+    limit?: number;
+  }): Promise<ReasonsReportPreference[]> {
+    const conditions = [];
+    if (filter?.base) {
+      conditions.push(eq(reasonsReportPreferences.base, filter.base));
+    }
+    if (filter?.aircraft) {
+      conditions.push(eq(reasonsReportPreferences.aircraft, filter.aircraft));
+    }
+    const base = db.select().from(reasonsReportPreferences);
+    const filtered =
+      conditions.length > 0 ? base.where(and(...conditions)) : base;
+    return await filtered
+      .orderBy(
+        desc(reasonsReportPreferences.year),
+        desc(reasonsReportPreferences.uploadedAt)
+      )
+      .limit(filter?.limit ?? 500);
   }
 
   async addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite> {

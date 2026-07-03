@@ -102,6 +102,26 @@ export const bidHistory = pgTable('bid_history', {
   uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
 });
 
+// Per-preference outcomes parsed from the Reasons pane of a NAVBLUE Reasons
+// Report. This is the pilot's personal record of what was honored or denied
+// at their seniority - the substrate for personalized coaching.
+export const reasonsReportPreferences = pgTable('reasons_report_preferences', {
+  id: serial('id').primaryKey(),
+  month: text('month').notNull(),
+  year: integer('year').notNull(),
+  base: text('base').notNull(),
+  aircraft: text('aircraft').notNull(),
+  pilotSeniorityNumber: integer('pilot_seniority_number'),
+  pilotEmployeeNumber: text('pilot_employee_number'),
+  preferenceNumber: integer('preference_number').notNull(), // 1-based position in the bid
+  preferenceText: text('preference_text').notNull(), // e.g. "Avoid Pairings If Layovers In MIA"
+  outcome: text('outcome').notNull(), // NAVBLUE reason vocabulary: Honored, Not honored, Not considered, Partially honored, Filtered by higher bid, Beyond bid limit, Awarded to senior bidder, ...
+  outcomeDetail: text('outcome_detail'), // Trailing detail, e.g. the higher bid number or counts
+  awardedPairingNumbers: jsonb('awarded_pairing_numbers'), // string[] pairings this preference awarded
+  reportBanners: jsonb('report_banners'), // string[] top-of-report flags: Affected by Denial Mode / SLG / Coverage
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+});
+
 export const userFavorites = pgTable(
   'user_favorites',
   {
@@ -212,6 +232,13 @@ export const insertBidHistorySchema = createInsertSchema(bidHistory).omit({
   id: true,
 });
 
+export const insertReasonsReportPreferenceSchema = createInsertSchema(
+  reasonsReportPreferences
+).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 export const insertUserFavoriteSchema = createInsertSchema(userFavorites).omit({
   id: true,
   createdAt: true,
@@ -233,6 +260,11 @@ export type Pairing = typeof pairings.$inferSelect;
 export type InsertPairing = z.infer<typeof insertPairingSchema>;
 export type BidHistory = typeof bidHistory.$inferSelect;
 export type InsertBidHistory = z.infer<typeof insertBidHistorySchema>;
+export type ReasonsReportPreference =
+  typeof reasonsReportPreferences.$inferSelect;
+export type InsertReasonsReportPreference = z.infer<
+  typeof insertReasonsReportPreferenceSchema
+>;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
 export type UserCalendarEvent = typeof userCalendarEvents.$inferSelect;
