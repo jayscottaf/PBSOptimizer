@@ -26,6 +26,7 @@ import {
   type InsertUserCalendarEvent,
 } from '../shared/schema';
 import { db } from './db';
+import { percentileWithin } from './lib/empiricalHold';
 import {
   eq,
   and,
@@ -122,6 +123,31 @@ export interface IStorage {
     limit?: number;
   }): Promise<ReasonsReportPreference[]>;
   getCategoryRosters(base: string): Promise<Map<string, number[]>>;
+  getAvailableMonths(base: string): Promise<string[]>;
+  getTrendsSummary(
+    base: string,
+    month?: string
+  ): Promise<{
+    periods: Array<{
+      period: string;
+      pilots: number;
+      totalPrefs: number;
+      honored: number;
+      lostToSenior: number;
+    }>;
+    holdBoundaries: Array<{
+      period: string;
+      pairingDays: number;
+      juniorMostPercentile: number | null;
+      awards: number;
+    }>;
+    window: {
+      windowMin: number;
+      windowMax: number;
+      threshold: number;
+      period: string;
+    } | null;
+  }>;
   getCategoryCreditWindow(base: string): Promise<{
     windowMin: number;
     windowMax: number;
@@ -145,7 +171,7 @@ export interface IStorage {
       avgAwardDepth: number | null;
     }>;
   }>;
-  getBidPatterns(base: string): Promise<{
+  getBidPatterns(base: string, month?: string): Promise<{
     typeMixByPeriod: Array<{
       period: string;
       award: number;
@@ -947,6 +973,124 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Contention-by-period and hold-boundary-by-trip-length, optionally
+   * narrowed to one calendar month. Shared by GET /api/trends and the
+   * coach's query_historic_trends tool so both read the same numbers.
+   */
+  async getTrendsSummary(
+    base: string,
+    month?: string
+  ): Promise<{
+    periods: Array<{
+      period: string;
+      pilots: number;
+      totalPrefs: number;
+      honored: number;
+      lostToSenior: number;
+    }>;
+    holdBoundaries: Array<{
+      period: string;
+      pairingDays: number;
+      juniorMostPercentile: number | null;
+      awards: number;
+    }>;
+    window: {
+      windowMin: number;
+      windowMax: number;
+      threshold: number;
+      period: string;
+    } | null;
+  }> {
+    const monthCode = month ? month.trim().slice(0, 3).toUpperCase() : null;
+    const monthCond = monthCode
+      ? sql`AND upper(left(trim(month), 3)) = ${monthCode}`
+      : sql``;
+
+    const contention = await db.execute(sql`
+      SELECT year, month,
+        count(*) AS total_prefs,
+        count(DISTINCT pilot_seniority_number) AS pilots,
+        sum(CASE WHEN outcome = 'Honored' THEN 1 ELSE 0 END) AS honored,
+        sum(CASE WHEN outcome IN ('Awarded to senior bidder', 'Awarded to senior shadow bidder') THEN 1 ELSE 0 END) AS lost_to_senior
+      FROM reasons_report_preferences
+      WHERE base = ${base} ${monthCond}
+      GROUP BY year, month
+    `);
+
+    const boundaries = await db.execute(sql`
+      SELECT year, month, pairing_days,
+        max(junior_holder_seniority) AS junior_most,
+        count(*) AS awards
+      FROM bid_history
+      WHERE base = ${base}
+        AND (award_type IS NULL OR award_type NOT ILIKE '%coverage%')
+        ${monthCond}
+      GROUP BY year, month, pairing_days
+    `);
+
+    const rosters = await this.getCategoryRosters(base);
+    const window = await this.getCategoryCreditWindow(base);
+
+    const monthNum = (m: string) => {
+      const idx = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+        .indexOf(String(m).trim().slice(0, 3).toUpperCase());
+      return idx === -1 ? 0 : idx + 1;
+    };
+    const sortKey = (r: any) => Number(r.year) * 100 + monthNum(r.month);
+
+    const periods = (contention.rows as any[])
+      .sort((a, b) => sortKey(a) - sortKey(b))
+      .map(r => ({
+        period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
+        pilots: Number(r.pilots),
+        totalPrefs: Number(r.total_prefs),
+        honored: Number(r.honored),
+        lostToSenior: Number(r.lost_to_senior),
+      }));
+
+    const holdBoundaries = (boundaries.rows as any[])
+      .sort((a, b) => sortKey(a) - sortKey(b))
+      .map(r => {
+        const key = `${String(r.month).trim().slice(0, 3).toUpperCase()}-${r.year}`;
+        const roster = rosters.get(key);
+        const pct = roster
+          ? percentileWithin(roster, Number(r.junior_most))
+          : null;
+        return {
+          period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
+          pairingDays: Number(r.pairing_days),
+          juniorMostPercentile: pct,
+          awards: Number(r.awards),
+        };
+      })
+      .filter(r => r.juniorMostPercentile !== null);
+
+    return { periods, holdBoundaries, window };
+  }
+
+  /**
+   * Distinct calendar months (3-letter, e.g. "JUL") with imported Reasons
+   * Report data for this base — drives the Trends page's month dropdown so
+   * it only offers months that actually have something to show.
+   */
+  async getAvailableMonths(base: string): Promise<string[]> {
+    const monthOrder = sql`CASE upper(left(trim(month), 3))
+      WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
+      WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
+      WHEN 'SEP' THEN 9 WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+      ELSE 0 END`;
+    const rows = await db.execute(sql`
+      SELECT month FROM (
+        SELECT DISTINCT upper(left(trim(month), 3)) AS month
+        FROM reasons_report_preferences
+        WHERE base = ${base}
+      ) t
+      ORDER BY ${monthOrder}
+    `);
+    return (rows.rows as any[]).map(r => r.month);
+  }
+
+  /**
    * The category's most common credit window and threshold from the most
    * recent imported Reasons Report period (each pilot's rows carry a
    * "Window 062:00-082:00, Threshold 082:00" banner). Real admin values —
@@ -1090,7 +1234,7 @@ export class DatabaseStorage implements IStorage {
    * imported period — not just outcomes. Answers "what do people ask for"
    * rather than "what did they get."
    */
-  async getBidPatterns(base: string): Promise<{
+  async getBidPatterns(base: string, month?: string): Promise<{
     typeMixByPeriod: Array<{
       period: string;
       award: number;
@@ -1114,6 +1258,13 @@ export class DatabaseStorage implements IStorage {
       WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
       WHEN 'SEP' THEN 9 WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
       ELSE 0 END`;
+    // Optional single-month filter, applied identically everywhere `base` is
+    // filtered below — compare on the normalized 3-letter month so trailing
+    // spaces/casing in the stored value never break the match.
+    const monthCode = month ? month.trim().slice(0, 3).toUpperCase() : null;
+    const monthCond = monthCode
+      ? sql`AND upper(left(trim(month), 3)) = ${monthCode}`
+      : sql``;
 
     const typeMix = await db.execute(sql`
       SELECT year, month,
@@ -1132,7 +1283,7 @@ export class DatabaseStorage implements IStorage {
           THEN array_length(regexp_split_to_array(preference_text, ','), 1)
           ELSE 0 END) AS prefer_off_days
       FROM reasons_report_preferences
-      WHERE base = ${base}
+      WHERE base = ${base} ${monthCond}
       GROUP BY year, month
       ORDER BY year, ${monthNum}
     `);
@@ -1144,7 +1295,7 @@ export class DatabaseStorage implements IStorage {
           ', '
         )) AS city
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'award%layover in%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%layover in%'
       ) t
       GROUP BY city ORDER BY n DESC LIMIT 12
     `);
@@ -1156,7 +1307,7 @@ export class DatabaseStorage implements IStorage {
           ', '
         )) AS city
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'avoid%layover in%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%layover in%'
       ) t
       GROUP BY city ORDER BY n DESC LIMIT 12
     `);
@@ -1167,12 +1318,12 @@ export class DatabaseStorage implements IStorage {
       SELECT hour, sum(n) AS n FROM (
         SELECT (regexp_match(preference_text, 'Check-In Time > (\\d{2}):'))[1]::int AS hour, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'award%check-in time >%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in time >%'
         GROUP BY 1
         UNION ALL
         SELECT (regexp_match(preference_text, 'Check-In Time < (\\d{2}):'))[1]::int AS hour, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'avoid%check-in time <%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in time <%'
         GROUP BY 1
       ) t
       GROUP BY hour ORDER BY hour
@@ -1186,13 +1337,13 @@ export class DatabaseStorage implements IStorage {
         SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
           'award' AS kind, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'award%check-in station%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in station%'
         GROUP BY 1
         UNION ALL
         SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
           'avoid' AS kind, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} AND preference_text ILIKE 'avoid%check-in station%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in station%'
         GROUP BY 1
       ) t
       WHERE station IS NOT NULL
@@ -1203,7 +1354,7 @@ export class DatabaseStorage implements IStorage {
     const daysOff = await db.execute(sql`
       SELECT (regexp_match(preference_text, '(\\d+) Consecutive Days Off'))[1]::int AS days, count(*) AS n
       FROM reasons_report_preferences
-      WHERE base = ${base} AND preference_text ILIKE '%consecutive days off%'
+      WHERE base = ${base} ${monthCond} AND preference_text ILIKE '%consecutive days off%'
       GROUP BY 1 ORDER BY 1
     `);
 

@@ -109,6 +109,7 @@ export class SimpleAI {
             .getCategoryCreditWindow(bidPackage.base)
             .catch(() => null)
         : null;
+      const base = bidPackage?.base;
       const toolContext = {
         pairings,
         alv: bidPackage?.alvHours
@@ -119,6 +120,9 @@ export class SimpleAI {
         windowMax: realWindow?.windowMax,
         windowSource: realWindow
           ? `the ${realWindow.period} Reasons Report`
+          : undefined,
+        fetchHistoricTrends: base
+          ? (month?: string) => this.fetchHistoricTrendsDigest(base, month)
           : undefined,
       };
       const MAX_TOOL_ROUNDS = 4;
@@ -146,7 +150,7 @@ export class SimpleAI {
         for (const call of toolCalls) {
           if (call.type !== 'function') continue;
           console.log(`[SimpleAI] Tool call: ${call.function.name}`);
-          const result = executeCoachTool(
+          const result = await executeCoachTool(
             call.function.name,
             call.function.arguments,
             toolContext
@@ -177,6 +181,76 @@ export class SimpleAI {
       // caught-here-and-returned generic string made that dead code.
       throw error;
     }
+  }
+
+  /**
+   * Backs the coach's query_historic_trends tool. Pulls the same numbers
+   * the Trends/Bid Patterns pages show, condensed to a compact digest so a
+   * tool-call round trip doesn't blow up the token budget.
+   */
+  private async fetchHistoricTrendsDigest(
+    base: string,
+    month?: string
+  ): Promise<object> {
+    const [trends, patterns] = await Promise.all([
+      this.storage.getTrendsSummary(base, month),
+      this.storage.getBidPatterns(base, month),
+    ]);
+
+    if (trends.periods.length === 0) {
+      return {
+        month: month ?? null,
+        message: month
+          ? `No imported Reasons Report data for ${month} specifically — try omitting the month for the full multi-year picture.`
+          : 'No Reasons Report history imported yet for this category.',
+      };
+    }
+
+    const avgLostToSenior =
+      trends.periods.reduce((s, p) => s + p.lostToSenior / p.totalPrefs, 0) /
+      trends.periods.length;
+    const avgPrefsPerPilot =
+      patterns.typeMixByPeriod.reduce((s, p) => s + p.avgPrefsPerPilot, 0) /
+      Math.max(1, patterns.typeMixByPeriod.length);
+
+    const boundariesByDays = new Map<number, number[]>();
+    for (const b of trends.holdBoundaries) {
+      if (b.juniorMostPercentile === null) continue;
+      if (!boundariesByDays.has(b.pairingDays)) {
+        boundariesByDays.set(b.pairingDays, []);
+      }
+      boundariesByDays.get(b.pairingDays)!.push(b.juniorMostPercentile);
+    }
+    const holdBoundariesByTripLength = [...boundariesByDays.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([days, pcts]) => ({
+        pairingDays: days,
+        minPercentile: Math.round(Math.min(...pcts)),
+        maxPercentile: Math.round(Math.max(...pcts)),
+      }));
+
+    return {
+      month: month ?? null,
+      periodsCovered: trends.periods.length,
+      spanningYears: [...new Set(trends.periods.map(p => p.period.split(' ')[1]))]
+        .sort(),
+      avgPctPreferencesLostToSeniorBidders: Math.round(avgLostToSenior * 100),
+      avgPreferencesPerPilot: Math.round(avgPrefsPerPilot),
+      holdBoundariesByTripLength,
+      topRequestedLayovers: patterns.topRequestedLayovers.slice(0, 5),
+      topAvoidedLayovers: patterns.topAvoidedLayovers.slice(0, 5),
+      preferredCheckInHours: patterns.earlyCheckInAvoidance
+        .slice()
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3)
+        .map(h => h.hour),
+      mostCommonConsecutiveDaysOff: patterns.daysOffPatterns
+        .slice()
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3)
+        .map(d => d.days),
+      creditWindow: trends.window,
+    };
   }
 
   /**
@@ -250,6 +324,7 @@ ${historyContext}
 TOOLS YOU CAN CALL:
 - simulate_bid: evaluate a structured draft bid against this bid package. Returns predicted awards with hold probabilities, credit totals, and explicit caveats.
 - export_bid: render a draft bid to review-ready NAVBLUE text with structure warnings.
+- query_historic_trends: look up real historic data mined from every imported Reasons Report period — category competitiveness, how junior each trip length has gone, bid complexity, top requested/avoided layover cities, preferred check-in hour, common days-off request length. Pass a 3-letter month (e.g. "AUG") to compare a specific calendar month the pilot may be about to bid against the multi-year average, or omit it for the full picture. Call this whenever the pilot asks about trends, seasons, competitiveness, or "how did this month do historically" instead of guessing or relying only on the fixed seniority-band summary above.
 When the pilot wants a bid drafted: interview briefly if goals are unclear, construct the DraftBid JSON (negatives BEFORE awards, specific before general, exits in every group except the last, reserve group last), call simulate_bid, refine if the result is weak (empty awards, incomplete line, inert preferences), then call export_bid and present the final text inside a code block along with the simulation summary and its caveats. Never present a draft you have not simulated.
 
 Be helpful, analyze the data thoroughly, and give specific recommendations with pairing numbers.`;

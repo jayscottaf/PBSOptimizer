@@ -130,26 +130,56 @@ assert(e2.warnings.some(w => w.includes('No reserve bid group')), 'warns on miss
 
 // 9) Coach tool executor: valid call, bad JSON, malformed bid
 const toolCtx = { pairings, alv: 40 };
-const sim = executeCoachTool(
+const sim = (await executeCoachTool(
   'simulate_bid',
   JSON.stringify({ bid: bid1, alv: 40 }),
   toolCtx
-) as any;
+)) as any;
 assert(
   typeof sim.totalCredit === 'number' && Array.isArray(sim.caveats),
   'executeCoachTool simulate_bid returns compact result'
 );
-const exp = executeCoachTool('export_bid', JSON.stringify({ bid: bid5 }), toolCtx) as any;
+const exp = (await executeCoachTool('export_bid', JSON.stringify({ bid: bid5 }), toolCtx)) as any;
 assert(
   typeof exp.text === 'string' && exp.text.includes('Start Pairings'),
   'executeCoachTool export_bid returns text'
 );
-const badJson = executeCoachTool('simulate_bid', '{not json', toolCtx) as any;
+const badJson = (await executeCoachTool('simulate_bid', '{not json', toolCtx)) as any;
 assert(!!badJson.error, 'executeCoachTool reports bad JSON as error, not throw');
-const badBid = executeCoachTool('simulate_bid', '{"bid": {"nope": true}}', toolCtx) as any;
+const badBid = (await executeCoachTool('simulate_bid', '{"bid": {"nope": true}}', toolCtx)) as any;
 assert(!!badBid.error, 'executeCoachTool reports malformed bid as error');
-const unknownTool = executeCoachTool('do_magic', '{"bid":{"groups":[]}}', toolCtx) as any;
+const unknownTool = (await executeCoachTool('do_magic', '{"bid":{"groups":[]}}', toolCtx)) as any;
 assert(!!unknownTool.error, 'executeCoachTool rejects unknown tool names');
+
+// 9b) query_historic_trends: requires an injected fetcher, passes month arg through
+const noFetcherCtx = { pairings, alv: 40 };
+const noFetcherResult = (await executeCoachTool(
+  'query_historic_trends',
+  '{}',
+  noFetcherCtx
+)) as any;
+assert(
+  !!noFetcherResult.error,
+  'query_historic_trends without an injected fetcher reports an error, not a crash'
+);
+let capturedMonth: string | undefined;
+const fetcherCtx = {
+  pairings,
+  alv: 40,
+  fetchHistoricTrends: async (month?: string) => {
+    capturedMonth = month;
+    return { periodsCovered: 18, avgPctPreferencesLostToSeniorBidders: 19 };
+  },
+};
+const trendsResult = (await executeCoachTool(
+  'query_historic_trends',
+  JSON.stringify({ month: 'AUG' }),
+  fetcherCtx
+)) as any;
+assert(
+  capturedMonth === 'AUG' && trendsResult.periodsCovered === 18,
+  'query_historic_trends threads the month argument into the injected fetcher and returns its digest'
+);
 
 // 10) Reasons pane parser against the real composite export format
 // (NYC-220-B JUL 2026): NBSP spacing, per-pilot sections, real vocabulary.

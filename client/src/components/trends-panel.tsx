@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, ListChecks } from 'lucide-react';
@@ -19,6 +20,8 @@ interface HoldBoundary {
 
 interface TrendsResponse {
   base: string;
+  month: string | null;
+  availableMonths: string[];
   periods: TrendPeriod[];
   holdBoundaries: HoldBoundary[];
   window: {
@@ -28,6 +31,12 @@ interface TrendsResponse {
     period: string;
   } | null;
 }
+
+const MONTH_NAMES: Record<string, string> = {
+  JAN: 'January', FEB: 'February', MAR: 'March', APR: 'April',
+  MAY: 'May', JUN: 'June', JUL: 'July', AUG: 'August',
+  SEP: 'September', OCT: 'October', NOV: 'November', DEC: 'December',
+};
 
 interface TypeMixPeriod {
   period: string;
@@ -49,6 +58,8 @@ interface CityCount {
 
 interface BidPatternsResponse {
   base: string;
+  month: string | null;
+  availableMonths: string[];
   typeMixByPeriod: TypeMixPeriod[];
   topRequestedLayovers: CityCount[];
   topAvoidedLayovers: CityCount[];
@@ -328,19 +339,22 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
 }
 
 export function TrendsPanel() {
+  const [month, setMonth] = useState<string>('');
+  const monthQuery = month ? `?month=${month}` : '';
+
   const { data, isLoading, isError } = useQuery<TrendsResponse>({
-    queryKey: ['/api/trends'],
+    queryKey: ['/api/trends', month],
     queryFn: async () => {
-      const res = await fetch('/api/trends');
+      const res = await fetch(`/api/trends${monthQuery}`);
       if (!res.ok) throw new Error('Failed to load trends');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
   });
   const { data: patterns } = useQuery<BidPatternsResponse>({
-    queryKey: ['/api/bid-patterns'],
+    queryKey: ['/api/bid-patterns', month],
     queryFn: async () => {
-      const res = await fetch('/api/bid-patterns');
+      const res = await fetch(`/api/bid-patterns${monthQuery}`);
       if (!res.ok) throw new Error('Failed to load bid patterns');
       return res.json();
     },
@@ -372,16 +386,36 @@ export function TrendsPanel() {
     <div className="space-y-4 p-1">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingUp className="h-5 w-5 text-blue-500" />
-            Category Trends — {data.base}
-          </CardTitle>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Mined from {data.periods.length} imported Reasons Report periods
-            ({data.periods[0]?.period} – {data.periods[data.periods.length - 1]?.period})
-            {data.window &&
-              ` · latest credit window ${data.window.windowMin.toFixed(0)}–${data.window.windowMax.toFixed(0)}h, threshold ${data.window.threshold.toFixed(0)}h (${data.window.period})`}
-          </p>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+                Category Trends — {data.base}
+              </CardTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {month
+                  ? `Showing only ${MONTH_NAMES[month] ?? month} across every imported year — compare against what you're about to bid.`
+                  : `Mined from ${data.periods.length} imported Reasons Report periods (${data.periods[0]?.period} – ${data.periods[data.periods.length - 1]?.period}).`}
+                {data.window &&
+                  ` Latest credit window ${data.window.windowMin.toFixed(0)}–${data.window.windowMax.toFixed(0)}h, threshold ${data.window.threshold.toFixed(0)}h (${data.window.period}).`}
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              Month
+              <select
+                value={month}
+                onChange={e => setMonth(e.target.value)}
+                className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value="">All periods</option>
+                {data.availableMonths.map(m => (
+                  <option key={m} value={m}>
+                    {MONTH_NAMES[m] ?? m}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </CardHeader>
       </Card>
 

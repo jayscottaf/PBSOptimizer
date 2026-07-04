@@ -130,6 +130,24 @@ export const COACH_TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'query_historic_trends',
+      description:
+        "Look up real historic bidding data for this category, mined from every imported Reasons Report period: category competitiveness (share of preferences lost to a more senior bidder), how junior each trip length has gone by percentile, bid complexity (avg preferences per pilot), and what pilots actually ask for (top requested/avoided layover cities, preferred check-in hour, common consecutive-days-off length). Optionally narrow to one calendar month (e.g. the month the pilot is about to bid) to compare it against history instead of the whole multi-year average. Use this whenever the pilot asks about trends, seasons, competitiveness, or historic patterns instead of guessing.",
+      parameters: {
+        type: 'object',
+        properties: {
+          month: {
+            type: 'string',
+            description:
+              'Optional 3-letter month code (e.g. "AUG") to narrow the lookup to that calendar month across all imported years. Omit for the full multi-year picture.',
+          },
+        },
+      },
+    },
+  },
 ];
 
 export interface CoachToolContext {
@@ -142,6 +160,12 @@ export interface CoachToolContext {
   windowMax?: number;
   threshold?: number;
   windowSource?: string;
+  /**
+   * Injected rather than imported directly, so this module stays free of
+   * storage/DB imports and unit-testable with plain data (see
+   * scripts/bid-tools-check.ts) — simpleAI.ts wires the real implementation.
+   */
+  fetchHistoricTrends?: (month?: string) => Promise<object>;
 }
 
 /**
@@ -149,11 +173,11 @@ export interface CoachToolContext {
  * enough to feed back into the model. Never throws: errors come back as
  * { error } so the model can self-correct its arguments.
  */
-export function executeCoachTool(
+export async function executeCoachTool(
   name: string,
   rawArgs: string,
   context: CoachToolContext
-): object {
+): Promise<object> {
   let args: any;
   try {
     args = JSON.parse(rawArgs || '{}');
@@ -161,15 +185,23 @@ export function executeCoachTool(
     return { error: 'Tool arguments were not valid JSON.' };
   }
 
-  const bid = args?.bid as DraftBid | undefined;
-  if (!bid || !Array.isArray(bid.groups)) {
-    return {
-      error:
-        'Missing or malformed "bid": expected { groups: [{ type, preferences }] }.',
-    };
-  }
-
   try {
+    if (name === 'query_historic_trends') {
+      if (!context.fetchHistoricTrends) {
+        return { error: 'Historic trends are not available for this bid package.' };
+      }
+      const month = typeof args.month === 'string' ? args.month : undefined;
+      return await context.fetchHistoricTrends(month);
+    }
+
+    const bid = args?.bid as DraftBid | undefined;
+    if (!bid || !Array.isArray(bid.groups)) {
+      return {
+        error:
+          'Missing or malformed "bid": expected { groups: [{ type, preferences }] }.',
+      };
+    }
+
     if (name === 'simulate_bid') {
       const result = simulateBid(bid, context.pairings, {
         alv: typeof args.alv === 'number' ? args.alv : context.alv,
