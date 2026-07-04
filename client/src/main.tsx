@@ -124,14 +124,17 @@ if ('serviceWorker' in navigator) {
 
   // Function to aggressively remove offline banners
   const removeOfflineBanners = () => {
-    // Remove common offline banner selectors
+    // Remove common offline banner selectors.
+    // Only match by an explicit offline class or the banner's own text —
+    // NEVER by generic positioned-element inline styles. Selectors like
+    // 'div[style*="position: fixed"][style*="top: 0"]' also match every
+    // Radix popper (Select/Dropdown/Popover/Tooltip), which would delete
+    // any open dropdown the moment connectivity changed.
     const selectors = [
       '.chrome-offline-banner',
       '.browser-offline-bar',
       '.offline-notification',
       'div[style*="You are offline"]',
-      'div[style*="background"][style*="red"]',
-      'div[style*="position: fixed"][style*="top: 0"]',
     ];
 
     selectors.forEach(selector => {

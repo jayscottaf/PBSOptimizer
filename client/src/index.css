@@ -22,17 +22,14 @@ body.offline {
   background-color: inherit !important;
 }
 
-/* Target Chrome's specific offline banner styles */
-body > div[style*="background"]:first-child,
-body > div[style*="red"]:first-child,
-div[style*="position: fixed"][style*="top: 0"],
+/* Target Chrome's specific offline banner styles.
+   NOTE: only match banners by an explicit "offline" class — do NOT match
+   generic positioned elements by inline style. Selectors like
+   div[style*="position: fixed"][style*="top: 0"] also match every Radix
+   popper (Select/Dropdown/Popover/Tooltip anchor themselves at fixed
+   top:0 and offset via transform), which silently hid every dropdown in
+   the app. */
 div[class*="offline"][style*="background"] {
-  display: none !important;
-}
-
-/* Remove any top-positioned warning banners */
-div[style*="position: absolute"][style*="top: 0"][style*="background"],
-div[style*="position: fixed"][style*="z-index"][style*="background"] {
   display: none !important;
 }
 

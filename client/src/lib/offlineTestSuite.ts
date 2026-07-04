@@ -440,14 +440,14 @@ export function addTestingUtilities() {
       cacheInfo: getCacheInfo,
 
       removeOfflineBanners: () => {
-        // Aggressive banner removal utility
+        // Aggressive banner removal utility. Match offline banners only by
+        // class or their own text — never by generic positioned-element
+        // inline styles, which also match Radix poppers (see main.tsx).
         const selectors = [
           '.chrome-offline-banner',
           '.browser-offline-bar',
           '.offline-notification',
           'div[style*="You are offline"]',
-          'div[style*="background"][style*="red"]',
-          'div[style*="position: fixed"][style*="top: 0"]',
         ];
 
         let removed = 0;
