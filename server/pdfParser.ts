@@ -781,12 +781,18 @@ export class PDFParser {
       }
 
       // Look for the actual total credit and block hours line - updated format
+      // Values are printed as HOURS.MINUTES (e.g. "10.30" = 10h30m), not decimal
+      // hours - same convention as the ALV parsing above, so convert the same way.
       const totalCreditMatch = line.match(
-        /TOTAL CREDIT\s+(\d{1,2}\.\d{2})TL\s+(\d{1,2}\.\d{2})BL/
+        /TOTAL CREDIT\s+(\d{1,2})\.(\d{2})TL\s+(\d{1,2})\.(\d{2})BL/
       );
       if (totalCreditMatch) {
-        creditHours = totalCreditMatch[1];
-        blockHours = totalCreditMatch[2];
+        const creditH = parseInt(totalCreditMatch[1]);
+        const creditM = parseInt(totalCreditMatch[2]);
+        const blockH = parseInt(totalCreditMatch[3]);
+        const blockM = parseInt(totalCreditMatch[4]);
+        creditHours = (creditH + creditM / 60).toFixed(2);
+        blockHours = (blockH + blockM / 60).toFixed(2);
       }
 
       // Look for TAFB - it's just the hours value, not converted to days
