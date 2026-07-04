@@ -137,6 +137,11 @@ export interface CoachToolContext {
   pairings: any[];
   /** ALV from the bid package, when known. */
   alv?: number;
+  /** Real credit window/threshold from the latest imported Reasons Report. */
+  windowMin?: number;
+  windowMax?: number;
+  threshold?: number;
+  windowSource?: string;
 }
 
 /**
@@ -168,6 +173,10 @@ export function executeCoachTool(
     if (name === 'simulate_bid') {
       const result = simulateBid(bid, context.pairings, {
         alv: typeof args.alv === 'number' ? args.alv : context.alv,
+        threshold: context.threshold,
+        windowMin: context.windowMin,
+        windowMax: context.windowMax,
+        windowSource: context.windowSource,
       });
       // Trim the award list so large lines don't blow up the context.
       return {

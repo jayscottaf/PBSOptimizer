@@ -122,6 +122,29 @@ export interface IStorage {
     limit?: number;
   }): Promise<ReasonsReportPreference[]>;
   getCategoryRosters(base: string): Promise<Map<string, number[]>>;
+  getCategoryCreditWindow(base: string): Promise<{
+    windowMin: number;
+    windowMax: number;
+    threshold: number;
+    period: string;
+  } | null>;
+  getStrategyStats(
+    base: string,
+    userPercentile: number
+  ): Promise<{
+    bandLow: number;
+    bandHigh: number;
+    periods: number;
+    denialModePeriods: number;
+    categories: Array<{
+      category: string;
+      total: number;
+      honored: number;
+      denied: number;
+      producedAward: number;
+      avgAwardDepth: number | null;
+    }>;
+  }>;
 
   // User favorites
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
@@ -902,6 +925,145 @@ export class DatabaseStorage implements IStorage {
       rosters.set(`${month}-${row.year}`, row.seniorities as number[]);
     }
     return rosters;
+  }
+
+  /**
+   * The category's most common credit window and threshold from the most
+   * recent imported Reasons Report period (each pilot's rows carry a
+   * "Window 062:00-082:00, Threshold 082:00" banner). Real admin values —
+   * the simulator otherwise has to guess ALV±10.
+   */
+  async getCategoryCreditWindow(base: string): Promise<{
+    windowMin: number;
+    windowMax: number;
+    threshold: number;
+    period: string;
+  } | null> {
+    const rows = await db.execute(sql`
+      WITH latest AS (
+        SELECT year, month FROM reasons_report_preferences
+        WHERE base = ${base}
+        ORDER BY year DESC,
+          array_position(
+            ARRAY['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],
+            upper(left(trim(month), 3))
+          ) DESC
+        LIMIT 1
+      )
+      SELECT banner, count(*) AS n, r.month, r.year
+      FROM reasons_report_preferences r
+      JOIN latest l ON r.year = l.year AND r.month = l.month,
+      LATERAL jsonb_array_elements_text(r.report_banners) AS banner
+      WHERE r.base = ${base} AND banner LIKE 'Window %'
+      GROUP BY banner, r.month, r.year
+      ORDER BY n DESC LIMIT 1
+    `);
+    const row = rows.rows[0] as any;
+    if (!row) return null;
+    const m = String(row.banner).match(
+      /Window\s+(\d{1,3}):(\d{2})-(\d{1,3}):(\d{2}),\s*Threshold\s+(\d{1,3}):(\d{2})/
+    );
+    if (!m) return null;
+    const toHours = (h: string, min: string) =>
+      parseInt(h, 10) + parseInt(min, 10) / 60;
+    return {
+      windowMin: toHours(m[1], m[2]),
+      windowMax: toHours(m[3], m[4]),
+      threshold: toHours(m[5], m[6]),
+      period: `${String(row.month).trim()} ${row.year}`,
+    };
+  }
+
+  /**
+   * Outcome statistics for pilots near a given seniority percentile,
+   * aggregated across every imported Reasons Report period. This is what the
+   * coach personalizes with: not the whole category, but pilots whose
+   * seniority position matches the user's (±10 percentile points).
+   */
+  async getStrategyStats(
+    base: string,
+    userPercentile: number
+  ): Promise<{
+    bandLow: number;
+    bandHigh: number;
+    periods: number;
+    denialModePeriods: number;
+    categories: Array<{
+      category: string;
+      total: number;
+      honored: number;
+      denied: number;
+      producedAward: number;
+      avgAwardDepth: number | null;
+    }>;
+  }> {
+    const lo = Math.max(0, (userPercentile - 10) / 100);
+    const hi = Math.min(1, (userPercentile + 10) / 100);
+    const rows = await db.execute(sql`
+      WITH pilot_ranks AS (
+        SELECT DISTINCT year, month, pilot_seniority_number,
+          percent_rank() OVER (
+            PARTITION BY year, month ORDER BY pilot_seniority_number
+          ) AS pct
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND pilot_seniority_number IS NOT NULL
+      ),
+      banded AS (
+        SELECT r.*
+        FROM reasons_report_preferences r
+        JOIN pilot_ranks p
+          ON p.year = r.year AND p.month = r.month
+          AND p.pilot_seniority_number = r.pilot_seniority_number
+        WHERE r.base = ${base} AND p.pct BETWEEN ${lo} AND ${hi}
+      )
+      SELECT
+        CASE
+          WHEN preference_text ILIKE 'prefer off%' THEN 'Prefer Off'
+          WHEN preference_text ILIKE 'avoid%' THEN 'Avoid Pairings'
+          WHEN preference_text ILIKE 'award%' THEN 'Award Pairings'
+          WHEN preference_text ILIKE 'set condition%' THEN 'Set Condition'
+          ELSE 'Other'
+        END AS category,
+        count(*) AS total,
+        sum(CASE WHEN outcome = 'Honored' THEN 1 ELSE 0 END) AS honored,
+        sum(CASE WHEN outcome IN (
+          'Awarded to senior bidder', 'Awarded to senior shadow bidder',
+          'Not honored', 'Not considered', 'Bid denied',
+          'Below Reduced Lower Limit Cutoff', 'Not used'
+        ) THEN 1 ELSE 0 END) AS denied,
+        sum(CASE WHEN jsonb_array_length(coalesce(awarded_pairing_numbers, '[]'::jsonb)) > 0
+          THEN 1 ELSE 0 END) AS produced_award,
+        avg(CASE WHEN jsonb_array_length(coalesce(awarded_pairing_numbers, '[]'::jsonb)) > 0
+          THEN preference_number END) AS avg_award_depth,
+        count(DISTINCT (year, month)) AS periods
+      FROM banded
+      GROUP BY 1 ORDER BY total DESC
+    `);
+    const flags = await db.execute(sql`
+      SELECT count(DISTINCT (year, month)) AS n
+      FROM reasons_report_preferences
+      WHERE base = ${base}
+        AND report_banners::text LIKE '%Affected By Denial Mode%'
+    `);
+    const periodsTotal = await db.execute(sql`
+      SELECT count(DISTINCT (year, month)) AS n
+      FROM reasons_report_preferences WHERE base = ${base}
+    `);
+    return {
+      bandLow: Math.round(lo * 100),
+      bandHigh: Math.round(hi * 100),
+      periods: Number((periodsTotal.rows[0] as any)?.n ?? 0),
+      denialModePeriods: Number((flags.rows[0] as any)?.n ?? 0),
+      categories: (rows.rows as any[]).map(r => ({
+        category: r.category,
+        total: Number(r.total),
+        honored: Number(r.honored),
+        denied: Number(r.denied),
+        producedAward: Number(r.produced_award),
+        avgAwardDepth:
+          r.avg_award_depth === null ? null : Number(r.avg_award_depth),
+      })),
+    };
   }
 
   async getReasonsReportPreferences(filter?: {

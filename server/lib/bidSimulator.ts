@@ -35,6 +35,15 @@ export interface SimulatorOptions {
   threshold?: number;
   /** Bid period year, used to anchor Prefer Off date comparisons. */
   bidYear?: number;
+  /**
+   * Real credit-window bounds observed in a Reasons Report ("Minimum window
+   * <062:00> ... Maximum window <082:00>"). When provided they replace the
+   * ALV±10 approximation entirely.
+   */
+  windowMin?: number;
+  windowMax?: number;
+  /** Where the window/threshold values came from, for the caveat text. */
+  windowSource?: string;
 }
 
 interface SimPairing {
@@ -223,17 +232,21 @@ function touchesDate(pairing: SimPairing, isoDate: string): boolean {
 function creditWindow(
   windowType: 'normal' | 'min' | 'max' | 'mid',
   alv: number,
-  cap: number
+  cap: number,
+  realBounds?: { min: number; max: number }
 ): { min: number; max: number } {
-  const top = Math.min(alv + 10, cap);
-  const bottom = alv - 10;
+  // Real observed bounds (from a Reasons Report) replace the ALV±10
+  // approximation; Set Condition sub-windows split at the midpoint.
+  const bottom = realBounds ? realBounds.min : alv - 10;
+  const top = realBounds ? Math.min(realBounds.max, cap) : Math.min(alv + 10, cap);
+  const middle = realBounds ? (bottom + top) / 2 : alv;
   switch (windowType) {
     case 'min':
-      return { min: bottom, max: alv };
+      return { min: bottom, max: middle };
     case 'max':
-      return { min: alv, max: top };
+      return { min: middle, max: top };
     case 'mid':
-      return { min: alv - 5, max: Math.min(alv + 5, cap) };
+      return { min: middle - 5, max: Math.min(middle + 5, cap) };
     default:
       return { min: bottom, max: top };
   }
@@ -246,6 +259,10 @@ export function simulateBid(
 ): SimulationResult {
   const alv = options.alv ?? 78;
   const cap = options.aircraftCategory === 'widebody' ? 92.5 : 91.5;
+  const realBounds =
+    options.windowMin !== undefined && options.windowMax !== undefined
+      ? { min: options.windowMin, max: options.windowMax }
+      : undefined;
   const allPairings = rawPairings.map(toSimPairing);
 
   const caveats = [
@@ -253,12 +270,14 @@ export function simulateBid(
     'Other pilots\' bids are unknown; hold probability per pairing is the only competition signal.',
     'Pairing date-overlap legality and FAR/PWA rest rules between awards are not checked.',
     'Prefer Off matching approximates operating dates from the effectiveDates range.',
-    `Threshold is admin-set and not published; this run assumes ${(options.threshold ?? alv).toFixed(1)} credit hours.`,
+    realBounds
+      ? `Credit window ${realBounds.min.toFixed(1)}-${realBounds.max.toFixed(1)} and threshold ${(options.threshold ?? alv).toFixed(1)} come from ${options.windowSource ?? 'an imported Reasons Report'}; the current month's admin values may differ.`
+      : `Threshold is admin-set and not published; this run assumes ${(options.threshold ?? alv).toFixed(1)} credit hours.`,
   ];
 
   const groupResults: SimulationGroupResult[] = [];
   let chosen: SimulationGroupResult | null = null;
-  let chosenWindow = creditWindow('normal', alv, cap);
+  let chosenWindow = creditWindow('normal', alv, cap, realBounds);
   let chosenThreshold = options.threshold ?? alv;
 
   bid.groups.forEach((group, groupIndex) => {
@@ -324,7 +343,7 @@ export function simulateBid(
       }
       if (pref.type === 'award') {
         awardPrefCount++;
-        const window = creditWindow(windowType, alv, cap);
+        const window = creditWindow(windowType, alv, cap, realBounds);
         const currentCredit = awards.reduce((s, a) => s + a.creditHours, 0);
         if (currentCredit > Math.min(threshold, window.max)) {
           inert.push({
@@ -395,7 +414,7 @@ export function simulateBid(
     groupResults.push(result);
 
     // First pairing group that reaches the window minimum wins.
-    const window = creditWindow(windowType, alv, cap);
+    const window = creditWindow(windowType, alv, cap, realBounds);
     if (!chosen && result.creditFromAwards >= window.min) {
       chosen = result;
       chosenWindow = window;

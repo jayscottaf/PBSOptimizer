@@ -45,6 +45,7 @@ import {
 import { simulateBid } from './lib/bidSimulator';
 import { exportBid } from './lib/bidExporter';
 import { parseAircraftCode } from './lib/aircraft';
+import { percentileWithin } from './lib/empiricalHold';
 import type { DraftBid } from '../shared/bidTypes';
 import * as fs from 'fs/promises';
 
@@ -1544,15 +1545,95 @@ export async function registerRoutes(app: Express) {
       const packageAlv =
         alv ??
         (bidPackage.alvHours ? parseFloat(String(bidPackage.alvHours)) : undefined);
+      // Real credit window/threshold from the latest imported Reasons Report
+      // (explicit request values still win).
+      const realWindow = await storage.getCategoryCreditWindow(bidPackage.base);
       const result = simulateBid(bid, packagePairings, {
         alv: packageAlv,
-        threshold,
+        threshold: threshold ?? realWindow?.threshold,
         aircraftCategory,
+        windowMin: realWindow?.windowMin,
+        windowMax: realWindow?.windowMax,
+        windowSource: realWindow
+          ? `the ${realWindow.period} Reasons Report`
+          : undefined,
       });
       res.json(result);
     } catch (error) {
       console.error('Error simulating bid:', error);
       res.status(500).json({ message: 'Failed to simulate bid' });
+    }
+  });
+
+  // Longitudinal category trends mined from imported Reasons Reports:
+  // per-period contention, category size, and how junior each trip length
+  // went (percentile of the junior-most holder).
+  app.get('/api/trends', async (req, res) => {
+    try {
+      const base = String(req.query.base || 'NYC');
+
+      const contention = await db.execute(sql`
+        SELECT year, month,
+          count(*) AS total_prefs,
+          count(DISTINCT pilot_seniority_number) AS pilots,
+          sum(CASE WHEN outcome = 'Honored' THEN 1 ELSE 0 END) AS honored,
+          sum(CASE WHEN outcome IN ('Awarded to senior bidder', 'Awarded to senior shadow bidder') THEN 1 ELSE 0 END) AS lost_to_senior
+        FROM reasons_report_preferences
+        WHERE base = ${base}
+        GROUP BY year, month
+      `);
+
+      const boundaries = await db.execute(sql`
+        SELECT year, month, pairing_days,
+          max(junior_holder_seniority) AS junior_most,
+          count(*) AS awards
+        FROM bid_history
+        WHERE base = ${base}
+          AND (award_type IS NULL OR award_type NOT ILIKE '%coverage%')
+        GROUP BY year, month, pairing_days
+      `);
+
+      const rosters = await storage.getCategoryRosters(base);
+      const window = await storage.getCategoryCreditWindow(base);
+
+      const monthNum = (m: string) => {
+        const idx = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+          .indexOf(String(m).trim().slice(0, 3).toUpperCase());
+        return idx === -1 ? 0 : idx + 1;
+      };
+      const sortKey = (r: any) => Number(r.year) * 100 + monthNum(r.month);
+
+      const periods = (contention.rows as any[])
+        .sort((a, b) => sortKey(a) - sortKey(b))
+        .map(r => ({
+          period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
+          pilots: Number(r.pilots),
+          totalPrefs: Number(r.total_prefs),
+          honored: Number(r.honored),
+          lostToSenior: Number(r.lost_to_senior),
+        }));
+
+      const holdBoundaries = (boundaries.rows as any[])
+        .sort((a, b) => sortKey(a) - sortKey(b))
+        .map(r => {
+          const key = `${String(r.month).trim().slice(0, 3).toUpperCase()}-${r.year}`;
+          const roster = rosters.get(key);
+          const pct = roster
+            ? percentileWithin(roster, Number(r.junior_most))
+            : null;
+          return {
+            period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
+            pairingDays: Number(r.pairing_days),
+            juniorMostPercentile: pct,
+            awards: Number(r.awards),
+          };
+        })
+        .filter(r => r.juniorMostPercentile !== null);
+
+      res.json({ base, periods, holdBoundaries, window });
+    } catch (error) {
+      console.error('Error building trends:', error);
+      res.status(500).json({ message: 'Failed to build trends' });
     }
   });
 

@@ -1,100 +1,63 @@
 /**
- * Mines parsed Reasons Report preference outcomes for patterns the bidding
- * coach can use: what kinds of preferences were honored or denied for this
- * pilot's category in past months. This is the personalization layer - it
- * turns the pilot's own award history into prompt context.
+ * Turns Reasons Report outcome data into coach prompt context. The
+ * aggregation happens in SQL (storage.getStrategyStats) because the corpus
+ * is ~100k preference rows; this module just renders the numbers into
+ * concise, actionable prompt lines.
  */
 
-import type { ReasonsReportPreference } from '../../shared/schema';
-
-const DENIED_OUTCOMES = [
-  'Not honored',
-  'Not considered',
-  'Not used',
-  'Bid denied',
-  'Below Reduced Lower Limit Cutoff',
-  // Real composite exports: seniority took it — the clearest denial signal
-  'Awarded to senior bidder',
-  'Awarded to senior shadow bidder',
-];
-
-const HONORED_OUTCOMES = ['Honored', 'Partially honored'];
-
-function classifyPreference(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.startsWith('prefer off')) return 'Prefer Off';
-  if (lower.startsWith('avoid')) return 'Avoid Pairings';
-  if (lower.startsWith('award')) return 'Award Pairings';
-  if (lower.startsWith('set condition')) return 'Set Condition';
-  if (lower.startsWith('slide vacation')) return 'Slide Vacation';
-  if (lower.includes('reserve')) return 'Reserve';
-  return 'Other';
+export interface StrategyStats {
+  bandLow: number;
+  bandHigh: number;
+  periods: number;
+  denialModePeriods: number;
+  categories: Array<{
+    category: string;
+    total: number;
+    honored: number;
+    denied: number;
+    producedAward: number;
+    avgAwardDepth: number | null;
+  }>;
 }
 
 /**
- * Build a compact history summary for the coach's system prompt. Returns an
- * empty string when there is nothing useful, so callers can append blindly.
+ * Build the coach's personalization context from seniority-band aggregates:
+ * what happened to preferences bid by pilots NEAR the user's percentile,
+ * across every imported period. Returns '' when there is no data.
  */
-export function buildPreferenceHistoryContext(
-  records: ReasonsReportPreference[]
-): string {
-  if (records.length === 0) return '';
-
-  const byCategory = new Map<
-    string,
-    { honored: number; denied: number; other: number; examples: string[] }
-  >();
-
-  const banners = new Set<string>();
-
-  for (const record of records) {
-    const category = classifyPreference(record.preferenceText);
-    if (!byCategory.has(category)) {
-      byCategory.set(category, { honored: 0, denied: 0, other: 0, examples: [] });
-    }
-    const bucket = byCategory.get(category)!;
-    if (HONORED_OUTCOMES.includes(record.outcome)) {
-      bucket.honored++;
-    } else if (DENIED_OUTCOMES.includes(record.outcome)) {
-      bucket.denied++;
-      if (bucket.examples.length < 2) {
-        bucket.examples.push(
-          `"${record.preferenceText.slice(0, 60)}" (${record.outcome}, ${record.month} ${record.year})`
-        );
-      }
-    } else {
-      bucket.other++;
-    }
-    if (Array.isArray(record.reportBanners)) {
-      for (const banner of record.reportBanners as string[]) {
-        // reportBanners also carries each pilot's credit-window line
-        // ("Window 062:00-082:00, Threshold 082:00"); only true report
-        // flags belong in the "flagged" prompt line.
-        if (/^Affected\s+by/i.test(banner)) {
-          banners.add(banner);
-        }
-      }
-    }
-  }
+export function buildStrategyContext(stats: StrategyStats): string {
+  if (stats.categories.length === 0 || stats.periods === 0) return '';
 
   const lines: string[] = [
-    'PILOT BID HISTORY (from imported Reasons Reports - use to personalize advice):',
+    `OUTCOMES FOR PILOTS NEAR YOUR SENIORITY (${stats.bandLow}th-${stats.bandHigh}th percentile band, ${stats.periods} imported bid periods — use to personalize advice):`,
   ];
-  for (const [category, stats] of byCategory) {
-    const total = stats.honored + stats.denied + stats.other;
-    let line = `- ${category}: ${stats.honored}/${total} honored, ${stats.denied}/${total} denied across imported months.`;
-    if (stats.examples.length > 0) {
-      line += ` Denied examples: ${stats.examples.join('; ')}.`;
+  for (const c of stats.categories) {
+    if (c.category === 'Other' || c.total < 10) continue;
+    let line: string;
+    if (c.category === 'Award Pairings') {
+      // Award preferences never get an "Honored" line — they either produce
+      // award events or are denied/filtered — so rate them by production.
+      const producedPct = Math.round((c.producedAward / c.total) * 100);
+      const deniedPct = Math.round((c.denied / c.total) * 100);
+      line = `- Award Pairings: produced a trip in ${producedPct}% of ${c.total} bids; ${deniedPct}% lost to a more senior bidder.`;
+      if (c.avgAwardDepth !== null) {
+        line += ` Awards that landed did so at preference #${c.avgAwardDepth.toFixed(0)} on average — advise stacking many specific Awards and expect the top ones to be taken by seniors.`;
+      }
+    } else {
+      const honoredPct = Math.round((c.honored / c.total) * 100);
+      const deniedPct = Math.round((c.denied / c.total) * 100);
+      line = `- ${c.category}: ${honoredPct}% honored, ${deniedPct}% denied of ${c.total} bids.`;
     }
     lines.push(line);
   }
-  if (banners.size > 0) {
+  if (stats.denialModePeriods > 0) {
     lines.push(
-      `- Past reports were flagged: ${[...banners].join(', ')} - factor that risk into fallback structure.`
+      `- Denial Mode ran in ${stats.denialModePeriods} of ${stats.periods} periods — always recommend a broad fallback (generic Award Pairings, reserve group) so dropped preferences degrade gracefully.`
     );
   }
   lines.push(
-    '- When a preference type keeps being denied at this seniority, recommend restructuring (broader fallback, Else Start Next, or different window) instead of repeating it.'
+    '- When a preference type shows a high denial rate at this band, recommend restructuring (broader filters, Else Start Next, different credit window) instead of repeating it.'
   );
   return lines.join('\n');
 }
+

@@ -33,6 +33,7 @@ import {
   Sun,
   Monitor,
   ClipboardList,
+  TrendingUp,
 } from 'lucide-react';
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
@@ -63,6 +64,9 @@ const DataManagementPanel = lazy(() =>
 );
 const BidBuilder = lazy(() =>
   import('@/components/bid-builder').then(m => ({ default: m.BidBuilder }))
+);
+const TrendsPanel = lazy(() =>
+  import('@/components/trends-panel').then(m => ({ default: m.TrendsPanel }))
 );
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -1620,6 +1624,10 @@ export default function Dashboard() {
                       <ClipboardList className="h-4 w-4" />
                       <span className="hidden sm:inline">Bid Builder</span>
                     </TabsTrigger>
+                    <TabsTrigger value="trends" className="flex items-center gap-1.5">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="hidden sm:inline">Trends</span>
+                    </TabsTrigger>
                   </TabsList>
                   <Button
                     variant="outline"
@@ -2033,6 +2041,12 @@ export default function Dashboard() {
             >
               <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
                 <BidBuilder bidPackageId={bidPackageId} />
+              </Suspense>
+            </TabsContent>
+
+            <TabsContent value="trends" className="flex-1 overflow-auto p-1">
+              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+                <TrendsPanel />
               </Suspense>
             </TabsContent>
           </Tabs>

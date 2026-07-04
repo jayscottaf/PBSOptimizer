@@ -6,9 +6,8 @@
 import OpenAI from 'openai';
 import type { IStorage } from '../storage';
 import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
-import { buildPreferenceHistoryContext } from './reasonsMiner';
+import { buildStrategyContext } from './reasonsMiner';
 import { COACH_TOOL_DEFINITIONS, executeCoachTool } from './coachTools';
-import { parseAircraftCode } from '../lib/aircraft';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -58,29 +57,21 @@ export class SimpleAI {
       // Build the context with ALL pairing data
       const pairingsContext = this.buildPairingsContext(pairings);
 
-      // Pilot's own preference-outcome history (empty string when none).
-      // Bid packages say "A220" while Reasons Reports say "220-B", so fetch
-      // by base and match aircraft on the normalized base type instead of
-      // filtering on the raw string (which would silently return nothing).
+      // Personalization context: outcome statistics for pilots near the
+      // user's seniority percentile, aggregated in SQL across every
+      // imported Reasons Report period (96k+ rows — far too many to feed
+      // into the prompt directly).
       let historyContext = '';
       try {
-        const fetched = await this.storage.getReasonsReportPreferences({
-          base: bidPackage?.base,
-          limit: 2000,
-        });
-        const pkgAircraftBase = bidPackage?.aircraft
-          ? parseAircraftCode(bidPackage.aircraft).baseType
-          : null;
-        const preferenceHistory = pkgAircraftBase
-          ? fetched.filter(
-              r => parseAircraftCode(r.aircraft).baseType === pkgAircraftBase
-            )
-          : fetched;
-        historyContext = buildPreferenceHistoryContext(
-          preferenceHistory.slice(0, 1500)
-        );
+        if (bidPackage?.base) {
+          const stats = await this.storage.getStrategyStats(
+            bidPackage.base,
+            query.seniorityPercentile ?? 50
+          );
+          historyContext = buildStrategyContext(stats);
+        }
       } catch (error) {
-        console.warn('[SimpleAI] Preference history unavailable:', error);
+        console.warn('[SimpleAI] Strategy history unavailable:', error);
       }
 
       // Build system prompt
@@ -113,10 +104,21 @@ export class SimpleAI {
 
       // Tool-calling loop: the coach may call simulate_bid / export_bid to
       // ground its draft before answering. Bounded rounds prevent runaway.
+      const realWindow = bidPackage?.base
+        ? await this.storage
+            .getCategoryCreditWindow(bidPackage.base)
+            .catch(() => null)
+        : null;
       const toolContext = {
         pairings,
         alv: bidPackage?.alvHours
           ? parseFloat(String(bidPackage.alvHours))
+          : undefined,
+        threshold: realWindow?.threshold,
+        windowMin: realWindow?.windowMin,
+        windowMax: realWindow?.windowMax,
+        windowSource: realWindow
+          ? `the ${realWindow.period} Reasons Report`
           : undefined,
       };
       const MAX_TOOL_ROUNDS = 4;
