@@ -7,6 +7,7 @@ import {
   percentileWithin,
   normalizeMonth3,
 } from '../server/lib/empiricalHold';
+import { extractBaseAndAircraft } from '../server/lib/packageHeader';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -277,6 +278,37 @@ const empLowSim = computeEmpiricalHold({
   rosters,
 });
 assert(empLowSim === null, 'low-similarity evidence is ignored entirely');
+
+// 10) Package header extraction - both real-world shapes
+// Shape 1: pairings-section header (TXT extracts of the pairings section)
+const txtShape = extractBaseAndAircraft(
+  'NYC BASE               220 PILOT PAIRINGS \n#7652  SU  EFFECTIVE AUG03'
+);
+assert(
+  txtShape?.base === 'NYC' && txtShape?.aircraft === '220',
+  'extracts base/aircraft from pairings-section header (TXT shape)'
+);
+// Shape 2: PDF cover page (verbatim line layout from a real NYC 220 JUL 2026
+// bid package PDF, where pdf-parse splits city/aircraft/title across lines)
+const pdfShape = extractBaseAndAircraft(
+  [
+    '',
+    ' 1 ',
+    ' ',
+    'NEW YORK CITY                      ',
+    '220                                      July  ',
+    'PILOT BID PACKAGE  2026 ',
+    'July 02, 2026 – July 31, 2026 (30 days) ',
+  ].join('\n')
+);
+assert(
+  pdfShape?.base === 'NYC' && pdfShape?.aircraft === '220',
+  'extracts base/aircraft from PDF cover page (real July 2026 layout)'
+);
+assert(
+  extractBaseAndAircraft('hello world\nnothing here') === null,
+  'returns null instead of guessing when no header is recognized'
+);
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

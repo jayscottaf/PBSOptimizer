@@ -8,6 +8,7 @@ import { storage } from './storage';
 import type { InsertPairing } from '../shared/schema';
 import { samplePdfText } from './samplePdfText';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
+import { extractBaseAndAircraft } from './lib/packageHeader';
 
 interface FlightSegment {
   date: string;
@@ -268,32 +269,6 @@ export class PDFParser {
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return { startDate: iso(startDate), endDate: iso(endDate) };
     }
-    return null;
-  }
-
-  /**
-   * Extract base and aircraft from the pairings header line, e.g.
-   * "NYC BASE               220 PILOT PAIRINGS" or "... MASTER PAIRINGS".
-   * Returns null if the header isn't found so callers can leave the
-   * upload-time PENDING placeholder rather than write a wrong guess.
-   */
-  private extractBaseAndAircraft(
-    text: string
-  ): { base: string; aircraft: string } | null {
-    const lines = text.split('\n');
-    for (let i = 0; i < Math.min(30, lines.length); i++) {
-      const line = lines[i].trim();
-      const match = line.match(
-        /^([A-Z]{3})\s+BASE\s+([A-Z0-9]+)\s+(?:PILOT|MASTER)\s+PAIRINGS/i
-      );
-      if (match) {
-        const base = match[1].toUpperCase();
-        const aircraft = match[2].toUpperCase();
-        console.log(`Found base/aircraft from header: ${base} ${aircraft}`);
-        return { base, aircraft };
-      }
-    }
-    console.log('Could not extract base/aircraft from pairings header');
     return null;
   }
 
@@ -1053,18 +1028,6 @@ export class PDFParser {
         }
       }
 
-      // Extract base and aircraft from the pairings header. The upload
-      // endpoint inserts the row with PENDING/PENDING placeholders since
-      // these values are only known once the PDF text is parsed.
-      const baseAndAircraft = this.extractBaseAndAircraft(text);
-      if (baseAndAircraft) {
-        await storage.updateBidPackageInfo(bidPackageId, baseAndAircraft);
-      } else {
-        console.warn(
-          `Bid package ${bidPackageId}: could not extract base/aircraft from PDF text; left as PENDING/PENDING.`
-        );
-      }
-
       // Extract bid package date from the PDF header
       const bidPackageDate = this.extractBidPackageDate(text);
       if (bidPackageDate) {
@@ -1128,6 +1091,38 @@ export class PDFParser {
         });
       } else {
         console.log('Could not extract ALV data from bid package');
+      }
+
+      // Extract base and aircraft. The upload endpoint inserts the row with
+      // PENDING/PENDING placeholders since these are only known once the
+      // text is parsed. Header shapes first; ALV table rows (which carry
+      // base + aircraft per position) as majority-vote fallback.
+      let baseAndAircraft = extractBaseAndAircraft(text);
+      if (!baseAndAircraft && alvTable.length > 0) {
+        const counts = new Map<string, number>();
+        for (const row of alvTable) {
+          if (!row.base || !row.aircraft) continue;
+          const key = `${row.base}|${row.aircraft}`;
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (top) {
+          const [base, aircraft] = top[0].split('|');
+          baseAndAircraft = { base, aircraft };
+          console.log(
+            `Base/aircraft from ALV table fallback: ${base} ${aircraft}`
+          );
+        }
+      }
+      if (baseAndAircraft) {
+        console.log(
+          `Setting bid package base/aircraft: ${baseAndAircraft.base} ${baseAndAircraft.aircraft}`
+        );
+        await storage.updateBidPackageInfo(bidPackageId, baseAndAircraft);
+      } else {
+        console.warn(
+          `Bid package ${bidPackageId}: could not extract base/aircraft; left as PENDING/PENDING.`
+        );
       }
 
       // Extract pairing blocks from the text
