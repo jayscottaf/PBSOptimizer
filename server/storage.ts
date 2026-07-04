@@ -855,12 +855,34 @@ export class DatabaseStorage implements IStorage {
           END
         )`;
 
+      // Longest single layover in the pairing, in minutes. Layover durations
+      // are "HH.MM" strings inside the jsonb layovers array; guard against
+      // rows where layovers isn't an array so jsonb_array_elements can't throw.
+      const maxLayoverMinutesExpr = sql`
+        COALESCE((
+          SELECT MAX(
+            CASE
+              WHEN elem->>'duration' ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
+                (split_part(elem->>'duration', '.', 1)::int * 60 + split_part(elem->>'duration', '.', 2)::int)
+              ELSE 0
+            END
+          )
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(${pairings.layovers}) = 'array'
+              THEN ${pairings.layovers}
+              ELSE '[]'::jsonb
+            END
+          ) AS elem
+        ), 0)`;
+
       const sortColumnField =
         sortColumn === 'creditBlockRatio'
           ? efficiencyExpr
           : sortColumn === 'tafb'
             ? tafbMinutesExpr
-            : sortColumnMap[sortColumn] || pairings.pairingNumber;
+            : sortColumn === 'maxLayover'
+              ? maxLayoverMinutesExpr
+              : sortColumnMap[sortColumn] || pairings.pairingNumber;
 
       // Query all pairings (no LIMIT/OFFSET)
       const pairingsResult = await db

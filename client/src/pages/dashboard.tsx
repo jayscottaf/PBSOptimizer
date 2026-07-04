@@ -77,6 +77,7 @@ import {
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
+import { maxLayoverMinutes } from '@/lib/layover';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
 import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
 import {
@@ -1032,6 +1033,10 @@ export default function Dashboard() {
           bVal = parseTimeTafb(b.tafb?.toString() || '0');
           break;
         }
+        case 'maxLayover':
+          aVal = maxLayoverMinutes(a);
+          bVal = maxLayoverMinutes(b);
+          break;
         default:
           aVal = a.pairingNumber || '';
           bVal = b.pairingNumber || '';

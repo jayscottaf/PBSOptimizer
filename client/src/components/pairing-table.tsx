@@ -16,6 +16,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import type { ConflictInfo } from '@/lib/conflictDetection';
 import { calculateValidStartDates } from '@/lib/pairingDates';
+import { maxLayoverMinutes, formatLayoverMinutes } from '@/lib/layover';
 import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCalculator';
 
 interface PairingTableProps {
@@ -578,6 +579,20 @@ export function PairingTable({
                 </div>
               </th>
               <th
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Longest layover in this pairing"
+                {...sortHeaderProps('maxLayover')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span className="truncate">Layover</span>
+                  {sortColumn === 'maxLayover' && (
+                    <span className="text-blue-600 flex-shrink-0">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('pairingDays')}
               >
@@ -782,6 +797,11 @@ export function PairingTable({
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                       {pairing.tafb}
+                    </span>
+                  </td>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                      {formatLayoverMinutes(maxLayoverMinutes(pairing))}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
