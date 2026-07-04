@@ -2735,18 +2735,10 @@ export async function registerRoutes(app: Express) {
           res.json({
             reply: result.response,
             pairingNumbers: result.pairingNumbers,
-            _debugPath: req.query.debug ? 'simpleAI' : undefined,
           });
           return;
         } catch (unifiedError) {
           console.error('Unified AI failed:', unifiedError);
-          if (req.query.debug) {
-            res.json({
-              reply: `[DEBUG] Fell through to fallback. Error: ${unifiedError instanceof Error ? unifiedError.message + '\n' + unifiedError.stack : String(unifiedError)}`,
-              _debugPath: 'fallback-error',
-            });
-            return;
-          }
 
           // Graceful error handling
           if (
