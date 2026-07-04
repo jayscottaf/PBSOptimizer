@@ -48,6 +48,7 @@ interface StatsPanelProps {
       average: number;
       poor: number;
     };
+    layoverCities?: Array<{ city: string; count: number }>;
   } | null;
   onTripLengthFilter?: (days: number) => void;
 }
@@ -62,6 +63,7 @@ interface ComputedStats {
   ratioBreakdown: RatioBreakdown;
   percentileThresholds: PercentileThresholds | null;
   pairingTypeBreakdown: Record<number, number>;
+  layoverCities: Array<{ city: string; count: number }>;
 }
 
 export function StatsPanel({
@@ -89,6 +91,7 @@ export function StatsPanel({
         },
         percentileThresholds: null,
         pairingTypeBreakdown: {},
+        layoverCities: [],
       };
     }
 
@@ -188,6 +191,28 @@ export function StatsPanel({
       {} as { [key: number]: number }
     );
 
+    // Layover-city counts (fallback for when backend stats aren't loaded).
+    // Count each pairing once per distinct city it overnights in.
+    const layoverCityCounts = new Map<string, number>();
+    for (const p of pairings) {
+      const layovers = Array.isArray((p as any).layovers)
+        ? (p as any).layovers
+        : [];
+      const cities = new Set<string>();
+      for (const l of layovers as Array<{ city?: string }>) {
+        const city = String(l?.city || '')
+          .trim()
+          .toUpperCase();
+        if (city) cities.add(city);
+      }
+      for (const city of cities) {
+        layoverCityCounts.set(city, (layoverCityCounts.get(city) || 0) + 1);
+      }
+    }
+    const layoverCities = [...layoverCityCounts.entries()]
+      .map(([city, count]) => ({ city, count }))
+      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
+
     const ratioBreakdown =
       statistics?.ratioBreakdown ??
       pairings.reduce(
@@ -237,8 +262,56 @@ export function StatsPanel({
       ratioBreakdown,
       percentileThresholds,
       pairingTypeBreakdown,
+      layoverCities,
     };
   }, [pairings, statistics, bidPackageStats]);
+
+  // Prefer whole-package layover stats from the backend; fall back to the
+  // per-page computation above when they haven't loaded yet.
+  const layoverStats = bidPackageStats?.layoverCities?.length
+    ? bidPackageStats.layoverCities
+    : stats.layoverCities;
+  const layoverTotal = bidPackageStats?.totalPairings || stats.totalPairings;
+
+  const layoverSection =
+    layoverStats.length > 0 ? (
+      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+          🏨 Layover Cities
+        </h4>
+        <div className="space-y-1">
+          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 pb-1 border-b border-gray-200 dark:border-gray-700">
+            <div>City</div>
+            <div className="text-right">#</div>
+            <div className="text-right">%</div>
+          </div>
+          <div className="max-h-64 overflow-y-auto space-y-1">
+            {layoverStats.map(({ city, count }) => {
+              const pct =
+                layoverTotal > 0
+                  ? ((count / layoverTotal) * 100).toFixed(0)
+                  : '0';
+              return (
+                <div
+                  key={city}
+                  className="grid grid-cols-3 gap-2 text-xs py-1"
+                >
+                  <span className="text-gray-700 dark:text-gray-300 font-medium">
+                    {city}
+                  </span>
+                  <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    {count}
+                  </span>
+                  <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    {pct}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   // Show processing status for current bid package. There's no reliable way
   // to know the expected pairing count until parsing finishes, so this is an
@@ -422,6 +495,8 @@ export function StatsPanel({
             </div>
           </div>
         )}
+
+        {layoverSection}
       </div>
     );
   }
@@ -597,6 +672,8 @@ export function StatsPanel({
             </div>
           </div>
         )}
+
+        {layoverSection}
       </CardContent>
     </Card>
   );

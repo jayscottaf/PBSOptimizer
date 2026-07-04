@@ -1644,6 +1644,8 @@ export class DatabaseStorage implements IStorage {
       average: number;
       poor: number;
     };
+    /** How many pairings overnight in each layover city, most common first. */
+    layoverCities: Array<{ city: string; count: number }>;
   }> {
     const allPairings = await db
       .select()
@@ -1659,8 +1661,28 @@ export class DatabaseStorage implements IStorage {
         avgByDays: {},
         pairingTypeBreakdown: {},
         ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
+        layoverCities: [],
       };
     }
+
+    // Count how many pairings include a layover in each city. A pairing that
+    // overnights in the same city more than once still counts once, so the
+    // count is "pairings with a BOS layover", not "BOS overnights".
+    const layoverCityCounts = new Map<string, number>();
+    for (const p of allPairings) {
+      const layovers = Array.isArray(p.layovers) ? p.layovers : [];
+      const cities = new Set<string>();
+      for (const l of layovers as Array<{ city?: string }>) {
+        const city = String(l?.city || '').trim().toUpperCase();
+        if (city) cities.add(city);
+      }
+      for (const city of cities) {
+        layoverCityCounts.set(city, (layoverCityCounts.get(city) || 0) + 1);
+      }
+    }
+    const layoverCities = [...layoverCityCounts.entries()]
+      .map(([city, count]) => ({ city, count }))
+      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
 
     // Calculate C/B ratios for all pairings
     const ratios = allPairings
@@ -1739,6 +1761,7 @@ export class DatabaseStorage implements IStorage {
       avgByDays,
       pairingTypeBreakdown,
       ratioBreakdown,
+      layoverCities,
     };
   }
 
