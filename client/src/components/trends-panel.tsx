@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, ListChecks } from 'lucide-react';
 
 interface TrendPeriod {
   period: string;
@@ -27,6 +27,188 @@ interface TrendsResponse {
     threshold: number;
     period: string;
   } | null;
+}
+
+interface TypeMixPeriod {
+  period: string;
+  award: number;
+  avoid: number;
+  preferOff: number;
+  setCondition: number;
+  other: number;
+  totalPrefs: number;
+  pilots: number;
+  avgPrefsPerPilot: number;
+  preferOffDays: number;
+}
+
+interface CityCount {
+  city: string;
+  count: number;
+}
+
+interface BidPatternsResponse {
+  base: string;
+  typeMixByPeriod: TypeMixPeriod[];
+  topRequestedLayovers: CityCount[];
+  topAvoidedLayovers: CityCount[];
+  earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
+  checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+  daysOffPatterns: Array<{ days: number; count: number }>;
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  award: '#60a5fa',
+  avoid: '#f87171',
+  preferOff: '#34d399',
+  setCondition: '#c084fc',
+  other: '#9ca3af',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  award: 'Award',
+  avoid: 'Avoid',
+  preferOff: 'Prefer Off',
+  setCondition: 'Set Condition',
+  other: 'Other',
+};
+
+function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
+  return (
+    <div className="space-y-1.5">
+      {periods.map(p => (
+        <div key={p.period} className="flex items-center gap-2 text-xs">
+          <span className="w-20 shrink-0 text-gray-500 dark:text-gray-400 font-mono">
+            {p.period}
+          </span>
+          <div className="flex-1 h-4 rounded overflow-hidden flex bg-gray-100 dark:bg-gray-800">
+            {(['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const).map(
+              key => {
+                const widthPct = (p[key] / Math.max(1, p.totalPrefs)) * 100;
+                return widthPct > 0 ? (
+                  <div
+                    key={key}
+                    style={{
+                      width: `${widthPct}%`,
+                      backgroundColor: TYPE_COLORS[key],
+                    }}
+                    title={`${TYPE_LABELS[key]}: ${p[key]}`}
+                  />
+                ) : null;
+              }
+            )}
+          </div>
+          <span className="w-16 shrink-0 text-right text-gray-500 dark:text-gray-400">
+            {p.avgPrefsPerPilot.toFixed(0)}/pilot
+          </span>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-4 mt-2">
+        {(['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const).map(
+          key => (
+            <span
+              key={key}
+              className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400"
+            >
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ backgroundColor: TYPE_COLORS[key] }}
+              />
+              {TYPE_LABELS[key]}
+            </span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RankedCityList({
+  title,
+  cities,
+  accent,
+}: {
+  title: string;
+  cities: CityCount[];
+  accent: string;
+}) {
+  const max = Math.max(1, ...cities.map(c => c.count));
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+        {title}
+      </p>
+      <div className="space-y-1">
+        {cities.map(c => (
+          <div key={c.city} className="flex items-center gap-2 text-xs">
+            <span className="w-9 shrink-0 font-mono text-gray-700 dark:text-gray-300">
+              {c.city}
+            </span>
+            <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+              <div
+                className="h-full rounded"
+                style={{
+                  width: `${(c.count / max) * 100}%`,
+                  backgroundColor: accent,
+                }}
+              />
+            </div>
+            <span className="w-8 shrink-0 text-right text-gray-500 dark:text-gray-400">
+              {c.count}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Histogram({
+  data,
+  labelFor,
+  color,
+}: {
+  data: Array<{ key: number; count: number }>;
+  labelFor: (key: number) => string;
+  color: string;
+}) {
+  const max = Math.max(1, ...data.map(d => d.count));
+  // Percentage heights need a parent with a resolved height; a flex column
+  // sized to its own content (label + bar) never resolves one, so the bars
+  // collapse to ~0. Give each bar column a fixed pixel height to fill
+  // instead, and render labels in a separate row underneath.
+  const BAR_AREA_PX = 80;
+  return (
+    <div>
+      <div className="flex items-end gap-1" style={{ height: BAR_AREA_PX }}>
+        {data.map(d => (
+          <div
+            key={d.key}
+            className="flex-1 h-full flex flex-col justify-end"
+            title={`${labelFor(d.key)}: ${d.count}`}
+          >
+            <div
+              className="w-full rounded-t"
+              style={{
+                height: `${Math.max(d.count > 0 ? 2 : 0, (d.count / max) * BAR_AREA_PX)}px`,
+                backgroundColor: color,
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1 mt-1">
+        {data.map(d => (
+          <span
+            key={d.key}
+            className="flex-1 text-center text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+          >
+            {labelFor(d.key)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const DAY_COLORS: Record<number, string> = {
@@ -155,6 +337,16 @@ export function TrendsPanel() {
     },
     staleTime: 5 * 60 * 1000,
   });
+  const { data: patterns } = useQuery<BidPatternsResponse>({
+    queryKey: ['/api/bid-patterns'],
+    queryFn: async () => {
+      const res = await fetch('/api/bid-patterns');
+      if (!res.ok) throw new Error('Failed to load bid patterns');
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !isLoading && !isError && !!data && data.periods.length > 0,
+  });
 
   if (isLoading) {
     return (
@@ -252,6 +444,148 @@ export function TrendsPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {patterns && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ListChecks className="h-4 w-4 text-blue-500" />
+                Bid patterns — what pilots actually ask for
+              </CardTitle>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Mined from preference text across every imported period —
+                what pilots bid, not just what they got.
+              </p>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Preference mix &amp; bid complexity
+              </CardTitle>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Share of each preference type per bid, and the average number
+                of preferences per pilot (right column) — how much pilots are
+                bidding has climbed sharply over time.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <TypeMixChart periods={patterns.typeMixByPeriod} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Layover preferences</CardTitle>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Cities named in Award (requested) vs. Avoid preferences,
+                ranked by how often they're bid.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <RankedCityList
+                  title="Most requested"
+                  cities={patterns.topRequestedLayovers}
+                  accent="#60a5fa"
+                />
+                <RankedCityList
+                  title="Most avoided"
+                  cities={patterns.topAvoidedLayovers}
+                  accent="#f87171"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Check-in time &amp; station preferences
+              </CardTitle>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                What hour pilots want to start after (combining Award
+                "Check-In Time &gt;" and Avoid "Check-In Time &lt;" bids), and
+                which report station they favor or avoid.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div>
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                  Prefers check-in after…
+                </p>
+                <Histogram
+                  data={patterns.earlyCheckInAvoidance.map(h => ({
+                    key: h.hour,
+                    count: h.count,
+                  }))}
+                  labelFor={h => `${h}:00`}
+                  color="#60a5fa"
+                />
+              </div>
+              <div className="space-y-1.5">
+                {patterns.checkInStations.map(s => {
+                  const max = Math.max(
+                    1,
+                    ...patterns.checkInStations.map(x => x.awarded + x.avoided)
+                  );
+                  return (
+                    <div
+                      key={s.station}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className="w-9 shrink-0 font-mono text-gray-700 dark:text-gray-300">
+                        {s.station}
+                      </span>
+                      <div className="flex-1 h-4 rounded overflow-hidden flex bg-gray-100 dark:bg-gray-800">
+                        <div
+                          className="h-full bg-blue-400/80 dark:bg-blue-500/70"
+                          style={{ width: `${(s.awarded / max) * 100}%` }}
+                          title={`Requested: ${s.awarded}`}
+                        />
+                        <div
+                          className="h-full bg-red-400/80 dark:bg-red-500/70"
+                          style={{ width: `${(s.avoided / max) * 100}%` }}
+                          title={`Avoided: ${s.avoided}`}
+                        />
+                      </div>
+                      <span className="w-32 shrink-0 text-right text-gray-500 dark:text-gray-400">
+                        {s.awarded} req · {s.avoided} avoid
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {patterns.daysOffPatterns.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Consecutive days-off requests
+                </CardTitle>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Length of "N Consecutive Days Off" Set Condition bids — the
+                  most common block pilots ask PBS to protect.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Histogram
+                  data={patterns.daysOffPatterns.map(d => ({
+                    key: d.days,
+                    count: d.count,
+                  }))}
+                  labelFor={d => `${d}d`}
+                  color="#c084fc"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

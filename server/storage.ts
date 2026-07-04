@@ -145,6 +145,25 @@ export interface IStorage {
       avgAwardDepth: number | null;
     }>;
   }>;
+  getBidPatterns(base: string): Promise<{
+    typeMixByPeriod: Array<{
+      period: string;
+      award: number;
+      avoid: number;
+      preferOff: number;
+      setCondition: number;
+      other: number;
+      totalPrefs: number;
+      pilots: number;
+      avgPrefsPerPilot: number;
+      preferOffDays: number;
+    }>;
+    topRequestedLayovers: Array<{ city: string; count: number }>;
+    topAvoidedLayovers: Array<{ city: string; count: number }>;
+    earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
+    checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+    daysOffPatterns: Array<{ days: number; count: number }>;
+  }>;
 
   // User favorites
   addUserFavorite(favorite: InsertUserFavorite): Promise<UserFavorite>;
@@ -1062,6 +1081,165 @@ export class DatabaseStorage implements IStorage {
         producedAward: Number(r.produced_award),
         avgAwardDepth:
           r.avg_award_depth === null ? null : Number(r.avg_award_depth),
+      })),
+    };
+  }
+
+  /**
+   * How pilots actually bid, mined from preference text across every
+   * imported period — not just outcomes. Answers "what do people ask for"
+   * rather than "what did they get."
+   */
+  async getBidPatterns(base: string): Promise<{
+    typeMixByPeriod: Array<{
+      period: string;
+      award: number;
+      avoid: number;
+      preferOff: number;
+      setCondition: number;
+      other: number;
+      totalPrefs: number;
+      pilots: number;
+      avgPrefsPerPilot: number;
+      preferOffDays: number;
+    }>;
+    topRequestedLayovers: Array<{ city: string; count: number }>;
+    topAvoidedLayovers: Array<{ city: string; count: number }>;
+    earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
+    checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+    daysOffPatterns: Array<{ days: number; count: number }>;
+  }> {
+    const monthNum = sql`CASE upper(left(trim(month), 3))
+      WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
+      WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
+      WHEN 'SEP' THEN 9 WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+      ELSE 0 END`;
+
+    const typeMix = await db.execute(sql`
+      SELECT year, month,
+        count(DISTINCT pilot_seniority_number) AS pilots,
+        count(*) AS total_prefs,
+        sum(CASE WHEN preference_text ILIKE 'award%' THEN 1 ELSE 0 END) AS award,
+        sum(CASE WHEN preference_text ILIKE 'avoid%' THEN 1 ELSE 0 END) AS avoid,
+        sum(CASE WHEN preference_text ILIKE 'prefer off%' THEN 1 ELSE 0 END) AS prefer_off,
+        sum(CASE WHEN preference_text ILIKE 'set condition%' THEN 1 ELSE 0 END) AS set_condition,
+        sum(CASE WHEN preference_text NOT ILIKE 'award%'
+          AND preference_text NOT ILIKE 'avoid%'
+          AND preference_text NOT ILIKE 'prefer off%'
+          AND preference_text NOT ILIKE 'set condition%' THEN 1 ELSE 0 END) AS other,
+        -- Each comma-separated date in a Prefer Off line is one requested day off.
+        sum(CASE WHEN preference_text ILIKE 'prefer off%'
+          THEN array_length(regexp_split_to_array(preference_text, ','), 1)
+          ELSE 0 END) AS prefer_off_days
+      FROM reasons_report_preferences
+      WHERE base = ${base}
+      GROUP BY year, month
+      ORDER BY year, ${monthNum}
+    `);
+
+    const requestedLayovers = await db.execute(sql`
+      SELECT city, count(*) AS n FROM (
+        SELECT unnest(string_to_array(
+          (regexp_matches(preference_text, 'Layover In ((?:[A-Z]{3}(?:, )?)+)'))[1],
+          ', '
+        )) AS city
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'award%layover in%'
+      ) t
+      GROUP BY city ORDER BY n DESC LIMIT 12
+    `);
+
+    const avoidedLayovers = await db.execute(sql`
+      SELECT city, count(*) AS n FROM (
+        SELECT unnest(string_to_array(
+          (regexp_matches(preference_text, 'Layover In ((?:[A-Z]{3}(?:, )?)+)'))[1],
+          ', '
+        )) AS city
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'avoid%layover in%'
+      ) t
+      GROUP BY city ORDER BY n DESC LIMIT 12
+    `);
+
+    // Two phrasings of the same wish (later report time): Award...Check-In
+    // Time > HH:MM and Avoid...Check-In Time < HH:MM — same threshold hour.
+    const earlyCheckIn = await db.execute(sql`
+      SELECT hour, sum(n) AS n FROM (
+        SELECT (regexp_match(preference_text, 'Check-In Time > (\\d{2}):'))[1]::int AS hour, count(*) AS n
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'award%check-in time >%'
+        GROUP BY 1
+        UNION ALL
+        SELECT (regexp_match(preference_text, 'Check-In Time < (\\d{2}):'))[1]::int AS hour, count(*) AS n
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'avoid%check-in time <%'
+        GROUP BY 1
+      ) t
+      GROUP BY hour ORDER BY hour
+    `);
+
+    const checkInStations = await db.execute(sql`
+      SELECT station,
+        sum(CASE WHEN kind = 'award' THEN n ELSE 0 END) AS awarded,
+        sum(CASE WHEN kind = 'avoid' THEN n ELSE 0 END) AS avoided
+      FROM (
+        SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
+          'award' AS kind, count(*) AS n
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'award%check-in station%'
+        GROUP BY 1
+        UNION ALL
+        SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
+          'avoid' AS kind, count(*) AS n
+        FROM reasons_report_preferences
+        WHERE base = ${base} AND preference_text ILIKE 'avoid%check-in station%'
+        GROUP BY 1
+      ) t
+      WHERE station IS NOT NULL
+      GROUP BY station
+      ORDER BY sum(n) DESC LIMIT 10
+    `);
+
+    const daysOff = await db.execute(sql`
+      SELECT (regexp_match(preference_text, '(\\d+) Consecutive Days Off'))[1]::int AS days, count(*) AS n
+      FROM reasons_report_preferences
+      WHERE base = ${base} AND preference_text ILIKE '%consecutive days off%'
+      GROUP BY 1 ORDER BY 1
+    `);
+
+    return {
+      typeMixByPeriod: (typeMix.rows as any[]).map(r => ({
+        period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
+        award: Number(r.award),
+        avoid: Number(r.avoid),
+        preferOff: Number(r.prefer_off),
+        setCondition: Number(r.set_condition),
+        other: Number(r.other),
+        totalPrefs: Number(r.total_prefs),
+        pilots: Number(r.pilots),
+        avgPrefsPerPilot: Number(r.total_prefs) / Math.max(1, Number(r.pilots)),
+        preferOffDays: Number(r.prefer_off_days),
+      })),
+      topRequestedLayovers: (requestedLayovers.rows as any[]).map(r => ({
+        city: r.city,
+        count: Number(r.n),
+      })),
+      topAvoidedLayovers: (avoidedLayovers.rows as any[]).map(r => ({
+        city: r.city,
+        count: Number(r.n),
+      })),
+      earlyCheckInAvoidance: (earlyCheckIn.rows as any[]).map(r => ({
+        hour: Number(r.hour),
+        count: Number(r.n),
+      })),
+      checkInStations: (checkInStations.rows as any[]).map(r => ({
+        station: r.station,
+        awarded: Number(r.awarded),
+        avoided: Number(r.avoided),
+      })),
+      daysOffPatterns: (daysOff.rows as any[]).map(r => ({
+        days: Number(r.days),
+        count: Number(r.n),
       })),
     };
   }

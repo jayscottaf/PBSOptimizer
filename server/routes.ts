@@ -1637,6 +1637,20 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // How pilots actually bid (preference text mining), not just outcomes:
+  // type mix, bid complexity over time, most requested/avoided layover
+  // cities, check-in time and station preferences, days-off patterns.
+  app.get('/api/bid-patterns', async (req, res) => {
+    try {
+      const base = String(req.query.base || 'NYC');
+      const patterns = await storage.getBidPatterns(base);
+      res.json({ base, ...patterns });
+    } catch (error) {
+      console.error('Error building bid patterns:', error);
+      res.status(500).json({ message: 'Failed to build bid patterns' });
+    }
+  });
+
   // Render a structured draft bid to review-ready NAVBLUE preference text
   app.post('/api/bid/export', async (req, res) => {
     try {
