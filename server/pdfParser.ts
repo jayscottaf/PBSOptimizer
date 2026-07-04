@@ -271,6 +271,32 @@ export class PDFParser {
     return null;
   }
 
+  /**
+   * Extract base and aircraft from the pairings header line, e.g.
+   * "NYC BASE               220 PILOT PAIRINGS" or "... MASTER PAIRINGS".
+   * Returns null if the header isn't found so callers can leave the
+   * upload-time PENDING placeholder rather than write a wrong guess.
+   */
+  private extractBaseAndAircraft(
+    text: string
+  ): { base: string; aircraft: string } | null {
+    const lines = text.split('\n');
+    for (let i = 0; i < Math.min(30, lines.length); i++) {
+      const line = lines[i].trim();
+      const match = line.match(
+        /^([A-Z]{3})\s+BASE\s+([A-Z0-9]+)\s+(?:PILOT|MASTER)\s+PAIRINGS/i
+      );
+      if (match) {
+        const base = match[1].toUpperCase();
+        const aircraft = match[2].toUpperCase();
+        console.log(`Found base/aircraft from header: ${base} ${aircraft}`);
+        return { base, aircraft };
+      }
+    }
+    console.log('Could not extract base/aircraft from pairings header');
+    return null;
+  }
+
   private extractBidPackageDate(text: string): string | null {
     const lines = text.split('\n');
 
@@ -1025,6 +1051,18 @@ export class PDFParser {
           text = await this.extractTextFromPDF(fileData);
           console.log(`PDF parsed successfully, ${text.length} characters`);
         }
+      }
+
+      // Extract base and aircraft from the pairings header. The upload
+      // endpoint inserts the row with PENDING/PENDING placeholders since
+      // these values are only known once the PDF text is parsed.
+      const baseAndAircraft = this.extractBaseAndAircraft(text);
+      if (baseAndAircraft) {
+        await storage.updateBidPackageInfo(bidPackageId, baseAndAircraft);
+      } else {
+        console.warn(
+          `Bid package ${bidPackageId}: could not extract base/aircraft from PDF text; left as PENDING/PENDING.`
+        );
       }
 
       // Extract bid package date from the PDF header
