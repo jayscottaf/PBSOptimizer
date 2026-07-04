@@ -925,6 +925,16 @@ export class PDFParser {
     const maxAllowedLayovers = Math.max(0, pairingDays - 1);
     const validatedLayovers = uniqueLayovers.slice(0, maxAllowedLayovers);
 
+    // Reject non-pairings that the header regex can match in the guide's
+    // explanatory prose — most notably the FRMS *example* rotation "#R523"
+    // (a JNB 350-fleet trip printed to illustrate the 99:59 no-block-limit
+    // format). Those examples use a "TOTALS---" line the credit/block regex
+    // doesn't match, so they land here with 0 credit. A real flown pairing
+    // always has positive credit, so use that as the invariant.
+    if ((parseFloat(creditHours) || 0) <= 0) {
+      return null;
+    }
+
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
