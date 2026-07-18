@@ -212,3 +212,47 @@ family, Substitution/Vertical-Swap/Shuffle nuances.
   one; not done since it changes state). Can be captured next time with a
   throwaway draft the user then discards.
 - Confirm which properties are Award-only vs also Avoid-eligible.
+
+## 10. The canonical bid XML schema (captured 2026-07 from a live bid)
+
+Source: the in-memory `bidsetData` model on the Bids screen — parsed by
+the app from the server's bid XML via xml2json, so object keys ARE the
+XML element names. Captured read-only from an already-submitted bid; no
+bid was modified. `bidLineToString` on each node carries the exact
+display text (including quirks like the double space in
+"Prefer Off  Friday").
+
+Structure per line: `{ BidLineNumber, BidLineType, <BidLineType>: {...} }`
+
+- **Group start**: `StartBidGroup: { BidGroupType: "StartPairings", StartPairings: "" }`
+  (BidGroupType ∈ StartPairings | StartReserve | StartBlankLine)
+- **Award**: `AwardPairings: { PairingProperties: { PairingProperty: obj | array } }`
+- **Avoid**: `AvoidPairings: { ElseStartNext: { boolean: "true" }?, PairingProperties: {...} }`
+- **Prefer Off (day-of-week)**: `PreferOff: { PreferOffType: "PreferOffDOWs",
+  PreferOffDOWs: { PreferOffType: "DOWs", DOWs: { DOW: ["Friday", ...] } } }`
+- **Set Condition (credit window)**: `LineCondition: { LineConditionType:
+  "MinimumCredit", MinimumCredit: "" }`
+- **Set Condition (pattern)**: `LineCondition: { LineConditionType: "Pattern",
+  Pattern: { NumberDays: "5" /* days OFF minimum */,
+  NumberDaysRange: { Start: "3", End: "6" } /* days ON range */ } }`
+
+Pairing property entries (each also carries `PairingPropertyType`):
+- `AverageDailyBlockTime: { TimeIntervalType: "TimeIntervalCondition",
+  TimeIntervalCondition: { Operator: "GT", Time: { Hour: "006", Minute: "30" } } }`
+- `PairingLength: { NumberDaysType: "NumberDaysCondition",
+  NumberDaysCondition: { Operator: "EQ" | "GT" | ..., Value: "1" } }`
+- `CarryOut: { NumberDaysCondition: { Operator: "GT", Value: "0" } }`
+- `CheckInBase: { Stations: { Station: "EWR" | [..] } }`  ← check-in station
+- `StartOnDOWs: { DOWs: { DOW: ["Monday", ...] } }`        ← departing-on DOW
+
+Operators observed: `GT`, `EQ` (UI also offers `<` and Range → `LT`,
+Start/End range objects). Times zero-padded `Hour: "006"`.
+
+**New grammar constructs seen live (not yet in our model):**
+- Prefer Off by day-of-week (`PreferOffDOWs`) — our preferOff supports
+  dates only.
+- Award condition `StartOnDOWs` (Departing On day-of-week) — we deferred
+  weekday matching for simulation, but the exporter can now emit it.
+
+This section is the spec for a future NAVBLUE-importable XML writer: the
+exporter can serialize DraftBid to this shape 1:1.
