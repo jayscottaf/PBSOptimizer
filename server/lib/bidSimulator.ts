@@ -413,6 +413,19 @@ export function simulateBid(
       'Set Condition Pattern is exported verbatim but not scored — the awards shown may violate the requested days-on/days-off shape.'
     );
   }
+  if (
+    bid.groups.some(g =>
+      g.preferences.some(
+        p =>
+          (p.preferOffDOWs && p.preferOffDOWs.length > 0) ||
+          (p.filter?.departOnDOWs && p.filter.departOnDOWs.length > 0)
+      )
+    )
+  ) {
+    caveats.push(
+      'Day-of-week conditions (Prefer Off DOWs / Departing On) are exported verbatim but not scored — operating weekdays are not derivable from effective-date ranges.'
+    );
+  }
 
   const groupResults: SimulationGroupResult[] = [];
   let chosen: SimulationGroupResult | null = null;
@@ -478,15 +491,27 @@ export function simulateBid(
         }
         continue;
       }
-      if (pref.type === 'preferOff' && pref.preferOffDates) {
-        const before = pool.length;
-        pool = pool.filter(
-          p => !pref.preferOffDates!.some(date => touchesDate(p, date))
-        );
-        if (pool.length === before) {
+      if (pref.type === 'preferOff') {
+        if (pref.preferOffDates && pref.preferOffDates.length > 0) {
+          const before = pool.length;
+          pool = pool.filter(
+            p => !pref.preferOffDates!.some(date => touchesDate(p, date))
+          );
+          if (pool.length === before) {
+            inert.push({
+              preferenceIndex: i,
+              reason: 'No pairings touch the requested days off.',
+            });
+          }
+        }
+        if (pref.preferOffDOWs && pref.preferOffDOWs.length > 0) {
+          // Weekday Prefer Off needs calendar placement of each operating
+          // departure, which the package's date-range format doesn't give
+          // us. Exported verbatim; not scored.
           inert.push({
             preferenceIndex: i,
-            reason: 'No pairings touch the requested days off.',
+            reason:
+              'Day-of-week Prefer Off is exported but not simulated (operating weekdays are not derivable from effective-date ranges).',
           });
         }
         continue;

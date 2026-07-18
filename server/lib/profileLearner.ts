@@ -30,8 +30,19 @@ export function neutralProfile(): BidProfileWeights {
     preferredPattern: null,
     preferredTripLengths: [],
     preferOffWeekendShare: 0,
+    preferOffDOWs: [],
   };
 }
+
+const DOW_NAMES = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+] as const;
 
 const CITY_LIST = /((?:[A-Z]{3}(?:,\s*)?)+)/;
 
@@ -83,6 +94,7 @@ export function learnProfile(
   let carryOutAvoids = 0;
   let preferOffDates = 0;
   let preferOffWeekend = 0;
+  const preferOffDowCounts = new Map<string, number>();
 
   for (const row of rows) {
     const text = row.preferenceText;
@@ -133,6 +145,10 @@ export function learnProfile(
           if (dow === 0 || dow === 6) preferOffWeekend++;
         }
       }
+      // Day-of-week Prefer Off ("Prefer Off  Friday, Saturday, Sunday")
+      for (const dow of DOW_NAMES) {
+        if (new RegExp(`\\b${dow}\\b`).test(text)) bump(preferOffDowCounts, dow);
+      }
     }
   }
 
@@ -163,6 +179,9 @@ export function learnProfile(
         Math.min(1, windowTotal / periods);
   weights.preferOffWeekendShare =
     preferOffDates === 0 ? 0 : preferOffWeekend / preferOffDates;
+  weights.preferOffDOWs = DOW_NAMES.filter(
+    d => (preferOffDowCounts.get(d) ?? 0) >= recurrence
+  );
 
   signals.rows = rows.length;
   signals.periods = periods;

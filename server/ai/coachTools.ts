@@ -103,6 +103,12 @@ const DRAFT_BID_SCHEMA = {
                         'Min days operating past the bid period end. Avoid with carryOutMin 1 = "Avoid If Carry Out > 0 Days".',
                     },
                     carryOutMax: { type: 'number' },
+                    departOnDOWs: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'NAVBLUE "Departing On" weekdays, e.g. ["Monday","Tuesday"]. Exported verbatim; not scored by simulate_bid.',
+                    },
                   },
                 },
                 preferOffDates: {
@@ -110,6 +116,12 @@ const DRAFT_BID_SCHEMA = {
                   items: { type: 'string' },
                   description:
                     'ISO dates YYYY-MM-DD, MOST IMPORTANT FIRST (Denial Mode drops from the end of the list).',
+                },
+                preferOffDOWs: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'preferOff by weekday every week, e.g. ["Friday","Saturday","Sunday"]. Exported verbatim; not scored by simulate_bid.',
                 },
                 creditWindow: {
                   type: 'string',
@@ -189,6 +201,32 @@ export const COACH_TOOL_DEFINITIONS = [
   {
     type: 'function' as const,
     function: {
+      name: 'optimize_bid',
+      description:
+        "Generate a complete optimized draft bid for this pilot from their stored preference profile (learned from their own bidding history and/or manually set), this bid package's pairings, and historic hold evidence. Returns the draft structure, NAVBLUE-ready text lines, a rationale for each strategic choice, and a simulation. Use when the pilot asks you to 'build my bid', 'optimize my bid', or wants a starting draft — then refine it with them and simulate_bid.",
+      parameters: {
+        type: 'object',
+        properties: {
+          overrides: {
+            type: 'object',
+            description:
+              'Optional month-specific overrides layered on the profile, e.g. {"creditLeaning": 1} to chase credit this month, {"preferOffDates": ["2026-08-15"]}, or {"creditWindow": "max"}.',
+            properties: {
+              creditLeaning: { type: 'number' },
+              preferOffDates: { type: 'array', items: { type: 'string' } },
+              creditWindow: {
+                type: 'string',
+                enum: ['min', 'max', 'mid'],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'query_historic_trends',
       description:
         "Look up real historic bidding data for this category, mined from every imported Reasons Report period: category competitiveness (share of preferences lost to a more senior bidder), how junior each trip length has gone by percentile, bid complexity (avg preferences per pilot), and what pilots actually ask for (top requested/avoided layover cities, preferred check-in hour, common consecutive-days-off length). Optionally narrow to one calendar month (e.g. the month the pilot is about to bid) to compare it against history instead of the whole multi-year average. Use this whenever the pilot asks about trends, seasons, competitiveness, or historic patterns instead of guessing.",
@@ -222,6 +260,8 @@ export interface CoachToolContext {
    * scripts/bid-tools-check.ts) — simpleAI.ts wires the real implementation.
    */
   fetchHistoricTrends?: (month?: string) => Promise<object>;
+  /** Injected optimizer (same DI rationale as fetchHistoricTrends). */
+  optimizeDraft?: (overrides?: Record<string, unknown>) => Promise<object>;
 }
 
 /**
@@ -248,6 +288,19 @@ export async function executeCoachTool(
       }
       const month = typeof args.month === 'string' ? args.month : undefined;
       return await context.fetchHistoricTrends(month);
+    }
+    if (name === 'optimize_bid') {
+      if (!context.optimizeDraft) {
+        return {
+          error:
+            'Optimizer is not available in this context (no bid package or user profile loaded).',
+        };
+      }
+      const overrides =
+        args?.overrides && typeof args.overrides === 'object'
+          ? args.overrides
+          : undefined;
+      return await context.optimizeDraft(overrides);
     }
 
     const bid = args?.bid as DraftBid | undefined;

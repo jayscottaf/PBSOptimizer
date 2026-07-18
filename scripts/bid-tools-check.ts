@@ -6,6 +6,7 @@ import {
   scorePairings,
   estimateCompletion,
 } from '../server/lib/bidOptimizer';
+import { bidToXml } from '../server/lib/bidXmlWriter';
 import { executeCoachTool } from '../server/ai/coachTools';
 import { ReasonsReportParser } from '../server/reasonsReportParser';
 import {
@@ -592,6 +593,125 @@ assert(
     !neutralExport.text.includes('EWR') && !neutralExport.text.includes('Pattern'),
     'neutral profile produces no station avoids or patterns — nothing hardcoded'
   );
+}
+
+// 14) Day-of-week constructs (from the live-bid XML capture)
+{
+  // Learner extracts recurring Prefer Off DOWs
+  const dowRows = ['JAN', 'FEB', 'MAR', 'APR'].map(month => ({
+    preferenceText: 'Prefer Off  Friday, Saturday, Sunday',
+    outcome: 'Honored', month, year: 2026,
+  }));
+  const { weights: dw } = learnProfile(dowRows, 4);
+  assert(
+    JSON.stringify(dw.preferOffDOWs) === JSON.stringify(['Friday', 'Saturday', 'Sunday']),
+    'learner extracts recurring Prefer Off day-of-week pattern'
+  );
+
+  // Exporter renders both DOW constructs with live-verified text
+  const dowBid: DraftBid = {
+    groups: [
+      {
+        type: 'pairings',
+        preferences: [
+          { type: 'preferOff', preferOffDOWs: ['Friday', 'Saturday', 'Sunday'] },
+          {
+            type: 'award',
+            filter: { departOnDOWs: ['Monday', 'Tuesday'], pairingDaysMin: 3, pairingDaysMax: 3 },
+          },
+        ],
+      },
+      { type: 'reserve', preferences: [] },
+    ],
+  };
+  const de = exportBid(dowBid);
+  assert(
+    de.lines.includes('Prefer Off  Friday, Saturday, Sunday'),
+    'Prefer Off DOWs exported with live-verified double-space text'
+  );
+  assert(
+    de.lines.some(l => l === 'Award Pairings If Pairing Length = 3 Days If Departing On Monday, Tuesday'),
+    'Departing On weekdays exported inside award conditions'
+  );
+
+  // Simulator: DOW constructs surfaced as not-scored, never crash
+  const ds = simulateBid(dowBid, pairings, { alv: 40, threshold: 30 });
+  assert(
+    ds.caveats.some(c => c.includes('Day-of-week')),
+    'simulation carries a day-of-week not-scored caveat'
+  );
+  assert(
+    ds.groupResults[0].inertPreferences.some(p => p.reason.includes('Day-of-week')),
+    'DOW Prefer Off marked not-simulated in group results'
+  );
+
+  // Optimizer emits the learned DOW prefer-off
+  const dowProfile = { ...neutralProfile(), preferOffDOWs: ['Friday', 'Saturday', 'Sunday'] as any };
+  const dopt = optimizeBid(pairings, dowProfile, { threshold: 40 });
+  const doptLines = exportBid(dopt.bid).lines;
+  assert(
+    doptLines.includes('Prefer Off  Friday, Saturday, Sunday'),
+    'optimizer emits recurring DOW prefer-off from profile'
+  );
+}
+
+// 15) XML writer matches the captured live schema
+{
+  const xmlBid: DraftBid = {
+    groups: [
+      {
+        type: 'pairings',
+        preferences: [
+          { type: 'setConditionPattern', patternDaysOnMin: 3, patternDaysOnMax: 6, patternDaysOffMin: 5 },
+          { type: 'setConditionCredit', creditWindow: 'min' },
+          { type: 'preferOff', preferOffDOWs: ['Friday', 'Saturday'] },
+          { type: 'avoid', filter: { checkInStations: ['EWR'] }, elseStartNext: true },
+          { type: 'avoid', filter: { carryOutMin: 1 } },
+          {
+            type: 'award',
+            filter: {
+              averageDailyBlockMin: 6.5,
+              departOnDOWs: ['Monday', 'Tuesday'],
+              pairingDaysMin: 1,
+              pairingDaysMax: 1,
+            },
+          },
+        ],
+      },
+      { type: 'reserve', preferences: [] },
+    ],
+  };
+  const xml = bidToXml(xmlBid);
+  const has = (frag: string, label: string) => assert(xml.includes(frag), label);
+  has('<BidGroupType>StartPairings</BidGroupType>', 'XML: StartPairings group start');
+  has('<BidGroupType>StartReserve</BidGroupType>', 'XML: StartReserve group start');
+  has('<LineConditionType>Pattern</LineConditionType>', 'XML: Pattern line condition');
+  has('<Pattern><NumberDays>5</NumberDays><NumberDaysRange><Start>3</Start><End>6</End></NumberDaysRange></Pattern>', 'XML: Pattern days-off + range encoded like live bid');
+  has('<LineConditionType>MinimumCredit</LineConditionType>', 'XML: MinimumCredit window');
+  has('<PreferOffType>PreferOffDOWs</PreferOffType>', 'XML: PreferOffDOWs type');
+  has('<DOW>Friday</DOW>', 'XML: DOW element');
+  has('<ElseStartNext><boolean>true</boolean></ElseStartNext>', 'XML: ElseStartNext boolean shape');
+  has('<PairingPropertyType>CheckInBase</PairingPropertyType>', 'XML: CheckInBase property');
+  has('<Station>EWR</Station>', 'XML: station element');
+  has('<PairingPropertyType>CarryOut</PairingPropertyType>', 'XML: CarryOut property');
+  has('<NumberDaysCondition><Operator>GT</Operator><Value>0</Value></NumberDaysCondition>', 'XML: carry-out GT 0 like live bid');
+  has('<PairingPropertyType>AverageDailyBlockTime</PairingPropertyType>', 'XML: ADB property');
+  has('<TimeIntervalCondition><Operator>GT</Operator><Time><Hour>006</Hour><Minute>30</Minute></Time></TimeIntervalCondition>', 'XML: time condition with zero-padded hour like live bid');
+  has('<PairingPropertyType>StartOnDOWs</PairingPropertyType>', 'XML: StartOnDOWs property');
+  has('<NumberDaysCondition><Operator>EQ</Operator><Value>1</Value></NumberDaysCondition>', 'XML: pairing length EQ');
+}
+
+// 16) optimize_bid coach tool dispatch (DI like the trends tool)
+{
+  const noCtx = (await executeCoachTool('optimize_bid', '{}', { pairings } as any)) as any;
+  assert(typeof noCtx.error === 'string', 'optimize_bid without injected optimizer returns error, not crash');
+  const fake = { called: null as any };
+  const ctx = {
+    pairings,
+    optimizeDraft: async (ov?: any) => { fake.called = ov ?? null; return { ok: true, got: ov ?? null }; },
+  } as any;
+  const withOv = (await executeCoachTool('optimize_bid', JSON.stringify({ overrides: { creditLeaning: 1 } }), ctx)) as any;
+  assert(withOv.ok === true && withOv.got?.creditLeaning === 1, 'optimize_bid threads overrides into injected optimizer');
 }
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);

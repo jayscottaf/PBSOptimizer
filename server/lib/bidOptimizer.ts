@@ -261,6 +261,12 @@ function negativesFromProfile(
     prefs.push({ type: 'preferOff', preferOffDates: [...preferOffDates] });
     notes.push(`Prefer Off ${preferOffDates.length} requested dates`);
   }
+  if (profile.preferOffDOWs && profile.preferOffDOWs.length > 0) {
+    prefs.push({ type: 'preferOff', preferOffDOWs: [...profile.preferOffDOWs] });
+    notes.push(
+      `Prefer Off ${profile.preferOffDOWs.join('/')} every week (recurring in your history)`
+    );
+  }
   if (profile.checkInStationAvoids.length > 0) {
     prefs.push({
       type: 'avoid',

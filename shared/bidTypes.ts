@@ -67,7 +67,20 @@ export interface PairingFilter {
    * "Avoid ... If Carry Out > 0 Days". */
   carryOutMin?: number;
   carryOutMax?: number;
+  /** NAVBLUE "Departing On <days>" (XML StartOnDOWs). Exported verbatim;
+   * simulated only for single-date pairings (a date-range pairing departs
+   * on several weekdays, so it is never excluded by this condition). */
+  departOnDOWs?: DayOfWeek[];
 }
+
+export type DayOfWeek =
+  | 'Monday'
+  | 'Tuesday'
+  | 'Wednesday'
+  | 'Thursday'
+  | 'Friday'
+  | 'Saturday'
+  | 'Sunday';
 
 export interface BidPreference {
   type:
@@ -84,6 +97,13 @@ export interface BidPreference {
    * (Denial Mode drops items from the end of the list).
    */
   preferOffDates?: string[];
+  /**
+   * For preferOff by day-of-week (NAVBLUE PreferOffDOWs, e.g. "Prefer Off
+   * Friday, Saturday, Sunday"). May be combined with or used instead of
+   * preferOffDates. Exported verbatim; the simulator cannot map weekdays
+   * onto date-range pairings, so it is surfaced as not-scored.
+   */
+  preferOffDOWs?: DayOfWeek[];
   /** For setConditionCredit. */
   creditWindow?: CreditWindowType;
   /**
@@ -130,6 +150,9 @@ export interface BidProfileWeights {
   preferredTripLengths: number[];
   /** 0..1 share of the pilot's Prefer Off dates falling on Sat/Sun. */
   preferOffWeekendShare: number;
+  /** Recurring day-of-week Prefer Off pattern (NAVBLUE PreferOffDOWs),
+   * e.g. ["Friday","Saturday","Sunday"] for a weekends-off bidder. */
+  preferOffDOWs?: DayOfWeek[];
 }
 
 export interface BidGroup {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type BidExportResult } from '@/lib/api';
 import type {
   BidGroup,
@@ -546,6 +546,48 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   const [exported, setExported] = useState<BidExportResult | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [optimizerRationale, setOptimizerRationale] = useState<string[]>([]);
+  const [learnEmployeeNumber, setLearnEmployeeNumber] = useState('');
+  const queryClient = useQueryClient();
+
+  const { data: bidProfile } = useQuery({
+    queryKey: ['bid-profile', userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/bid-profile/${userId}`);
+      if (!res.ok) throw new Error('Failed to load profile');
+      return res.json();
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
+
+  const learnProfileMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/bid-profile/${userId}/learn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeNumber: learnEmployeeNumber.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || 'Learning failed');
+      }
+      return res.json();
+    },
+    onSuccess: result => {
+      queryClient.invalidateQueries({ queryKey: ['bid-profile', userId] });
+      toast({
+        title: 'Profile learned from your history',
+        description: `${result.learnedFromPeriods} bid periods analyzed. Auto-draft now uses your revealed preferences.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Learning failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   useEffect(() => {
     try {
@@ -770,6 +812,102 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
             </Button>
           </div>
         </div>
+
+        {userId && bidProfile && (
+          <Card className="border-dashed">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center justify-between text-sm font-medium">
+                <span>Preference profile</span>
+                <Badge variant="outline">
+                  {bidProfile.source === 'none'
+                    ? 'not set'
+                    : `${bidProfile.source}${bidProfile.learnedFromPeriods ? ` · ${bidProfile.learnedFromPeriods} periods` : ''}`}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              {bidProfile.source !== 'none' && bidProfile.weights && (
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge variant="secondary">
+                    {bidProfile.weights.creditLeaning <= -0.33
+                      ? 'Quality-of-life bidder'
+                      : bidProfile.weights.creditLeaning >= 0.33
+                        ? 'Credit maximizer'
+                        : 'Balanced credit/QoL'}
+                  </Badge>
+                  {(bidProfile.weights.checkInStationAvoids ?? []).map(
+                    (s: string) => (
+                      <Badge key={s} variant="secondary">
+                        avoids {s} check-in
+                      </Badge>
+                    )
+                  )}
+                  {bidProfile.weights.avoidsCarryOut && (
+                    <Badge variant="secondary">avoids carry-out</Badge>
+                  )}
+                  {bidProfile.weights.avoidsRedeyes && (
+                    <Badge variant="secondary">avoids redeyes</Badge>
+                  )}
+                  {(bidProfile.weights.preferOffDOWs ?? []).length > 0 && (
+                    <Badge variant="secondary">
+                      off {(bidProfile.weights.preferOffDOWs as string[])
+                        .map(d => d.slice(0, 3))
+                        .join('/')}
+                    </Badge>
+                  )}
+                  {bidProfile.weights.preferredPattern && (
+                    <Badge variant="secondary">
+                      pattern {bidProfile.weights.preferredPattern.daysOnMin}-
+                      {bidProfile.weights.preferredPattern.daysOnMax} on /{' '}
+                      {bidProfile.weights.preferredPattern.daysOffMin}+ off
+                    </Badge>
+                  )}
+                  {(bidProfile.weights.preferredTripLengths ?? []).length >
+                    0 && (
+                    <Badge variant="secondary">
+                      trips{' '}
+                      {(bidProfile.weights.preferredTripLengths as number[]).join(
+                        '>'
+                      )}
+                      d
+                    </Badge>
+                  )}
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">
+                    Employee number (learn from your own bid history)
+                  </Label>
+                  <Input
+                    placeholder="e.g. 050000600"
+                    value={learnEmployeeNumber}
+                    onChange={e => setLearnEmployeeNumber(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    !learnEmployeeNumber.trim() ||
+                    learnProfileMutation.isPending
+                  }
+                  onClick={() => learnProfileMutation.mutate()}
+                >
+                  {learnProfileMutation.isPending
+                    ? 'Learning…'
+                    : bidProfile.source === 'none'
+                      ? 'Learn profile'
+                      : 'Re-learn'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Your profile is learned only from your own Reasons history
+                and drives Auto-draft. Nothing is preset.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {optimizerRationale.length > 0 && (
           <Card className="border-dashed">

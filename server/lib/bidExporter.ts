@@ -163,6 +163,9 @@ function renderFilterConditions(filter: PairingFilter): string[] {
   if (filter.carryOutMax !== undefined) {
     conditions.push(`If Carry Out < ${filter.carryOutMax + 1} Days`);
   }
+  if (filter.departOnDOWs && filter.departOnDOWs.length > 0) {
+    conditions.push(`If Departing On ${filter.departOnDOWs.join(', ')}`);
+  }
   return conditions;
 }
 
@@ -179,8 +182,18 @@ function renderPreference(pref: BidPreference): string | null {
       return ['Avoid Pairings', ...conditions].join(' ') + esn;
     }
     case 'preferOff': {
-      const dates = (pref.preferOffDates ?? []).map(formatIsoDate).join(', ');
       const esn = pref.elseStartNext ? ' Else Start Next Bid Group' : '';
+      // Day-of-week Prefer Off is a distinct NAVBLUE construct
+      // (PreferOffDOWs). The live app renders it with a double space after
+      // "Prefer Off" — kept verbatim for text fidelity.
+      if (
+        (!pref.preferOffDates || pref.preferOffDates.length === 0) &&
+        pref.preferOffDOWs &&
+        pref.preferOffDOWs.length > 0
+      ) {
+        return `Prefer Off  ${pref.preferOffDOWs.join(', ')}` + esn;
+      }
+      const dates = (pref.preferOffDates ?? []).map(formatIsoDate).join(', ');
       return `Prefer Off ${dates}` + esn;
     }
     case 'setConditionCredit': {

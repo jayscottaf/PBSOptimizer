@@ -124,6 +124,16 @@ export class SimpleAI {
         fetchHistoricTrends: base
           ? (month?: string) => this.fetchHistoricTrendsDigest(base, month)
           : undefined,
+        optimizeDraft: base
+          ? (overrides?: Record<string, unknown>) =>
+              this.optimizeDraftDigest(
+                query.bidPackageId,
+                query.userId,
+                base,
+                pairings,
+                overrides
+              )
+          : undefined,
       };
       const MAX_TOOL_ROUNDS = 4;
       let rawResponse = 'No response generated';
@@ -254,6 +264,62 @@ export class SimpleAI {
   }
 
   /**
+   * Backs the coach's optimize_bid tool: profile + boundaries + window →
+   * optimizer → compact digest with the exact NAVBLUE text lines.
+   */
+  private async optimizeDraftDigest(
+    bidPackageId: number,
+    userId: number | undefined,
+    base: string,
+    pairings: any[],
+    overrides?: Record<string, unknown>
+  ): Promise<object> {
+    const [{ optimizeBid }, { exportBid }, { neutralProfile }] =
+      await Promise.all([
+        import('../lib/bidOptimizer'),
+        import('../lib/bidExporter'),
+        import('../lib/profileLearner'),
+      ]);
+    const profileRow = userId
+      ? await this.storage.getBidProfile(userId).catch(() => undefined)
+      : undefined;
+    const weights = (profileRow?.weights as any) ?? neutralProfile();
+    const user = userId
+      ? await this.storage.getUser(userId).catch(() => undefined)
+      : undefined;
+    const [trends, window] = await Promise.all([
+      this.storage.getTrendsSummary(base).catch(() => null),
+      this.storage.getCategoryCreditWindow(base).catch(() => null),
+    ]);
+    const boundaryByDays = new Map<number, number>();
+    for (const b of trends?.holdBoundaries ?? []) {
+      if (b.juniorMostPercentile !== null) {
+        boundaryByDays.set(b.pairingDays, b.juniorMostPercentile);
+      }
+    }
+    const optimized = optimizeBid(pairings, weights, {
+      seniorityPercentile: user?.seniorityPercentile ?? undefined,
+      holdBoundaries: [...boundaryByDays.entries()].map(
+        ([pairingDays, juniorMostPercentile]) => ({
+          pairingDays,
+          juniorMostPercentile,
+        })
+      ),
+      threshold: window?.threshold ?? undefined,
+      overrides: overrides as any,
+    });
+    const exported = exportBid(optimized.bid);
+    return {
+      profileSource: profileRow?.source ?? 'neutral (no profile yet)',
+      rationale: optimized.rationale,
+      group1Completion: optimized.group1Completion,
+      bid: optimized.bid,
+      navblueText: exported.lines,
+      warnings: exported.warnings,
+    };
+  }
+
+  /**
    * Build compact context with all pairing data
    */
   private buildPairingsContext(pairings: any[]): string {
@@ -324,6 +390,7 @@ ${historyContext}
 TOOLS YOU CAN CALL:
 - simulate_bid: evaluate a structured draft bid against this bid package. Returns predicted awards with hold probabilities, credit totals, and explicit caveats.
 - export_bid: render a draft bid to review-ready NAVBLUE text with structure warnings.
+- optimize_bid: generate a complete optimized draft bid from this pilot's stored preference profile, this package, and historic hold evidence — returns the draft, NAVBLUE-ready text lines, per-choice rationale, and warnings. Call it when the pilot asks you to build/optimize their bid, then walk through the rationale with them, apply their adjustments (via overrides or manual edits), and verify with simulate_bid.
 - query_historic_trends: look up real historic data mined from every imported Reasons Report period — category competitiveness, how junior each trip length has gone, bid complexity, top requested/avoided layover cities, preferred check-in hour, common days-off request length. Pass a 3-letter month (e.g. "AUG") to compare a specific calendar month the pilot may be about to bid against the multi-year average, or omit it for the full picture. Call this whenever the pilot asks about trends, seasons, competitiveness, or "how did this month do historically" instead of guessing or relying only on the fixed seniority-band summary above.
 When the pilot wants a bid drafted: interview briefly if goals are unclear, construct the DraftBid JSON (negatives BEFORE awards, specific before general, exits in every group except the last, reserve group last), call simulate_bid, refine if the result is weak (empty awards, incomplete line, inert preferences), then call export_bid and present the final text inside a code block along with the simulation summary and its caveats. Never present a draft you have not simulated.
 
