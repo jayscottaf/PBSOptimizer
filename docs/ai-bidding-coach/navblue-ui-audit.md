@@ -11,6 +11,74 @@ This complements `navblue-rules.md` (derived from the PDF guide) with the
 prose didn't spell out. Use this as the spec for the Bid Builder grammar
 restructure.
 
+**Update 2026-07-04 (round 2):** the live **Pairings screen** exposes a
+"Pairing Preferences" panel that is the *same* property editor the bid
+editor uses (`field[pairingPref.fieldName]`, `pairingPref.tempfieldNames`).
+Building a filter there does NOT touch a bid, so it gave us the complete
+property list AND the value-widget model with zero bid risk. See §8 (the
+authoritative property list) and §9 (the widget model) — these supersede
+the inferred parts of §2/§7.
+
+## 8. Authoritative pairing-property list (live Pairings "Pairing Preferences" panel)
+
+The exact selectable properties, verbatim, in panel order:
+
+Aircraft Type · Average Daily Block Time · Average Daily Credit · Carry
+Out · Deadhead Day · Deadhead Legs · Depart On · Duty Duration · Duty Legs
+· Duty On · Enroute Check-In Time · Enroute Check-Out Time · Flight Number
+· Landings In · Layover · Redeyes · Sit Length · TAFB · Total Legs In
+Pairing · Total Legs In First Duty · Total Legs In Last Duty · Pairing
+Check-In Station · Pairing Check-In Time · Pairing Check-Out Time · Pairing
+Total Block Time · Pairing In-Period Block Time · Pairing Carry-Out Block
+Time · Pairing Total Credit · Pairing In-Period Credit · Pairing Carry-Out
+Credit · Pairing International Type · Pairing Length · Pairing Number ·
+Pairing Number Departing On · Work Start Station · Work End Station ·
+Premium Rotation
+
+**New vs prior audit:** `Pairing International Type`, `Work Start Station`,
+`Work End Station`, `Premium Rotation`, `Total Legs In Pairing`.
+
+**Sortable pairing columns** (Sort By dropdown): Pairing Number, Check-In
+Time, Check-Out Time, Credit Value, TAFB, L/O Stns, Positions, Aircraft
+Type, Length, Dates, Average Daily Credit.
+
+## 9. The value-widget model (confirmed by direct observation)
+
+Every property is built the same way — this is the exact shape the Bid
+Builder should adopt:
+
+```
+<Property>
+  ├─ If | If Not              (positive vs negative match)
+  ├─ Any | Every              (matching modifier; ≥1 leg vs all legs)
+  └─ one or more sub-fields, each with:
+        operator: [ Exactly = | Greater Than > | Less Than < | Range ]
+        value:    widget depends on the field's data type
+```
+
+Observed widgets by data type:
+- **Duration/time** (e.g. Layover → *Of Duration*, Sit Length, Duty
+  Duration): operator dropdown + **Hours / Minutes** spinners (HH:MM).
+- **Layover** is a *compound* property with sub-fields: **Stations** (city
+  list), **Of Duration** (HH:MM range), **On** (dates), **Starting At**
+  (time), **Includes All Of** (require every listed city).
+- **Depart On** sub-fields: **Dates List**, **Dates Range**, **Days Of
+  Week List**, **Time Range** (the day-of-week widget we needed).
+- Numeric (credit/block/legs): operator dropdown + numeric value(s);
+  `Range` shows two inputs.
+
+Operator set is **{ Exactly =, Greater Than >, Less Than <, Range }** — so
+our exporter's `>=`/`<=` for Pairing Length is non-standard; NAVBLUE uses
+`=`, `>`, `<`, or a Range with two bounds.
+
+### Bid Builder model change this implies
+
+Replace the flat `PairingFilter` with an ordered list of **conditions**,
+each: `{ property, matcher: If|IfNot, quantifier: Any|Every, subField?,
+operator: '='|'>'|'<'|'range', value | [lo,hi] }`. That one shape covers
+every property NAVBLUE offers and maps 1:1 to both the display text and the
+XML the app posts to `/fcgi-bin/ClassBidUI`.
+
 ## How the app is built (for the parser/exporter)
 
 - AngularJS 1.x SPA. Bid data per period lives in IndexedDB
