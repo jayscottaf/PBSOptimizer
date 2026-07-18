@@ -21,8 +21,19 @@ export interface PairingFilter {
   pairingNumbers?: string[];
   pairingDaysMin?: number;
   pairingDaysMax?: number;
-  /** Match if the pairing has a layover in any of these cities. */
+  /** Match if the pairing has a layover in any of these cities (NAVBLUE
+   * "Layover · Stations · If Any"). */
   layoverCities?: string[];
+  /** Exclude if the pairing has a layover in ANY of these cities (NAVBLUE
+   * "Layover · Stations · If Not Any"). */
+  excludeLayoverCities?: string[];
+  /** Number of layover (overnight) stops. NAVBLUE "Number Of Layovers". */
+  layoverCountMin?: number;
+  layoverCountMax?: number;
+  /** Sum of all layover durations, in decimal hours. NAVBLUE "Total
+   * Layover Time". */
+  totalLayoverHoursMin?: number;
+  totalLayoverHoursMax?: number;
   creditMin?: number;
   creditMax?: number;
   blockMin?: number;
@@ -30,10 +41,18 @@ export interface PairingFilter {
   /** Check-in hour of day, 0-23 inclusive bounds. */
   checkInHourMin?: number;
   checkInHourMax?: number;
+  /** Cap on deadhead legs (NAVBLUE "Deadhead Legs <"). */
   deadheadsMax?: number;
+  /** Require at least this many deadhead legs (NAVBLUE "Deadhead Legs >",
+   * or "Deadhead Day" when >= 1). */
+  deadheadsMin?: number;
   /** Average daily credit = creditHours / pairingDays. */
   averageDailyCreditMin?: number;
   averageDailyCreditMax?: number;
+  /** Average daily block = blockHours / pairingDays. NAVBLUE "Average
+   * Daily Block Time". */
+  averageDailyBlockMin?: number;
+  averageDailyBlockMax?: number;
 }
 
 export interface BidPreference {

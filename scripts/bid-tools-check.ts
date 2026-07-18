@@ -128,6 +128,59 @@ assert(e2.warnings.some(w => w.includes('never place a Start Next in the last bi
 assert(e2.warnings.some(w => w.includes('forced to the bottom')), 'warns on CSSN not last in its group');
 assert(e2.warnings.some(w => w.includes('No reserve bid group')), 'warns on missing reserve group');
 
+// 8b) Tier-1 grammar: new simulator filters. High threshold so every
+// matching pairing is awarded (no early stop), then check the set.
+const awardedWith = (filter: any): string[] => {
+  const b: DraftBid = {
+    groups: [{ type: 'pairings', preferences: [{ type: 'award', filter }] }],
+  };
+  return simulateBid(b, pairings, { alv: 999, threshold: 999 }).awards
+    .map(a => a.pairingNumber)
+    .sort();
+};
+// 7605 has ADB 11/2=5.5, the only one >=5.4 (others 5.0-5.33)
+assert(awardedWith({ averageDailyBlockMin: 5.4 }).join() === '7605', 'averageDailyBlockMin filters');
+// exclude MIA drops 7601/7602
+assert(!awardedWith({ excludeLayoverCities: ['MIA'] }).some(n => ['7601', '7602'].includes(n)), 'excludeLayoverCities removes MIA trips');
+// only 7605 has 2 deadheads
+assert(awardedWith({ deadheadsMin: 2 }).join() === '7605', 'deadheadsMin requires >= 2 DH');
+// layover totals: 7601=14h,7602=15h → >=14
+assert(awardedWith({ totalLayoverHoursMin: 14 }).join() === '7601,7602', 'totalLayoverHoursMin filters');
+// every fixture has exactly one layover
+assert(awardedWith({ layoverCountMax: 0 }).length === 0, 'layoverCountMax 0 excludes all one-layover trips');
+
+// 8c) Tier-1 exporter: real NAVBLUE conditions, no [app-only] notes
+const e3 = exportBid({
+  groups: [
+    {
+      type: 'pairings',
+      preferences: [
+        {
+          type: 'award',
+          filter: {
+            averageDailyBlockMin: 5,
+            blockMin: 12,
+            deadheadsMin: 1,
+            deadheadsMax: 2,
+            excludeLayoverCities: ['ORD'],
+            totalLayoverHoursMin: 10,
+            layoverCountMax: 2,
+          },
+        },
+      ],
+    },
+    { type: 'reserve', preferences: [] },
+  ],
+});
+const e3text = e3.text;
+assert(!e3text.includes('[app-only'), 'exporter emits no [app-only] notes for Tier-1 fields');
+assert(e3text.includes('Average Daily Block Time > 5:00'), 'exports Average Daily Block Time');
+assert(e3text.includes('Block Time > 12:00'), 'exports real Block Time condition');
+assert(e3text.includes('Deadhead Day'), 'exports Deadhead Day for deadheadsMin 1');
+assert(e3text.includes('Not Any Layover In ORD'), 'exports Not Any Layover In');
+assert(e3text.includes('Total Layover Time > 10:00'), 'exports Total Layover Time');
+assert(e3text.includes('Number Of Layovers < 2'), 'exports Number Of Layovers');
+
 // 9) Coach tool executor: valid call, bad JSON, malformed bid
 const toolCtx = { pairings, alv: 40 };
 const sim = (await executeCoachTool(

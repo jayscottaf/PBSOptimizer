@@ -64,6 +64,33 @@ function renderFilterConditions(filter: PairingFilter): string[] {
       `If Layovers In ${filter.layoverCities.map(c => c.toUpperCase()).join(', ')}`
     );
   }
+  if (filter.excludeLayoverCities && filter.excludeLayoverCities.length > 0) {
+    conditions.push(
+      `If Not Any Layover In ${filter.excludeLayoverCities.map(c => c.toUpperCase()).join(', ')}`
+    );
+  }
+  if (
+    filter.layoverCountMin !== undefined &&
+    filter.layoverCountMax !== undefined
+  ) {
+    conditions.push(
+      `If Number Of Layovers Between ${filter.layoverCountMin} and ${filter.layoverCountMax}`
+    );
+  } else if (filter.layoverCountMin !== undefined) {
+    conditions.push(`If Number Of Layovers > ${filter.layoverCountMin}`);
+  } else if (filter.layoverCountMax !== undefined) {
+    conditions.push(`If Number Of Layovers < ${filter.layoverCountMax}`);
+  }
+  if (filter.totalLayoverHoursMin !== undefined) {
+    conditions.push(
+      `If Total Layover Time > ${formatHours(filter.totalLayoverHoursMin)}`
+    );
+  }
+  if (filter.totalLayoverHoursMax !== undefined) {
+    conditions.push(
+      `If Total Layover Time < ${formatHours(filter.totalLayoverHoursMax)}`
+    );
+  }
   if (filter.creditMin !== undefined && filter.creditMax !== undefined) {
     conditions.push(
       `If Pairing Credit Between ${formatHours(filter.creditMin)} and ${formatHours(filter.creditMax)}`
@@ -88,12 +115,37 @@ function renderFilterConditions(filter: PairingFilter): string[] {
       `If Average Daily Credit < ${formatHours(filter.averageDailyCreditMax)}`
     );
   }
-  if (filter.deadheadsMax !== undefined) {
-    // Deadhead-count filtering is app-side; NAVBLUE has no direct property.
-    conditions.push(`[app-only: max ${filter.deadheadsMax} deadheads]`);
+  if (filter.averageDailyBlockMin !== undefined) {
+    conditions.push(
+      `If Average Daily Block Time > ${formatHours(filter.averageDailyBlockMin)}`
+    );
   }
-  if (filter.blockMin !== undefined || filter.blockMax !== undefined) {
-    conditions.push('[app-only: block-hour filter]');
+  if (filter.averageDailyBlockMax !== undefined) {
+    conditions.push(
+      `If Average Daily Block Time < ${formatHours(filter.averageDailyBlockMax)}`
+    );
+  }
+  // NAVBLUE has real Block Time and Deadhead Legs properties (confirmed in
+  // the live Pairings preference panel) — emit them, not app-only notes.
+  if (filter.blockMin !== undefined && filter.blockMax !== undefined) {
+    conditions.push(
+      `If Block Time Between ${formatHours(filter.blockMin)} and ${formatHours(filter.blockMax)}`
+    );
+  } else if (filter.blockMin !== undefined) {
+    conditions.push(`If Block Time > ${formatHours(filter.blockMin)}`);
+  } else if (filter.blockMax !== undefined) {
+    conditions.push(`If Block Time < ${formatHours(filter.blockMax)}`);
+  }
+  if (filter.deadheadsMin !== undefined) {
+    // "Deadhead Day" is the NAVBLUE shorthand for "has at least one DH leg".
+    conditions.push(
+      filter.deadheadsMin === 1
+        ? 'If Deadhead Day'
+        : `If Deadhead Legs > ${filter.deadheadsMin - 1}`
+    );
+  }
+  if (filter.deadheadsMax !== undefined) {
+    conditions.push(`If Deadhead Legs < ${filter.deadheadsMax + 1}`);
   }
   return conditions;
 }

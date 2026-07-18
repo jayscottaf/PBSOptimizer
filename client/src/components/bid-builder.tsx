@@ -237,9 +237,47 @@ function summarizeFilter(filter?: PairingFilter): string {
   if (filter.layoverCities?.length) {
     parts.push(`layover ${filter.layoverCities.join('/')}`);
   }
+  if (filter.excludeLayoverCities?.length) {
+    parts.push(`not layover ${filter.excludeLayoverCities.join('/')}`);
+  }
+  if (
+    filter.layoverCountMin !== undefined ||
+    filter.layoverCountMax !== undefined
+  ) {
+    parts.push(
+      `${filter.layoverCountMin ?? 0}-${filter.layoverCountMax ?? '∞'} layovers`
+    );
+  }
+  if (
+    filter.totalLayoverHoursMin !== undefined ||
+    filter.totalLayoverHoursMax !== undefined
+  ) {
+    parts.push(
+      `total LO ${filter.totalLayoverHoursMin ?? 0}-${filter.totalLayoverHoursMax ?? '∞'}h`
+    );
+  }
   if (filter.creditMin !== undefined || filter.creditMax !== undefined) {
     parts.push(
       `credit ${filter.creditMin ?? 0}-${filter.creditMax ?? '∞'}`
+    );
+  }
+  if (filter.blockMin !== undefined || filter.blockMax !== undefined) {
+    parts.push(`block ${filter.blockMin ?? 0}-${filter.blockMax ?? '∞'}`);
+  }
+  if (
+    filter.averageDailyCreditMin !== undefined ||
+    filter.averageDailyCreditMax !== undefined
+  ) {
+    parts.push(
+      `ADC ${filter.averageDailyCreditMin ?? 0}-${filter.averageDailyCreditMax ?? '∞'}`
+    );
+  }
+  if (
+    filter.averageDailyBlockMin !== undefined ||
+    filter.averageDailyBlockMax !== undefined
+  ) {
+    parts.push(
+      `ADB ${filter.averageDailyBlockMin ?? 0}-${filter.averageDailyBlockMax ?? '∞'}`
     );
   }
   if (
@@ -250,8 +288,11 @@ function summarizeFilter(filter?: PairingFilter): string {
       `check-in ${filter.checkInHourMin ?? 0}:00-${filter.checkInHourMax ?? 23}:59`
     );
   }
+  if (filter.deadheadsMin !== undefined) {
+    parts.push(filter.deadheadsMin === 1 ? 'has DH' : `≥${filter.deadheadsMin} DH`);
+  }
   if (filter.deadheadsMax !== undefined) {
-    parts.push(`max ${filter.deadheadsMax} DH`);
+    parts.push(`≤${filter.deadheadsMax} DH`);
   }
   return parts.length > 0 ? parts.join(', ') : 'any pairing';
 }
@@ -287,10 +328,23 @@ interface PreferenceFormState {
   pairingDaysMin: string;
   pairingDaysMax: string;
   layoverCities: string;
+  excludeLayoverCities: string;
+  layoverCountMin: string;
+  layoverCountMax: string;
+  totalLayoverHoursMin: string;
+  totalLayoverHoursMax: string;
   creditMin: string;
   creditMax: string;
+  blockMin: string;
+  blockMax: string;
+  averageDailyCreditMin: string;
+  averageDailyCreditMax: string;
+  averageDailyBlockMin: string;
+  averageDailyBlockMax: string;
   checkInHourMin: string;
   checkInHourMax: string;
+  deadheadsMin: string;
+  deadheadsMax: string;
   pairingNumbers: string;
   limit: string;
   elseStartNext: boolean;
@@ -303,10 +357,23 @@ const EMPTY_FORM: PreferenceFormState = {
   pairingDaysMin: '',
   pairingDaysMax: '',
   layoverCities: '',
+  excludeLayoverCities: '',
+  layoverCountMin: '',
+  layoverCountMax: '',
+  totalLayoverHoursMin: '',
+  totalLayoverHoursMax: '',
   creditMin: '',
   creditMax: '',
+  blockMin: '',
+  blockMax: '',
+  averageDailyCreditMin: '',
+  averageDailyCreditMax: '',
+  averageDailyBlockMin: '',
+  averageDailyBlockMax: '',
   checkInHourMin: '',
   checkInHourMax: '',
+  deadheadsMin: '',
+  deadheadsMax: '',
   pairingNumbers: '',
   limit: '',
   elseStartNext: false,
@@ -325,17 +392,43 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
       filter.pairingDaysMin = num(form.pairingDaysMin);
     if (num(form.pairingDaysMax) !== undefined)
       filter.pairingDaysMax = num(form.pairingDaysMax);
-    const cities = form.layoverCities
-      .split(/[,\s]+/)
-      .map(city => city.trim().toUpperCase())
-      .filter(Boolean);
+    const parseCities = (raw: string) =>
+      raw
+        .split(/[,\s]+/)
+        .map(city => city.trim().toUpperCase())
+        .filter(Boolean);
+    const cities = parseCities(form.layoverCities);
     if (cities.length > 0) filter.layoverCities = cities;
+    const excludeCities = parseCities(form.excludeLayoverCities);
+    if (excludeCities.length > 0) filter.excludeLayoverCities = excludeCities;
+    if (num(form.layoverCountMin) !== undefined)
+      filter.layoverCountMin = num(form.layoverCountMin);
+    if (num(form.layoverCountMax) !== undefined)
+      filter.layoverCountMax = num(form.layoverCountMax);
+    if (num(form.totalLayoverHoursMin) !== undefined)
+      filter.totalLayoverHoursMin = num(form.totalLayoverHoursMin);
+    if (num(form.totalLayoverHoursMax) !== undefined)
+      filter.totalLayoverHoursMax = num(form.totalLayoverHoursMax);
     if (num(form.creditMin) !== undefined) filter.creditMin = num(form.creditMin);
     if (num(form.creditMax) !== undefined) filter.creditMax = num(form.creditMax);
+    if (num(form.blockMin) !== undefined) filter.blockMin = num(form.blockMin);
+    if (num(form.blockMax) !== undefined) filter.blockMax = num(form.blockMax);
+    if (num(form.averageDailyCreditMin) !== undefined)
+      filter.averageDailyCreditMin = num(form.averageDailyCreditMin);
+    if (num(form.averageDailyCreditMax) !== undefined)
+      filter.averageDailyCreditMax = num(form.averageDailyCreditMax);
+    if (num(form.averageDailyBlockMin) !== undefined)
+      filter.averageDailyBlockMin = num(form.averageDailyBlockMin);
+    if (num(form.averageDailyBlockMax) !== undefined)
+      filter.averageDailyBlockMax = num(form.averageDailyBlockMax);
     if (num(form.checkInHourMin) !== undefined)
       filter.checkInHourMin = num(form.checkInHourMin);
     if (num(form.checkInHourMax) !== undefined)
       filter.checkInHourMax = num(form.checkInHourMax);
+    if (num(form.deadheadsMin) !== undefined)
+      filter.deadheadsMin = num(form.deadheadsMin);
+    if (num(form.deadheadsMax) !== undefined)
+      filter.deadheadsMax = num(form.deadheadsMax);
     const numbers = form.pairingNumbers
       .split(/[,\s]+/)
       .map(token => token.trim())
@@ -833,6 +926,195 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                                 setForm(p => ({
                                   ...p,
                                   checkInHourMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <Label className="text-xs">
+                              Exclude layover cities (comma-separated)
+                            </Label>
+                            <Input
+                              placeholder="ORD, DFW"
+                              value={form.excludeLayoverCities}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  excludeLayoverCities: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs"># Layovers min</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.layoverCountMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  layoverCountMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs"># Layovers max</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.layoverCountMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  layoverCountMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Total layover min (hrs)
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.totalLayoverHoursMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  totalLayoverHoursMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Total layover max (hrs)
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.totalLayoverHoursMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  totalLayoverHoursMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Block min (hrs)</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.blockMin}
+                              onChange={e =>
+                                setForm(p => ({ ...p, blockMin: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Block max (hrs)</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.blockMax}
+                              onChange={e =>
+                                setForm(p => ({ ...p, blockMax: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Avg daily credit min
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.25"
+                              value={form.averageDailyCreditMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  averageDailyCreditMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Avg daily credit max
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.25"
+                              value={form.averageDailyCreditMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  averageDailyCreditMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Avg daily block min
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.25"
+                              value={form.averageDailyBlockMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  averageDailyBlockMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Avg daily block max
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.25"
+                              value={form.averageDailyBlockMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  averageDailyBlockMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Deadheads min</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.deadheadsMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  deadheadsMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Deadheads max</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.deadheadsMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  deadheadsMax: e.target.value,
                                 }))
                               }
                             />

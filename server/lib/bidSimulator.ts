@@ -55,8 +55,25 @@ interface SimPairing {
   deadheads: number;
   checkInHour: number | null;
   layoverCities: string[];
+  layoverCount: number;
+  totalLayoverHours: number;
   effectiveStart: { month: number; day: number } | null;
   effectiveEnd: { month: number; day: number } | null;
+}
+
+/** Layover durations are "HH.MM" strings (e.g. "18.48" = 18h48m). Sum to
+ * decimal hours. Mirrors client/src/lib/layover.ts. */
+function layoverHours(layovers: any[]): number {
+  let minutes = 0;
+  for (const l of layovers) {
+    const str = String(l?.duration ?? '').trim();
+    if (!str) continue;
+    const [h, m] = str.split('.');
+    minutes +=
+      (parseInt(h || '0', 10) || 0) * 60 +
+      (parseInt((m || '0').padEnd(2, '0').slice(0, 2), 10) || 0);
+  }
+  return minutes / 60;
 }
 
 const MONTH_TOKENS: Record<string, number> = {
@@ -111,9 +128,10 @@ function toSimPairing(p: any): SimPairing {
       layovers = [];
     }
   }
-  const layoverCities = Array.isArray(layovers)
-    ? layovers.map((l: any) => String(l?.city ?? '').toUpperCase()).filter(Boolean)
-    : [];
+  const layoverArr = Array.isArray(layovers) ? layovers : [];
+  const layoverCities = layoverArr
+    .map((l: any) => String(l?.city ?? '').toUpperCase())
+    .filter(Boolean);
   const { start, end } = parseEffectiveDates(p.effectiveDates);
   return {
     pairingNumber: String(p.pairingNumber ?? ''),
@@ -127,6 +145,8 @@ function toSimPairing(p: any): SimPairing {
     deadheads: p.deadheads || 0,
     checkInHour: parseCheckInHour(p.checkInTime),
     layoverCities,
+    layoverCount: layoverArr.length,
+    totalLayoverHours: layoverHours(layoverArr),
     effectiveStart: start,
     effectiveEnd: end,
   };
@@ -153,6 +173,36 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
     if (!pairing.layoverCities.some(city => wanted.includes(city))) {
       return false;
     }
+  }
+  if (filter.excludeLayoverCities && filter.excludeLayoverCities.length > 0) {
+    const unwanted = filter.excludeLayoverCities.map(c => c.toUpperCase());
+    if (pairing.layoverCities.some(city => unwanted.includes(city))) {
+      return false;
+    }
+  }
+  if (
+    filter.layoverCountMin !== undefined &&
+    pairing.layoverCount < filter.layoverCountMin
+  ) {
+    return false;
+  }
+  if (
+    filter.layoverCountMax !== undefined &&
+    pairing.layoverCount > filter.layoverCountMax
+  ) {
+    return false;
+  }
+  if (
+    filter.totalLayoverHoursMin !== undefined &&
+    pairing.totalLayoverHours < filter.totalLayoverHoursMin
+  ) {
+    return false;
+  }
+  if (
+    filter.totalLayoverHoursMax !== undefined &&
+    pairing.totalLayoverHours > filter.totalLayoverHoursMax
+  ) {
+    return false;
   }
   if (filter.creditMin !== undefined && pairing.creditHours < filter.creditMin) {
     return false;
@@ -184,7 +234,11 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   if (filter.deadheadsMax !== undefined && pairing.deadheads > filter.deadheadsMax) {
     return false;
   }
-  const adc = pairing.creditHours / Math.max(1, pairing.pairingDays);
+  if (filter.deadheadsMin !== undefined && pairing.deadheads < filter.deadheadsMin) {
+    return false;
+  }
+  const days = Math.max(1, pairing.pairingDays);
+  const adc = pairing.creditHours / days;
   if (
     filter.averageDailyCreditMin !== undefined &&
     adc < filter.averageDailyCreditMin
@@ -194,6 +248,19 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   if (
     filter.averageDailyCreditMax !== undefined &&
     adc > filter.averageDailyCreditMax
+  ) {
+    return false;
+  }
+  const adb = pairing.blockHours / days;
+  if (
+    filter.averageDailyBlockMin !== undefined &&
+    adb < filter.averageDailyBlockMin
+  ) {
+    return false;
+  }
+  if (
+    filter.averageDailyBlockMax !== undefined &&
+    adb > filter.averageDailyBlockMax
   ) {
     return false;
   }

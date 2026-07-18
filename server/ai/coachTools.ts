@@ -53,15 +53,38 @@ const DRAFT_BID_SCHEMA = {
                     layoverCities: {
                       type: 'array',
                       items: { type: 'string' },
-                      description: '3-letter station codes, e.g. ["BOS","MIA"]',
+                      description:
+                        'Match if the pairing overnights in ANY of these 3-letter stations, e.g. ["BOS","MIA"].',
                     },
+                    excludeLayoverCities: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'Exclude the pairing if it overnights in ANY of these stations (NAVBLUE "Not Any Layover In").',
+                    },
+                    layoverCountMin: { type: 'number' },
+                    layoverCountMax: { type: 'number' },
+                    totalLayoverHoursMin: {
+                      type: 'number',
+                      description: 'Sum of all layover durations, decimal hours.',
+                    },
+                    totalLayoverHoursMax: { type: 'number' },
                     creditMin: { type: 'number' },
                     creditMax: { type: 'number' },
+                    blockMin: { type: 'number' },
+                    blockMax: { type: 'number' },
                     checkInHourMin: { type: 'number' },
                     checkInHourMax: { type: 'number' },
                     deadheadsMax: { type: 'number' },
+                    deadheadsMin: {
+                      type: 'number',
+                      description:
+                        'Require at least this many deadhead legs (1 = "Deadhead Day").',
+                    },
                     averageDailyCreditMin: { type: 'number' },
                     averageDailyCreditMax: { type: 'number' },
+                    averageDailyBlockMin: { type: 'number' },
+                    averageDailyBlockMax: { type: 'number' },
                   },
                 },
                 preferOffDates: {
