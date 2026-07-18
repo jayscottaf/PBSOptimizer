@@ -1508,7 +1508,7 @@ export default function Dashboard() {
 
       {/* Left Sidebar - Hidden on mobile */}
       <div
-        className={`hidden lg:flex bg-white dark:bg-gray-900 border-r dark:border-gray-800 transition-all duration-300 ${
+        className={`hidden lg:flex bg-card border-r dark:border-gray-800 transition-all duration-300 ${
           sidebarCollapsed ? 'w-16' : 'w-80'
         } flex-shrink-0 flex-col`}
       >
@@ -1600,7 +1600,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <Plane className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <h1 className="text-xl sm:text-2xl font-bold text-foreground">
                       PBS Bid Optimizer
                     </h1>
                   </div>
@@ -1725,10 +1725,10 @@ export default function Dashboard() {
                 {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
                 {/* Horizontal Filters Bar */}
-                <div className="flex flex-col h-full bg-white dark:bg-gray-900">
-                  <div className="w-full bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-4">
+                <div className="flex flex-col h-full bg-card">
+                  <div className="w-full bg-card border-b dark:border-gray-800 p-4">
                     <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      <h3 className="text-sm font-semibold text-secondary-foreground">
                         Filters
                       </h3>
                       <SmartFilterSystem
@@ -1810,7 +1810,7 @@ export default function Dashboard() {
                                 </span>
                               ) : (
                                 <span
-                                  className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 cursor-pointer"
+                                  className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border border-border cursor-pointer"
                                   onClick={async () => {
                                     console.log('Manual prefetch triggered');
                                     setShowInitialStatus(true); // Show status during manual prefetch
@@ -1920,7 +1920,7 @@ export default function Dashboard() {
                       </CardHeader>
                       <CardContent className="flex-1 overflow-auto p-0">
                         {isUpdatingSeniority && (
-                          <div className="absolute inset-0 bg-white dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                          <div className="absolute inset-0 bg-card bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
                             <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
                               <RefreshCw className="h-6 w-6 animate-spin" />
                               <span className="text-lg font-medium">
@@ -1939,7 +1939,7 @@ export default function Dashboard() {
                                   onChange={(e) => setHideConflicts(e.target.checked)}
                                   className="rounded border border-gray-300 dark:border-gray-600"
                                 />
-                                <span className="text-gray-700 dark:text-gray-300">
+                                <span className="text-secondary-foreground">
                                   Hide conflicts ({conflictMap.size})
                                 </span>
                               </label>
@@ -1975,7 +1975,7 @@ export default function Dashboard() {
                       <Star className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
                       Your Favorites
                     </CardTitle>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                    <span className="text-sm text-muted-foreground">
                       {favorites.length} favorite pairings
                     </span>
                   </CardHeader>
@@ -2088,7 +2088,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 {/* Bid Package Upload */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Bid Package</h3>
+                  <h3 className="text-sm font-medium text-secondary-foreground">Bid Package</h3>
                   <FileUpload
                     onUpload={(file, result) => {
                         setShowUploadModal(false);
@@ -2110,7 +2110,7 @@ export default function Dashboard() {
 
                 {/* Reasons Report Upload */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Reasons Report</h3>
+                  <h3 className="text-sm font-medium text-secondary-foreground">Reasons Report</h3>
                   <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
                     <ReasonsReportUpload
                       onUploadSuccess={() => {
@@ -2179,7 +2179,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 lg:hidden">
           <div className="h-full flex flex-col">
             {/* Minimal header with just close button */}
-            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b dark:border-gray-800 bg-white dark:bg-gray-900">
+            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b dark:border-gray-800 bg-card">
               <h1 className="text-base font-medium dark:text-gray-100">AI Assistant</h1>
               <Button
                 variant="ghost"
@@ -2254,7 +2254,7 @@ export default function Dashboard() {
                     value={linkPin}
                     onChange={e => setLinkPin(e.target.value)}
                     placeholder="Sync PIN"
-                    className="bg-white dark:bg-gray-900"
+                    className="bg-card"
                   />
                   <Button
                     variant="secondary"
@@ -2390,7 +2390,7 @@ export default function Dashboard() {
             </div>
             {currentUser && (
               <div className="border-t pt-4 mt-4">
-                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <div className="text-sm font-medium text-secondary-foreground mb-1">
                   Sync PIN
                 </div>
                 <p className="text-xs text-gray-500 mb-2">
@@ -2432,7 +2432,7 @@ export default function Dashboard() {
               </div>
             )}
             <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <div className="text-sm font-medium text-secondary-foreground mb-3">
                 Appearance
               </div>
               <div className="flex gap-2 mb-4">
@@ -2466,7 +2466,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="text-sm font-medium text-secondary-foreground mb-2">
                 Cache Management
               </div>
               <div className="flex gap-2 mb-4">

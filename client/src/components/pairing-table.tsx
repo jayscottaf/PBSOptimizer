@@ -96,7 +96,7 @@ export function PairingTable({
   // Format route with day-by-day grouping, layover highlighting, and DH markers
   const formatRouteDisplay = (pairing: Pairing) => {
     if (!pairing.flightSegments || !Array.isArray(pairing.flightSegments) || pairing.flightSegments.length === 0) {
-      return <span className="text-gray-900 dark:text-gray-100">{pairing.route || ''}</span>;
+      return <span className="text-foreground">{pairing.route || ''}</span>;
     }
 
     // Build deadhead segments set
@@ -162,9 +162,9 @@ export function PairingTable({
         {dayRoutes.map((dayRoute, dayIdx) => (
           <div key={dayRoute.day} className="flex items-center gap-1">
             {dayIdx > 0 && (
-              <span className="text-gray-500 dark:text-gray-400 mx-1">|</span>
+              <span className="text-muted-foreground mx-1">|</span>
             )}
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">
+            <span className="text-xs font-medium text-muted-foreground mr-1">
               {dayRoute.day}:
             </span>
             {dayRoute.segments.map((seg, segIdx) => (
@@ -172,11 +172,11 @@ export function PairingTable({
                 {segIdx > 0 && <span className="text-gray-400 dark:text-gray-600">-</span>}
                 <span
                   className={`${
-                    seg.isDeadhead ? 'text-gray-500 dark:text-gray-400 italic' : ''
+                    seg.isDeadhead ? 'text-muted-foreground italic' : ''
                   } ${
                     seg.isLayover
                       ? 'font-bold text-teal-600 dark:text-teal-400'
-                      : seg.isDeadhead ? '' : 'text-gray-900 dark:text-gray-100'
+                      : seg.isDeadhead ? '' : 'text-foreground'
                   }`}
                 >
                   {seg.isDeadhead ? `(DH)${seg.airport}` : seg.airport}
@@ -490,10 +490,10 @@ export function PairingTable({
   return (
     <Card className={!showHeader ? 'border-0 rounded-none shadow-none' : undefined}>
       {showHeader && (
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pairing Results</h3>
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-foreground">Pairing Results</h3>
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-muted-foreground">
               Showing {safePairings.length} pairings
             </span>
             <Button
@@ -508,10 +508,10 @@ export function PairingTable({
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
-          <thead className="bg-gray-50 dark:bg-gray-800">
+          <thead className="bg-muted">
             <tr>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('pairingNumber')}
               >
                 <div className="flex items-center space-x-1">
@@ -524,7 +524,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('holdProbability')}
               >
                 <div className="flex items-center space-x-1">
@@ -536,11 +536,11 @@ export function PairingTable({
                   )}
                 </div>
               </th>
-              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px] sm:min-w-[280px] lg:min-w-[350px]">
+              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[200px] sm:min-w-[280px] lg:min-w-[350px]">
                 Route
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('creditHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -553,7 +553,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('blockHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -566,7 +566,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('tafb')}
               >
                 <div className="flex items-center space-x-1">
@@ -579,7 +579,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 title="Longest layover in this pairing"
                 {...sortHeaderProps('maxLayover')}
               >
@@ -593,7 +593,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('pairingDays')}
               >
                 <div className="flex items-center space-x-1">
@@ -606,7 +606,7 @@ export function PairingTable({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                 {...sortHeaderProps('creditBlockRatio')}
               >
                 <div className="flex items-center space-x-1">
@@ -619,18 +619,18 @@ export function PairingTable({
                 </div>
               </th>
               {(showDeleteButton || showAddToCalendar) && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[60px] sm:min-w-[70px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px]">
                   Actions
                 </th>
               )}
               {showDeleteButton && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
                   Remove
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-card divide-y divide-gray-200 dark:divide-gray-700">
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={`skeleton-${i}`}>
@@ -648,7 +648,7 @@ export function PairingTable({
                   <p className="text-red-600 dark:text-red-400 font-medium">
                     Couldn't load pairings.
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Check your connection and try again.
                   </p>
                   {onRetry && (
@@ -667,7 +667,7 @@ export function PairingTable({
               <tr>
                 <td
                   colSpan={showDeleteButton ? 10 : 9}
-                  className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
+                  className="px-6 py-8 text-center text-muted-foreground"
                 >
                   {hasActiveFilters
                     ? 'No pairings match your filters. Try clearing some to see more results.'
@@ -678,12 +678,12 @@ export function PairingTable({
               safePairings.map((pairing, index) => (
                 <tr
                   key={`${pairing.id}-${index}`}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                  className="hover:bg-muted cursor-pointer"
                   onClick={() => handlePairingClick(pairing)}
                 >
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <div className="flex items-center gap-1">
-                      <span className="font-mono font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
+                      <span className="font-mono font-medium text-foreground text-xs sm:text-sm">
                         {pairing.pairingNumber}
                       </span>
                       {pairing.holdProbability >= 80 && (
@@ -778,34 +778,34 @@ export function PairingTable({
                       {formatRouteDisplay(pairing)}
                     </div>
                     <div
-                      className="text-xs text-gray-500 dark:text-gray-400"
+                      className="text-xs text-muted-foreground"
                       title={formatEffectiveDisplay(pairing)}
                     >
                       {formatEffectiveDisplay(pairing)}
                     </div>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
                       {pairing.creditHours}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-mono text-xs sm:text-sm text-muted-foreground">
                       {pairing.blockHours}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-xs sm:text-sm text-muted-foreground">
                       {pairing.tafb}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-xs sm:text-sm text-muted-foreground">
                       {formatLayoverMinutes(maxLayoverMinutes(pairing))}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <span className="text-xs sm:text-sm font-medium text-foreground">
                       {pairing.pairingDays}
                     </span>
                   </td>
@@ -908,7 +908,7 @@ export function PairingTable({
 
       {/* Pagination */}
       {safePairings.length > 0 && pagination && (
-        <div className="bg-white dark:bg-gray-900 px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="bg-card px-6 py-3 border-t border-border flex items-center justify-between">
           <div className="flex-1 flex justify-between sm:hidden">
             <Button
               variant="outline"

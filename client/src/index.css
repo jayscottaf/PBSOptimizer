@@ -33,50 +33,97 @@ div[class*="offline"][style*="background"] {
   display: none !important;
 }
 
+/* ------------------------------------------------------------------ */
+/* Design tokens — "flight deck" identity.                              */
+/* Dark is the flagship (deep navy-slate + one signature sky accent);   */
+/* light is a clean cool companion. All colors flow through these       */
+/* tokens; avoid raw gray/blue utility classes in components.           */
+/* ------------------------------------------------------------------ */
+
 :root {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(20, 14.3%, 4.1%);
-  --muted: hsl(60, 4.8%, 95.9%);
-  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --background: hsl(210, 20%, 98%);
+  --foreground: hsl(222, 30%, 12%);
+  --muted: hsl(214, 18%, 94%);
+  --muted-foreground: hsl(217, 12%, 42%);
   --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --popover-foreground: hsl(222, 30%, 12%);
   --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(20, 14.3%, 4.1%);
-  --border: hsl(20, 5.9%, 90%);
-  --input: hsl(20, 5.9%, 90%);
-  --primary: hsl(207, 90%, 54%);
-  --primary-foreground: hsl(211, 100%, 99%);
-  --secondary: hsl(60, 4.8%, 95.9%);
-  --secondary-foreground: hsl(24, 9.8%, 10%);
-  --accent: hsl(60, 4.8%, 95.9%);
-  --accent-foreground: hsl(24, 9.8%, 10%);
-  --destructive: hsl(0, 84.2%, 60.2%);
-  --destructive-foreground: hsl(60, 9.1%, 97.8%);
-  --ring: hsl(20, 14.3%, 4.1%);
+  --card-foreground: hsl(222, 30%, 12%);
+  --border: hsl(214, 16%, 89%);
+  --input: hsl(214, 16%, 89%);
+  --primary: hsl(203, 94%, 46%);
+  --primary-foreground: hsl(210, 40%, 99%);
+  --secondary: hsl(214, 18%, 94%);
+  --secondary-foreground: hsl(222, 25%, 18%);
+  --accent: hsl(206, 60%, 94%);
+  --accent-foreground: hsl(210, 60%, 26%);
+  --destructive: hsl(0, 76%, 52%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --success: hsl(152, 58%, 34%);
+  --success-foreground: hsl(0, 0%, 100%);
+  --warning: hsl(35, 92%, 40%);
+  --warning-foreground: hsl(0, 0%, 100%);
+  --info: hsl(203, 90%, 42%);
+  --info-foreground: hsl(0, 0%, 100%);
+  --ring: hsl(203, 94%, 46%);
   --radius: 0.5rem;
+  --chart-1: hsl(203, 90%, 50%);
+  --chart-2: hsl(160, 66%, 40%);
+  --chart-3: hsl(43, 92%, 48%);
+  --chart-4: hsl(263, 62%, 58%);
+  --chart-5: hsl(346, 72%, 54%);
+  --sidebar-background: hsl(216, 24%, 96%);
+  --sidebar-foreground: hsl(222, 25%, 20%);
+  --sidebar-primary: hsl(203, 94%, 46%);
+  --sidebar-primary-foreground: hsl(210, 40%, 99%);
+  --sidebar-accent: hsl(210, 20%, 90%);
+  --sidebar-accent-foreground: hsl(222, 30%, 14%);
+  --sidebar-border: hsl(214, 16%, 87%);
+  --sidebar-ring: hsl(203, 94%, 46%);
+  --surface-raised: hsl(0, 0%, 100%);
 }
 
 .dark {
-  --background: hsl(240, 10%, 3.9%);
-  --foreground: hsl(0, 0%, 98%);
-  --muted: hsl(240, 3.7%, 18%);
-  --muted-foreground: hsl(240, 5%, 78%);
-  --popover: hsl(240, 10%, 8%);
-  --popover-foreground: hsl(0, 0%, 98%);
-  --card: hsl(240, 10%, 8%);
-  --card-foreground: hsl(0, 0%, 98%);
-  --border: hsl(240, 3.7%, 22%);
-  --input: hsl(240, 3.7%, 20%);
-  --primary: hsl(207, 90%, 54%);
-  --primary-foreground: hsl(211, 100%, 99%);
-  --secondary: hsl(240, 3.7%, 18%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --accent: hsl(240, 3.7%, 18%);
-  --accent-foreground: hsl(0, 0%, 98%);
-  --destructive: hsl(0, 62.8%, 30.6%);
-  --destructive-foreground: hsl(0, 0%, 98%);
-  --ring: hsl(240, 4.9%, 83.9%);
+  --background: hsl(222, 28%, 6%);
+  --foreground: hsl(210, 25%, 96%);
+  --muted: hsl(220, 18%, 14%);
+  --muted-foreground: hsl(217, 12%, 64%);
+  --popover: hsl(222, 25%, 10%);
+  --popover-foreground: hsl(210, 25%, 96%);
+  --card: hsl(222, 25%, 9%);
+  --card-foreground: hsl(210, 25%, 96%);
+  --border: hsl(220, 16%, 16%);
+  --input: hsl(220, 16%, 18%);
+  --primary: hsl(203, 94%, 56%);
+  --primary-foreground: hsl(222, 47%, 8%);
+  --secondary: hsl(220, 18%, 14%);
+  --secondary-foreground: hsl(210, 25%, 96%);
+  --accent: hsl(212, 40%, 16%);
+  --accent-foreground: hsl(204, 90%, 78%);
+  --destructive: hsl(0, 72%, 56%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --success: hsl(152, 56%, 46%);
+  --success-foreground: hsl(150, 60%, 8%);
+  --warning: hsl(38, 92%, 54%);
+  --warning-foreground: hsl(35, 80%, 8%);
+  --info: hsl(203, 90%, 60%);
+  --info-foreground: hsl(210, 60%, 8%);
+  --ring: hsl(203, 94%, 56%);
   --radius: 0.5rem;
+  --chart-1: hsl(203, 90%, 60%);
+  --chart-2: hsl(160, 66%, 48%);
+  --chart-3: hsl(43, 96%, 58%);
+  --chart-4: hsl(263, 66%, 66%);
+  --chart-5: hsl(346, 74%, 62%);
+  --sidebar-background: hsl(222, 30%, 5%);
+  --sidebar-foreground: hsl(214, 18%, 82%);
+  --sidebar-primary: hsl(203, 94%, 56%);
+  --sidebar-primary-foreground: hsl(222, 47%, 8%);
+  --sidebar-accent: hsl(220, 20%, 12%);
+  --sidebar-accent-foreground: hsl(210, 25%, 96%);
+  --sidebar-border: hsl(220, 18%, 12%);
+  --sidebar-ring: hsl(203, 94%, 56%);
+  --surface-raised: hsl(222, 22%, 12%);
 }
 
 @layer base {
@@ -86,5 +133,30 @@ div[class*="offline"][style*="background"] {
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    /* cv11/ss01: cleaner Inter alternates; tnum: tabular numerals so
+       credit/block/TAFB columns align. */
+    font-feature-settings:
+      'cv11' 1,
+      'ss01' 1,
+      'tnum' 1;
+  }
+}
+
+/* Typographic scale — apply opportunistically; not global overrides. */
+@layer components {
+  .text-display {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+  .text-title {
+    @apply text-lg font-semibold tracking-tight;
+  }
+  .text-body {
+    @apply text-sm leading-6;
+  }
+  .text-caption {
+    @apply text-xs text-muted-foreground;
+  }
+  .text-mono-data {
+    @apply font-mono text-sm tabular-nums;
   }
 }

@@ -565,7 +565,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             <h2 className="text-2xl font-bold">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               {bidPackageId && latestBidPackage
                 ? `Bid Package: ${latestBidPackage.month} ${latestBidPackage.year}`
                 : 'Calendar View'}
@@ -595,13 +595,13 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="bg-card border dark:border-gray-700 rounded-lg overflow-hidden">
           {/* Day headers */}
-          <div className="grid grid-cols-7 bg-gray-50 dark:bg-gray-800 border-b">
+          <div className="grid grid-cols-7 bg-muted border-b">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div
                 key={day}
-                className="p-3 text-center font-semibold text-gray-700 dark:text-gray-300 border-r dark:border-gray-700 last:border-r-0"
+                className="p-3 text-center font-semibold text-secondary-foreground border-r dark:border-gray-700 last:border-r-0"
               >
                 {day}
               </div>
@@ -628,8 +628,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                         key={day.toISOString()}
                         className={`p-2 border-r dark:border-gray-700 last:border-r-0 relative ${
                           !inBidPeriod
-                            ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600'
-                            : 'bg-white dark:bg-gray-900'
+                            ? 'bg-muted text-gray-400 dark:text-gray-600'
+                            : 'bg-card'
                         }`}
                       >
                         <div
@@ -637,7 +637,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             isToday
                               ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center'
                               : inBidPeriod
-                                ? 'text-gray-900 dark:text-gray-100'
+                                ? 'text-foreground'
                                 : 'text-gray-400 dark:text-gray-600'
                           }`}
                         >
@@ -813,10 +813,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
         <Card className="mt-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <CardTitle className="text-xl font-semibold text-foreground">
                 Monthly Overview
               </CardTitle>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 {format(currentDate, 'MMMM yyyy')} performance metrics
               </span>
             </div>
@@ -831,14 +831,14 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📋
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                      <div className="text-sm text-muted-foreground">
                         Total Pairings
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">This month</div>
+                      <div className="text-xs text-muted-foreground">This month</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {events.length}
                     </div>
                   </div>
@@ -853,12 +853,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       ⏱️
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Credit Hours</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">ALV: {userALV.toFixed(0)}h</div>
+                      <div className="text-sm text-muted-foreground">Credit Hours</div>
+                      <div className="text-xs text-muted-foreground">ALV: {userALV.toFixed(0)}h</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {totalCreditHours.toFixed(2)}
                     </div>
                     <div className={`text-xs px-2 py-1 rounded-full ${
@@ -871,7 +871,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
                     <span>{totalCreditHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
@@ -894,18 +894,18 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       🛫
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Block Hours</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Flight time</div>
+                      <div className="text-sm text-muted-foreground">Block Hours</div>
+                      <div className="text-xs text-muted-foreground">Flight time</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {totalBlockHours.toFixed(2)}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
                     <span>{totalBlockHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
@@ -930,17 +930,17 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📅
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Days Working</div>
+                      <div className="text-sm text-muted-foreground">Days Working</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {totalWorkingDays}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
                     <span>{totalWorkingDays}/{bidPeriodDays}</span>
                   </div>
@@ -963,17 +963,17 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       🏖️
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Days Off</div>
+                      <div className="text-sm text-muted-foreground">Days Off</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {totalDaysOff}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
                     <span>{totalDaysOff}/{bidPeriodDays}</span>
                   </div>
@@ -996,7 +996,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       📊
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                      <div className="text-sm text-muted-foreground">
                         Credit/Block Ratio
                       </div>
                       <div
@@ -1015,12 +1015,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    <div className="text-2xl font-bold text-foreground">
                       {ratio.toFixed(2)}
                     </div>
                     <div className="flex items-center gap-1 justify-end">
                       <div className={`w-2 h-2 ${ratioDotColor} rounded-full`}></div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">({ratioLabel})</span>
+                      <span className="text-xs text-muted-foreground">({ratioLabel})</span>
                     </div>
                   </div>
                 </div>
@@ -1035,10 +1035,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     📈
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div className="text-sm font-medium text-foreground">
                       Efficiency Score
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                       Compared to all {bidPackageStats?.totalPairings || 0}{' '}
                       pairings in bid package
                     </div>
@@ -1069,7 +1069,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
               </div>
 
               {hasStats && (
-                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                <div className="text-xs text-muted-foreground space-y-1">
                   <div className="flex justify-between">
                     <span>Your ratio: {ratio.toFixed(2)}</span>
                     <span>Package average: {avgRatio!.toFixed(2)}</span>

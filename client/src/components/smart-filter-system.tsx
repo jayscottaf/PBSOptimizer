@@ -485,7 +485,7 @@ export function SmartFilterSystem({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         {/* Function Selector */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter By</label>
+          <label className="text-sm font-medium text-secondary-foreground">Filter By</label>
           <select
             value={selectedFunction}
             onChange={e => {
@@ -505,7 +505,7 @@ export function SmartFilterSystem({
 
         {/* Data Selector */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Value</label>
+          <label className="text-sm font-medium text-secondary-foreground">Value</label>
           <select
             value={selectedData}
             onChange={e => {
@@ -527,7 +527,7 @@ export function SmartFilterSystem({
 
         {/* Rotation Number Filter */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="text-sm font-medium text-secondary-foreground">
             Rotation #
           </label>
           <input
@@ -595,7 +595,7 @@ export function SmartFilterSystem({
       <div className="flex flex-wrap items-center gap-4">
         {/* Preferred Days Off */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span className="text-sm font-medium text-secondary-foreground">
             Days Off:
           </span>
           <Button
@@ -615,7 +615,7 @@ export function SmartFilterSystem({
         {/* Layover Locations Multi-Select */}
         {layoverLocations.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-sm font-medium text-secondary-foreground">
               Layover Cities:
             </span>
             <Button
@@ -783,7 +783,7 @@ export function SmartFilterSystem({
       {/* Quick Filter Buttons */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Quick filters:</span>
+          <span className="text-sm text-muted-foreground">Quick filters:</span>
           <Button
             variant="ghost"
             size="sm"

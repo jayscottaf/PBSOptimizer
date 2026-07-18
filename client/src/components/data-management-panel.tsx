@@ -240,7 +240,7 @@ export function DataManagementPanel() {
                           {currentPackage.month} {currentPackage.year}
                           <Badge variant="default" className="text-xs bg-blue-500">Current</Badge>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className="text-xs text-muted-foreground">
                           {currentPackage.base} {currentPackage.aircraft} |{' '}
                           {currentPackage.pairingCount} pairings
                         </div>
@@ -298,19 +298,19 @@ export function DataManagementPanel() {
                 <>
                   <button
                     onClick={() => setShowAllPackages(!showAllPackages)}
-                    className="w-full flex items-center justify-between p-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-between p-2 text-sm text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                   >
                     <span>{otherPackages.length} other package{otherPackages.length > 1 ? 's' : ''}</span>
                     <ChevronDown className={`h-4 w-4 transition-transform ${showAllPackages ? 'rotate-180' : ''}`} />
                   </button>
 
                   {showAllPackages && (
-                    <div className="space-y-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
+                    <div className="space-y-2 pl-2 border-l-2 border-border">
                       {otherPackages.map((pkg) => (
                         <div
                           key={pkg.id}
                           data-testid={`package-row-${pkg.id}`}
-                          className="rounded-lg border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                          className="rounded-lg border bg-muted border-border"
                         >
                           <button
                             onClick={() => togglePackage(pkg.id)}
@@ -320,7 +320,7 @@ export function DataManagementPanel() {
                               <Package className="h-4 w-4 text-gray-400" />
                               <div>
                                 <div className="font-medium">{pkg.month} {pkg.year}</div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                <div className="text-xs text-muted-foreground">
                                   {pkg.base} {pkg.aircraft} | {pkg.pairingCount} pairings
                                 </div>
                               </div>
@@ -396,7 +396,7 @@ export function DataManagementPanel() {
                     className={`flex items-center justify-between p-3 rounded-lg border ${
                       isLinked
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                        : 'bg-muted border-border'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -405,7 +405,7 @@ export function DataManagementPanel() {
                         <div className="font-medium">
                           {report.month} {report.year}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className="text-xs text-muted-foreground">
                           {report.base} {report.aircraft}
                         </div>
                       </div>
@@ -435,14 +435,14 @@ export function DataManagementPanel() {
                 <>
                   <button
                     onClick={() => setShowAllReports(!showAllReports)}
-                    className="w-full flex items-center justify-between p-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-between p-2 text-sm text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                   >
                     <span>{reasonsReports.length - 1} other report{reasonsReports.length > 2 ? 's' : ''}</span>
                     <ChevronDown className={`h-4 w-4 transition-transform ${showAllReports ? 'rotate-180' : ''}`} />
                   </button>
 
                   {showAllReports && (
-                    <div className="space-y-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
+                    <div className="space-y-2 pl-2 border-l-2 border-border">
                       {reasonsReports.slice(1).map((report, idx) => {
                         const isLinked = hasMatchingBidPackage(report);
                         return (
@@ -451,7 +451,7 @@ export function DataManagementPanel() {
                             className={`flex items-center justify-between p-3 rounded-lg border ${
                               isLinked
                                 ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                : 'bg-muted border-border'
                             }`}
                           >
                             <div className="flex items-center gap-3">
@@ -460,7 +460,7 @@ export function DataManagementPanel() {
                                 <div className="font-medium">
                                   {report.month} {report.year}
                                 </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                <div className="text-xs text-muted-foreground">
                                   {report.base} {report.aircraft}
                                 </div>
                               </div>

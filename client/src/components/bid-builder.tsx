@@ -107,7 +107,7 @@ const PREFERENCE_STYLE: Record<
   clearScheduleStartNext: {
     icon: SkipForward,
     accent: 'border-l-gray-400',
-    chip: 'text-gray-600 dark:text-gray-400',
+    chip: 'text-muted-foreground',
   },
 };
 

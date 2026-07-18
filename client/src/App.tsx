@@ -16,44 +16,37 @@ function Router() {
   );
 }
 
+function OfflineBanner() {
+  const [offline, setOffline] = React.useState(
+    typeof navigator !== 'undefined' && !navigator.onLine
+  );
+  React.useEffect(() => {
+    const goOnline = () => setOffline(false);
+    const goOffline = () => setOffline(true);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+  if (!offline) return null;
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-0 top-0 z-[1000] bg-destructive px-3 py-2 text-center text-sm font-medium text-destructive-foreground"
+    >
+      You are offline. Some data may be unavailable.
+    </div>
+  );
+}
+
 function App() {
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-  // Listen for online/offline events (simple banner only)
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => {
-      const el = document.getElementById('offline-banner');
-      if (el) {
-        el.style.display = 'none';
-      }
-    });
-    window.addEventListener('offline', () => {
-      const el = document.getElementById('offline-banner');
-      if (el) {
-        el.style.display = 'block';
-      }
-    });
-  }
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <TooltipProvider delayDuration={200} skipDelayDuration={0}>
-          <div
-            id="offline-banner"
-            style={{
-              display: isOffline ? 'block' : 'none',
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 1000,
-              background: '#b91c1c',
-              color: 'white',
-              padding: '8px',
-              textAlign: 'center',
-            }}
-          >
-            You are offline. Some data may be unavailable.
-          </div>
+          <OfflineBanner />
           <Toaster />
           <Router />
         </TooltipProvider>

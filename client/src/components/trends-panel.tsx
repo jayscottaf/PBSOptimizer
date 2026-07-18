@@ -89,10 +89,10 @@ function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
     <div className="space-y-1.5">
       {periods.map(p => (
         <div key={p.period} className="flex items-center gap-2 text-xs">
-          <span className="w-20 shrink-0 text-gray-500 dark:text-gray-400 font-mono">
+          <span className="w-20 shrink-0 text-muted-foreground font-mono">
             {p.period}
           </span>
-          <div className="flex-1 h-4 rounded overflow-hidden flex bg-gray-100 dark:bg-gray-800">
+          <div className="flex-1 h-4 rounded overflow-hidden flex bg-muted">
             {(['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const).map(
               key => {
                 const widthPct = (p[key] / Math.max(1, p.totalPrefs)) * 100;
@@ -109,7 +109,7 @@ function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
               }
             )}
           </div>
-          <span className="w-16 shrink-0 text-right text-gray-500 dark:text-gray-400">
+          <span className="w-16 shrink-0 text-right text-muted-foreground">
             {p.avgPrefsPerPilot.toFixed(0)}/pilot
           </span>
         </div>
@@ -119,7 +119,7 @@ function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
           key => (
             <span
               key={key}
-              className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
             >
               <span
                 className="inline-block w-3 h-3 rounded-sm"
@@ -146,16 +146,16 @@ function RankedCityList({
   const max = Math.max(1, ...cities.map(c => c.count));
   return (
     <div>
-      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+      <p className="text-xs font-medium text-muted-foreground mb-1.5">
         {title}
       </p>
       <div className="space-y-1">
         {cities.map(c => (
           <div key={c.city} className="flex items-center gap-2 text-xs">
-            <span className="w-9 shrink-0 font-mono text-gray-700 dark:text-gray-300">
+            <span className="w-9 shrink-0 font-mono text-secondary-foreground">
               {c.city}
             </span>
-            <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+            <div className="flex-1 h-3 bg-muted rounded overflow-hidden">
               <div
                 className="h-full rounded"
                 style={{
@@ -164,7 +164,7 @@ function RankedCityList({
                 }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right text-gray-500 dark:text-gray-400">
+            <span className="w-8 shrink-0 text-right text-muted-foreground">
               {c.count}
             </span>
           </div>
@@ -212,7 +212,7 @@ function Histogram({
         {data.map(d => (
           <span
             key={d.key}
-            className="flex-1 text-center text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+            className="flex-1 text-center text-[9px] text-muted-foreground whitespace-nowrap"
           >
             {labelFor(d.key)}
           </span>
@@ -237,7 +237,7 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
     .sort();
   if (periods.length < 2) {
     return (
-      <p className="text-sm text-gray-500 dark:text-gray-400">
+      <p className="text-sm text-muted-foreground">
         Not enough periods for a trend line yet.
       </p>
     );
@@ -324,7 +324,7 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
         {dayLengths.map(days => (
           <span
             key={days}
-            className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
           >
             <span
               className="inline-block w-3 h-0.5 rounded"
@@ -364,14 +364,14 @@ export function TrendsPanel() {
 
   if (isLoading) {
     return (
-      <div className="p-6 text-sm text-gray-500 dark:text-gray-400">
+      <div className="p-6 text-sm text-muted-foreground">
         Crunching three years of award history…
       </div>
     );
   }
   if (isError || !data || data.periods.length === 0) {
     return (
-      <div className="p-6 text-sm text-gray-500 dark:text-gray-400">
+      <div className="p-6 text-sm text-muted-foreground">
         No Reasons Report history imported yet — upload composite reports to
         unlock category trends.
       </div>
@@ -392,7 +392,7 @@ export function TrendsPanel() {
                 <TrendingUp className="h-5 w-5 text-blue-500" />
                 Category Trends — {data.base}
               </CardTitle>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {month
                   ? `Showing only ${MONTH_NAMES[month] ?? month} across every imported year — compare against what you're about to bid.`
                   : `Mined from ${data.periods.length} imported Reasons Report periods (${data.periods[0]?.period} – ${data.periods[data.periods.length - 1]?.period}).`}
@@ -405,7 +405,7 @@ export function TrendsPanel() {
               <select
                 value={month}
                 onChange={e => setMonth(e.target.value)}
-                className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100"
+                className="rounded-md border border-input bg-card px-2 py-1.5 text-sm text-foreground"
               >
                 <option value="">All periods</option>
                 {data.availableMonths.map(m => (
@@ -424,13 +424,13 @@ export function TrendsPanel() {
           <CardTitle className="text-base">
             How junior each trip length goes
           </CardTitle>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Percentile of the junior-most pilot awarded each trip length, per
             period. Higher lines = trips that go deep into the category (easier
             to hold); dips mark months when seniors took them.
           </p>
         </CardHeader>
-        <CardContent className="text-gray-700 dark:text-gray-300">
+        <CardContent className="text-secondary-foreground">
           <BoundaryChart boundaries={data.holdBoundaries} />
         </CardContent>
       </Card>
@@ -438,7 +438,7 @@ export function TrendsPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Contention by period</CardTitle>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Share of all bid preferences lost to a more senior pilot — the
             category's competitiveness month by month.
           </p>
@@ -454,10 +454,10 @@ export function TrendsPanel() {
                   : 0;
               return (
                 <div key={p.period} className="flex items-center gap-2 text-xs">
-                  <span className="w-20 shrink-0 text-gray-500 dark:text-gray-400 font-mono">
+                  <span className="w-20 shrink-0 text-muted-foreground font-mono">
                     {p.period}
                   </span>
-                  <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+                  <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
                     <div
                       className="h-full bg-red-400/80 dark:bg-red-500/70 rounded"
                       style={{ width: `${widthPct}%` }}
@@ -469,7 +469,7 @@ export function TrendsPanel() {
                   <span className="w-24 shrink-0 text-right text-green-600 dark:text-green-400">
                     {honoredPct.toFixed(0)}% honored
                   </span>
-                  <span className="w-16 shrink-0 text-right text-gray-400 dark:text-gray-500">
+                  <span className="w-16 shrink-0 text-right text-muted-foreground">
                     {p.pilots} pilots
                   </span>
                 </div>
@@ -487,7 +487,7 @@ export function TrendsPanel() {
                 <ListChecks className="h-4 w-4 text-blue-500" />
                 Bid patterns — what pilots actually ask for
               </CardTitle>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Mined from preference text across every imported period —
                 what pilots bid, not just what they got.
               </p>
@@ -499,7 +499,7 @@ export function TrendsPanel() {
               <CardTitle className="text-base">
                 Preference mix &amp; bid complexity
               </CardTitle>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Share of each preference type per bid, and the average number
                 of preferences per pilot (right column) — how much pilots are
                 bidding has climbed sharply over time.
@@ -513,7 +513,7 @@ export function TrendsPanel() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Layover preferences</CardTitle>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Cities named in Award (requested) vs. Avoid preferences,
                 ranked by how often they're bid.
               </p>
@@ -539,7 +539,7 @@ export function TrendsPanel() {
               <CardTitle className="text-base">
                 Check-in time &amp; station preferences
               </CardTitle>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 What hour pilots want to start after (combining Award
                 "Check-In Time &gt;" and Avoid "Check-In Time &lt;" bids), and
                 which report station they favor or avoid.
@@ -547,7 +547,7 @@ export function TrendsPanel() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div>
-                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                <p className="text-xs font-medium text-muted-foreground mb-2">
                   Prefers check-in after…
                 </p>
                 <Histogram
@@ -570,10 +570,10 @@ export function TrendsPanel() {
                       key={s.station}
                       className="flex items-center gap-2 text-xs"
                     >
-                      <span className="w-9 shrink-0 font-mono text-gray-700 dark:text-gray-300">
+                      <span className="w-9 shrink-0 font-mono text-secondary-foreground">
                         {s.station}
                       </span>
-                      <div className="flex-1 h-4 rounded overflow-hidden flex bg-gray-100 dark:bg-gray-800">
+                      <div className="flex-1 h-4 rounded overflow-hidden flex bg-muted">
                         <div
                           className="h-full bg-blue-400/80 dark:bg-blue-500/70"
                           style={{ width: `${(s.awarded / max) * 100}%` }}
@@ -585,7 +585,7 @@ export function TrendsPanel() {
                           title={`Avoided: ${s.avoided}`}
                         />
                       </div>
-                      <span className="w-32 shrink-0 text-right text-gray-500 dark:text-gray-400">
+                      <span className="w-32 shrink-0 text-right text-muted-foreground">
                         {s.awarded} req · {s.avoided} avoid
                       </span>
                     </div>
@@ -601,7 +601,7 @@ export function TrendsPanel() {
                 <CardTitle className="text-base">
                   Consecutive days-off requests
                 </CardTitle>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Length of "N Consecutive Days Off" Set Condition bids — the
                   most common block pilots ask PBS to protect.
                 </p>

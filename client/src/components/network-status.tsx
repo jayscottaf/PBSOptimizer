@@ -86,7 +86,7 @@ export function NetworkStatus({
     <div className={`${className}`}>
       {/* Always visible WiFi icon - inline style */}
       <div
-        className="flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer relative"
+        className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer relative"
         onClick={() => {
           if (!networkStatus.isOnline) {
             setShowFullStatus(!showFullStatus);
@@ -102,9 +102,9 @@ export function NetworkStatus({
 
       {/* Expandable details panel - only when offline and expanded */}
       {!networkStatus.isOnline && showFullStatus && (
-        <div className="absolute top-10 right-0 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 z-50">
+        <div className="absolute top-10 right-0 w-72 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg p-4 z-50">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+            <div className="flex items-center gap-2 text-secondary-foreground">
               <AlertTriangle className="h-4 w-4" />
               <span className="font-medium">Working Offline</span>
             </div>
@@ -122,7 +122,7 @@ export function NetworkStatus({
             </Button>
           </div>
 
-          <div className="text-gray-600 dark:text-gray-400 space-y-2 text-sm">
+          <div className="text-muted-foreground space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-3 w-3 text-green-500 dark:text-green-400" />
               <span>Cached data & local sorting available</span>

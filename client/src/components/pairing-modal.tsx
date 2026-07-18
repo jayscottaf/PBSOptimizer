@@ -203,55 +203,55 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Pairing Overview */}
             <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
+              <h4 className="font-semibold text-foreground text-sm sm:text-base">
                 Overview
               </h4>
               <Card>
-                <CardContent className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-800 font-mono text-xs sm:text-sm space-y-1 text-gray-900 dark:text-gray-100">
+                <CardContent className="p-3 sm:p-4 bg-muted font-mono text-xs sm:text-sm space-y-1 text-foreground">
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Pairing:</span>{' '}
+                    <span className="text-muted-foreground">Pairing:</span>{' '}
                     {pairing.pairingNumber}
                   </div>
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Effective:</span>{' '}
+                    <span className="text-muted-foreground">Effective:</span>{' '}
                     {pairing.effectiveDates}
                   </div>
                   {pairing.payHours && (
                     <div>
-                      <span className="text-gray-600 dark:text-gray-400">Total Pay:</span>{' '}
+                      <span className="text-muted-foreground">Total Pay:</span>{' '}
                       {pairing.payHours}
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Credit:</span>{' '}
+                    <span className="text-muted-foreground">Credit:</span>{' '}
                     {pairing.creditHours}
                   </div>
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Block:</span>{' '}
+                    <span className="text-muted-foreground">Block:</span>{' '}
                     {pairing.blockHours}
                   </div>
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">TAFB:</span> {pairing.tafb}{' '}
+                    <span className="text-muted-foreground">TAFB:</span> {pairing.tafb}{' '}
                     hours
                   </div>
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Days:</span>{' '}
+                    <span className="text-muted-foreground">Days:</span>{' '}
                     {pairing.pairingDays || 'N/A'}
                   </div>
                   {pairing.fdp && (
                     <div>
-                      <span className="text-gray-600 dark:text-gray-400">FDP:</span> {pairing.fdp}
+                      <span className="text-muted-foreground">FDP:</span> {pairing.fdp}
                     </div>
                   )}
                   {pairing.deadheads > 0 && (
                     <div>
-                      <span className="text-gray-600 dark:text-gray-400">Deadheads:</span>{' '}
+                      <span className="text-muted-foreground">Deadheads:</span>{' '}
                       {pairing.deadheads}
                     </div>
                   )}
                   {pairing.holdProbability !== undefined && (
                     <div>
-                      <span className="text-gray-600 dark:text-gray-400">Hold Probability:</span>{' '}
+                      <span className="text-muted-foreground">Hold Probability:</span>{' '}
                       <span className={
                         pairing.holdProbability >= 70 ? 'text-green-600 font-medium' :
                         pairing.holdProbability >= 50 ? 'text-yellow-600 font-medium' :
@@ -267,7 +267,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
 
             {/* Flight Segments */}
             <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
+              <h4 className="font-semibold text-foreground text-sm sm:text-base">
                 Flight Segments
               </h4>
               <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
@@ -319,7 +319,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                     ));
                   })()
                 ) : (
-                  <div className="text-gray-500 dark:text-gray-400 text-sm">
+                  <div className="text-muted-foreground text-sm">
                     No flight segment details available
                   </div>
                 )}
@@ -329,12 +329,12 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
 
           {/* Full Text Block */}
           <div className="space-y-2 sm:space-y-4">
-            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
+            <h4 className="font-semibold text-foreground text-sm sm:text-base">
               Full Pairing Text
             </h4>
             <Card>
               <CardContent className="p-2 sm:p-4">
-                <pre className="text-xs font-mono whitespace-pre-wrap bg-gray-50 dark:bg-gray-800 dark:text-gray-100 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
+                <pre className="text-xs font-mono whitespace-pre-wrap bg-muted dark:text-gray-100 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
                   {pairing.fullTextBlock || 'No full text block available'}
                 </pre>
               </CardContent>
@@ -343,7 +343,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
 
           {/* Historical Awards - Fingerprint Matching */}
           <div className="space-y-2 sm:space-y-4">
-            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
+            <h4 className="font-semibold text-foreground text-sm sm:text-base">
               Similar Historical Pairings
             </h4>
             <Card>
@@ -371,7 +371,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                             match.isExactPairing ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' :
                             match.confidence === 'exact' ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
                             match.confidence === 'high' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700' :
-                            'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600'
+                            'bg-muted border-gray-300 dark:border-gray-600'
                           }`}
                         >
                           <div className="flex justify-between items-start mb-2">
@@ -428,8 +428,8 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                                       <span className="text-gray-600 dark:text-gray-300 w-24">
                                         {award.date} {award.dayOfWeek}
                                       </span>
-                                      <span className="text-gray-400 dark:text-gray-500 mx-2">—</span>
-                                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                      <span className="text-muted-foreground mx-2">—</span>
+                                      <span className="font-semibold text-foreground">
                                         Seniority #{award.seniority}
                                       </span>
                                     </div>
@@ -459,7 +459,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                           </div>
                           
                           {/* Historical pairing details */}
-                          <div className="text-xs text-gray-600 dark:text-gray-400 font-mono mb-2">
+                          <div className="text-xs text-muted-foreground font-mono mb-2">
                             Layovers: {match.historicalLayovers || 'None'} | 
                             Days: {match.historicalDays} | 
                             Credit: {parseFloat(match.historicalCredit).toFixed(2)}
@@ -471,37 +471,37 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                               <div className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.layoverMatch)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Layovers</div>
+                              <div className="text-muted-foreground">Layovers</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.daysMatch >= 80 ? 'text-green-600' : match.breakdown.daysMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.daysMatch)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Days</div>
+                              <div className="text-muted-foreground">Days</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${(match.breakdown.seasonMatch ?? 0) >= 80 ? 'text-green-600' : (match.breakdown.seasonMatch ?? 0) >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.seasonMatch ?? 0)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Season</div>
+                              <div className="text-muted-foreground">Season</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.creditMatch >= 80 ? 'text-green-600' : match.breakdown.creditMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.creditMatch)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Credit</div>
+                              <div className="text-muted-foreground">Credit</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.timeMatch >= 80 ? 'text-green-600' : match.breakdown.timeMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.timeMatch)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Times</div>
+                              <div className="text-muted-foreground">Times</div>
                             </div>
                             <div className="text-center">
                               <div className={`font-semibold ${match.breakdown.efficiencyMatch >= 80 ? 'text-green-600' : match.breakdown.efficiencyMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
                                 {Math.round(match.breakdown.efficiencyMatch)}%
                               </div>
-                              <div className="text-gray-500 dark:text-gray-400">Efficiency</div>
+                              <div className="text-muted-foreground">Efficiency</div>
                             </div>
                           </div>
                         </div>
@@ -509,7 +509,7 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                     </div>
                   </div>
                 ) : (
-                  <div className="text-gray-500 dark:text-gray-400 text-sm">
+                  <div className="text-muted-foreground text-sm">
                     No similar historical pairings found (60%+ match required)
                   </div>
                 )}

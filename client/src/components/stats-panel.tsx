@@ -275,12 +275,12 @@ export function StatsPanel({
 
   const layoverSection =
     layoverStats.length > 0 ? (
-      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+      <div className="mt-6 pt-4 border-t border-border">
+        <h4 className="text-sm font-medium text-foreground mb-3">
           🏨 Layover Cities
         </h4>
         <div className="space-y-1">
-          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 pb-1 border-b border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
             <div>City</div>
             <div className="text-right">#</div>
             <div className="text-right">%</div>
@@ -296,13 +296,13 @@ export function StatsPanel({
                   key={city}
                   className="grid grid-cols-3 gap-2 text-xs py-1"
                 >
-                  <span className="text-gray-700 dark:text-gray-300 font-medium">
+                  <span className="text-secondary-foreground font-medium">
                     {city}
                   </span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                  <span className="text-foreground font-medium text-right">
                     {count}
                   </span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                  <span className="text-foreground font-medium text-right">
                     {pct}%
                   </span>
                 </div>
@@ -330,7 +330,7 @@ export function StatsPanel({
       <div className="p-0">
         {isProcessing && (
           <div className="space-y-2">
-            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Processing bid package…</span>
               <span>{displayTotalPairings} pairings saved so far</span>
             </div>
@@ -349,7 +349,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-blue-600">
               {displayTotalPairings}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               Total Pairings
             </div>
             {isProcessing && (
@@ -361,7 +361,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-green-600">
               {stats.likelyToHold}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               Likely to Hold (≥70%)
             </div>
           </div>
@@ -369,7 +369,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-purple-600">
               {stats.highCredit}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               High Credit (18+ hrs)
             </div>
           </div>
@@ -377,13 +377,13 @@ export function StatsPanel({
 
         {/* Combined Trip Types Table */}
         {stats.totalPairings > 0 && (
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+          <div className="mt-6 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium text-foreground mb-3">
               ✈️ Trip Types
             </h4>
             <div className="space-y-1">
               {/* Header row */}
-              <div className="grid grid-cols-4 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 pb-1 border-b border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
                 <div>Trip</div>
                 <div className="text-right">%</div>
                 <div className="text-right">Avg Credit</div>
@@ -403,12 +403,12 @@ export function StatsPanel({
                     className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
                     onClick={() => onTripLengthFilter?.(days)}
                   >
-                    <span className="text-gray-700 dark:text-gray-300 font-medium">{days}-day</span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">{percentage}%</span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    <span className="text-secondary-foreground font-medium">{days}-day</span>
+                    <span className="text-foreground font-medium text-right">{percentage}%</span>
+                    <span className="text-foreground font-medium text-right">
                       {avgData ? avgData.credit.toFixed(1) : '-'}
                     </span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    <span className="text-foreground font-medium text-right">
                       {avgData ? avgData.block.toFixed(1) : '-'}
                     </span>
                   </div>
@@ -420,8 +420,8 @@ export function StatsPanel({
 
         {/* Credit/Block Ratio Breakdown */}
         {stats.totalPairings > 0 && (
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+          <div className="mt-6 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium text-foreground mb-3 flex items-center">
               <BarChart2 className="h-4 w-4 mr-2" />
               Credit/Block Ratio Quality
             </h4>
@@ -429,7 +429,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
                   </span>
                 </div>
@@ -446,7 +446,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
                   </span>
                 </div>
@@ -462,7 +462,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
                   </span>
                 </div>
@@ -479,7 +479,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
                   </span>
                 </div>
@@ -509,7 +509,7 @@ export function StatsPanel({
       <CardContent className="p-6">
         {isProcessing && (
           <div className="space-y-2">
-            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Processing bid package…</span>
               <span>{displayTotalPairings} pairings saved so far</span>
             </div>
@@ -528,7 +528,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-blue-600">
               {displayTotalPairings}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               Total Pairings
             </div>
             {isProcessing && (
@@ -540,7 +540,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-green-600">
               {stats.likelyToHold}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               Likely to Hold (≥70%)
             </div>
           </div>
@@ -548,7 +548,7 @@ export function StatsPanel({
             <div className="text-xl lg:text-2xl font-bold text-purple-600">
               {stats.highCredit}
             </div>
-            <div className="text-xs lg:text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-xs lg:text-sm text-muted-foreground">
               High Credit (18+ hrs)
             </div>
           </div>
@@ -556,13 +556,13 @@ export function StatsPanel({
 
         {/* Combined Trip Types Table */}
         {stats.totalPairings > 0 && (
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+          <div className="mt-6 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium text-foreground mb-3">
               ✈️ Trip Types
             </h4>
             <div className="space-y-1">
               {/* Header row */}
-              <div className="grid grid-cols-4 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 pb-1 border-b border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
                 <div>Trip</div>
                 <div className="text-right">%</div>
                 <div className="text-right">Avg Credit</div>
@@ -582,12 +582,12 @@ export function StatsPanel({
                     className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
                     onClick={() => onTripLengthFilter?.(days)}
                   >
-                    <span className="text-gray-700 dark:text-gray-300 font-medium">{days}-day</span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">{percentage}%</span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    <span className="text-secondary-foreground font-medium">{days}-day</span>
+                    <span className="text-foreground font-medium text-right">{percentage}%</span>
+                    <span className="text-foreground font-medium text-right">
                       {avgData ? avgData.credit.toFixed(1) : '-'}
                     </span>
-                    <span className="text-gray-900 dark:text-gray-100 font-medium text-right">
+                    <span className="text-foreground font-medium text-right">
                       {avgData ? avgData.block.toFixed(1) : '-'}
                     </span>
                   </div>
@@ -599,8 +599,8 @@ export function StatsPanel({
 
         {/* Credit/Block Ratio Breakdown */}
         {stats.totalPairings > 0 && (
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+          <div className="mt-6 pt-4 border-t border-border">
+            <h4 className="text-sm font-medium text-foreground mb-3 flex items-center">
               <BarChart2 className="h-4 w-4 mr-2" />
               Credit/Block Ratio Quality
             </h4>
@@ -608,7 +608,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
                   </span>
                 </div>
@@ -624,7 +624,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
                   </span>
                 </div>
@@ -640,7 +640,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
                   </span>
                 </div>
@@ -656,7 +656,7 @@ export function StatsPanel({
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
                   </span>
                 </div>
