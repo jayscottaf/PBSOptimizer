@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, X, Calendar as CalendarIcon, MapPin } from 'lucide-react';
+import {
+  X,
+  Calendar as CalendarIcon,
+  MapPin,
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+} from 'lucide-react';
 import { SearchFilters } from '@/lib/api';
 import { api } from '@/lib/api';
 import {
@@ -15,6 +22,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 interface FilterOption {
   key: string;
@@ -289,70 +302,6 @@ export function SmartFilterSystem({
     ? allFilterOptions.find(f => f.key === selectedFunction)?.dataOptions || []
     : [];
 
-  const handleAddFilter = () => {
-    if (!selectedFunction || !selectedData) {
-      return;
-    }
-
-    const functionOption = allFilterOptions.find(f => f.key === selectedFunction);
-    const dataOption = currentFunctionOptions.find(
-      d => d.value.toString() === selectedData
-    );
-
-    if (!functionOption || !dataOption) {
-      return;
-    }
-
-    // Clear conflicting filters based on category
-    if (functionOption.key === 'creditHours') {
-      onFilterClear('creditMin');
-      onFilterClear('creditMax');
-      onFilterClear('creditRange');
-    } else if (functionOption.key === 'pairingDays') {
-      // Clear all pairing day related filters when setting a new pairing days filter
-      onFilterClear('pairingDays');
-      onFilterClear('pairingDaysMin');
-      onFilterClear('pairingDaysMax');
-    } else if (functionOption.key === 'blockHours') {
-      onFilterClear('blockMin');
-      onFilterClear('blockMax');
-      onFilterClear('blockRange');
-    }
-
-    // Handle range filters (like credit hours and block hours) specially
-    if (dataOption.additionalFilter) {
-      // For range filters, create a combined filter object
-      const rangeFilter = {
-        [dataOption.filterKey || functionOption.key]: dataOption.value,
-        [dataOption.additionalFilter.key]: dataOption.additionalFilter.value,
-      };
-      // Determine the range filter key based on the function
-      const rangeKey =
-        functionOption.key === 'creditHours'
-          ? 'creditRange'
-          : functionOption.key === 'blockHours'
-            ? 'blockRange'
-            : functionOption.key + 'Range';
-      onFilterApply(
-        rangeKey,
-        rangeFilter,
-        `${functionOption.label}: ${dataOption.label}`
-      );
-    } else {
-      // Apply single filter
-      const filterKey = dataOption.filterKey || functionOption.key;
-      onFilterApply(
-        filterKey,
-        dataOption.value,
-        `${functionOption.label}: ${dataOption.label}`
-      );
-    }
-
-    // Reset selections
-    setSelectedFunction('');
-    setSelectedData('');
-  };
-
   // Apply immediately when user selects a value
   const handleSelectValueAndApply = (value: string) => {
     setSelectedData(value);
@@ -427,6 +376,7 @@ export function SmartFilterSystem({
 
   const [quickFilterKeys, setQuickFilterKeys] = useState<QuickFilterKey[]>([]);
   const [showCustomize, setShowCustomize] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Load persisted preferences
   useEffect(() => {
@@ -463,201 +413,263 @@ export function SmartFilterSystem({
     persistQuickFilters(next);
   };
 
+  // Pressed state is derived from the live activeFilters list so the chips
+  // stay in sync no matter where a filter was set or cleared.
+  const isQuickFilterActive = (key: QuickFilterKey): boolean => {
+    if (key === 'goodHold') {
+      return activeFilters.some(
+        f => f.key === 'holdProbabilityMin' && Number(f.value) === 70
+      );
+    }
+    if (key === 'highCredit') {
+      return activeFilters.some(
+        f => f.key === 'creditMin' && Number(f.value) === 15
+      );
+    }
+    if (key === 'multiDay') {
+      return activeFilters.some(
+        f => f.key === 'pairingDaysMin' && Number(f.value) === 2
+      );
+    }
+    return activeFilters.some(
+      f => f.key === 'efficiency' && Number(f.value) === 1.3
+    );
+  };
+
   const applyQuickFilter = (key: QuickFilterKey) => {
+    const active = isQuickFilterActive(key);
     const newFilters: any = {};
     if (key === 'goodHold') {
-      newFilters.holdProbabilityMin = 70;
+      newFilters.holdProbabilityMin = active ? undefined : 70;
     } else if (key === 'highCredit') {
-      newFilters.creditMin = 15.0;
+      newFilters.creditMin = active ? undefined : 15.0;
       newFilters.creditMax = undefined;
     } else if (key === 'multiDay') {
       newFilters.pairingDays = undefined;
-      newFilters.pairingDaysMin = 2;
+      newFilters.pairingDaysMin = active ? undefined : 2;
       newFilters.pairingDaysMax = undefined;
     } else if (key === 'excellentRatio') {
-      newFilters.efficiency = 1.3;
+      newFilters.efficiency = active ? undefined : 1.3;
     }
     onFiltersChange(newFilters);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-        {/* Function Selector */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-secondary-foreground">Filter By</label>
-          <select
-            value={selectedFunction}
-            onChange={e => {
-              setSelectedFunction(e.target.value);
-              setSelectedData(''); // Reset data selection when function changes
-            }}
-            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">Select function...</option>
-            {allFilterOptions.map(option => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Data Selector */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-secondary-foreground">Value</label>
-          <select
-            value={selectedData}
-            onChange={e => {
-              handleSelectValueAndApply(e.target.value);
-            }}
-            disabled={!selectedFunction}
-            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">
-              {selectedFunction ? 'Select value...' : 'Select function first'}
-            </option>
-            {currentFunctionOptions.map((option, index) => (
-              <option key={index} value={option.value.toString()}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Rotation Number Filter */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-secondary-foreground">
-            Rotation #
-          </label>
+    <div className="space-y-3">
+      {/* Row 1 — search first, then one-tap chips, then pickers */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-56">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={rotationNumber}
             onChange={e => {
               const value = e.target.value.trim();
               onFiltersChange({ rotationNumber: value || undefined });
             }}
-            placeholder="Any rotation..."
+            placeholder="Search rotation #…"
             inputMode="numeric"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="flex h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             data-testid="input-rotation-number"
           />
         </div>
 
-        {/* Add Filter Button (hidden; auto-applies on selection) */}
+        {(quickFilterKeys || []).map(key => {
+          const meta = allQuickFilters.find(f => f.key === key);
+          if (!meta) {
+            return null;
+          }
+          const pressed = isQuickFilterActive(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={pressed}
+              onClick={() => applyQuickFilter(key)}
+              className={cn(
+                'h-9 rounded-full border px-3 text-sm font-medium transition-colors',
+                pressed
+                  ? 'border-primary bg-primary/15 text-primary'
+                  : 'border-border bg-background text-secondary-foreground hover:bg-accent'
+              )}
+            >
+              {meta.label}
+            </button>
+          );
+        })}
+
         <Button
-          onClick={handleAddFilter}
-          disabled
-          className="hidden items-center gap-2"
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5"
+          onClick={() => setIsCalendarOpen(true)}
+          data-testid="button-select-days-off"
         >
-          <Plus className="h-4 w-4" />
-          Add Filter
+          <CalendarIcon className="h-4 w-4" />
+          Days off
+          {selectedDaysOff.length > 0 && (
+            <Badge variant="secondary" className="ml-0.5 px-1.5 text-xs">
+              {selectedDaysOff.length}
+            </Badge>
+          )}
         </Button>
+
+        {layoverLocations.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={() => setIsLayoverDialogOpen(true)}
+            data-testid="button-select-layovers"
+          >
+            <MapPin className="h-4 w-4" />
+            Layovers
+            {selectedLayovers.length > 0 && (
+              <Badge variant="secondary" className="ml-0.5 px-1.5 text-xs">
+                {selectedLayovers.length}
+              </Badge>
+            )}
+          </Button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(v => !v)}
+          aria-expanded={showAdvanced}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Advanced
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform',
+              showAdvanced && 'rotate-180'
+            )}
+          />
+        </button>
       </div>
 
       {/* Active Filters Display */}
       {activeFilters.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">
-              Active Filters:
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClearFilters}
-              className="text-xs text-red-600 hover:text-red-700"
+        <div className="flex flex-wrap items-center gap-1.5">
+          {activeFilters.map((filter, index) => (
+            <Badge
+              key={index}
+              variant="secondary"
+              className="flex items-center gap-1 pr-1"
             >
-              Clear All
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {activeFilters.map((filter, index) => (
-              <Badge
-                key={index}
-                variant="secondary"
-                className="flex items-center gap-1 pr-1"
+              <span className="text-xs">{filter.label}</span>
+              <button
+                onClick={() => onFilterClear(filter.key)}
+                className="ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive/20"
+                title="Remove filter"
+                aria-label={`Remove ${filter.label}`}
               >
-                <span className="text-xs">{filter.label}</span>
-                <button
-                  onClick={() => onFilterClear(filter.key)}
-                  className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                  title="Remove filter"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearFilters}
+            className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+          >
+            Clear all
+          </Button>
         </div>
       )}
 
-      {/* Preferred Days Off and Layover Locations Row */}
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Preferred Days Off */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-secondary-foreground">
-            Days Off:
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={() => setIsCalendarOpen(true)}
-            data-testid="button-select-days-off"
-          >
-            <CalendarIcon className="h-4 w-4" />
-            {selectedDaysOff.length === 0
-              ? 'Select'
-              : `${selectedDaysOff.length} selected`}
-          </Button>
-        </div>
-
-        {/* Layover Locations Multi-Select */}
-        {layoverLocations.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-secondary-foreground">
-              Layover Cities:
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-              onClick={() => setIsLayoverDialogOpen(true)}
-              data-testid="button-select-layovers"
+      {/* Selected layover cities inline */}
+      {selectedLayovers.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {selectedLayovers.slice(0, 6).map(city => (
+            <Badge
+              key={city}
+              variant="secondary"
+              className="flex items-center gap-1 pr-1"
             >
-              <MapPin className="h-4 w-4" />
-              {selectedLayovers.length === 0
-                ? 'Select cities'
-                : `${selectedLayovers.length} selected`}
-            </Button>
-            {/* Show selected cities as badges inline */}
-            {selectedLayovers.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {selectedLayovers.slice(0, 3).map(city => (
-                  <Badge
-                    key={city}
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1"
-                  >
-                    <span className="text-xs">{city}</span>
-                    <button
-                      onClick={() => toggleLayoverCity(city)}
-                      className="ml-1 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
+              <span className="text-xs">{city}</span>
+              <button
+                onClick={() => toggleLayoverCity(city)}
+                className="ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive/20"
+                aria-label={`Remove ${city}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {selectedLayovers.length > 6 && (
+            <Badge variant="outline" className="text-xs">
+              +{selectedLayovers.length - 6} more
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Advanced — the function/value picker, unchanged behavior */}
+      <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+        <CollapsibleTrigger className="sr-only">
+          Advanced filters
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-secondary-foreground">
+                Filter by
+              </label>
+              <select
+                value={selectedFunction}
+                onChange={e => {
+                  setSelectedFunction(e.target.value);
+                  setSelectedData(''); // Reset data selection when function changes
+                }}
+                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Select function...</option>
+                {allFilterOptions.map(option => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
                 ))}
-                {selectedLayovers.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{selectedLayovers.length - 3} more
-                  </Badge>
-                )}
-              </div>
-            )}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-secondary-foreground">
+                Value
+              </label>
+              <select
+                value={selectedData}
+                onChange={e => {
+                  handleSelectValueAndApply(e.target.value);
+                }}
+                disabled={!selectedFunction}
+                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">
+                  {selectedFunction
+                    ? 'Select value...'
+                    : 'Select function first'}
+                </option>
+                {currentFunctionOptions.map((option, index) => (
+                  <option key={index} value={option.value.toString()}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => setShowCustomize(true)}
+              >
+                Customize quick filters
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Layover Cities Dialog */}
       <Dialog open={isLayoverDialogOpen} onOpenChange={setIsLayoverDialogOpen}>
@@ -779,40 +791,6 @@ export function SmartFilterSystem({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Quick Filter Buttons */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Quick filters:</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs dark:text-gray-300"
-            onClick={() => setShowCustomize(true)}
-          >
-            Customize
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {(quickFilterKeys || []).map(key => {
-            const meta = allQuickFilters.find(f => f.key === key);
-            if (!meta) {
-              return null;
-            }
-            return (
-              <Button
-                key={key}
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => applyQuickFilter(key)}
-              >
-                {meta.label}
-              </Button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Customize Quick Filters Dialog */}
       <Dialog open={showCustomize} onOpenChange={setShowCustomize}>
