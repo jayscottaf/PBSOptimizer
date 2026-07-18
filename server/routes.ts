@@ -1564,6 +1564,94 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // ---- Per-pilot bid preference profile (optimizer objective input) ----
+  // Weights are learned from THAT pilot's own Reasons history and/or set
+  // manually. Never seeded from another pilot's style.
+  app.get('/api/bid-profile/:userId', async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      if (Number.isNaN(userId)) {
+        return res.status(400).json({ message: 'Invalid user id' });
+      }
+      const profile = await storage.getBidProfile(userId);
+      if (!profile) {
+        const { neutralProfile } = await import('./lib/profileLearner');
+        return res.json({
+          userId,
+          weights: neutralProfile(),
+          source: 'none',
+          learnedFromPeriods: 0,
+        });
+      }
+      res.json(profile);
+    } catch (error) {
+      console.error('Error fetching bid profile:', error);
+      res.status(500).json({ message: 'Failed to fetch bid profile' });
+    }
+  });
+
+  app.put('/api/bid-profile/:userId', async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      if (Number.isNaN(userId)) {
+        return res.status(400).json({ message: 'Invalid user id' });
+      }
+      const { weights, employeeNumber } = req.body ?? {};
+      if (!weights || typeof weights !== 'object') {
+        return res.status(400).json({ message: 'weights object is required' });
+      }
+      const existing = await storage.getBidProfile(userId);
+      const profile = await storage.upsertBidProfile(userId, {
+        employeeNumber:
+          typeof employeeNumber === 'string'
+            ? employeeNumber
+            : existing?.employeeNumber,
+        weights,
+        source: existing?.source === 'learned' ? 'mixed' : 'manual',
+        learnedFromPeriods: existing?.learnedFromPeriods ?? 0,
+      });
+      res.json(profile);
+    } catch (error) {
+      console.error('Error saving bid profile:', error);
+      res.status(500).json({ message: 'Failed to save bid profile' });
+    }
+  });
+
+  app.post('/api/bid-profile/:userId/learn', async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      if (Number.isNaN(userId)) {
+        return res.status(400).json({ message: 'Invalid user id' });
+      }
+      const employeeNumber = String(req.body?.employeeNumber ?? '').trim();
+      if (!employeeNumber) {
+        return res.status(400).json({
+          message:
+            'employeeNumber is required — profiles learn only from that pilot\'s own history.',
+        });
+      }
+      const { rows, periods } =
+        await storage.getPilotPreferenceRows(employeeNumber);
+      if (rows.length === 0) {
+        return res.status(404).json({
+          message: `No imported Reasons history found for employee ${employeeNumber}.`,
+        });
+      }
+      const { learnProfile } = await import('./lib/profileLearner');
+      const { weights, signals } = learnProfile(rows, periods);
+      const profile = await storage.upsertBidProfile(userId, {
+        employeeNumber,
+        weights,
+        source: 'learned',
+        learnedFromPeriods: periods,
+      });
+      res.json({ ...profile, signals });
+    } catch (error) {
+      console.error('Error learning bid profile:', error);
+      res.status(500).json({ message: 'Failed to learn bid profile' });
+    }
+  });
+
   // Longitudinal category trends mined from imported Reasons Reports:
   // per-period contention, category size, and how junior each trip length
   // went (percentile of the junior-most holder).

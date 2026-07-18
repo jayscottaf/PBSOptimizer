@@ -206,6 +206,35 @@ export const userCalendarEvents = pgTable(
   })
 );
 
+// Per-pilot bidding preference profile for the optimizer. Weights are
+// LEARNED from that pilot's own Reasons history and/or set manually —
+// no pilot's style is ever a product default (multi-pilot constraint).
+export const userBidProfiles = pgTable(
+  'user_bid_profiles',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id)
+      .notNull()
+      .unique(),
+    // NAVBLUE employee number, the stable cross-period pilot identity in
+    // Reasons Reports (seniority numbers drift month to month).
+    employeeNumber: text('employee_number'),
+    // BidProfileWeights JSON (see shared/bidTypes.ts)
+    weights: jsonb('weights').notNull(),
+    source: text('source').notNull().default('manual'), // manual | learned | mixed
+    learnedFromPeriods: integer('learned_from_periods').default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index('user_bid_profiles_user_id_idx').on(table.userId),
+  })
+);
+
+export type UserBidProfile = typeof userBidProfiles.$inferSelect;
+export type InsertUserBidProfile = typeof userBidProfiles.$inferInsert;
+
 // Relations
 export const bidPackagesRelations = relations(bidPackages, ({ many }) => ({
   pairings: many(pairings),

@@ -24,6 +24,8 @@ import {
   type ChatHistory,
   type UserCalendarEvent,
   type InsertUserCalendarEvent,
+  userBidProfiles,
+  type UserBidProfile,
 } from '../shared/schema';
 import { db } from './db';
 import { percentileWithin } from './lib/empiricalHold';
@@ -222,6 +224,29 @@ export interface IStorage {
     startDate: Date,
     endDate: Date
   ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+
+  // Per-pilot bid preference profile (optimizer objective input)
+  getBidProfile(userId: number): Promise<UserBidProfile | undefined>;
+  upsertBidProfile(
+    userId: number,
+    profile: {
+      employeeNumber?: string | null;
+      weights: unknown;
+      source: string;
+      learnedFromPeriods?: number;
+    }
+  ): Promise<UserBidProfile>;
+  /** A pilot's own preference rows across all imported periods, plus the
+   * distinct period count — the learner's input. */
+  getPilotPreferenceRows(employeeNumber: string): Promise<{
+    rows: {
+      preferenceText: string;
+      outcome: string;
+      month: string;
+      year: number;
+    }[];
+    periods: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2156,6 +2181,74 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(userCalendarEvents.startDate));
 
     return result.map(r => ({ ...r.calendarEvent, pairing: r.pairing }));
+  }
+
+  async getBidProfile(userId: number): Promise<UserBidProfile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(userBidProfiles)
+      .where(eq(userBidProfiles.userId, userId));
+    return profile;
+  }
+
+  async upsertBidProfile(
+    userId: number,
+    profile: {
+      employeeNumber?: string | null;
+      weights: unknown;
+      source: string;
+      learnedFromPeriods?: number;
+    }
+  ): Promise<UserBidProfile> {
+    const [row] = await db
+      .insert(userBidProfiles)
+      .values({
+        userId,
+        employeeNumber: profile.employeeNumber ?? null,
+        weights: profile.weights,
+        source: profile.source,
+        learnedFromPeriods: profile.learnedFromPeriods ?? 0,
+      })
+      .onConflictDoUpdate({
+        target: userBidProfiles.userId,
+        set: {
+          employeeNumber: profile.employeeNumber ?? null,
+          weights: profile.weights,
+          source: profile.source,
+          learnedFromPeriods: profile.learnedFromPeriods ?? 0,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async getPilotPreferenceRows(employeeNumber: string): Promise<{
+    rows: {
+      preferenceText: string;
+      outcome: string;
+      month: string;
+      year: number;
+    }[];
+    periods: number;
+  }> {
+    // Employee numbers appear zero-padded to varying widths across
+    // composite exports; match on the numeric value.
+    const result = await db.execute(sql`
+      SELECT preference_text, outcome, month, year
+      FROM reasons_report_preferences
+      WHERE pilot_employee_number IS NOT NULL
+        AND ltrim(pilot_employee_number, '0') = ltrim(${employeeNumber}, '0')
+      ORDER BY year, month, preference_number
+    `);
+    const rows = (result.rows as any[]).map(r => ({
+      preferenceText: String(r.preference_text),
+      outcome: String(r.outcome),
+      month: String(r.month),
+      year: Number(r.year),
+    }));
+    const periods = new Set(rows.map(r => `${r.month} ${r.year}`)).size;
+    return { rows, periods };
   }
 }
 

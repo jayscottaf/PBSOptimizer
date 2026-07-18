@@ -103,6 +103,35 @@ export interface BidPreference {
   elseStartNext?: boolean;
 }
 
+/**
+ * A pilot's bidding-preference profile, consumed by the optimizer's
+ * objective function. Learned from THAT pilot's own Reasons history
+ * and/or edited manually. Never seeded with another pilot's style.
+ */
+export interface BidProfileWeights {
+  /** -1 (pure quality-of-life) .. +1 (pure credit maximizer). Derived
+   * from credit-window choices and high-credit award frequency. */
+  creditLeaning: number;
+  /** Cities this pilot repeatedly awards toward / avoids. */
+  layoverLikes: string[];
+  layoverDislikes: string[];
+  /** Co-terminal check-in stations this pilot avoids (e.g. EWR for some
+   * NYC pilots — pilot-specific, never a default). */
+  checkInStationAvoids: string[];
+  avoidsRedeyes: boolean;
+  avoidsCarryOut: boolean;
+  /** Most-used Set Condition Pattern, if the pilot uses one. */
+  preferredPattern: {
+    daysOnMin: number;
+    daysOnMax: number;
+    daysOffMin: number;
+  } | null;
+  /** Trip lengths in descending order of how often the pilot awards them. */
+  preferredTripLengths: number[];
+  /** 0..1 share of the pilot's Prefer Off dates falling on Sat/Sun. */
+  preferOffWeekendShare: number;
+}
+
 export interface BidGroup {
   type: 'pairings' | 'reserve';
   preferences: BidPreference[];

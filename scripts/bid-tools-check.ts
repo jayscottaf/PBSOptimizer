@@ -1,5 +1,6 @@
 import { simulateBid } from '../server/lib/bidSimulator';
 import { exportBid } from '../server/lib/bidExporter';
+import { learnProfile, neutralProfile } from '../server/lib/profileLearner';
 import { executeCoachTool } from '../server/ai/coachTools';
 import { ReasonsReportParser } from '../server/reasonsReportParser';
 import {
@@ -456,6 +457,55 @@ assert(
   extractBaseAndAircraft('hello world\nnothing here') === null,
   'returns null instead of guessing when no header is recognized'
 );
+
+// 12) Profile learner: pure, neutral without history, learns recurring
+// signals only from the given pilot's own rows.
+{
+  const empty = learnProfile([], 0);
+  assert(
+    JSON.stringify(empty.weights) === JSON.stringify(neutralProfile()),
+    'learner returns neutral profile with zero history'
+  );
+
+  // Synthetic pilot across 6 periods: always avoids ORD check-in and
+  // carry-out, max credit window, pattern 3-6/5, awards SEA layovers in
+  // 4 periods, avoids MSP in 3, prefers off weekends. A one-off avoid of
+  // BUF (single period) must NOT become a learned dislike.
+  const mkPeriod = (month: string) => [
+    { preferenceText: 'Avoid Pairings If Pairing Check-In Station ORD', outcome: 'Honored', month, year: 2026 },
+    { preferenceText: 'Avoid Pairings If Carry Out > 0 Days', outcome: 'Honored', month, year: 2026 },
+    { preferenceText: 'Set Condition Maximum Credit Window', outcome: 'Honored', month, year: 2026 },
+    { preferenceText: 'Set Condition Pattern Between 3 And 6 Days On ,With 5 Days Off (Minimum)', outcome: 'Honored', month, year: 2026 },
+    { preferenceText: 'Award Pairings If Pairing Length = 3 Days', outcome: 'Honored', month, year: 2026 },
+  ];
+  const rows = [
+    ...['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN'].flatMap(mkPeriod),
+    ...['JAN', 'FEB', 'MAR', 'APR'].map(month => ({
+      preferenceText: 'Award Pairings If Layovers In SEA, SAN',
+      outcome: 'Honored', month, year: 2026,
+    })),
+    ...['JAN', 'FEB', 'MAR'].map(month => ({
+      preferenceText: 'Avoid Pairings If Layovers In MSP',
+      outcome: 'Honored', month, year: 2026,
+    })),
+    { preferenceText: 'Avoid Pairings If Layovers In BUF', outcome: 'Honored', month: 'JUN', year: 2026 },
+    // Prefer Off: Feb 7/8 2026 = Sat/Sun; Feb 10 = Tue
+    { preferenceText: 'Prefer Off Feb 7, 2026, Feb 8, 2026, Feb 10, 2026', outcome: 'Honored', month: 'FEB', year: 2026 },
+  ];
+  const { weights } = learnProfile(rows, 6);
+  assert(weights.checkInStationAvoids.join() === 'ORD', 'learner finds recurring check-in station avoid');
+  assert(weights.avoidsCarryOut === true, 'learner flags carry-out avoidance');
+  assert(weights.creditLeaning > 0.5, 'max-credit windows push creditLeaning positive');
+  assert(
+    JSON.stringify(weights.preferredPattern) === JSON.stringify({ daysOnMin: 3, daysOnMax: 6, daysOffMin: 5 }),
+    'learner extracts the recurring pattern'
+  );
+  assert(weights.layoverLikes.includes('SEA') && weights.layoverLikes.includes('SAN'), 'learner finds liked layovers');
+  assert(weights.layoverDislikes.includes('MSP'), 'learner finds disliked layovers');
+  assert(!weights.layoverDislikes.includes('BUF'), 'one-off avoid does not become a learned dislike');
+  assert(weights.preferredTripLengths[0] === 3, 'learner ranks preferred trip length');
+  assert(Math.abs(weights.preferOffWeekendShare - 2 / 3) < 0.01, 'weekend share of Prefer Off dates computed');
+}
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
