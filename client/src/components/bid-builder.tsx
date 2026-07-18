@@ -762,9 +762,9 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
       <div className="grid gap-4 lg:grid-cols-2">
       {/* Builder column */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Draft Bid</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="default"
               size="sm"
@@ -1082,6 +1082,9 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
 
                       {(form.kind === 'award' || form.kind === 'avoid') && (
                         <div className="grid grid-cols-2 gap-2">
+                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Trip shape
+                          </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Days min</Label>
                             <Input
@@ -1104,98 +1107,6 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 setForm(p => ({
                                   ...p,
                                   pairingDaysMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Layover cities (comma-separated)
-                            </Label>
-                            <Input
-                              placeholder="BOS, MIA"
-                              value={form.layoverCities}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  layoverCities: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Credit min (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.creditMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  creditMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Credit max (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.creditMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  creditMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Check-in from (0-23)
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="23"
-                              value={form.checkInHourMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  checkInHourMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Check-in to (0-23)
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="23"
-                              value={form.checkInHourMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  checkInHourMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Exclude layover cities (comma-separated)
-                            </Label>
-                            <Input
-                              placeholder="ORD, DFW"
-                              value={form.excludeLayoverCities}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  excludeLayoverCities: e.target.value,
                                 }))
                               }
                             />
@@ -1229,33 +1140,120 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">
-                              Total layover min (hrs)
-                            </Label>
+                            <Label className="text-xs">Deadheads min</Label>
                             <Input
                               type="number"
-                              step="0.5"
-                              value={form.totalLayoverHoursMin}
+                              min="0"
+                              value={form.deadheadsMin}
                               onChange={e =>
                                 setForm(p => ({
                                   ...p,
-                                  totalLayoverHoursMin: e.target.value,
+                                  deadheadsMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Deadheads max</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.deadheadsMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  deadheadsMax: e.target.value,
                                 }))
                               }
                             />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">
-                              Total layover max (hrs)
+                              Carry-out days min
                             </Label>
                             <Input
                               type="number"
-                              step="0.5"
-                              value={form.totalLayoverHoursMax}
+                              min="0"
+                              value={form.carryOutMin}
                               onChange={e =>
                                 setForm(p => ({
                                   ...p,
-                                  totalLayoverHoursMax: e.target.value,
+                                  carryOutMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Carry-out days max
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.carryOutMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  carryOutMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Redeye</Label>
+                            <Select
+                              value={form.redeye || 'any'}
+                              onValueChange={value =>
+                                setForm(p => ({
+                                  ...p,
+                                  redeye: (value === 'any' ? '' : value) as
+                                    | ''
+                                    | 'has'
+                                    | 'none',
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="any">
+                                  Either (no condition)
+                                </SelectItem>
+                                <SelectItem value="has">
+                                  Has a redeye leg
+                                </SelectItem>
+                                <SelectItem value="none">No redeyes</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Credit & block
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Credit min (hrs)</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.creditMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  creditMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Credit max (hrs)</Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.creditMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  creditMax: e.target.value,
                                 }))
                               }
                             />
@@ -1346,30 +1344,104 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               }
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Deadheads min</Label>
+                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Layovers
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <Label className="text-xs">
+                              Layover cities (comma-separated)
+                            </Label>
                             <Input
-                              type="number"
-                              min="0"
-                              value={form.deadheadsMin}
+                              placeholder="BOS, MIA"
+                              value={form.layoverCities}
                               onChange={e =>
                                 setForm(p => ({
                                   ...p,
-                                  deadheadsMin: e.target.value,
+                                  layoverCities: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <Label className="text-xs">
+                              Exclude layover cities (comma-separated)
+                            </Label>
+                            <Input
+                              placeholder="ORD, DFW"
+                              value={form.excludeLayoverCities}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  excludeLayoverCities: e.target.value,
                                 }))
                               }
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Deadheads max</Label>
+                            <Label className="text-xs">
+                              Total layover min (hrs)
+                            </Label>
                             <Input
                               type="number"
-                              min="0"
-                              value={form.deadheadsMax}
+                              step="0.5"
+                              value={form.totalLayoverHoursMin}
                               onChange={e =>
                                 setForm(p => ({
                                   ...p,
-                                  deadheadsMax: e.target.value,
+                                  totalLayoverHoursMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Total layover max (hrs)
+                            </Label>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={form.totalLayoverHoursMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  totalLayoverHoursMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Check-in & specifics
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Check-in from (0-23)
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={form.checkInHourMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  checkInHourMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Check-in to (0-23)
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={form.checkInHourMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  checkInHourMax: e.target.value,
                                 }))
                               }
                             />
@@ -1385,66 +1457,6 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 setForm(p => ({
                                   ...p,
                                   checkInStations: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Redeye</Label>
-                            <Select
-                              value={form.redeye || 'any'}
-                              onValueChange={value =>
-                                setForm(p => ({
-                                  ...p,
-                                  redeye: (value === 'any' ? '' : value) as
-                                    | ''
-                                    | 'has'
-                                    | 'none',
-                                }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="any">
-                                  Either (no condition)
-                                </SelectItem>
-                                <SelectItem value="has">
-                                  Has a redeye leg
-                                </SelectItem>
-                                <SelectItem value="none">No redeyes</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Carry-out days min
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.carryOutMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  carryOutMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Carry-out days max
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.carryOutMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  carryOutMax: e.target.value,
                                 }))
                               }
                             />
@@ -1670,9 +1682,10 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
         ))}
       </div>
 
-      {/* Results column */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
+      {/* Results column — sticky on wide screens so simulation results stay
+          visible while editing a long draft on the left. */}
+      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => simulateMutation.mutate()}
             disabled={simulateMutation.isPending || preferenceCount === 0}
