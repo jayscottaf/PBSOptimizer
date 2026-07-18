@@ -36,6 +36,15 @@ export interface SimulatorOptions {
   /** Bid period year, used to anchor Prefer Off date comparisons. */
   bidYear?: number;
   /**
+   * Bid period anchor (1-12 + full year). When provided, the simulator
+   * enumerates each pairing's real operating-date instances from its
+   * effective-date range, unlocking exact Prefer Off matching (a pairing
+   * survives if ANY instance avoids the days off), scoreable day-of-week
+   * conditions, and the post-award placement check.
+   */
+  periodMonth?: number;
+  periodYear?: number;
+  /**
    * Real credit-window bounds observed in a Reasons Report ("Minimum window
    * <062:00> ... Maximum window <082:00>"). When provided they replace the
    * ALV±10 approximation entirely.
@@ -67,6 +76,79 @@ interface SimPairing {
   carryOutDays: number;
   effectiveStart: { month: number; day: number } | null;
   effectiveEnd: { month: number; day: number } | null;
+  /**
+   * Real operating-date instances (one per possible departure day),
+   * populated only when the simulator knows the bid period's month/year.
+   * Each instance spans [start, start + pairingDays - 1] in ms epoch days.
+   */
+  instances: { startDay: number; endDay: number; startDow: number }[];
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/** "August" / "AUG" / "aug" → 8; null when unrecognized. */
+export function monthNameToNumber(name: unknown): number | null {
+  const key = String(name ?? '').trim().slice(0, 3).toUpperCase();
+  return key in MONTH_TOKENS ? MONTH_TOKENS[key] : null;
+}
+
+/** UTC epoch-day for a calendar date (avoids TZ drift). */
+function epochDay(year: number, month: number, day: number): number {
+  return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
+}
+
+/** 0=Sunday .. 6=Saturday for an epoch day. */
+function dowOfEpochDay(day: number): number {
+  // 1970-01-01 was a Thursday (4).
+  return (((day + 4) % 7) + 7) % 7;
+}
+
+const DOW_NAME_TO_NUM: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+/**
+ * Enumerate a pairing's operating instances. The effective range spans
+ * departure dates; a range that starts in a month before the bid period's
+ * month (e.g. "DEC28-JAN02" for a January package) belongs partly to the
+ * previous year. We anchor each token to the bid-period year, shifting
+ * across the year boundary when the token month is far "ahead of" the
+ * period month (e.g. DEC tokens for a JAN package = previous year).
+ */
+function enumerateInstances(
+  start: { month: number; day: number } | null,
+  end: { month: number; day: number } | null,
+  pairingDays: number,
+  periodMonth: number,
+  periodYear: number
+): { startDay: number; endDay: number; startDow: number }[] {
+  if (!start) return [];
+  const anchor = (t: { month: number; day: number }): number => {
+    let year = periodYear;
+    const diff = t.month - periodMonth;
+    if (diff > 6) year -= 1; // e.g. DEC token in a JAN package
+    if (diff < -6) year += 1; // e.g. JAN token in a DEC package
+    return epochDay(year, t.month, t.day);
+  };
+  const s = anchor(start);
+  const e = end ? anchor(end) : s;
+  const last = Math.max(s, e);
+  const out: { startDay: number; endDay: number; startDow: number }[] = [];
+  // Ranges are at most a bid period plus carry; cap defensively.
+  for (let d = s; d <= last && out.length < 62; d++) {
+    out.push({
+      startDay: d,
+      endDay: d + Math.max(0, pairingDays - 1),
+      startDow: dowOfEpochDay(d),
+    });
+  }
+  return out;
 }
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -129,7 +211,11 @@ function parseEffectiveDates(text: unknown): {
   return { start: parsed[0], end: parsed[parsed.length - 1] };
 }
 
-function toSimPairing(p: any): SimPairing {
+function toSimPairing(
+  p: any,
+  periodMonth?: number,
+  periodYear?: number
+): SimPairing {
   let layovers = p.layovers;
   if (typeof layovers === 'string') {
     try {
@@ -188,7 +274,30 @@ function toSimPairing(p: any): SimPairing {
     carryOutDays,
     effectiveStart: start,
     effectiveEnd: end,
+    instances:
+      periodMonth !== undefined && periodYear !== undefined
+        ? enumerateInstances(start, end, days, periodMonth, periodYear)
+        : [],
   };
+}
+
+/** Does any day of an instance span fall on one of the given DOWs? */
+function instanceTouchesDow(
+  inst: { startDay: number; endDay: number },
+  dows: Set<number>
+): boolean {
+  const len = inst.endDay - inst.startDay + 1;
+  if (len >= 7) return dows.size > 0;
+  for (let d = inst.startDay; d <= inst.endDay; d++) {
+    if (dows.has(dowOfEpochDay(d))) return true;
+  }
+  return false;
+}
+
+function isoToEpochDay(iso: string): number | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return epochDay(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
 }
 
 function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
@@ -327,6 +436,21 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   ) {
     return false;
   }
+  if (
+    filter.departOnDOWs &&
+    filter.departOnDOWs.length > 0 &&
+    pairing.instances.length > 0
+  ) {
+    // Positive matching: at least one operating instance departs on one of
+    // the requested weekdays. Without instances (no period anchor) this
+    // condition is permissive and surfaced as a caveat instead.
+    const wanted = new Set(
+      filter.departOnDOWs.map(d => DOW_NAME_TO_NUM[d]).filter(n => n !== undefined)
+    );
+    if (!pairing.instances.some(i => wanted.has(i.startDow))) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -393,13 +517,21 @@ export function simulateBid(
     options.windowMin !== undefined && options.windowMax !== undefined
       ? { min: options.windowMin, max: options.windowMax }
       : undefined;
-  const allPairings = rawPairings.map(toSimPairing);
+  const calendarAware =
+    options.periodMonth !== undefined && options.periodYear !== undefined;
+  const allPairings = rawPairings.map(p =>
+    toSimPairing(p, options.periodMonth, options.periodYear)
+  );
 
   const caveats = [
     'Static first pass: substitution, vertical swapping, shuffling, Denial Mode, and coverage awards are NOT modeled.',
     'Other pilots\' bids are unknown; hold probability per pairing is the only competition signal.',
-    'Pairing date-overlap legality and FAR/PWA rest rules between awards are not checked.',
-    'Prefer Off matching approximates operating dates from the effectiveDates range.',
+    calendarAware
+      ? 'Awards are checked for calendar placement (no overlaps; Pattern gaps honored greedily), but FAR/PWA rest rules between awards are not modeled.'
+      : 'Pairing date-overlap legality and FAR/PWA rest rules between awards are not checked.',
+    calendarAware
+      ? 'Prefer Off uses real operating dates: a pairing is only excluded when every operating date conflicts.'
+      : 'Prefer Off matching approximates operating dates from the effectiveDates range.',
     realBounds
       ? `Credit window ${realBounds.min.toFixed(1)}-${realBounds.max.toFixed(1)} and threshold ${(options.threshold ?? alv).toFixed(1)} come from ${options.windowSource ?? 'an imported Reasons Report'}; the current month's admin values may differ.`
       : `Threshold is admin-set and not published; this run assumes ${(options.threshold ?? alv).toFixed(1)} credit hours.`,
@@ -423,7 +555,9 @@ export function simulateBid(
     )
   ) {
     caveats.push(
-      'Day-of-week conditions (Prefer Off DOWs / Departing On) are exported verbatim but not scored — operating weekdays are not derivable from effective-date ranges.'
+      calendarAware
+        ? 'Day-of-week conditions are scored from real operating dates (a range pairing matches if any of its instances does).'
+        : 'Day-of-week conditions (Prefer Off DOWs / Departing On) are exported verbatim but not scored — pass the bid period month/year to score them.'
     );
   }
 
@@ -494,9 +628,29 @@ export function simulateBid(
       if (pref.type === 'preferOff') {
         if (pref.preferOffDates && pref.preferOffDates.length > 0) {
           const before = pool.length;
-          pool = pool.filter(
-            p => !pref.preferOffDates!.some(date => touchesDate(p, date))
-          );
+          if (calendarAware) {
+            // Exact semantics: each pairing offers multiple operating
+            // instances; it only leaves the pool if EVERY instance touches
+            // a requested day off (PBS can award a non-conflicting date).
+            const offDays = pref.preferOffDates
+              .map(isoToEpochDay)
+              .filter((d): d is number => d !== null);
+            pool = pool.filter(p => {
+              if (p.instances.length === 0) {
+                return !pref.preferOffDates!.some(date => touchesDate(p, date));
+              }
+              return p.instances.some(
+                inst =>
+                  !offDays.some(
+                    d => d >= inst.startDay && d <= inst.endDay
+                  )
+              );
+            });
+          } else {
+            pool = pool.filter(
+              p => !pref.preferOffDates!.some(date => touchesDate(p, date))
+            );
+          }
           if (pool.length === before) {
             inert.push({
               preferenceIndex: i,
@@ -505,14 +659,36 @@ export function simulateBid(
           }
         }
         if (pref.preferOffDOWs && pref.preferOffDOWs.length > 0) {
-          // Weekday Prefer Off needs calendar placement of each operating
-          // departure, which the package's date-range format doesn't give
-          // us. Exported verbatim; not scored.
-          inert.push({
-            preferenceIndex: i,
-            reason:
-              'Day-of-week Prefer Off is exported but not simulated (operating weekdays are not derivable from effective-date ranges).',
-          });
+          if (calendarAware) {
+            // A pairing survives if any instance avoids every banned
+            // weekday for its whole span.
+            const banned = new Set(
+              pref.preferOffDOWs
+                .map(d => DOW_NAME_TO_NUM[d])
+                .filter(n => n !== undefined)
+            );
+            const before = pool.length;
+            pool = pool.filter(p =>
+              p.instances.length === 0
+                ? true
+                : p.instances.some(inst => !instanceTouchesDow(inst, banned))
+            );
+            if (pool.length === before) {
+              inert.push({
+                preferenceIndex: i,
+                reason:
+                  'Every pairing has at least one operating date clear of the requested weekdays.',
+              });
+            }
+          } else {
+            // Without a period anchor, weekday Prefer Off cannot be mapped
+            // onto date ranges. Exported verbatim; not scored.
+            inert.push({
+              preferenceIndex: i,
+              reason:
+                'Day-of-week Prefer Off is exported but not simulated (no bid-period anchor to derive operating weekdays).',
+            });
+          }
         }
         continue;
       }
@@ -615,7 +791,75 @@ export function simulateBid(
     0
   );
 
+  // Calendar placement check for the winning group (period anchor known):
+  // greedily place one operating instance per award, earliest-first,
+  // without overlap and honoring the group's Pattern gap if present.
+  let placement: SimulationResult['placement'];
+  if (calendarAware && chosen && awards.length > 0) {
+    const byNumber = new Map(allPairings.map(p => [p.pairingNumber, p]));
+    const groupPrefs =
+      bid.groups[(chosen as SimulationGroupResult).groupIndex]?.preferences ??
+      [];
+    const pattern = groupPrefs.find(p => p.type === 'setConditionPattern');
+    const gap = pattern?.patternDaysOffMin ?? 0;
+    const notes: string[] = [];
+    let feasible = true;
+
+    const withInstances = awards
+      .map(a => ({ award: a, sim: byNumber.get(a.pairingNumber) }))
+      .filter(x => x.sim && x.sim.instances.length > 0) as {
+      award: SimulatedAward;
+      sim: SimPairing;
+    }[];
+    if (withInstances.length < awards.length) {
+      notes.push(
+        `${awards.length - withInstances.length} award(s) had no parseable operating dates and were skipped in the placement check.`
+      );
+    }
+    withInstances.sort(
+      (a, b) => a.sim.instances[0].startDay - b.sim.instances[0].startDay
+    );
+    let lastEnd = -Infinity;
+    for (const { award, sim } of withInstances) {
+      const inst = sim.instances.find(i => i.startDay > lastEnd + gap);
+      if (!inst) {
+        feasible = false;
+        notes.push(
+          `Pairing ${award.pairingNumber} has no operating date that fits after the previous award${gap > 0 ? ` with ${gap} days off between trips` : ''}.`
+        );
+        continue;
+      }
+      lastEnd = inst.endDay;
+      if (
+        pattern?.patternDaysOnMax !== undefined &&
+        award.pairingDays > pattern.patternDaysOnMax
+      ) {
+        feasible = false;
+        notes.push(
+          `Pairing ${award.pairingNumber} is ${award.pairingDays} days — longer than the Pattern's ${pattern.patternDaysOnMax}-day maximum work stretch.`
+        );
+      }
+      if (
+        pattern?.patternDaysOnMin !== undefined &&
+        award.pairingDays < pattern.patternDaysOnMin
+      ) {
+        notes.push(
+          `Pairing ${award.pairingNumber} (${award.pairingDays}d) is shorter than the Pattern's ${pattern.patternDaysOnMin}-day minimum stretch — PBS would need to pair it back-to-back with another trip.`
+        );
+      }
+    }
+    if (feasible && notes.length === 0) {
+      notes.push(
+        gap > 0
+          ? `All awards place on the calendar without overlap and with ≥${gap} days off between trips.`
+          : 'All awards place on the calendar without overlapping.'
+      );
+    }
+    placement = { feasible, notes };
+  }
+
   return {
+    ...(placement ? { placement } : {}),
     awards,
     totalCredit: Math.round(totalCredit * 100) / 100,
     expectedCredit: Math.round(expectedCredit * 100) / 100,

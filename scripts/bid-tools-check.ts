@@ -714,5 +714,83 @@ assert(
   assert(withOv.ok === true && withOv.got?.creditLeaning === 1, 'optimize_bid threads overrides into injected optimizer');
 }
 
+// 17) Calendar-aware simulation (period anchor AUG 2026; Aug 1 = Saturday)
+{
+  const CAL = { periodMonth: 8, periodYear: 2026, alv: 999, threshold: 999 };
+  const calAwards = (prefs: any[]): string[] =>
+    simulateBid(
+      { groups: [{ type: 'pairings', preferences: prefs }] } as DraftBid,
+      pairings,
+      CAL as any
+    ).awards
+      .map(a => a.pairingNumber)
+      .sort();
+
+  // departOnDOWs now scoreable: 7603 departs Mon Aug 10 ONLY; 7606 departs
+  // Sun Aug 30 ONLY; range trips include Fridays so they survive a Friday
+  // filter while both single-date trips are excluded.
+  const fri = calAwards([{ type: 'award', filter: { departOnDOWs: ['Friday'] } }]);
+  assert(!fri.includes('7603') && !fri.includes('7606'), 'departOnDOWs excludes single-date trips departing other weekdays');
+  assert(fri.includes('7601') && fri.includes('7605'), 'departOnDOWs keeps range trips that include a Friday departure');
+  const mon = calAwards([{ type: 'award', filter: { departOnDOWs: ['Monday'] } }]);
+  assert(mon.includes('7603'), 'departOnDOWs matches the Monday-only trip');
+
+  // Exact Prefer Off dates: old approx removed ANY-touching pairing; now a
+  // range pairing survives if another operating date avoids the day off.
+  // 7603 (AUG10 ONLY, 4d, Aug10-13) dies on a Aug 12 day off; 7601
+  // (AUG03-AUG20 range) survives via other departures.
+  const off12 = calAwards([
+    { type: 'preferOff', preferOffDates: ['2026-08-12'] },
+    { type: 'award' },
+  ]);
+  assert(!off12.includes('7603'), 'exact Prefer Off kills the single-date trip touching the day off');
+  assert(off12.includes('7601'), 'exact Prefer Off keeps range trips with clear alternate dates');
+
+  // DOW Prefer Off now scored: weekends off kills 7606 (Sun-only departure
+  // spans Sun-Tue) but keeps 7603 (Mon-Thu) and range trips with midweek
+  // instances.
+  const wkndOff = calAwards([
+    { type: 'preferOff', preferOffDOWs: ['Saturday', 'Sunday'] },
+    { type: 'award' },
+  ]);
+  assert(!wkndOff.includes('7606'), 'weekend Prefer Off excludes the Sunday-departing trip');
+  assert(wkndOff.includes('7603'), 'weekend Prefer Off keeps the Mon-Thu trip');
+  assert(wkndOff.includes('7601'), 'weekend Prefer Off keeps range trips with midweek instances');
+
+  // Placement check: single-date awards that collide are flagged; awards
+  // that fit report feasible.
+  const okPlace = simulateBid(
+    {
+      groups: [
+        {
+          type: 'pairings',
+          preferences: [
+            { type: 'award', filter: { pairingNumbers: ['7603', '7606'] } },
+          ],
+        },
+      ],
+    } as DraftBid,
+    pairings,
+    { periodMonth: 8, periodYear: 2026, alv: 45, threshold: 40 } as any
+  );
+  assert(okPlace.placement !== undefined, 'placement check present when period anchor given');
+  assert(okPlace.placement!.feasible === true, 'non-overlapping single-date awards are placeable (Aug10-13 then Aug30+)');
+
+  const noAnchor = simulateBid(
+    { groups: [{ type: 'pairings', preferences: [{ type: 'award' }] }] } as DraftBid,
+    pairings,
+    { alv: 45, threshold: 40 }
+  );
+  assert(noAnchor.placement === undefined, 'no placement check without a period anchor');
+  assert(
+    noAnchor.caveats.some(c => c.includes('not checked')),
+    'caveats stay conservative without the period anchor'
+  );
+  assert(
+    okPlace.caveats.some(c => c.includes('calendar placement')),
+    'caveats reflect calendar placement when anchored'
+  );
+}
+
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

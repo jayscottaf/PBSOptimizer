@@ -23,7 +23,7 @@ import { sql } from 'drizzle-orm';
 import { storage } from '../server/storage';
 import { learnProfile } from '../server/lib/profileLearner';
 import { optimizeBid, scorePairings } from '../server/lib/bidOptimizer';
-import { simulateBid } from '../server/lib/bidSimulator';
+import { simulateBid, monthNameToNumber } from '../server/lib/bidSimulator';
 
 const MONTH_NAME_TO_CODE: Record<string, string> = {
   January: 'JAN', February: 'FEB', March: 'MAR', April: 'APR',
@@ -109,6 +109,8 @@ async function main() {
       threshold: window?.threshold,
       windowMin: window?.windowMin,
       windowMax: window?.windowMax,
+      periodMonth: monthNameToNumber(pkg.month) ?? undefined,
+      periodYear: Number(pkg.year) || undefined,
     });
 
     // Score both lines with the SAME profile

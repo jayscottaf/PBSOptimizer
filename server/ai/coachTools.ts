@@ -254,6 +254,10 @@ export interface CoachToolContext {
   windowMax?: number;
   threshold?: number;
   windowSource?: string;
+  /** Bid period anchor (1-12 / full year) — unlocks calendar-aware
+   * simulation (exact Prefer Off, day-of-week scoring, placement check). */
+  periodMonth?: number;
+  periodYear?: number;
   /**
    * Injected rather than imported directly, so this module stays free of
    * storage/DB imports and unit-testable with plain data (see
@@ -318,6 +322,8 @@ export async function executeCoachTool(
         windowMin: context.windowMin,
         windowMax: context.windowMax,
         windowSource: context.windowSource,
+        periodMonth: context.periodMonth,
+        periodYear: context.periodYear,
       });
       // Trim the award list so large lines don't blow up the context.
       return {

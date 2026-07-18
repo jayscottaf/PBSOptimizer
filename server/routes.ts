@@ -1547,6 +1547,7 @@ export async function registerRoutes(app: Express) {
       // Real credit window/threshold from the latest imported Reasons Report
       // (explicit request values still win).
       const realWindow = await storage.getCategoryCreditWindow(bidPackage.base);
+      const { monthNameToNumber } = await import('./lib/bidSimulator');
       const result = simulateBid(bid, packagePairings, {
         alv: packageAlv,
         threshold: threshold ?? realWindow?.threshold,
@@ -1556,6 +1557,8 @@ export async function registerRoutes(app: Express) {
         windowSource: realWindow
           ? `the ${realWindow.period} Reasons Report`
           : undefined,
+        periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
+        periodYear: bidPackage.year ?? undefined,
       });
       res.json(result);
     } catch (error) {
@@ -1700,7 +1703,9 @@ export async function registerRoutes(app: Express) {
       );
 
       const { optimizeBid } = await import('./lib/bidOptimizer');
-      const { simulateBid } = await import('./lib/bidSimulator');
+      const { simulateBid, monthNameToNumber } = await import(
+        './lib/bidSimulator'
+      );
       const optimized = optimizeBid(pairingsList, weights, {
         seniorityPercentile: seniorityPercentile ?? undefined,
         holdBoundaries,
@@ -1717,6 +1722,8 @@ export async function registerRoutes(app: Express) {
         windowSource: realWindow
           ? `the ${realWindow.period} Reasons Report`
           : undefined,
+        periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
+        periodYear: bidPackage.year ?? undefined,
       });
       res.json({
         bid: optimized.bid,

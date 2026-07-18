@@ -8,6 +8,7 @@ import type { IStorage } from '../storage';
 import { buildBiddingCoachKnowledgeContext } from './biddingCoachKnowledge';
 import { buildStrategyContext } from './reasonsMiner';
 import { COACH_TOOL_DEFINITIONS, executeCoachTool } from './coachTools';
+import { monthNameToNumber } from '../lib/bidSimulator';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -121,6 +122,8 @@ export class SimpleAI {
         windowSource: realWindow
           ? `the ${realWindow.period} Reasons Report`
           : undefined,
+        periodMonth: monthNameToNumber(bidPackage?.month) ?? undefined,
+        periodYear: bidPackage?.year ?? undefined,
         fetchHistoricTrends: base
           ? (month?: string) => this.fetchHistoricTrendsDigest(base, month)
           : undefined,

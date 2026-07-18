@@ -196,4 +196,14 @@ export interface SimulationResult {
   groupResults: SimulationGroupResult[];
   /** Engine behaviors this static pass does NOT model. Always read these. */
   caveats: string[];
+  /**
+   * Calendar placement check for the winning group's awards (present only
+   * when the simulator was given the bid period's month/year): greedy
+   * attempt to place one operating instance per award without overlaps,
+   * honoring the group's Set Condition Pattern gaps if any.
+   */
+  placement?: {
+    feasible: boolean;
+    notes: string[];
+  };
 }
