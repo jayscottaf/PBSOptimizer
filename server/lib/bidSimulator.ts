@@ -57,9 +57,19 @@ interface SimPairing {
   layoverCities: string[];
   layoverCount: number;
   totalLayoverHours: number;
+  /** First flight segment's departure airport (NAVBLUE "Pairing Check-In
+   * Station") — e.g. JFK/LGA/EWR within the NYC base. */
+  checkInStation: string | null;
+  /** Any leg departing 22:00-04:59. */
+  hasRedeye: boolean;
+  /** Days the trip operates past the end of its effective-dates month
+   * (NAVBLUE "Carry Out"), from the latest departure + trip length. */
+  carryOutDays: number;
   effectiveStart: { month: number; day: number } | null;
   effectiveEnd: { month: number; day: number } | null;
 }
+
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /** Layover durations are "HH.MM" strings (e.g. "18.48" = 18h48m). Sum to
  * decimal hours. Mirrors client/src/lib/layover.ts. */
@@ -132,7 +142,33 @@ function toSimPairing(p: any): SimPairing {
   const layoverCities = layoverArr
     .map((l: any) => String(l?.city ?? '').toUpperCase())
     .filter(Boolean);
+  let segments = p.flightSegments;
+  if (typeof segments === 'string') {
+    try {
+      segments = JSON.parse(segments);
+    } catch {
+      segments = [];
+    }
+  }
+  const segmentArr = Array.isArray(segments) ? segments : [];
+  const checkInStation = segmentArr.length
+    ? String(segmentArr[0]?.departure ?? '').toUpperCase() || null
+    : null;
+  const hasRedeye = segmentArr.some((s: any) => {
+    const m = String(s?.departureTime ?? '').match(/^(\d{2})/);
+    if (!m) return false;
+    const hour = parseInt(m[1], 10);
+    return hour >= 22 || hour < 5;
+  });
   const { start, end } = parseEffectiveDates(p.effectiveDates);
+  const days = p.pairingDays || 1;
+  const carryEnd = end ?? start;
+  const carryOutDays = carryEnd
+    ? Math.max(
+        0,
+        carryEnd.day + days - 1 - (DAYS_IN_MONTH[carryEnd.month - 1] ?? 31)
+      )
+    : 0;
   return {
     pairingNumber: String(p.pairingNumber ?? ''),
     creditHours: toNumber(p.creditHours),
@@ -147,6 +183,9 @@ function toSimPairing(p: any): SimPairing {
     layoverCities,
     layoverCount: layoverArr.length,
     totalLayoverHours: layoverHours(layoverArr),
+    checkInStation,
+    hasRedeye,
+    carryOutDays,
     effectiveStart: start,
     effectiveEnd: end,
   };
@@ -264,6 +303,30 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   ) {
     return false;
   }
+  if (filter.checkInStations && filter.checkInStations.length > 0) {
+    const wanted = filter.checkInStations.map(s => s.toUpperCase());
+    if (
+      pairing.checkInStation === null ||
+      !wanted.includes(pairing.checkInStation)
+    ) {
+      return false;
+    }
+  }
+  if (filter.hasRedeye !== undefined && pairing.hasRedeye !== filter.hasRedeye) {
+    return false;
+  }
+  if (
+    filter.carryOutMin !== undefined &&
+    pairing.carryOutDays < filter.carryOutMin
+  ) {
+    return false;
+  }
+  if (
+    filter.carryOutMax !== undefined &&
+    pairing.carryOutDays > filter.carryOutMax
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -341,6 +404,15 @@ export function simulateBid(
       ? `Credit window ${realBounds.min.toFixed(1)}-${realBounds.max.toFixed(1)} and threshold ${(options.threshold ?? alv).toFixed(1)} come from ${options.windowSource ?? 'an imported Reasons Report'}; the current month's admin values may differ.`
       : `Threshold is admin-set and not published; this run assumes ${(options.threshold ?? alv).toFixed(1)} credit hours.`,
   ];
+  if (
+    bid.groups.some(g =>
+      g.preferences.some(p => p.type === 'setConditionPattern')
+    )
+  ) {
+    caveats.push(
+      'Set Condition Pattern is exported verbatim but not scored — the awards shown may violate the requested days-on/days-off shape.'
+    );
+  }
 
   const groupResults: SimulationGroupResult[] = [];
   let chosen: SimulationGroupResult | null = null;
@@ -382,6 +454,17 @@ export function simulateBid(
       if (pref.type === 'clearScheduleStartNext') {
         // CSSN is forced to the bottom of the group; nothing to evaluate
         // statically - it only matters when the group cannot complete.
+        continue;
+      }
+      if (pref.type === 'setConditionPattern') {
+        // Line-shape constraints need calendar placement of awards, which
+        // this static pass does not model. Exported verbatim; surfaced
+        // here so the pilot knows it is not scored.
+        inert.push({
+          preferenceIndex: i,
+          reason:
+            'Set Condition Pattern is exported but not simulated (line-shape placement is not modeled in this static pass).',
+        });
         continue;
       }
       if (pref.type === 'avoid' && pref.filter) {

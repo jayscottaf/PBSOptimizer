@@ -16,13 +16,17 @@ function assert(cond: boolean, label: string) {
   if (!cond) failures++;
 }
 
-// Synthetic package: 3-day MIA trips, 4-day BOS trips, a redeye-ish 2-day
+// Synthetic package: 3-day MIA trips, 4-day BOS trips, a redeye-ish 2-day.
+// flightSegments give each trip a check-in station (first departure) and
+// departure times (7605 departs 22:30 = redeye). 7606 departs AUG30 for 3
+// days = 1 carry-out day.
 const pairings = [
-  { pairingNumber: '7601', creditHours: '18.50', blockHours: '15.00', pairingDays: 3, holdProbability: 80, deadheads: 0, checkInTime: '09.30', layovers: [{ city: 'MIA', duration: '14' }], effectiveDates: 'AUG03-AUG20' },
-  { pairingNumber: '7602', creditHours: '19.00', blockHours: '16.00', pairingDays: 3, holdProbability: 60, deadheads: 0, checkInTime: '10.00', layovers: [{ city: 'MIA', duration: '15' }], effectiveDates: 'AUG05-AUG25' },
-  { pairingNumber: '7603', creditHours: '24.00', blockHours: '20.00', pairingDays: 4, holdProbability: 90, deadheads: 1, checkInTime: '06.00', layovers: [{ city: 'BOS', duration: '12' }], effectiveDates: 'AUG10 ONLY' },
-  { pairingNumber: '7604', creditHours: '25.00', blockHours: '21.00', pairingDays: 4, holdProbability: 40, deadheads: 0, checkInTime: '13.45', layovers: [{ city: 'BOS', duration: '13' }], effectiveDates: 'AUG12-AUG28' },
-  { pairingNumber: '7605', creditHours: '12.00', blockHours: '11.00', pairingDays: 2, holdProbability: 95, deadheads: 2, checkInTime: '22.00', layovers: [{ city: 'CVG', duration: '10' }], effectiveDates: 'AUG01-AUG30' },
+  { pairingNumber: '7601', creditHours: '18.50', blockHours: '15.00', pairingDays: 3, holdProbability: 80, deadheads: 0, checkInTime: '09.30', layovers: [{ city: 'MIA', duration: '14' }], effectiveDates: 'AUG03-AUG20', flightSegments: [{ departure: 'JFK', departureTime: '0930' }] },
+  { pairingNumber: '7602', creditHours: '19.00', blockHours: '16.00', pairingDays: 3, holdProbability: 60, deadheads: 0, checkInTime: '10.00', layovers: [{ city: 'MIA', duration: '15' }], effectiveDates: 'AUG05-AUG25', flightSegments: [{ departure: 'LGA', departureTime: '1000' }] },
+  { pairingNumber: '7603', creditHours: '24.00', blockHours: '20.00', pairingDays: 4, holdProbability: 90, deadheads: 1, checkInTime: '06.00', layovers: [{ city: 'BOS', duration: '12' }], effectiveDates: 'AUG10 ONLY', flightSegments: [{ departure: 'EWR', departureTime: '0600' }] },
+  { pairingNumber: '7604', creditHours: '25.00', blockHours: '21.00', pairingDays: 4, holdProbability: 40, deadheads: 0, checkInTime: '13.45', layovers: [{ city: 'BOS', duration: '13' }], effectiveDates: 'AUG12-AUG28', flightSegments: [{ departure: 'JFK', departureTime: '1345' }] },
+  { pairingNumber: '7605', creditHours: '12.00', blockHours: '11.00', pairingDays: 2, holdProbability: 95, deadheads: 2, checkInTime: '22.00', layovers: [{ city: 'CVG', duration: '10' }], effectiveDates: 'AUG01-AUG30', flightSegments: [{ departure: 'LGA', departureTime: '2230' }] },
+  { pairingNumber: '7606', creditHours: '17.00', blockHours: '14.00', pairingDays: 3, holdProbability: 30, deadheads: 0, checkInTime: '08.00', layovers: [{ city: 'SLC', duration: '20' }], effectiveDates: 'AUG30 ONLY', flightSegments: [{ departure: 'JFK', departureTime: '0800' }] },
 ];
 
 // 1) Avoid removes MIA from a later generic Award (negatives scope everything after)
@@ -144,8 +148,8 @@ assert(awardedWith({ averageDailyBlockMin: 5.4 }).join() === '7605', 'averageDai
 assert(!awardedWith({ excludeLayoverCities: ['MIA'] }).some(n => ['7601', '7602'].includes(n)), 'excludeLayoverCities removes MIA trips');
 // only 7605 has 2 deadheads
 assert(awardedWith({ deadheadsMin: 2 }).join() === '7605', 'deadheadsMin requires >= 2 DH');
-// layover totals: 7601=14h,7602=15h → >=14
-assert(awardedWith({ totalLayoverHoursMin: 14 }).join() === '7601,7602', 'totalLayoverHoursMin filters');
+// layover totals: 7601=14h, 7602=15h, 7606=20h → >=14
+assert(awardedWith({ totalLayoverHoursMin: 14 }).join() === '7601,7602,7606', 'totalLayoverHoursMin filters');
 // every fixture has exactly one layover
 assert(awardedWith({ layoverCountMax: 0 }).length === 0, 'layoverCountMax 0 excludes all one-layover trips');
 
@@ -180,6 +184,66 @@ assert(e3text.includes('Deadhead Day'), 'exports Deadhead Day for deadheadsMin 1
 assert(e3text.includes('Not Any Layover In ORD'), 'exports Not Any Layover In');
 assert(e3text.includes('Total Layover Time > 10:00'), 'exports Total Layover Time');
 assert(e3text.includes('Number Of Layovers < 2'), 'exports Number Of Layovers');
+
+// 8d) Derived properties: check-in station, redeye, carry-out
+assert(awardedWith({ checkInStations: ['EWR'] }).join() === '7603', 'checkInStations matches first-segment departure');
+assert(awardedWith({ hasRedeye: true }).join() === '7605', 'hasRedeye true requires a 22:00-04:59 departure');
+assert(!awardedWith({ hasRedeye: false }).includes('7605'), 'hasRedeye false excludes redeye trips');
+assert(awardedWith({ carryOutMin: 1 }).join() === '7606', 'carryOutMin finds the AUG30 3-day trip (1 day into SEP)');
+assert(!awardedWith({ carryOutMax: 0 }).includes('7606'), 'carryOutMax 0 excludes carry-out trips');
+
+// 8e) Set Condition Pattern: exact export text + not-simulated caveat
+const patternBid: DraftBid = {
+  groups: [
+    {
+      type: 'pairings',
+      preferences: [
+        {
+          type: 'setConditionPattern',
+          patternDaysOnMin: 3,
+          patternDaysOnMax: 6,
+          patternDaysOffMin: 5,
+          elseStartNext: true,
+        },
+        { type: 'award' },
+      ],
+    },
+    { type: 'reserve', preferences: [] },
+  ],
+};
+const ep = exportBid(patternBid);
+assert(
+  ep.lines.includes(
+    'Set Condition Pattern Between 3 And 6 Days On ,With 5 Days Off (Minimum) Else Start Next Bid Group'
+  ),
+  'Pattern exports verbatim NAVBLUE text (including " ,With" spacing)'
+);
+const rp = simulateBid(patternBid, pairings, { alv: 40, threshold: 30 });
+assert(
+  rp.caveats.some(c => c.includes('Pattern')),
+  'Pattern adds a not-scored caveat to simulation'
+);
+assert(
+  rp.groupResults[0].inertPreferences.some(p => p.reason.includes('not simulated')),
+  'Pattern preference marked not-simulated in group results'
+);
+// Set Condition after an Award warns
+const latePattern = exportBid({
+  groups: [
+    {
+      type: 'pairings',
+      preferences: [
+        { type: 'award' },
+        { type: 'setConditionPattern', patternDaysOnMin: 3, patternDaysOnMax: 6, patternDaysOffMin: 4 },
+      ],
+    },
+    { type: 'reserve', preferences: [] },
+  ],
+});
+assert(
+  latePattern.warnings.some(w => w.includes('forced above Award')),
+  'Pattern after Award triggers placement warning'
+);
 
 // 9) Coach tool executor: valid call, bad JSON, malformed bid
 const toolCtx = { pairings, alv: 40 };

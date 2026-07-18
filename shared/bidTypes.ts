@@ -53,6 +53,20 @@ export interface PairingFilter {
    * Daily Block Time". */
   averageDailyBlockMin?: number;
   averageDailyBlockMax?: number;
+  /** Match pairings that check in at any of these stations (NAVBLUE
+   * "Pairing Check-In Station"; derived from the first flight segment's
+   * departure airport). Use inside an Avoid preference to steer away from
+   * a co-terminal (e.g. a pilot avoiding EWR check-ins). */
+  checkInStations?: string[];
+  /** true = require at least one redeye leg; false = require none.
+   * Redeye = any leg departing 22:00-04:59 local. NAVBLUE "Duty Is
+   * Redeye" with Any / Not Any. */
+  hasRedeye?: boolean;
+  /** Days the pairing operates past the end of the bid period (NAVBLUE
+   * "Carry Out"). carryOutMin: 1 inside an Avoid renders the common
+   * "Avoid ... If Carry Out > 0 Days". */
+  carryOutMin?: number;
+  carryOutMax?: number;
 }
 
 export interface BidPreference {
@@ -61,6 +75,7 @@ export interface BidPreference {
     | 'avoid'
     | 'preferOff'
     | 'setConditionCredit'
+    | 'setConditionPattern'
     | 'clearScheduleStartNext';
   /** For award/avoid. */
   filter?: PairingFilter;
@@ -71,6 +86,17 @@ export interface BidPreference {
   preferOffDates?: string[];
   /** For setConditionCredit. */
   creditWindow?: CreditWindowType;
+  /**
+   * For setConditionPattern (NAVBLUE "Set Condition Pattern Between X And
+   * Y Days On ,With Z Days Off (Minimum)"). Constrains the whole line's
+   * shape: work stretches between patternDaysOnMin and patternDaysOnMax
+   * days, separated by at least patternDaysOffMin days off. NOT scored by
+   * the simulator yet (line-shape placement is not modeled) — exported
+   * verbatim and surfaced as a caveat.
+   */
+  patternDaysOnMin?: number;
+  patternDaysOnMax?: number;
+  patternDaysOffMin?: number;
   /** Award only: cap on pairings awarded by this preference. */
   limit?: number;
   /** Attachable to avoid/preferOff/setConditionCredit. */

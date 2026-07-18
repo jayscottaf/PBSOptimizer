@@ -36,6 +36,7 @@ const DRAFT_BID_SCHEMA = {
                     'avoid',
                     'preferOff',
                     'setConditionCredit',
+                    'setConditionPattern',
                     'clearScheduleStartNext',
                   ],
                 },
@@ -85,6 +86,23 @@ const DRAFT_BID_SCHEMA = {
                     averageDailyCreditMax: { type: 'number' },
                     averageDailyBlockMin: { type: 'number' },
                     averageDailyBlockMax: { type: 'number' },
+                    checkInStations: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'Match pairings checking in at any of these stations (e.g. ["JFK","LGA"]). Put in an Avoid preference to steer away from a co-terminal.',
+                    },
+                    hasRedeye: {
+                      type: 'boolean',
+                      description:
+                        'true = require a redeye leg (departs 22:00-04:59); false = require none.',
+                    },
+                    carryOutMin: {
+                      type: 'number',
+                      description:
+                        'Min days operating past the bid period end. Avoid with carryOutMin 1 = "Avoid If Carry Out > 0 Days".',
+                    },
+                    carryOutMax: { type: 'number' },
                   },
                 },
                 preferOffDates: {
@@ -96,6 +114,21 @@ const DRAFT_BID_SCHEMA = {
                 creditWindow: {
                   type: 'string',
                   enum: ['normal', 'min', 'max', 'mid'],
+                },
+                patternDaysOnMin: {
+                  type: 'number',
+                  description:
+                    'setConditionPattern only: min days in a work stretch.',
+                },
+                patternDaysOnMax: {
+                  type: 'number',
+                  description:
+                    'setConditionPattern only: max days in a work stretch.',
+                },
+                patternDaysOffMin: {
+                  type: 'number',
+                  description:
+                    'setConditionPattern only: minimum days off between stretches. Exported verbatim; NOT scored by simulate_bid.',
                 },
                 limit: {
                   type: 'number',

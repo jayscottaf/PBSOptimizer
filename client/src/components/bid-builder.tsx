@@ -70,6 +70,7 @@ const PREFERENCE_LABELS: Record<PreferenceKind, string> = {
   avoid: 'Avoid Pairings',
   preferOff: 'Prefer Off',
   setConditionCredit: 'Set Condition (credit window)',
+  setConditionPattern: 'Set Condition (pattern: days on/off)',
   clearScheduleStartNext: 'Clear Schedule and Start Next',
 };
 
@@ -97,6 +98,11 @@ const PREFERENCE_STYLE: Record<
     icon: Gauge,
     accent: 'border-l-purple-500',
     chip: 'text-purple-600 dark:text-purple-400',
+  },
+  setConditionPattern: {
+    icon: Gauge,
+    accent: 'border-l-indigo-500',
+    chip: 'text-indigo-600 dark:text-indigo-400',
   },
   clearScheduleStartNext: {
     icon: SkipForward,
@@ -294,6 +300,17 @@ function summarizeFilter(filter?: PairingFilter): string {
   if (filter.deadheadsMax !== undefined) {
     parts.push(`≤${filter.deadheadsMax} DH`);
   }
+  if (filter.checkInStations?.length) {
+    parts.push(`check-in @ ${filter.checkInStations.join('/')}`);
+  }
+  if (filter.hasRedeye !== undefined) {
+    parts.push(filter.hasRedeye ? 'has redeye' : 'no redeye');
+  }
+  if (filter.carryOutMin !== undefined || filter.carryOutMax !== undefined) {
+    parts.push(
+      `carry-out ${filter.carryOutMin ?? 0}-${filter.carryOutMax ?? '∞'}d`
+    );
+  }
   return parts.length > 0 ? parts.join(', ') : 'any pairing';
 }
 
@@ -318,6 +335,12 @@ function summarizePreference(pref: BidPreference): string {
       const labels = { min: 'Minimum', max: 'Maximum', mid: 'Mid', normal: 'Normal' };
       return `Set Condition: ${labels[pref.creditWindow ?? 'normal']} Credit`;
     }
+    case 'setConditionPattern':
+      return (
+        `Set Condition: Pattern ${pref.patternDaysOnMin}-${pref.patternDaysOnMax} on, ` +
+        `${pref.patternDaysOffMin}+ off` +
+        (pref.elseStartNext ? ' + Else Start Next' : '')
+      );
     case 'clearScheduleStartNext':
       return 'Clear Schedule and Start Next Bid Group';
   }
@@ -345,10 +368,17 @@ interface PreferenceFormState {
   checkInHourMax: string;
   deadheadsMin: string;
   deadheadsMax: string;
+  checkInStations: string;
+  redeye: '' | 'has' | 'none';
+  carryOutMin: string;
+  carryOutMax: string;
   pairingNumbers: string;
   limit: string;
   elseStartNext: boolean;
   creditWindow: 'min' | 'max' | 'mid';
+  patternDaysOnMin: string;
+  patternDaysOnMax: string;
+  patternDaysOffMin: string;
   preferOffDates: Date[];
 }
 
@@ -374,10 +404,17 @@ const EMPTY_FORM: PreferenceFormState = {
   checkInHourMax: '',
   deadheadsMin: '',
   deadheadsMax: '',
+  checkInStations: '',
+  redeye: '',
+  carryOutMin: '',
+  carryOutMax: '',
   pairingNumbers: '',
   limit: '',
   elseStartNext: false,
   creditWindow: 'max',
+  patternDaysOnMin: '',
+  patternDaysOnMax: '',
+  patternDaysOffMin: '',
   preferOffDates: [],
 };
 
@@ -429,6 +466,14 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
       filter.deadheadsMin = num(form.deadheadsMin);
     if (num(form.deadheadsMax) !== undefined)
       filter.deadheadsMax = num(form.deadheadsMax);
+    const stations = parseCities(form.checkInStations);
+    if (stations.length > 0) filter.checkInStations = stations;
+    if (form.redeye === 'has') filter.hasRedeye = true;
+    if (form.redeye === 'none') filter.hasRedeye = false;
+    if (num(form.carryOutMin) !== undefined)
+      filter.carryOutMin = num(form.carryOutMin);
+    if (num(form.carryOutMax) !== undefined)
+      filter.carryOutMax = num(form.carryOutMax);
     const numbers = form.pairingNumbers
       .split(/[,\s]+/)
       .map(token => token.trim())
@@ -466,6 +511,21 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
     return {
       type: 'setConditionCredit',
       creditWindow: form.creditWindow,
+      ...(form.elseStartNext ? { elseStartNext: true } : {}),
+    };
+  }
+  if (form.kind === 'setConditionPattern') {
+    const on1 = num(form.patternDaysOnMin);
+    const on2 = num(form.patternDaysOnMax);
+    const off = num(form.patternDaysOffMin);
+    if (on1 === undefined || on2 === undefined || off === undefined) {
+      return null;
+    }
+    return {
+      type: 'setConditionPattern',
+      patternDaysOnMin: on1,
+      patternDaysOnMax: on2,
+      patternDaysOffMin: off,
       ...(form.elseStartNext ? { elseStartNext: true } : {}),
     };
   }
@@ -1121,6 +1181,81 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                           </div>
                           <div className="col-span-2 space-y-1">
                             <Label className="text-xs">
+                              Check-in stations (comma-separated)
+                            </Label>
+                            <Input
+                              placeholder="JFK, LGA"
+                              value={form.checkInStations}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  checkInStations: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Redeye</Label>
+                            <Select
+                              value={form.redeye || 'any'}
+                              onValueChange={value =>
+                                setForm(p => ({
+                                  ...p,
+                                  redeye: (value === 'any' ? '' : value) as
+                                    | ''
+                                    | 'has'
+                                    | 'none',
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="any">
+                                  Either (no condition)
+                                </SelectItem>
+                                <SelectItem value="has">
+                                  Has a redeye leg
+                                </SelectItem>
+                                <SelectItem value="none">No redeyes</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Carry-out days min
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.carryOutMin}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  carryOutMin: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              Carry-out days max
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={form.carryOutMax}
+                              onChange={e =>
+                                setForm(p => ({
+                                  ...p,
+                                  carryOutMax: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <Label className="text-xs">
                               Specific pairing numbers (optional)
                             </Label>
                             <Input
@@ -1229,6 +1364,69 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                           <p className="text-xs text-muted-foreground">
                             Min/Max Credit bidders can be capped by seniority;
                             without an exit, PBS ignores a capped condition.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={form.elseStartNext}
+                              onCheckedChange={checked =>
+                                setForm(p => ({ ...p, elseStartNext: checked }))
+                              }
+                            />
+                            <Label className="text-xs">Else Start Next</Label>
+                          </div>
+                        </div>
+                      )}
+
+                      {form.kind === 'setConditionPattern' && (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Days on (min)</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={form.patternDaysOnMin}
+                                onChange={e =>
+                                  setForm(p => ({
+                                    ...p,
+                                    patternDaysOnMin: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Days on (max)</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={form.patternDaysOnMax}
+                                onChange={e =>
+                                  setForm(p => ({
+                                    ...p,
+                                    patternDaysOnMax: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Days off (min)</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={form.patternDaysOffMin}
+                                onChange={e =>
+                                  setForm(p => ({
+                                    ...p,
+                                    patternDaysOffMin: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Shapes the whole line: work stretches of min–max
+                            days separated by at least the given days off.
+                            Exported exactly; not yet scored by Simulate.
                           </p>
                           <div className="flex items-center gap-2">
                             <Switch

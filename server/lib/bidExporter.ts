@@ -147,6 +147,22 @@ function renderFilterConditions(filter: PairingFilter): string[] {
   if (filter.deadheadsMax !== undefined) {
     conditions.push(`If Deadhead Legs < ${filter.deadheadsMax + 1}`);
   }
+  if (filter.checkInStations && filter.checkInStations.length > 0) {
+    conditions.push(
+      `If Pairing Check-In Station ${filter.checkInStations.map(s => s.toUpperCase()).join(', ')}`
+    );
+  }
+  if (filter.hasRedeye !== undefined) {
+    conditions.push(
+      filter.hasRedeye ? 'If Any Duty Is Redeye' : 'If Not Any Duty Is Redeye'
+    );
+  }
+  if (filter.carryOutMin !== undefined) {
+    conditions.push(`If Carry Out > ${filter.carryOutMin - 1} Days`);
+  }
+  if (filter.carryOutMax !== undefined) {
+    conditions.push(`If Carry Out < ${filter.carryOutMax + 1} Days`);
+  }
   return conditions;
 }
 
@@ -178,6 +194,21 @@ function renderPreference(pref: BidPreference): string | null {
       if (!label) return null;
       const esn = pref.elseStartNext ? ' Else Start Next Bid Group' : '';
       return `Set Condition ${label}` + esn;
+    }
+    case 'setConditionPattern': {
+      const on1 = pref.patternDaysOnMin;
+      const on2 = pref.patternDaysOnMax;
+      const off = pref.patternDaysOffMin;
+      if (on1 === undefined || on2 === undefined || off === undefined) {
+        return null;
+      }
+      // Verbatim NAVBLUE rendering, including the " ,With" spacing, as it
+      // appears in real submitted-bid confirmations.
+      const esn = pref.elseStartNext ? ' Else Start Next Bid Group' : '';
+      return (
+        `Set Condition Pattern Between ${on1} And ${on2} Days On ,With ${off} Days Off (Minimum)` +
+        esn
+      );
     }
     case 'clearScheduleStartNext':
       return 'Clear Schedule and Start Next Bid Group';
@@ -217,7 +248,10 @@ function validate(bid: DraftBid): string[] {
     }
     const firstAward = group.preferences.findIndex(p => p.type === 'award');
     const lateSetCondition = group.preferences.findIndex(
-      (p, i) => p.type === 'setConditionCredit' && firstAward !== -1 && i > firstAward
+      (p, i) =>
+        (p.type === 'setConditionCredit' || p.type === 'setConditionPattern') &&
+        firstAward !== -1 &&
+        i > firstAward
     );
     if (lateSetCondition !== -1) {
       warnings.push(
