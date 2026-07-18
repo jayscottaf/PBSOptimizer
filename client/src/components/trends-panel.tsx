@@ -518,7 +518,7 @@ export function TrendsPanel({
                   ` Latest credit window ${data.window.windowMin.toFixed(0)}–${data.window.windowMax.toFixed(0)}h, threshold ${data.window.threshold.toFixed(0)}h (${data.window.period}).`}
               </p>
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground dark:text-muted-foreground/50">
               Month
               <select
                 value={month}

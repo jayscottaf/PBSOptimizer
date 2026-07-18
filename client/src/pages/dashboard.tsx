@@ -1636,13 +1636,13 @@ export default function Dashboard() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className="text-sm text-gray-500">
+                            <span className="text-sm text-muted-foreground">
                               {latestBidPackage
                                 ? `${latestBidPackage.month} ${latestBidPackage.year}`
                                 : ''}
                             </span>
                           )}
-                          <span className="text-sm text-gray-500">
+                          <span className="text-sm text-muted-foreground">
                             {filteredDisplayPairings.length} pairings
                             {hideConflicts && conflictMap.size > 0 ? ` (${conflictMap.size} hidden)` : ''}
                           </span>
@@ -1791,7 +1791,7 @@ export default function Dashboard() {
                                   type="checkbox"
                                   checked={hideConflicts}
                                   onChange={(e) => setHideConflicts(e.target.checked)}
-                                  className="rounded border border-gray-300 dark:border-gray-600"
+                                  className="rounded border border-input"
                                 />
                                 <span className="text-secondary-foreground">
                                   Hide conflicts ({conflictMap.size})
@@ -1850,11 +1850,11 @@ export default function Dashboard() {
                       />
                     ) : (
                       <div className="text-center py-8">
-                        <Star className="mx-auto h-16 w-16 text-gray-300" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">
+                        <Star className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                        <h3 className="mt-4 text-lg font-medium text-foreground">
                           No Favorites Yet
                         </h3>
-                        <p className="mt-2 text-sm text-gray-500">
+                        <p className="mt-2 text-sm text-muted-foreground">
                           Click the star icon on any pairing to add it to your
                           favorites.
                         </p>
@@ -1871,8 +1871,8 @@ export default function Dashboard() {
                 <Suspense
                   fallback={
                     <div className="text-center py-8">
-                      <Calendar className="mx-auto h-16 w-16 text-gray-300" />
-                      <p className="mt-2 text-sm text-gray-500">Loading calendar…</p>
+                      <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                      <p className="mt-2 text-sm text-muted-foreground">Loading calendar…</p>
                     </div>
                   }
                 >
@@ -1883,11 +1883,11 @@ export default function Dashboard() {
                 </Suspense>
               ) : (
                 <div className="text-center py-8">
-                  <Calendar className="mx-auto h-16 w-16 text-gray-300" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                  <h3 className="mt-4 text-lg font-medium text-foreground">
                     Calendar Loading
                   </h3>
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Setting up your calendar view...
                   </p>
                 </div>
@@ -1898,7 +1898,7 @@ export default function Dashboard() {
               value="bidBuilder"
               className="flex-1 overflow-auto p-1"
             >
-              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
                 <BidBuilder
                   bidPackageId={bidPackageId}
                   userId={currentUser?.id}
@@ -1907,7 +1907,7 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="trends" className="flex-1 overflow-auto p-1">
-              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
                 <TrendsPanel seniorityPercentile={seniorityPercentile} />
               </Suspense>
             </TabsContent>
@@ -1959,7 +1959,7 @@ export default function Dashboard() {
                         }
                     }}
                   />
-                  <div className="text-xs text-gray-500 flex items-center">
+                  <div className="text-xs text-muted-foreground flex items-center">
                     <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
                     PDF or TXT format
                   </div>
@@ -1968,7 +1968,7 @@ export default function Dashboard() {
                 {/* Reasons Report Upload */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-secondary-foreground">Reasons Report</h3>
-                  <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+                  <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
                     <ReasonsReportUpload
                       onUploadSuccess={() => {
                         queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
@@ -1984,7 +1984,7 @@ export default function Dashboard() {
               </div>
             </TabsContent>
             <TabsContent value="dataOverview" className="space-y-4">
-              <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
                 <DataManagementPanel />
               </Suspense>
             </TabsContent>
@@ -2009,7 +2009,7 @@ export default function Dashboard() {
             {currentUser && latestBidPackage ? (
               <Suspense
                 fallback={
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
                     Loading AI assistant…
                   </div>
                 }
@@ -2017,9 +2017,9 @@ export default function Dashboard() {
                 <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} />
               </Suspense>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center">
-                  <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p>
                     {bidPackages.length === 0
                       ? 'Upload a bid package to start using the AI assistant'
@@ -2033,11 +2033,11 @@ export default function Dashboard() {
       </Dialog>
       {/* Mobile AI Assistant Full Screen - Only on Mobile */}
       {showMobileAI && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 lg:hidden">
+        <div className="fixed inset-0 z-50 bg-background lg:hidden">
           <div className="h-full flex flex-col">
             {/* Minimal header with just close button */}
-            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b dark:border-gray-800 bg-card">
-              <h1 className="text-base font-medium dark:text-gray-100">AI Assistant</h1>
+            <div className="flex-shrink-0 flex items-center justify-between p-3 border-b bg-card">
+              <h1 className="text-base font-medium">AI Assistant</h1>
               <Button
                 variant="ghost"
                 size="sm"
@@ -2054,7 +2054,7 @@ export default function Dashboard() {
               {currentUser && latestBidPackage ? (
                 <Suspense
                   fallback={
-                    <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
                       Loading AI assistant…
                     </div>
                   }
@@ -2062,9 +2062,9 @@ export default function Dashboard() {
                   <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} compact={true} />
                 </Suspense>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-500 p-4">
+                <div className="flex items-center justify-center h-full text-muted-foreground p-4">
                   <div className="text-center">
-                    <Bot className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <Bot className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm">Upload a bid package to start</p>
                   </div>
                 </div>
@@ -2159,7 +2159,7 @@ export default function Dashboard() {
               </div>
             )}
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Name
               </label>
               <Input
@@ -2169,7 +2169,7 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Seniority Number <span className="text-red-500">*</span>
               </label>
               <Input
@@ -2182,7 +2182,7 @@ export default function Dashboard() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Category Seniority %
               </label>
               <Input
@@ -2194,10 +2194,10 @@ export default function Dashboard() {
                 onChange={e => setSeniorityPercentile(e.target.value)}
                 placeholder="e.g., 47.6 (optional)"
               />
-              <p className="text-xs text-gray-500 mt-1">Lower % = more senior</p>
+              <p className="text-xs text-muted-foreground mt-1">Lower % = more senior</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Base <span className="text-red-500">*</span>
               </label>
               <select
@@ -2220,7 +2220,7 @@ export default function Dashboard() {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Aircraft <span className="text-red-500">*</span>
               </label>
               <select
@@ -2243,7 +2243,7 @@ export default function Dashboard() {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
+              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
                 Position <span className="text-red-500">*</span>
               </label>
               <select
@@ -2258,14 +2258,14 @@ export default function Dashboard() {
                 <option value="A">A - Position A</option>
                 <option value="B">B - Position B</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">Position A or B (matches ALV table)</p>
+              <p className="text-xs text-muted-foreground mt-1">Position A or B (matches ALV table)</p>
             </div>
             {currentUser && (
               <div className="border-t pt-4 mt-4">
                 <div className="text-sm font-medium text-secondary-foreground mb-1">
                   Sync PIN
                 </div>
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-muted-foreground mb-2">
                   Set a PIN, then enter it on any other device to load this same profile, favorites, calendar, and chat history there.
                 </p>
                 <div className="flex gap-2">

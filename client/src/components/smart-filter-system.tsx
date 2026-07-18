@@ -759,7 +759,7 @@ export function SmartFilterSystem({
             />
             {selectedDaysOff.length > 0 && (
               <div className="mt-3 w-full">
-                <p className="text-sm text-gray-600 mb-2">Selected dates:</p>
+                <p className="text-sm text-muted-foreground mb-2">Selected dates:</p>
                 <div className="flex flex-wrap gap-1">
                   {selectedDaysOff.map((date, index) => (
                     <Badge

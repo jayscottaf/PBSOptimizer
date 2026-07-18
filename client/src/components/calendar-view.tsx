@@ -619,13 +619,13 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       ) : (
-        <div className="bg-card border dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="bg-card border rounded-lg overflow-hidden">
           {/* Day headers */}
           <div className="grid grid-cols-7 bg-muted border-b">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div
                 key={day}
-                className="p-3 text-center font-semibold text-secondary-foreground border-r dark:border-gray-700 last:border-r-0"
+                className="p-3 text-center font-semibold text-secondary-foreground border-r last:border-r-0"
               >
                 {day}
               </div>
@@ -639,7 +639,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             return (
               <div
                 key={weekIndex}
-                className="relative border-b dark:border-gray-700 last:border-b-0"
+                className="relative border-b last:border-b-0"
               >
                 {/* Day numbers and basic layout */}
                 <div className="grid grid-cols-7 min-h-[120px]">
@@ -650,9 +650,9 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     return (
                       <div
                         key={day.toISOString()}
-                        className={`p-2 border-r dark:border-gray-700 last:border-r-0 relative ${
+                        className={`p-2 border-r  last:border-r-0 relative ${
                           !inBidPeriod
-                            ? 'bg-muted text-gray-400 dark:text-gray-600'
+                            ? 'bg-muted text-muted-foreground dark:text-muted-foreground'
                             : 'bg-card'
                         }`}
                       >
@@ -662,7 +662,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                               ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center'
                               : inBidPeriod
                                 ? 'text-foreground'
-                                : 'text-gray-400 dark:text-gray-600'
+                                : 'text-muted-foreground dark:text-muted-foreground'
                           }`}
                         >
                           {format(day, 'd')}
@@ -813,7 +813,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                           </Button>
 
                           {/* Tooltip on hover */}
-                          <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                             {event.pairing.pairingNumber}:{' '}
                             {event.pairing.creditHours} credit hrs
                             {isViolation && (
@@ -899,7 +899,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     <span>Progress</span>
                     <span>{totalCreditHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-green-500 h-2 rounded-full transition-all duration-300"
                       style={{
@@ -933,7 +933,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     <span>Progress</span>
                     <span>{totalBlockHours.toFixed(1)}/{userALV.toFixed(0)}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-orange-500 h-2 rounded-full transition-all duration-300"
                       style={{
@@ -968,7 +968,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     <span>Progress</span>
                     <span>{totalWorkingDays}/{bidPeriodDays}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-purple-500 h-2 rounded-full transition-all duration-300"
                       style={{
@@ -1001,7 +1001,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                     <span>Progress</span>
                     <span>{totalDaysOff}/{bidPeriodDays}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
                       style={{
