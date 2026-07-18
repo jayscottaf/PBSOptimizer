@@ -12,9 +12,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Plane,
   Search,
   X,
+  Bot,
   CloudUpload,
   BarChart2,
   User,
@@ -24,11 +24,6 @@ import {
   Info,
   Star,
   Calendar,
-  ChevronLeft,
-  ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Bot,
   Moon,
   Sun,
   Monitor,
@@ -40,7 +35,10 @@ import { StatsPanel } from '@/components/stats-panel';
 import { PairingTable } from '@/components/pairing-table';
 import { PairingModal } from '@/components/pairing-modal';
 import { SmartFilterSystem } from '@/components/smart-filter-system';
-import { NetworkStatus } from '@/components/network-status';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/layout/app-sidebar';
+import { AppHeader } from '@/components/layout/app-header';
+import { MobileNav } from '@/components/layout/mobile-nav';
 
 // Code-split: these are only needed once the pilot opens the Calendar tab,
 // the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
@@ -378,17 +376,6 @@ export default function Dashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showMobileAI, setShowMobileAI] = useState(false);
-
-  // Sidebar collapsed state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('sidebarCollapsed');
-    return saved !== null ? JSON.parse(saved) : false;
-  });
-
-  // Save sidebar state to localStorage
-  React.useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
-  }, [sidebarCollapsed]);
 
   // Check if profile is complete on mount - show modal if not
   React.useEffect(() => {
@@ -1471,223 +1458,74 @@ export default function Dashboard() {
     }
   }, [displayPairings, calendarEventsData, latestBidPackage]);
 
-  // Update the quick stats to use filtered pairings instead of raw response
-  const quickStats = React.useMemo(() => {
-    if (!filteredDisplayPairings || filteredDisplayPairings.length === 0) {
-      return { totalPairings: 0, likelyToHold: 0, highCredit: 0 };
+  const openAIAssistant = useCallback(() => {
+    // On mobile: show full-screen AI view; on desktop: open the modal.
+    if (window.innerWidth < 1024) {
+      setShowMobileAI(true);
+    } else {
+      setShowAIAssistant(true);
     }
-
-    const totalPairings = filteredDisplayPairings.length;
-    // Calculate stats from filtered pairings
-    const likelyToHold = filteredDisplayPairings.filter(p => (p.holdProbability || 0) >= 70).length;
-    const highCredit = filteredDisplayPairings.filter(p => parseFloat(p.creditHours?.toString() || '0') >= 18).length;
-
-    return {
-      totalPairings,
-      likelyToHold,
-      highCredit,
-    };
-  }, [filteredDisplayPairings]);
+  }, []);
 
   return (
-    <div className={`flex min-h-screen bg-gray-50 dark:bg-gray-950 ${processingBidPackage ? 'pt-12' : ''}`}>
+    <SidebarProvider>
       {/* Processing Banner - Shows during bid package processing */}
       {processingBidPackage && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 dark:bg-blue-700 text-white px-4 py-3 shadow-lg">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-info px-4 py-3 text-info-foreground shadow-lg">
           <div className="flex items-center justify-center gap-3">
             <RefreshCw className="h-5 w-5 animate-spin" />
             <span className="font-medium">
               Processing {processingBidPackage.name}...
             </span>
-            <span className="text-blue-200 text-sm hidden sm:inline">
+            <span className="hidden text-sm opacity-80 sm:inline">
               This may take a minute. You can continue using the app.
             </span>
           </div>
         </div>
       )}
 
-      {/* Left Sidebar - Hidden on mobile */}
-      <div
-        className={`hidden lg:flex bg-card border-r dark:border-gray-800 transition-all duration-300 ${
-          sidebarCollapsed ? 'w-16' : 'w-80'
-        } flex-shrink-0 flex-col`}
+      <AppSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        currentUser={currentUser}
+        seniorityPercentile={seniorityPercentile}
+        bidPackages={bidPackages as any[]}
+        selectedPackage={latestBidPackage}
+        onSelectPackage={setSelectedBidPackageId}
+        onOpenProfile={() => setShowProfileModal(true)}
+      />
+
+      <SidebarInset
+        className={`min-w-0 ${processingBidPackage ? 'pt-12' : ''}`}
       >
-        {/* Toggle button */}
-        <div className="p-4 border-b dark:border-gray-800 flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        <AppHeader
+          activeTab={activeTab}
+          currentUser={currentUser}
+          seniorityPercentile={seniorityPercentile}
+          onUpload={() => setShowUploadModal(true)}
+          onOpenAI={openAIAssistant}
+        />
 
-        <div className="p-4 flex-1 overflow-y-auto">
-          {!bidPackageId ? (
-            sidebarCollapsed ? (
-              <div className="text-center">
-                <CloudUpload className="mx-auto h-8 w-8 text-gray-300" />
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <CloudUpload className="mx-auto h-12 w-12 text-gray-300" />
-                <h3 className="mt-4 text-lg font-medium text-gray-900">
-                  No Bid Package
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Upload a PDF bid package to get started with analyzing
-                  pairings.
-                </p>
-              </div>
-            )
-          ) : (
-            <div className="space-y-6">
-              {sidebarCollapsed ? (
-                // Collapsed view - show essential numbers only
-                <div className="space-y-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-600">
-                      {quickStats.totalPairings}
-                    </div>
-                    <div className="text-xs text-gray-600">Total</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">
-                      {quickStats.likelyToHold}
-                    </div>
-                    <div className="text-xs text-gray-600">Hold</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-purple-600">
-                      {quickStats.highCredit}
-                    </div>
-                    <div className="text-xs text-gray-600">HC</div>
-                  </div>
-                </div>
-              ) : (
-                // Expanded view - show full stats panel
-                <div className="space-y-6">
-                  <StatsPanel
-                    pairings={filteredDisplayPairings || []}
-                    bidPackage={latestBidPackage}
-                    statistics={effectiveStatistics}
-                    bidPackageStats={bidPackageStats}
-                    onTripLengthFilter={handleTripLengthFilter}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full p-3 pb-20 sm:p-6 lg:pb-6">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="h-full flex flex-col"
+            >
+              {/* Navigation now lives in the sidebar + mobile bottom nav; the
+                  TabsList is kept for screen readers / keyboard tab semantics. */}
+              <TabsList className="sr-only">
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                <TabsTrigger value="favorites">Favorites</TabsTrigger>
+                <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                <TabsTrigger value="bidBuilder">Bid Builder</TabsTrigger>
+                <TabsTrigger value="trends">Trends</TabsTrigger>
+              </TabsList>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="p-3 sm:p-6 h-full">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="h-full flex flex-col"
-          >
-            <div className="flex flex-col gap-4 mb-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Plane className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-                      PBS Bid Optimizer
-                    </h1>
-                  </div>
-                  {currentUser && (
-                    <Badge variant="outline" className="text-xs">
-                      Seniority #{currentUser.seniorityNumber} (
-                      {seniorityPercentile}%)
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <TabsList className="sm:w-auto">
-                    <TabsTrigger value="dashboard" className="flex items-center gap-1.5">
-                      <Search className="h-4 w-4" />
-                      <span className="hidden sm:inline">Dashboard</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="favorites" className="flex items-center gap-1.5">
-                      <Star className="h-4 w-4" />
-                      <span className="hidden sm:inline">Favorites</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="calendar" className="flex items-center gap-1.5">
-                      <Calendar className="h-4 w-4" />
-                      <span className="hidden sm:inline">Calendar</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="bidBuilder" className="flex items-center gap-1.5">
-                      <ClipboardList className="h-4 w-4" />
-                      <span className="hidden sm:inline">Bid Builder</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="trends" className="flex items-center gap-1.5">
-                      <TrendingUp className="h-4 w-4" />
-                      <span className="hidden sm:inline">Trends</span>
-                    </TabsTrigger>
-                  </TabsList>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // On mobile: show full-screen AI view
-                      // On desktop: open AI Assistant modal
-                      if (window.innerWidth < 1024) {
-                        // lg breakpoint
-                        setShowMobileAI(true);
-                      } else {
-                        setShowAIAssistant(true);
-                      }
-                    }}
-                    className={`flex items-center justify-center w-9 h-9 hover:bg-green-50 dark:hover:bg-green-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all duration-200 hover:scale-105 hover:shadow-md ${
-                      showMobileAI
-                        ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400'
-                        : 'text-green-600 dark:text-green-400'
-                    }`}
-                    title="AI Assistant"
-                  >
-                    <Bot className="h-4 w-4 hover:text-green-700 dark:hover:text-green-400" />
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowProfileModal(true)}
-                    className="flex items-center justify-center w-9 h-9 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 hover:scale-105"
-                    title="User Profile"
-                  >
-                    <User className="h-4 w-4 dark:text-gray-300" />
-                  </Button>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowUploadModal(true)}
-                      className="flex items-center gap-2 dark:text-gray-300"
-                    >
-                      <CloudUpload className="h-4 w-4" />
-                      <span className="hidden sm:inline">Upload</span>
-                    </Button>
-
-                    {/* Network Status - Inline WiFi icon */}
-                    <div className="relative">
-                      <NetworkStatus />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mobile Stats Panel - Only show on mobile and when we have bid package data */}
-              {bidPackageId && (
-                <div className="lg:hidden">
+              {/* Quick Stats — interim home until the Phase-3 insight Home lands */}
+              {bidPackageId && activeTab === 'dashboard' && (
+                <div className="mb-4">
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
@@ -1718,9 +1556,8 @@ export default function Dashboard() {
                   </Card>
                 </div>
               )}
-            </div>
 
-            <TabsContent value="dashboard" className="flex-1 overflow-hidden">
+              <TabsContent value="dashboard" className="flex-1 overflow-hidden">
               <div className="space-y-6 h-full">
                 {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
 
@@ -2058,8 +1895,11 @@ export default function Dashboard() {
               </Suspense>
             </TabsContent>
           </Tabs>
+          </div>
         </div>
-      </div>
+      </SidebarInset>
+
+      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Pairing Modal */}
       {selectedPairing && (
@@ -2578,6 +2418,6 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </SidebarProvider>
   );
 }
