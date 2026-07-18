@@ -487,6 +487,81 @@ export function PairingTable({
   // Ensure pairings is always an array
   const safePairings = Array.isArray(pairings) ? pairings : [];
 
+  const legend = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Info className="h-3.5 w-3.5" />
+          Legend
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 text-sm">
+        <p className="mb-2 font-medium">Reading this table</p>
+        <dl className="space-y-1.5 text-xs">
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">HH.MM</dt>
+            <dd className="text-muted-foreground">
+              Times are hours.minutes — 15.45 = 15h 45m
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">Hold %</dt>
+            <dd className="text-muted-foreground">
+              Estimated chance the pairing is still available at your
+              seniority when PBS reaches it
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">A / B / C…</dt>
+            <dd className="text-muted-foreground">
+              Duty days of the trip, in order
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">
+              <span className="font-semibold text-teal-600 dark:text-teal-400">
+                Teal city
+              </span>
+            </dt>
+            <dd className="text-muted-foreground">
+              Overnight layover station
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium italic">(DH)</dt>
+            <dd className="text-muted-foreground">
+              Deadhead — repositioning flight, ride as passenger
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">TAFB</dt>
+            <dd className="text-muted-foreground">
+              Time Away From Base: check-in to release
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">C/B</dt>
+            <dd className="text-muted-foreground">
+              Credit ÷ block — higher means more pay per hour flown
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">
+              <AlertTriangle className="inline h-3.5 w-3.5 text-warning" />
+            </dt>
+            <dd className="text-muted-foreground">
+              Conflicts with an event on your calendar
+            </dd>
+          </div>
+        </dl>
+      </PopoverContent>
+    </Popover>
+  );
+
   return (
     <Card className={!showHeader ? 'border-0 rounded-none shadow-none' : undefined}>
       {showHeader && (
@@ -496,6 +571,7 @@ export function PairingTable({
             <span className="text-sm text-muted-foreground">
               Showing {safePairings.length} pairings
             </span>
+            {legend}
             <Button
               variant="link"
               className="text-blue-600 hover:text-blue-700 font-medium"
@@ -505,6 +581,11 @@ export function PairingTable({
           </div>
         </div>
       )}
+      {!showHeader && (
+        <div className="flex justify-end border-b border-border px-2 py-1">
+          {legend}
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
@@ -512,6 +593,7 @@ export function PairingTable({
             <tr>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Rotation number in the bid package"
                 {...sortHeaderProps('pairingNumber')}
               >
                 <div className="flex items-center space-x-1">
@@ -525,6 +607,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Estimated chance this pairing is still available at your seniority"
                 {...sortHeaderProps('holdProbability')}
               >
                 <div className="flex items-center space-x-1">
@@ -541,6 +624,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Pay credit, HH.MM (15.45 = 15h 45m)"
                 {...sortHeaderProps('creditHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -554,6 +638,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Scheduled flying time, HH.MM"
                 {...sortHeaderProps('blockHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -567,6 +652,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Time Away From Base: check-in to release, HH.MM"
                 {...sortHeaderProps('tafb')}
               >
                 <div className="flex items-center space-x-1">
@@ -594,6 +680,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Trip length in days"
                 {...sortHeaderProps('pairingDays')}
               >
                 <div className="flex items-center space-x-1">
@@ -607,6 +694,7 @@ export function PairingTable({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Credit \u00f7 block \u2014 higher = more pay per hour flown"
                 {...sortHeaderProps('creditBlockRatio')}
               >
                 <div className="flex items-center space-x-1">
