@@ -134,6 +134,26 @@ export const api = {
     return response.json();
   },
 
+  // Optimizer: generate a draft bid from the pilot's profile + package
+  optimizeBid: async (
+    bidPackageId: number,
+    userId?: number,
+    overrides?: Record<string, unknown>
+  ): Promise<{
+    bid: DraftBid;
+    rationale: string[];
+    group1Completion: number;
+    simulation: SimulationResult;
+    profileSource: string;
+  }> => {
+    const response = await apiRequest('POST', '/api/optimize-bid', {
+      bidPackageId,
+      userId,
+      overrides,
+    });
+    return response.json();
+  },
+
   // Get unique layover locations for a bid package
   getLayoverLocations: async (bidPackageId: number): Promise<string[]> => {
     const response = await apiRequest('GET', `/api/layover-locations?bidPackageId=${bidPackageId}`);

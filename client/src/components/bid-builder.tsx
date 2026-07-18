@@ -534,9 +534,10 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
 
 interface BidBuilderProps {
   bidPackageId?: number;
+  userId?: number;
 }
 
-export function BidBuilder({ bidPackageId }: BidBuilderProps) {
+export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   const { toast } = useToast();
   const [bid, setBid] = useState<DraftBid>(loadDraft);
   const [addingToGroup, setAddingToGroup] = useState<number | null>(null);
@@ -544,6 +545,7 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [exported, setExported] = useState<BidExportResult | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [optimizerRationale, setOptimizerRationale] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -580,6 +582,33 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
     onError: (error: Error) => {
       toast({
         title: 'Export failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const optimizeMutation = useMutation({
+    mutationFn: () => api.optimizeBid(bidPackageId!, userId),
+    onSuccess: result => {
+      setBid(result.bid);
+      setSimulation(result.simulation);
+      setExported(null);
+      setOptimizerRationale(result.rationale);
+      toast({
+        title:
+          result.profileSource === 'neutral'
+            ? 'Draft generated (neutral profile)'
+            : 'Optimized draft generated',
+        description:
+          result.profileSource === 'neutral'
+            ? 'No preference profile yet — learn one from your history or set weights for a personalized draft.'
+            : `Built from your ${result.profileSource} profile. Review, tune, and re-simulate.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Optimize failed',
         description: error.message,
         variant: 'destructive',
       });
@@ -695,6 +724,16 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
           <h2 className="text-lg font-semibold">Draft Bid</h2>
           <div className="flex gap-2">
             <Button
+              variant="default"
+              size="sm"
+              onClick={() => optimizeMutation.mutate()}
+              disabled={optimizeMutation.isPending}
+              title="Generate a draft from your preference profile, hold history, and this month's pairings"
+            >
+              <Sparkles className="h-4 w-4 mr-1" />
+              {optimizeMutation.isPending ? 'Optimizing…' : 'Auto-draft'}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => setShowTemplates(v => !v)}
@@ -724,12 +763,30 @@ export function BidBuilder({ bidPackageId }: BidBuilderProps) {
                 setBid(cloneBid(EMPTY_BID));
                 setSimulation(null);
                 setExported(null);
+                setOptimizerRationale([]);
               }}
             >
               Clear draft
             </Button>
           </div>
         </div>
+
+        {optimizerRationale.length > 0 && (
+          <Card className="border-dashed">
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="h-4 w-4" /> Why this draft
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+                {optimizerRationale.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         {templatesVisible && (
           <Card className="border-dashed">
