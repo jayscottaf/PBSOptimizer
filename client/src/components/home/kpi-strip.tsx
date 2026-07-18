@@ -1,5 +1,6 @@
 import { Package, ShieldCheck, TrendingUp, MoonStar } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Term } from '@/components/ui/term';
 import {
   countHighCredit,
   countLikelyToHold,
@@ -16,7 +17,7 @@ interface KpiStripProps {
 interface KpiCardProps {
   icon: React.ComponentType<{ className?: string }>;
   value: string;
-  label: string;
+  label: React.ReactNode;
   context: string;
 }
 
@@ -55,7 +56,7 @@ export function KpiStrip({
       <KpiCard
         icon={Package}
         value={String(total)}
-        label="Pairings"
+        label={<Term term="pairing">Pairings</Term>}
         context={
           bidPackage
             ? `${bidPackage.month} ${bidPackage.year} · ${bidPackage.base} ${bidPackage.aircraft}`
@@ -65,7 +66,7 @@ export function KpiStrip({
       <KpiCard
         icon={ShieldCheck}
         value={String(hold)}
-        label="Likely to hold"
+        label={<Term term="hold probability">Likely to hold</Term>}
         context={
           seniorityPercentile !== null && seniorityPercentile !== undefined
             ? `${pct(hold, total)} of package at your seniority (${seniorityPercentile}%)`
@@ -75,13 +76,13 @@ export function KpiStrip({
       <KpiCard
         icon={TrendingUp}
         value={String(highCredit)}
-        label="High credit"
+        label={<Term term="credit">High credit</Term>}
         context={`${pct(highCredit, total)} pay 18h+ credit`}
       />
       <KpiCard
         icon={MoonStar}
         value={String(longLayovers)}
-        label="Long layovers"
+        label={<Term term="layover">Long layovers</Term>}
         context={`${pct(longLayovers, total)} include a 20h+ overnight`}
       />
     </div>

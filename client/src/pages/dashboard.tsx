@@ -41,6 +41,7 @@ import { AppHeader } from '@/components/layout/app-header';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
+import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 
 // Code-split: these are only needed once the pilot opens the Calendar tab,
 // the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
@@ -376,6 +377,9 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  // First-run welcome step inside the profile dialog (presentation only —
+  // the dialog's open/close gating below is untouched).
+  const [welcomeIntroDone, setWelcomeIntroDone] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showMobileAI, setShowMobileAI] = useState(false);
 
@@ -2087,6 +2091,21 @@ export default function Dashboard() {
         }}
       >
         <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+          {!currentUser && !seniorityNumber && !welcomeIntroDone ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Welcome to PBS Optimizer</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Three steps: set up your profile, upload a bid package, get
+                  your bid.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="overflow-y-auto pr-2">
+                <WelcomeIntro onGetStarted={() => setWelcomeIntroDone(true)} />
+              </div>
+            </>
+          ) : (
+          <>
           <DialogHeader>
             <DialogTitle>Complete Your Profile</DialogTitle>
             <DialogDescription>
@@ -2429,6 +2448,8 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
+          </>
+          )}
         </DialogContent>
       </Dialog>
     </SidebarProvider>
