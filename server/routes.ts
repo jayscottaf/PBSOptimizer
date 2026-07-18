@@ -1652,6 +1652,86 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Generate an optimized draft bid from the pilot's profile + this
+  // package. Objective comes entirely from the per-user profile (learned
+  // and/or manual) plus request overrides — no built-in style.
+  app.post('/api/optimize-bid', async (req, res) => {
+    try {
+      const { bidPackageId, userId, overrides } = req.body ?? {};
+      const pkgId = parseInt(String(bidPackageId));
+      if (Number.isNaN(pkgId)) {
+        return res.status(400).json({ message: 'bidPackageId is required' });
+      }
+      const bidPackage = await storage.getBidPackage(pkgId);
+      if (!bidPackage) {
+        return res.status(404).json({ message: 'Bid package not found' });
+      }
+      const pairingsList = await storage.searchPairings({ bidPackageId: pkgId });
+      if (pairingsList.length === 0) {
+        return res.status(400).json({ message: 'Bid package has no pairings' });
+      }
+
+      const uid = parseInt(String(userId));
+      const profileRow = Number.isNaN(uid)
+        ? undefined
+        : await storage.getBidProfile(uid);
+      const { neutralProfile } = await import('./lib/profileLearner');
+      const weights = (profileRow?.weights as any) ?? neutralProfile();
+
+      const user = Number.isNaN(uid) ? undefined : await storage.getUser(uid);
+      const seniorityPercentile = user?.seniorityPercentile ?? undefined;
+
+      const [trends, realWindow] = await Promise.all([
+        storage.getTrendsSummary(bidPackage.base).catch(() => null),
+        storage.getCategoryCreditWindow(bidPackage.base).catch(() => null),
+      ]);
+      // Latest-period boundary per trip length as the reachability signal.
+      const boundaryByDays = new Map<number, number>();
+      for (const b of trends?.holdBoundaries ?? []) {
+        if (b.juniorMostPercentile !== null) {
+          boundaryByDays.set(b.pairingDays, b.juniorMostPercentile);
+        }
+      }
+      const holdBoundaries = [...boundaryByDays.entries()].map(
+        ([pairingDays, juniorMostPercentile]) => ({
+          pairingDays,
+          juniorMostPercentile,
+        })
+      );
+
+      const { optimizeBid } = await import('./lib/bidOptimizer');
+      const { simulateBid } = await import('./lib/bidSimulator');
+      const optimized = optimizeBid(pairingsList, weights, {
+        seniorityPercentile: seniorityPercentile ?? undefined,
+        holdBoundaries,
+        threshold: realWindow?.threshold ?? undefined,
+        overrides,
+      });
+      const simulation = simulateBid(optimized.bid, pairingsList, {
+        alv: bidPackage.alvHours
+          ? parseFloat(String(bidPackage.alvHours))
+          : undefined,
+        threshold: realWindow?.threshold,
+        windowMin: realWindow?.windowMin,
+        windowMax: realWindow?.windowMax,
+        windowSource: realWindow
+          ? `the ${realWindow.period} Reasons Report`
+          : undefined,
+      });
+      res.json({
+        bid: optimized.bid,
+        rationale: optimized.rationale,
+        group1Completion: optimized.group1Completion,
+        topScored: optimized.scored.slice(0, 25),
+        simulation,
+        profileSource: profileRow?.source ?? 'neutral',
+      });
+    } catch (error) {
+      console.error('Error optimizing bid:', error);
+      res.status(500).json({ message: 'Failed to optimize bid' });
+    }
+  });
+
   // Longitudinal category trends mined from imported Reasons Reports:
   // per-period contention, category size, and how junior each trip length
   // went (percentile of the junior-most holder).

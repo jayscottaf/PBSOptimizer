@@ -1,6 +1,11 @@
 import { simulateBid } from '../server/lib/bidSimulator';
 import { exportBid } from '../server/lib/bidExporter';
 import { learnProfile, neutralProfile } from '../server/lib/profileLearner';
+import {
+  optimizeBid,
+  scorePairings,
+  estimateCompletion,
+} from '../server/lib/bidOptimizer';
 import { executeCoachTool } from '../server/ai/coachTools';
 import { ReasonsReportParser } from '../server/reasonsReportParser';
 import {
@@ -505,6 +510,88 @@ assert(
   assert(!weights.layoverDislikes.includes('BUF'), 'one-off avoid does not become a learned dislike');
   assert(weights.preferredTripLengths[0] === 3, 'learner ranks preferred trip length');
   assert(Math.abs(weights.preferOffWeekendShare - 2 / 3) < 0.01, 'weekend share of Prefer Off dates computed');
+}
+
+// 13) Optimizer: profile-driven, structurally valid, cascades on risk
+{
+  const profile = {
+    ...neutralProfile(),
+    creditLeaning: -0.8, // QoL bidder
+    layoverLikes: ['BOS'],
+    layoverDislikes: ['CVG'],
+    checkInStationAvoids: ['EWR'],
+    avoidsCarryOut: true,
+    preferredPattern: { daysOnMin: 3, daysOnMax: 6, daysOffMin: 5 },
+    preferredTripLengths: [4, 3],
+  };
+
+  // Scoring: BOS 4-day trips should outrank the CVG redeye 2-day for
+  // this QoL profile even though credit/day differs.
+  const scored = scorePairings(pairings, profile);
+  assert(scored[0].pairingDays === 4 && scored[0].pairingNumber !== '7605', 'QoL profile ranks liked 4-day BOS trips first');
+  const cvg = scored.find(s => s.pairingNumber === '7605');
+  assert(!!cvg && cvg.score < scored[0].score, 'disliked-layover trip scores lower');
+
+  // Completion estimator: tiny pool vs huge threshold → low; boundaries
+  // kill unreachable lengths.
+  const full = estimateCompletion(scored, 40);
+  const starved = estimateCompletion(scored, 400);
+  assert(full > starved, 'completion estimate falls as threshold rises');
+  const boundaried = estimateCompletion(scored, 40, 90, [
+    { pairingDays: 4, juniorMostPercentile: 50 },
+    { pairingDays: 3, juniorMostPercentile: 50 },
+  ]);
+  assert(boundaried < full, 'hold boundaries reduce completion for junior pilots');
+
+  // Full optimize: senior pilot → short cascade; junior → longer ladder.
+  const senior = optimizeBid(pairings, profile, {
+    seniorityPercentile: 10,
+    threshold: 40,
+  });
+  const junior = optimizeBid(pairings, profile, {
+    seniorityPercentile: 95,
+    threshold: 400,
+    holdBoundaries: [{ pairingDays: 4, juniorMostPercentile: 50 }],
+  });
+  const seniorPairingGroups = senior.bid.groups.filter(g => g.type === 'pairings').length;
+  const juniorPairingGroups = junior.bid.groups.filter(g => g.type === 'pairings').length;
+  assert(juniorPairingGroups > seniorPairingGroups, 'junior/starved pilot gets a deeper cascade');
+  assert(senior.bid.groups[senior.bid.groups.length - 1].type === 'reserve', 'optimizer appends reserve fallback group');
+
+  // Structure: every non-last pairing group has an exit; exported bid
+  // passes the validator with no warnings.
+  const exportedOpt = exportBid(junior.bid);
+  assert(exportedOpt.warnings.length === 0, 'optimized cascade passes exporter validation with zero warnings');
+  assert(
+    exportedOpt.lines.some(l => l.startsWith('Set Condition Pattern Between 3 And 6')),
+    'optimized bid carries the pattern set-condition'
+  );
+  assert(
+    exportedOpt.lines.some(l => l === 'Avoid Pairings If Pairing Check-In Station EWR'),
+    'profile station avoid rendered as real NAVBLUE line'
+  );
+  assert(
+    exportedOpt.lines.includes('Set Condition Minimum Credit Window') ||
+      exportedOpt.lines.includes('Set Condition Minimum Credit'),
+    'QoL leaning selects minimum credit window'
+  );
+  // Named top picks come before generic length tiers
+  const firstAwardIdx = exportedOpt.lines.findIndex(l => l.startsWith('Award Pairings If Pairing Numbers'));
+  const firstLengthIdx = exportedOpt.lines.findIndex(l => /^Award Pairings If Pairing Length = \d Days$/.test(l));
+  assert(firstAwardIdx !== -1 && firstLengthIdx !== -1 && firstAwardIdx < firstLengthIdx, 'named top picks precede attribute tiers');
+
+  // Simulation of the optimized bid runs clean end-to-end
+  const simOpt = simulateBid(senior.bid, pairings, { alv: 40, threshold: 35 });
+  assert(simOpt.awards.length > 0, 'optimized bid simulates with awards');
+
+  // Neutral profile (new pilot, no history) still yields a valid bid
+  const neutral = optimizeBid(pairings, neutralProfile(), { threshold: 40 });
+  const neutralExport = exportBid(neutral.bid);
+  assert(neutralExport.warnings.length === 0, 'neutral-profile bid is structurally valid (no hardcoded style leaks)');
+  assert(
+    !neutralExport.text.includes('EWR') && !neutralExport.text.includes('Pattern'),
+    'neutral profile produces no station avoids or patterns — nothing hardcoded'
+  );
 }
 
 console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} FAILURES`);
