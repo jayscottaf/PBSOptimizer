@@ -1,6 +1,6 @@
 import {
   Plane,
-  Search,
+  Home,
   Star,
   Calendar,
   ClipboardList,
@@ -32,7 +32,7 @@ import {
 import { PackageSwitcher } from '@/components/layout/package-switcher';
 
 export const NAV_ITEMS = [
-  { value: 'dashboard', label: 'Dashboard', icon: Search },
+  { value: 'dashboard', label: 'Home', icon: Home },
   { value: 'favorites', label: 'Favorites', icon: Star },
   { value: 'calendar', label: 'Calendar', icon: Calendar },
   { value: 'bidBuilder', label: 'Bid Builder', icon: ClipboardList },

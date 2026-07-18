@@ -39,6 +39,8 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { AppHeader } from '@/components/layout/app-header';
 import { MobileNav } from '@/components/layout/mobile-nav';
+import { KpiStrip } from '@/components/home/kpi-strip';
+import { TopPicks } from '@/components/home/top-picks';
 
 // Code-split: these are only needed once the pilot opens the Calendar tab,
 // the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
@@ -1496,7 +1498,7 @@ export default function Dashboard() {
       />
 
       <SidebarInset
-        className={`min-w-0 ${processingBidPackage ? 'pt-12' : ''}`}
+        className={`h-svh min-w-0 overflow-hidden ${processingBidPackage ? 'pt-12' : ''}`}
       >
         <AppHeader
           activeTab={activeTab}
@@ -1506,7 +1508,7 @@ export default function Dashboard() {
           onOpenAI={openAIAssistant}
         />
 
-        <div className="flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <div className="h-full p-3 pb-20 sm:p-6 lg:pb-6">
             <Tabs
               value={activeTab}
@@ -1523,47 +1525,58 @@ export default function Dashboard() {
                 <TabsTrigger value="trends">Trends</TabsTrigger>
               </TabsList>
 
-              {/* Quick Stats — interim home until the Phase-3 insight Home lands */}
-              {bidPackageId && activeTab === 'dashboard' && (
-                <div className="mb-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BarChart2 className="h-5 w-5" />
-                          Quick Stats
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowQuickStats(!showQuickStats)}
-                        >
-                          {showQuickStats ? 'Hide' : 'Show'}
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    {showQuickStats && (
-                      <CardContent>
-                        <StatsPanel
-                          pairings={displayPairings || []}
-                          bidPackage={latestBidPackage}
-                          statistics={effectiveStatistics}
-                          bidPackageStats={bidPackageStats}
-                          onTripLengthFilter={handleTripLengthFilter}
-                        />
-                      </CardContent>
-                    )}
-                  </Card>
-                </div>
-              )}
+              <TabsContent value="dashboard" className="flex-1 overflow-auto">
+              <div className="space-y-4">
+                {/* Insight-first Home: KPIs and the optimizer's picks come
+                    before the full table (insight → detail reading order). */}
+                {bidPackageId && (
+                  <>
+                    <KpiStrip
+                      pairings={displayPairings || []}
+                      bidPackage={latestBidPackage}
+                      seniorityPercentile={seniorityPercentile}
+                    />
+                    <TopPicks
+                      bidPackageId={bidPackageId}
+                      userId={currentUser?.id}
+                      pairings={pairings || []}
+                      onPairingClick={handlePairingClick}
+                      onOpenBidBuilder={() => setActiveTab('bidBuilder')}
+                    />
+                    <Card>
+                      <CardHeader className="py-3">
+                        <CardTitle className="flex items-center justify-between text-base font-medium">
+                          <div className="flex items-center gap-2">
+                            <BarChart2 className="h-4 w-4" />
+                            Detailed stats
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowQuickStats(!showQuickStats)}
+                          >
+                            {showQuickStats ? 'Hide' : 'Show'}
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      {showQuickStats && (
+                        <CardContent>
+                          <StatsPanel
+                            pairings={displayPairings || []}
+                            bidPackage={latestBidPackage}
+                            statistics={effectiveStatistics}
+                            bidPackageStats={bidPackageStats}
+                            onTripLengthFilter={handleTripLengthFilter}
+                          />
+                        </CardContent>
+                      )}
+                    </Card>
+                  </>
+                )}
 
-              <TabsContent value="dashboard" className="flex-1 overflow-hidden">
-              <div className="space-y-6 h-full">
-                {/* Removed duplicate mobile Smart Filters card to keep a single instance above results */}
-
-                {/* Horizontal Filters Bar */}
-                <div className="flex flex-col h-full bg-card">
-                  <div className="w-full bg-card border-b dark:border-gray-800 p-4">
+                {/* All pairings: filters + table */}
+                <div className="flex flex-col bg-card">
+                  <div className="w-full bg-card border-b p-4">
                     <div className="space-y-4">
                       <h3 className="text-sm font-semibold text-secondary-foreground">
                         Filters
@@ -1580,16 +1593,16 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Pairing Results Section */}
-                  <div className="flex-1 overflow-auto p-4 lg:p-0">
-                    {' '}
-                    {/* Ensure results section takes remaining space */}
+                  {/* Pairing Results Section — fixed viewport-height panel so
+                      the table keeps its own scroll while the page scrolls
+                      the insight sections above it. */}
+                  <div className="h-[75vh] min-h-[420px] p-4 lg:p-0">
                     <Card className="h-full flex flex-col">
                       <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
                           <CardTitle className="text-lg font-medium flex items-center gap-2">
                             <Search className="h-5 w-5 text-muted-foreground" />
-                            Pairing Results
+                            All pairings
                           </CardTitle>
                           {bidPackages.length > 1 ? (
                             <Select
