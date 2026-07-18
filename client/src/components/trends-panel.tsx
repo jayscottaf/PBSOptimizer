@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, ListChecks } from 'lucide-react';
+import {
+  TrendingUp,
+  ListChecks,
+  CircleCheck,
+  CircleAlert,
+  Lightbulb,
+} from 'lucide-react';
 
 interface TrendPeriod {
   period: string;
@@ -338,7 +344,98 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
   );
 }
 
-export function TrendsPanel() {
+interface Insight {
+  tone: 'success' | 'warning' | 'info';
+  text: string;
+}
+
+/** Plain-English takeaways derived from the already-fetched history —
+ *  averaged over the most recent 3 periods per trip length so a single
+ *  odd month doesn't flip the message. */
+function deriveInsights(
+  data: TrendsResponse,
+  seniorityPercentile: number | null | undefined
+): Insight[] {
+  const insights: Insight[] = [];
+
+  const byDays = new Map<number, number[]>();
+  for (const b of data.holdBoundaries) {
+    if (b.juniorMostPercentile === null || b.juniorMostPercentile === undefined)
+      continue;
+    if (!byDays.has(b.pairingDays)) byDays.set(b.pairingDays, []);
+    byDays.get(b.pairingDays)!.push(b.juniorMostPercentile);
+  }
+  const recentAvg = new Map<number, number>();
+  for (const [days, values] of byDays) {
+    const recent = values.slice(-3);
+    recentAvg.set(
+      days,
+      recent.reduce((a, v) => a + v, 0) / Math.max(1, recent.length)
+    );
+  }
+
+  if (
+    recentAvg.size > 0 &&
+    seniorityPercentile !== null &&
+    seniorityPercentile !== undefined
+  ) {
+    const user = Number(seniorityPercentile);
+    const holdable = [...recentAvg.entries()]
+      .filter(([, pct]) => pct >= user + 5)
+      .map(([d]) => d)
+      .sort((a, b) => a - b);
+    const tight = [...recentAvg.entries()]
+      .filter(([, pct]) => pct < user)
+      .sort((a, b) => a[1] - b[1]);
+    if (holdable.length > 0) {
+      insights.push({
+        tone: 'success',
+        text: `${holdable.map(d => `${d}-day`).join(', ')} trips have recently gone junior of your seniority (${user}%) — realistic targets for named awards.`,
+      });
+    }
+    if (tight.length > 0) {
+      const [days, pct] = tight[0];
+      insights.push({
+        tone: 'warning',
+        text: `${days}-day trips are the tightest fit: the junior-most holder has averaged the ${pct.toFixed(0)}th percentile — senior of you, so treat them as long shots with fallbacks.`,
+      });
+    }
+  }
+
+  if (data.periods.length >= 4) {
+    const shares = data.periods.map(p =>
+      p.totalPrefs > 0 ? p.lostToSenior / p.totalPrefs : 0
+    );
+    const last = shares[shares.length - 1];
+    const avg = shares.reduce((a, v) => a + v, 0) / shares.length;
+    if (Math.abs(last - avg) >= 0.03) {
+      insights.push({
+        tone: 'info',
+        text:
+          last > avg
+            ? `Contention is up: ${(last * 100).toFixed(0)}% of preferences were lost to seniors last period vs a ${(avg * 100).toFixed(0)}% average — leave more fallback room in your bid.`
+            : `Contention eased last period (${(last * 100).toFixed(0)}% lost to seniors vs ${(avg * 100).toFixed(0)}% average) — a good month to reach for picks you usually miss.`,
+      });
+    }
+  }
+
+  return insights.slice(0, 3);
+}
+
+const INSIGHT_STYLES: Record<
+  Insight['tone'],
+  { icon: typeof CircleCheck; className: string }
+> = {
+  success: { icon: CircleCheck, className: 'text-success' },
+  warning: { icon: CircleAlert, className: 'text-warning' },
+  info: { icon: Lightbulb, className: 'text-info' },
+};
+
+export function TrendsPanel({
+  seniorityPercentile,
+}: {
+  seniorityPercentile?: number | string | null;
+} = {}) {
   const [month, setMonth] = useState<string>('');
   const monthQuery = month ? `?month=${month}` : '';
 
@@ -382,8 +479,29 @@ export function TrendsPanel() {
     ...data.periods.map(p => p.lostToSenior / p.totalPrefs)
   );
 
+  const userPct =
+    seniorityPercentile !== null && seniorityPercentile !== undefined
+      ? Number(seniorityPercentile)
+      : undefined;
+  const insights = deriveInsights(data, Number.isNaN(userPct) ? undefined : userPct);
+
   return (
     <div className="space-y-4 p-1">
+      {insights.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {insights.map((insight, i) => {
+            const { icon: Icon, className } = INSIGHT_STYLES[insight.tone];
+            return (
+              <Card key={i}>
+                <CardContent className="flex items-start gap-2.5 p-4">
+                  <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${className}`} />
+                  <p className="text-sm leading-snug">{insight.text}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4 flex-wrap">

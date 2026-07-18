@@ -17,7 +17,13 @@ import {
 } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  AlertTriangle,
+  CalendarPlus,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { PairingModal } from './pairing-modal';
@@ -550,6 +556,24 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
   return (
     <div className="space-y-4">
+      {/* Teaching empty state — a blank grid gives new users no clue that
+          the calendar fills from "Add to calendar" on pairings. */}
+      {!isLoading && events.length === 0 && (
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4 text-sm">
+            <CalendarPlus className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="font-medium">Preview your month here</p>
+              <p className="text-muted-foreground">
+                Star pairings you like, then use “Add to calendar” from the
+                pairing table or Favorites — total credit, days off, and
+                crew-rest conflicts appear automatically as you lay out the
+                month.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* Navigation Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
