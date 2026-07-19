@@ -1660,7 +1660,7 @@ export async function registerRoutes(app: Express) {
   // and/or manual) plus request overrides — no built-in style.
   app.post('/api/optimize-bid', async (req, res) => {
     try {
-      const { bidPackageId, userId, overrides } = req.body ?? {};
+      const { bidPackageId, userId, overrides, depth } = req.body ?? {};
       const pkgId = parseInt(String(bidPackageId));
       if (Number.isNaN(pkgId)) {
         return res.status(400).json({ message: 'bidPackageId is required' });
@@ -1711,6 +1711,9 @@ export async function registerRoutes(app: Express) {
         holdBoundaries,
         threshold: realWindow?.threshold ?? undefined,
         overrides,
+        depth: ['auto', 'compact', 'deep'].includes(depth)
+          ? depth
+          : undefined,
       });
       const simulation = simulateBid(optimized.bid, pairingsList, {
         alv: bidPackage.alvHours

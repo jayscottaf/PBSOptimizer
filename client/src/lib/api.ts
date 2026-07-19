@@ -138,7 +138,8 @@ export const api = {
   optimizeBid: async (
     bidPackageId: number,
     userId?: number,
-    overrides?: Record<string, unknown>
+    overrides?: Record<string, unknown>,
+    depth?: 'auto' | 'compact' | 'deep'
   ): Promise<{
     bid: DraftBid;
     rationale: string[];
@@ -150,6 +151,7 @@ export const api = {
       bidPackageId,
       userId,
       overrides,
+      depth,
     });
     return response.json();
   },

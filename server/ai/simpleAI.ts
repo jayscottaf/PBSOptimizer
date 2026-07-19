@@ -128,13 +128,17 @@ export class SimpleAI {
           ? (month?: string) => this.fetchHistoricTrendsDigest(base, month)
           : undefined,
         optimizeDraft: base
-          ? (overrides?: Record<string, unknown>) =>
+          ? (
+              overrides?: Record<string, unknown>,
+              depth?: 'auto' | 'compact' | 'deep'
+            ) =>
               this.optimizeDraftDigest(
                 query.bidPackageId,
                 query.userId,
                 base,
                 pairings,
-                overrides
+                overrides,
+                depth
               )
           : undefined,
       };
@@ -275,7 +279,8 @@ export class SimpleAI {
     userId: number | undefined,
     base: string,
     pairings: any[],
-    overrides?: Record<string, unknown>
+    overrides?: Record<string, unknown>,
+    depth?: 'auto' | 'compact' | 'deep'
   ): Promise<object> {
     const [{ optimizeBid }, { exportBid }, { neutralProfile }] =
       await Promise.all([
@@ -310,6 +315,7 @@ export class SimpleAI {
       ),
       threshold: window?.threshold ?? undefined,
       overrides: overrides as any,
+      depth,
     });
     const exported = exportBid(optimized.bid);
     return {

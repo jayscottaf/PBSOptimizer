@@ -593,6 +593,109 @@ assert(
     !neutralExport.text.includes('EWR') && !neutralExport.text.includes('Pattern'),
     'neutral profile produces no station avoids or patterns — nothing hardcoded'
   );
+
+  // --- Depth engine (seniority-adaptive cascade) ---
+
+  // Fixture A: comfortable senior on auto keeps the legacy short cascade.
+  assert(seniorPairingGroups <= 3, 'comfortable senior on auto keeps a short cascade (no regression)');
+
+  // Explicit depth overrides.
+  const compact = optimizeBid(pairings, profile, {
+    seniorityPercentile: 95,
+    threshold: 400,
+    holdBoundaries: [{ pairingDays: 4, juniorMostPercentile: 50 }],
+    depth: 'compact',
+  });
+  assert(
+    compact.bid.groups.filter(g => g.type === 'pairings').length <= 3,
+    'depth: compact caps the cascade at 3 pairing groups even for a starved pilot'
+  );
+
+  // Fixture B: the plug — 100% seniority, starved threshold → extended ladder.
+  const plug = optimizeBid(pairings, profile, {
+    seniorityPercentile: 100,
+    threshold: 400,
+    holdBoundaries: [{ pairingDays: 4, juniorMostPercentile: 50 }],
+  });
+  const plugGroups = plug.bid.groups.filter(g => g.type === 'pairings');
+  assert(plugGroups.length >= 6, 'plug (100%, starved) gets the extended relaxation ladder on auto');
+  assert(plug.bid.groups[plug.bid.groups.length - 1].type === 'reserve', 'plug cascade still ends in reserve');
+
+  // Monotone looseness: pattern daysOffMin non-increasing then absent,
+  // credit window present then dropped, avoid count non-increasing,
+  // final pairings group is a bare any-pairing award.
+  let sawNoPattern = false;
+  let lastOffMin = Infinity;
+  let sawNoCredit = false;
+  let lastAvoids = Infinity;
+  for (const g of plugGroups) {
+    const pat = g.preferences.find(p => p.type === 'setConditionPattern');
+    if (pat) {
+      assert(!sawNoPattern, 'plug ladder never re-adds a pattern after dropping it');
+      assert((pat.patternDaysOffMin ?? 0) <= lastOffMin, 'plug days-off ladder is non-increasing');
+      lastOffMin = pat.patternDaysOffMin ?? 0;
+    } else {
+      sawNoPattern = true;
+    }
+    const credit = g.preferences.find(p => p.type === 'setConditionCredit');
+    if (credit) {
+      assert(!sawNoCredit, 'plug ladder never re-adds the credit window after dropping it');
+    } else {
+      sawNoCredit = true;
+    }
+    const avoids = g.preferences.filter(p => p.type === 'avoid').length;
+    assert(avoids <= lastAvoids, 'plug avoid count is non-increasing down the ladder');
+    lastAvoids = avoids;
+  }
+  assert(sawNoPattern && sawNoCredit, 'plug ladder eventually drops both the pattern and the credit window');
+  const lastPlugGroup = plugGroups[plugGroups.length - 1];
+  assert(
+    lastPlugGroup.preferences.length === 1 &&
+      lastPlugGroup.preferences[0].type === 'award' &&
+      !lastPlugGroup.preferences[0].filter,
+    'plug cascade ends in a bare any-pairing group'
+  );
+  assert(
+    exportBid(plug.bid).warnings.length === 0,
+    'plug extended cascade passes exporter validation with zero warnings'
+  );
+
+  // depth: deep forces the full ladder even for a comfortable senior.
+  const deepSenior = optimizeBid(pairings, profile, {
+    seniorityPercentile: 10,
+    threshold: 40,
+    depth: 'deep',
+  });
+  assert(
+    deepSenior.bid.groups.filter(g => g.type === 'pairings').length >= 6,
+    'depth: deep forces the extended ladder regardless of completion'
+  );
+
+  // Reachability floor: a great-fit pairing with hold < 20% is not named
+  // for a starved pilot but is named for a comfortable senior.
+  const withGhost = [
+    ...pairings,
+    { pairingNumber: '7699', creditHours: '24.50', blockHours: '20.00', pairingDays: 4, holdProbability: 5, deadheads: 0, checkInTime: '12.00', layovers: [{ city: 'BOS', duration: '30' }], effectiveDates: 'AUG15-AUG28', flightSegments: [{ departure: 'JFK', departureTime: '1200' }] },
+  ];
+  const namedNumbers = (bid: typeof plug.bid): string[] =>
+    bid.groups
+      .flatMap(g => g.preferences)
+      .filter(p => p.type === 'award' && p.filter?.pairingNumbers)
+      .flatMap(p => p.filter!.pairingNumbers!);
+  const ghostJunior = optimizeBid(withGhost, profile, {
+    seniorityPercentile: 100,
+    threshold: 400,
+  });
+  const ghostSenior = optimizeBid(withGhost, profile, {
+    seniorityPercentile: 10,
+    threshold: 40,
+  });
+  assert(!namedNumbers(ghostJunior.bid).includes('7699'), 'junior named picks exclude unreachable (hold < 20%) pairings');
+  assert(namedNumbers(ghostSenior.bid).includes('7699'), 'senior named picks still include the popular low-hold pairing');
+  assert(
+    ghostJunior.rationale.some(r => r.includes('hold')),
+    'junior rationale explains the reachability re-rank'
+  );
 }
 
 // 14) Day-of-week constructs (from the live-bid XML capture)

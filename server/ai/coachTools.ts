@@ -220,6 +220,12 @@ export const COACH_TOOL_DEFINITIONS = [
               },
             },
           },
+          depth: {
+            type: 'string',
+            enum: ['auto', 'compact', 'deep'],
+            description:
+              "Cascade depth. 'auto' (default) matches depth to the pilot's completion odds; 'deep' forces the full extended relaxation ladder a very junior pilot needs; 'compact' caps at 3 groups.",
+          },
         },
       },
     },
@@ -265,7 +271,10 @@ export interface CoachToolContext {
    */
   fetchHistoricTrends?: (month?: string) => Promise<object>;
   /** Injected optimizer (same DI rationale as fetchHistoricTrends). */
-  optimizeDraft?: (overrides?: Record<string, unknown>) => Promise<object>;
+  optimizeDraft?: (
+    overrides?: Record<string, unknown>,
+    depth?: 'auto' | 'compact' | 'deep'
+  ) => Promise<object>;
 }
 
 /**
@@ -304,7 +313,10 @@ export async function executeCoachTool(
         args?.overrides && typeof args.overrides === 'object'
           ? args.overrides
           : undefined;
-      return await context.optimizeDraft(overrides);
+      const depth = ['auto', 'compact', 'deep'].includes(args?.depth)
+        ? (args.depth as 'auto' | 'compact' | 'deep')
+        : undefined;
+      return await context.optimizeDraft(overrides, depth);
     }
 
     const bid = args?.bid as DraftBid | undefined;

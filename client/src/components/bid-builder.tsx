@@ -546,6 +546,9 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   const [exported, setExported] = useState<BidExportResult | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const templatesCardRef = useRef<HTMLDivElement | null>(null);
+  const [optimizeDepth, setOptimizeDepth] = useState<
+    'auto' | 'compact' | 'deep'
+  >('auto');
   const [optimizerRationale, setOptimizerRationale] = useState<string[]>([]);
   const [learnEmployeeNumber, setLearnEmployeeNumber] = useState('');
   const queryClient = useQueryClient();
@@ -632,7 +635,8 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   });
 
   const optimizeMutation = useMutation({
-    mutationFn: () => api.optimizeBid(bidPackageId!, userId),
+    mutationFn: () =>
+      api.optimizeBid(bidPackageId!, userId, undefined, optimizeDepth),
     onSuccess: result => {
       setBid(result.bid);
       setSimulation(result.simulation);
@@ -794,6 +798,25 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
               <Sparkles className="h-4 w-4 mr-1" />
               {optimizeMutation.isPending ? 'Optimizing…' : 'Auto-draft'}
             </Button>
+            <Select
+              value={optimizeDepth}
+              onValueChange={value =>
+                setOptimizeDepth(value as 'auto' | 'compact' | 'deep')
+              }
+            >
+              <SelectTrigger
+                className="h-9 w-[7.5rem] text-sm"
+                title="Cascade depth: Auto matches your completion odds; Deep builds the long relaxation ladder a junior pilot needs"
+                data-testid="select-optimize-depth"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Depth: Auto</SelectItem>
+                <SelectItem value="compact">Depth: Compact</SelectItem>
+                <SelectItem value="deep">Depth: Deep</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               size="sm"

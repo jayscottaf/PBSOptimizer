@@ -48,6 +48,13 @@ export interface OptimizerOptions {
   };
   /** Cap on named pairing numbers per award tier. */
   topPicksPerLength?: number;
+  /**
+   * Cascade depth. 'auto' (default) matches depth to the completion
+   * estimate — comfortable seniors get 2-3 groups, pilots whose Group 1
+   * will never complete get the full extended relaxation ladder.
+   * 'compact' caps at 3 groups; 'deep' always builds the full ladder.
+   */
+  depth?: 'auto' | 'compact' | 'deep';
 }
 
 export interface ScoredPairing {
@@ -357,18 +364,22 @@ export function optimizeBid(
   }
 
   // Relaxation ladder for the days-off pattern: strictest wish first,
-  // stepping down toward the contractual-ish floor of 2.
-  const ladders: (BidProfileWeights['preferredPattern'] | null)[] = [];
+  // stepping down. The short ladder (used by the legacy/auto bands) stops
+  // 2 below the wish; the deep ladder runs to the contractual-ish floor
+  // of 2 days off.
+  const shortLadder: (BidProfileWeights['preferredPattern'] | null)[] = [];
+  const fullLadder: (BidProfileWeights['preferredPattern'] | null)[] = [];
   if (profile.preferredPattern) {
-    for (
-      let off = profile.preferredPattern.daysOffMin;
-      off >= Math.max(2, profile.preferredPattern.daysOffMin - 2);
-      off--
-    ) {
-      ladders.push({ ...profile.preferredPattern, daysOffMin: off });
+    for (let off = profile.preferredPattern.daysOffMin; off >= 2; off--) {
+      const step = { ...profile.preferredPattern, daysOffMin: off };
+      fullLadder.push(step);
+      if (off >= Math.max(2, profile.preferredPattern.daysOffMin - 2)) {
+        shortLadder.push(step);
+      }
     }
   } else {
-    ladders.push(null);
+    shortLadder.push(null);
+    fullLadder.push(null);
   }
 
   const completion = estimateCompletion(
@@ -377,48 +388,133 @@ export function optimizeBid(
     options.seniorityPercentile,
     options.holdBoundaries
   );
-  // How many cascade groups: comfortable completion → wishes only + one
-  // fallback; poor completion → full ladder + soft-avoid-free fallback.
-  const groupCount =
-    completion >= 0.95
-      ? Math.min(2, ladders.length + 1)
-      : completion >= 0.7
-        ? Math.min(3, ladders.length + 1)
-        : ladders.length + 1;
+  const depth = options.depth ?? 'auto';
+
+  // Each group is a complete restatement; the invariant is that every
+  // group is strictly looser than the one before it, so the pilot — not
+  // Denial Mode — chooses the order their standards degrade in.
+  interface GroupSpec {
+    pattern: BidProfileWeights['preferredPattern'] | null;
+    includeCreditWindow: boolean;
+    softness: number;
+    /** Bare `Award: any pairing` terminal group — no conditions at all. */
+    bare?: boolean;
+  }
+
+  // Legacy shape (unchanged behavior for comfortable completion): N-1
+  // ladder steps then a soft-avoid-free fallback repeating the loosest
+  // pattern.
+  const legacySpecs = (count: number): GroupSpec[] =>
+    Array.from({ length: count }, (_, g) => ({
+      pattern: shortLadder[Math.min(g, shortLadder.length - 1)],
+      includeCreditWindow: true,
+      softness: g === count - 1 ? 1 : 0,
+    }));
+
+  // Extended ladder for pilots whose Group 1 will essentially never
+  // complete: relax one dimension at a time — days off, then the
+  // pattern itself, then the credit window, then soft avoids, ending in
+  // a bare any-pairing group (completion beats preference at the
+  // bottom of the cascade).
+  const deepSpecs = (): GroupSpec[] => {
+    const specs: GroupSpec[] = fullLadder
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .map(pattern => ({ pattern, includeCreditWindow: true, softness: 0 }));
+    specs.push({ pattern: null, includeCreditWindow: true, softness: 0 });
+    if (creditWindow) {
+      specs.push({ pattern: null, includeCreditWindow: false, softness: 0 });
+    }
+    specs.push({ pattern: null, includeCreditWindow: false, softness: 1 });
+    specs.push({
+      pattern: null,
+      includeCreditWindow: false,
+      softness: 1,
+      bare: true,
+    });
+    return specs;
+  };
+
+  const specs: GroupSpec[] =
+    depth === 'deep'
+      ? deepSpecs()
+      : depth === 'compact'
+        ? legacySpecs(Math.min(3, shortLadder.length + 1))
+        : completion >= 0.95
+          ? legacySpecs(Math.min(2, shortLadder.length + 1))
+          : completion >= 0.7
+            ? legacySpecs(Math.min(3, shortLadder.length + 1))
+            : completion >= 0.3
+              ? legacySpecs(shortLadder.length + 1)
+              : deepSpecs();
+
+  const usedDeep =
+    depth === 'deep' || (depth === 'auto' && completion < 0.3);
   rationale.push(
-    `Estimated line-completion likelihood at this seniority: ${(completion * 100).toFixed(0)}% → ${groupCount} bid group${groupCount > 1 ? 's' : ''} in the cascade`
+    `Estimated line-completion likelihood at this seniority: ${(completion * 100).toFixed(0)}% → ${specs.length} bid group${specs.length > 1 ? 's' : ''} in the cascade (depth: ${depth}${usedDeep ? ', extended relaxation ladder' : ''})`
   );
+  if (usedDeep) {
+    rationale.push(
+      'Deep cascade: your line will likely be built in the fallbacks, so each group relaxes one dimension at a time — days off, then the pattern, then the credit window, then soft avoids — ending in a bare any-pairing group so PBS never assigns for you.'
+    );
+  }
+
+  // Junior named picks: at poor completion, ranking picks purely by
+  // profile score names trips that will be gone long before PBS reaches
+  // this pilot. Re-rank by score × hold and drop the unreachable ones —
+  // a junior pilot's edge is naming the well-fitting pairings nobody
+  // senior bids.
+  let cascadeSource = scored;
+  let namedPicks = topPicks;
+  if (completion < 0.5) {
+    const HOLD_FLOOR = 20;
+    cascadeSource = scored
+      .filter(s => (s.holdProbability ?? 50) >= HOLD_FLOOR)
+      .sort(
+        (a, b) =>
+          b.score * (Math.max(5, b.holdProbability ?? 50) / 100) -
+          a.score * (Math.max(5, a.holdProbability ?? 50) / 100)
+      );
+    if (cascadeSource.length === 0) cascadeSource = scored;
+    namedPicks = Math.max(topPicks, 15);
+    rationale.push(
+      `Named picks re-ranked by fit × hold probability and capped to reachable pairings (hold ≥ ${HOLD_FLOOR}%) — at this seniority the win is claiming well-fitting trips others skip, not the package's most popular ones.`
+    );
+  }
 
   const groups: BidGroup[] = [];
-  for (let g = 0; g < groupCount; g++) {
-    const isLast = g === groupCount - 1;
-    const pattern = ladders[Math.min(g, ladders.length - 1)];
-    const softness = isLast ? 1 : 0;
+  specs.forEach((spec, g) => {
+    const isLast = g === specs.length - 1;
     const prefs: BidPreference[] = [];
 
-    if (pattern) {
+    if (spec.bare) {
+      prefs.push({ type: 'award' });
+      groups.push({ type: 'pairings', preferences: prefs });
+      return;
+    }
+
+    if (spec.pattern) {
       prefs.push({
         type: 'setConditionPattern',
-        patternDaysOnMin: pattern.daysOnMin,
-        patternDaysOnMax: pattern.daysOnMax,
-        patternDaysOffMin: pattern.daysOffMin,
+        patternDaysOnMin: spec.pattern.daysOnMin,
+        patternDaysOnMax: spec.pattern.daysOnMax,
+        patternDaysOffMin: spec.pattern.daysOffMin,
         elseStartNext: !isLast ? true : undefined,
       });
     }
-    if (creditWindow) {
+    if (creditWindow && spec.includeCreditWindow) {
       prefs.push({ type: 'setConditionCredit', creditWindow });
     }
     const negatives = negativesFromProfile(
       profile,
       options.overrides?.preferOffDates,
-      softness
+      spec.softness
     );
     prefs.push(...negatives.prefs);
     if (g === 0) {
       for (const n of negatives.notes) rationale.push(n);
     }
-    prefs.push(...awardCascade(scored, profile, topPicks));
-    if (!isLast && !pattern) {
+    prefs.push(...awardCascade(cascadeSource, profile, namedPicks));
+    if (!isLast && !spec.pattern) {
       // Group needs an exit; without a pattern carrying ESN, put it on
       // the last negative, else fall back to CSSN.
       const lastNegative = [...prefs]
@@ -428,17 +524,18 @@ export function optimizeBid(
       else prefs.push({ type: 'clearScheduleStartNext' });
     }
     groups.push({ type: 'pairings', preferences: prefs });
-  }
+  });
   groups.push({ type: 'reserve', preferences: [] });
 
-  if (profile.preferredPattern && groupCount > 1) {
-    rationale.push(
-      `Days-off ladder across groups: ${ladders
-        .slice(0, groupCount - 1)
-        .map(l => l?.daysOffMin)
-        .filter(Boolean)
-        .join(' → ')} (last group drops soft avoids entirely)`
-    );
+  if (profile.preferredPattern && specs.length > 1) {
+    const offSteps = specs
+      .map(s => s.pattern?.daysOffMin)
+      .filter((v): v is number => v !== undefined && v !== null);
+    if (offSteps.length > 1) {
+      rationale.push(
+        `Days-off ladder across groups: ${offSteps.join(' → ')} (later groups drop soft avoids${usedDeep ? ', then the pattern and credit window' : ' entirely'})`
+      );
+    }
   }
   rationale.push(
     `Top-scored pairings named explicitly per preferred trip length (${(profile.preferredTripLengths.length ? profile.preferredTripLengths : ['auto']).join(', ')}), then attribute tiers, then a generic fallback.`
