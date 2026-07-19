@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type BidExportResult } from '@/lib/api';
 import type {
@@ -545,6 +545,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [exported, setExported] = useState<BidExportResult | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const templatesCardRef = useRef<HTMLDivElement | null>(null);
   const [optimizerRationale, setOptimizerRationale] = useState<string[]>([]);
   const [learnEmployeeNumber, setLearnEmployeeNumber] = useState('');
   const queryClient = useQueryClient();
@@ -735,6 +736,24 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
 
   const templatesVisible = showTemplates || preferenceCount === 0;
 
+  // The strategy card is force-shown on an empty draft, so a plain toggle
+  // makes the Templates button feel dead (and on mobile the card sits below
+  // the fold). Reveal + scroll to it; only a second click on an explicitly
+  // opened card hides it again.
+  const handleTemplatesClick = () => {
+    if (showTemplates && preferenceCount > 0) {
+      setShowTemplates(false);
+      return;
+    }
+    setShowTemplates(true);
+    window.requestAnimationFrame(() => {
+      templatesCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* How it works strip */}
@@ -778,7 +797,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowTemplates(v => !v)}
+              onClick={handleTemplatesClick}
               title="Start from a strategy template"
             >
               <Sparkles className="h-4 w-4 mr-1" /> Templates
@@ -927,7 +946,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
         )}
 
         {templatesVisible && (
-          <Card className="border-dashed">
+          <Card ref={templatesCardRef} className="border-dashed">
             <CardHeader className="py-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="h-4 w-4 text-amber-500" />
