@@ -456,6 +456,45 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Delete a bid package and everything hanging off it (pairings,
+  // favorites, calendar events, chat history). Bid-history award rows are
+  // unlinked first — the linked_pairing_id FK would block pairing deletion
+  // otherwise (same order the upload-time dedupe uses); they re-link on
+  // the next matching upload.
+  app.delete('/api/bid-packages/:id', async (req, res) => {
+    try {
+      const bidPackageId = parseInt(req.params.id);
+      if (isNaN(bidPackageId)) {
+        return res.status(400).json({ error: 'Invalid bid package ID' });
+      }
+      const bidPackage = await storage.getBidPackage(bidPackageId);
+      if (!bidPackage) {
+        return res.status(404).json({ error: 'Bid package not found' });
+      }
+      const pkgPairings = await storage.getPairings(bidPackageId);
+      if (pkgPairings.length > 0) {
+        await db
+          .update(bidHistory)
+          .set({ linkedPairingId: null })
+          .where(
+            inArray(
+              bidHistory.linkedPairingId,
+              pkgPairings.map(p => p.id)
+            )
+          );
+      }
+      await storage.deleteBidPackage(bidPackageId);
+      res.json({
+        deleted: bidPackageId,
+        pairings: pkgPairings.length,
+        label: `${bidPackage.month} ${bidPackage.year} · ${bidPackage.base} ${bidPackage.aircraft}`,
+      });
+    } catch (error) {
+      console.error('Error deleting bid package:', error);
+      res.status(500).json({ error: 'Failed to delete bid package' });
+    }
+  });
+
   // Normalize month to uppercase 3-letter abbreviation for consistent matching
   const normalizeMonth = (month: string): string => {
     const upper = month.toUpperCase();

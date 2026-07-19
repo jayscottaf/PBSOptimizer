@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Database, Package, FileText, CheckCircle, AlertCircle, Loader2, FileStack, ChevronDown } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Button } from './ui/button';
+import { Database, Package, FileText, CheckCircle, AlertCircle, Loader2, FileStack, ChevronDown, Trash2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
 
 interface UploadedReport {
   month: string;
@@ -60,6 +62,42 @@ export function DataManagementPanel() {
   const [expandedPackages, setExpandedPackages] = useState<Set<number>>(new Set());
   const [showAllPackages, setShowAllPackages] = useState(false);
   const [showAllReports, setShowAllReports] = useState(false);
+  const queryClient = useQueryClient();
+
+  const deletePackageMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/bid-packages/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to delete bid package');
+      }
+      return response.json() as Promise<{ deleted: number; label: string }>;
+    },
+    onSuccess: result => {
+      toast({
+        title: 'Bid package deleted',
+        description: `${result.label} and its pairings were removed.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['data-health'] });
+      queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Delete failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const confirmDelete = (pkg: BidPackageInfo) => {
+    const ok = window.confirm(
+      `Delete ${pkg.month} ${pkg.year} · ${pkg.base} ${pkg.aircraft} (${pkg.pairingCount} pairings)?\n\nThis also removes favorites and calendar entries tied to its pairings. This cannot be undone.`
+    );
+    if (ok) deletePackageMutation.mutate(pkg.id);
+  };
 
   const { data, isLoading, error } = useQuery<DataHealthResponse>({
     queryKey: ['data-health'],
@@ -345,17 +383,35 @@ export function DataManagementPanel() {
                             </div>
                           </button>
 
-                          {expandedPackages.has(pkg.id) && pkg.positions.length > 0 && (
-                            <div className="px-3 pb-3 flex gap-1 flex-wrap">
-                              {pkg.positions.map((pos, idx) => (
-                                <Badge
-                                  key={idx}
-                                  variant="outline"
-                                  className="text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                                >
-                                  {pos.position}: {pos.count}
-                                </Badge>
-                              ))}
+                          {expandedPackages.has(pkg.id) && (
+                            <div className="px-3 pb-3 space-y-2">
+                              {pkg.positions.length > 0 && (
+                                <div className="flex gap-1 flex-wrap">
+                                  {pkg.positions.map((pos, idx) => (
+                                    <Badge
+                                      key={idx}
+                                      variant="outline"
+                                      className="text-xs bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                                    >
+                                      {pos.position}: {pos.count}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive"
+                                disabled={deletePackageMutation.isPending}
+                                onClick={() => confirmDelete(pkg)}
+                                data-testid={`delete-package-${pkg.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {deletePackageMutation.isPending &&
+                                deletePackageMutation.variables === pkg.id
+                                  ? 'Deleting…'
+                                  : 'Delete package'}
+                              </Button>
                             </div>
                           )}
                         </div>
