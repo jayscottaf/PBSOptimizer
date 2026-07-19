@@ -36,6 +36,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { PairingDisplay } from '@/components/pairing-display';
+import { PbsEntryAssistant } from '@/components/pbs-entry-assistant';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertTriangle,
@@ -1866,40 +1867,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
         )}
 
         {exported && (
-          <Card>
-            <CardHeader className="py-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
-                  NAVBLUE bid text (review-ready)
-                </CardTitle>
-                <Button size="sm" variant="outline" onClick={copyExport}>
-                  <ClipboardCopy className="h-4 w-4 mr-1" /> Copy
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {exported.warnings.length > 0 && (
-                <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
-                  {exported.warnings.map((warning, i) => (
-                    <p
-                      key={i}
-                      className="text-xs text-amber-800 dark:text-amber-300"
-                    >
-                      • {warning}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <pre className="rounded bg-muted p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto">
-                {exported.text}
-              </pre>
-              <p className="text-xs text-muted-foreground">
-                Enter each line in NAVBLUE and verify it is accepted — property
-                availability varies by configuration. This is a starting
-                draft, not a guarantee of any award.
-              </p>
-            </CardContent>
-          </Card>
+          <PbsEntryAssistant exported={exported} onCopyAll={copyExport} />
         )}
       </div>
       </div>

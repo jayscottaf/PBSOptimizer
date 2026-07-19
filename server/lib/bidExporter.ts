@@ -15,11 +15,31 @@ import type {
   PairingFilter,
 } from '../../shared/bidTypes';
 
+export interface EntryStep {
+  /** Exact display text NAVBLUE should show once the line is entered —
+   * byte-identical to the corresponding entry in `lines`. */
+  expectText: string;
+  /** Ordered NAVBLUE UI actions to build the line, in the app's own
+   * vocabulary (from the live-UI audit). */
+  actions: string[];
+  /** Why the optimizer chose this line (beginner-mode education). */
+  why?: string;
+}
+
+export interface EntryGroup {
+  title: string;
+  /** The group-level NAVBLUE action, e.g. "Add Bid Group → Start Pairings". */
+  groupAction: string;
+  steps: EntryStep[];
+}
+
 export interface ExportResult {
   text: string;
   lines: string[];
   /** Grammar/structure problems the pilot should fix before submitting. */
   warnings: string[];
+  /** Guided transcription steps for the PBS Entry Assistant. */
+  entrySteps: EntryGroup[];
 }
 
 function formatHours(hours: number): string {
@@ -230,6 +250,176 @@ function renderPreference(pref: BidPreference): string | null {
   }
 }
 
+/**
+ * NAVBLUE UI actions for each filter condition, mirroring
+ * renderFilterConditions field-for-field so the instructions and the
+ * expected text always describe the same conditions. Vocabulary comes
+ * from the live-UI audit (§1 preference types, §9 value-widget model):
+ * property names are the exact labels in the "Add property" picker,
+ * operators are { Exactly =, Greater Than >, Less Than <, Range }.
+ */
+function actionsForFilter(filter: PairingFilter): string[] {
+  const a: string[] = [];
+  const range = (
+    label: string,
+    min: number | undefined,
+    max: number | undefined,
+    fmt: (v: number) => string,
+    unit = ''
+  ) => {
+    if (min !== undefined && max !== undefined) {
+      if (min === max) {
+        a.push(`Add property → ${label}; operator → Exactly =; value → ${fmt(min)}${unit}`);
+      } else {
+        a.push(`Add property → ${label}; operator → Range; values → ${fmt(min)}–${fmt(max)}${unit}`);
+      }
+    } else if (min !== undefined) {
+      a.push(`Add property → ${label}; operator → Greater Than >; value → ${fmt(min)}${unit}`);
+    } else if (max !== undefined) {
+      a.push(`Add property → ${label}; operator → Less Than <; value → ${fmt(max)}${unit}`);
+    }
+  };
+  const n = (v: number) => String(v);
+
+  if (filter.pairingNumbers && filter.pairingNumbers.length > 0) {
+    a.push(
+      `Add property → Pairing Numbers; enter: ${filter.pairingNumbers.join(', ')}`
+    );
+  }
+  range('Pairing Length', filter.pairingDaysMin, filter.pairingDaysMax, n, ' days');
+  if (filter.layoverCities && filter.layoverCities.length > 0) {
+    a.push(
+      `Add property → Layover; sub-field Stations → add ${filter.layoverCities.map(c => c.toUpperCase()).join(', ')}`
+    );
+  }
+  if (filter.excludeLayoverCities && filter.excludeLayoverCities.length > 0) {
+    a.push(
+      `Add property → Layover; matcher → If Not, quantifier → Any; sub-field Stations → add ${filter.excludeLayoverCities.map(c => c.toUpperCase()).join(', ')}`
+    );
+  }
+  range('Number Of Layovers', filter.layoverCountMin, filter.layoverCountMax, n);
+  range(
+    'Total Layover Time',
+    filter.totalLayoverHoursMin,
+    filter.totalLayoverHoursMax,
+    formatHours,
+    ' (Hours/Minutes spinners)'
+  );
+  range('Pairing Credit', filter.creditMin, filter.creditMax, formatHours, ' (Hours/Minutes spinners)');
+  if (filter.checkInHourMin !== undefined || filter.checkInHourMax !== undefined) {
+    const from = String(filter.checkInHourMin ?? 0).padStart(2, '0');
+    const to = String(filter.checkInHourMax ?? 23).padStart(2, '0');
+    a.push(
+      `Add property → Check-In Time; sub-field Time Range → ${from}:00 to ${to}:59`
+    );
+  }
+  range('Average Daily Credit', filter.averageDailyCreditMin, filter.averageDailyCreditMax, formatHours, ' (Hours/Minutes spinners)');
+  range('Average Daily Block Time', filter.averageDailyBlockMin, filter.averageDailyBlockMax, formatHours, ' (Hours/Minutes spinners)');
+  range('Block Time', filter.blockMin, filter.blockMax, formatHours, ' (Hours/Minutes spinners)');
+  if (filter.deadheadsMin !== undefined) {
+    a.push(
+      filter.deadheadsMin === 1
+        ? 'Add property → Deadhead Day'
+        : `Add property → Deadhead Legs; operator → Greater Than >; value → ${filter.deadheadsMin - 1}`
+    );
+  }
+  if (filter.deadheadsMax !== undefined) {
+    a.push(
+      `Add property → Deadhead Legs; operator → Less Than <; value → ${filter.deadheadsMax + 1}`
+    );
+  }
+  if (filter.checkInStations && filter.checkInStations.length > 0) {
+    a.push(
+      `Add property → Pairing Check-In Station; Stations → add ${filter.checkInStations.map(s => s.toUpperCase()).join(', ')}`
+    );
+  }
+  if (filter.hasRedeye !== undefined) {
+    a.push(
+      filter.hasRedeye
+        ? 'Add property → Duty Is Redeye (matcher If, quantifier Any)'
+        : 'Add property → Duty Is Redeye; matcher → If Not, quantifier → Any'
+    );
+  }
+  if (filter.carryOutMin !== undefined) {
+    a.push(
+      `Add property → Carry Out; operator → Greater Than >; value → ${filter.carryOutMin - 1} days`
+    );
+  }
+  if (filter.carryOutMax !== undefined) {
+    a.push(
+      `Add property → Carry Out; operator → Less Than <; value → ${filter.carryOutMax + 1} days`
+    );
+  }
+  if (filter.departOnDOWs && filter.departOnDOWs.length > 0) {
+    a.push(
+      `Add property → Depart On; sub-field Days Of Week List → ${filter.departOnDOWs.join(', ')}`
+    );
+  }
+  return a;
+}
+
+/** NAVBLUE UI actions to build one preference line. */
+function actionsForPreference(pref: BidPreference): string[] {
+  const actions: string[] = [];
+  switch (pref.type) {
+    case 'award':
+      actions.push('Preference type → Award Pairings');
+      if (pref.filter) actions.push(...actionsForFilter(pref.filter));
+      if (pref.limit !== undefined) {
+        actions.push(`Set Limit → ${pref.limit} (max awards from this line)`);
+      }
+      break;
+    case 'avoid':
+      actions.push('Preference type → Avoid Pairings');
+      if (pref.filter) actions.push(...actionsForFilter(pref.filter));
+      break;
+    case 'preferOff':
+      actions.push('Preference type → Prefer Off');
+      if (pref.preferOffDates && pref.preferOffDates.length > 0) {
+        actions.push(
+          `Dates List → pick ${pref.preferOffDates.map(formatIsoDate).join(', ')} — in this order (Denial Mode drops dates from the END of the list)`
+        );
+      }
+      if (pref.preferOffDOWs && pref.preferOffDOWs.length > 0) {
+        actions.push(
+          `Days Of Week List → ${pref.preferOffDOWs.join(', ')} (every week)`
+        );
+      }
+      break;
+    case 'setConditionCredit': {
+      const labels = {
+        min: 'Minimum Credit',
+        max: 'Maximum Credit',
+        mid: 'Mid Credit',
+        normal: null,
+      } as const;
+      const label = labels[pref.creditWindow ?? 'normal'];
+      actions.push('Preference type → Set Condition');
+      if (label) actions.push(`Condition sub-type → ${label}`);
+      break;
+    }
+    case 'setConditionPattern':
+      actions.push('Preference type → Set Condition');
+      actions.push('Condition sub-type → Pattern');
+      actions.push(
+        `Days-on range → ${pref.patternDaysOnMin}–${pref.patternDaysOnMax} (spinners)`
+      );
+      actions.push(`Days-off minimum → ${pref.patternDaysOffMin}`);
+      break;
+    case 'clearScheduleStartNext':
+      actions.push('Preference type → Clear Schedule and Start Next');
+      actions.push(
+        'Must be the LAST line in this bid group (PBS forces it to the bottom anyway)'
+      );
+      break;
+  }
+  if (pref.elseStartNext) {
+    actions.push("Toggle 'Else Start Next Bid Group' → ON");
+  }
+  actions.push('Save the line, then verify the text below matches exactly');
+  return actions;
+}
+
 function validate(bid: DraftBid): string[] {
   const warnings: string[] = [];
   bid.groups.forEach((group: BidGroup, index: number) => {
@@ -298,17 +488,34 @@ function validate(bid: DraftBid): string[] {
 
 export function exportBid(bid: DraftBid): ExportResult {
   const lines: string[] = [];
-  bid.groups.forEach(group => {
-    lines.push(group.type === 'reserve' ? 'Start Reserve' : 'Start Pairings');
+  const entrySteps: EntryGroup[] = [];
+  bid.groups.forEach((group, index) => {
+    const header = group.type === 'reserve' ? 'Start Reserve' : 'Start Pairings';
+    lines.push(header);
+    const entryGroup: EntryGroup = {
+      title: `Bid Group ${index + 1}${group.type === 'reserve' ? ' — Reserve' : ''}`,
+      groupAction: `Add Bid Group → ${header}`,
+      steps: [],
+    };
     group.preferences.forEach(pref => {
+      // Text and step are built from the same render in the same pass so
+      // the checklist's expected text can never drift from the raw export.
       const line = renderPreference(pref);
-      if (line) lines.push(line);
+      if (!line) return;
+      lines.push(line);
+      entryGroup.steps.push({
+        expectText: line,
+        actions: actionsForPreference(pref),
+        why: pref.why,
+      });
     });
+    entrySteps.push(entryGroup);
   });
   const warnings = validate(bid);
   return {
     text: lines.join('\n'),
     lines,
     warnings,
+    entrySteps,
   };
 }

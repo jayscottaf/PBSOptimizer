@@ -121,6 +121,12 @@ export interface BidPreference {
   limit?: number;
   /** Attachable to avoid/preferOff/setConditionCredit. */
   elseStartNext?: boolean;
+  /**
+   * Display-only: why the optimizer chose this preference (shown in the
+   * PBS Entry Assistant's beginner mode). Never exported to NAVBLUE text
+   * or XML; absent on manually added preferences.
+   */
+  why?: string;
 }
 
 /**

@@ -8,10 +8,21 @@ import {
 } from './offlineCache';
 import type { DraftBid, SimulationResult } from '@shared/bidTypes';
 
+export interface BidEntryStep {
+  expectText: string;
+  actions: string[];
+  why?: string;
+}
+export interface BidEntryGroup {
+  title: string;
+  groupAction: string;
+  steps: BidEntryStep[];
+}
 export interface BidExportResult {
   text: string;
   lines: string[];
   warnings: string[];
+  entrySteps: BidEntryGroup[];
 }
 export interface BidPackage {
   id: number;

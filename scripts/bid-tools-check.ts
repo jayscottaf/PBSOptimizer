@@ -696,6 +696,122 @@ assert(
     ghostJunior.rationale.some(r => r.includes('hold')),
     'junior rationale explains the reachability re-rank'
   );
+
+  // --- PBS Entry Assistant (guided transcription steps) ---
+  {
+    const assistBid: DraftBid = {
+      groups: [
+        {
+          type: 'pairings',
+          preferences: [
+            {
+              type: 'setConditionPattern',
+              patternDaysOnMin: 3,
+              patternDaysOnMax: 6,
+              patternDaysOffMin: 4,
+              elseStartNext: true,
+            },
+            { type: 'setConditionCredit', creditWindow: 'min' },
+            {
+              type: 'preferOff',
+              preferOffDates: ['2026-08-15'],
+              preferOffDOWs: [],
+            },
+            { type: 'preferOff', preferOffDOWs: ['Saturday', 'Sunday'] },
+            {
+              type: 'avoid',
+              filter: {
+                checkInStations: ['EWR'],
+                hasRedeye: true,
+                carryOutMin: 1,
+              },
+              elseStartNext: true,
+            },
+            {
+              type: 'award',
+              filter: { pairingNumbers: ['7601', '7603'] },
+              limit: 2,
+            },
+            {
+              type: 'award',
+              filter: {
+                pairingDaysMin: 3,
+                pairingDaysMax: 3,
+                layoverCities: ['BOS'],
+                creditMin: 15,
+                creditMax: 22,
+                totalLayoverHoursMin: 20,
+                departOnDOWs: ['Monday'],
+              },
+            },
+            { type: 'award' },
+          ],
+        },
+        {
+          type: 'pairings',
+          preferences: [
+            { type: 'award' },
+            { type: 'clearScheduleStartNext' },
+          ],
+        },
+        { type: 'reserve', preferences: [] },
+      ],
+    };
+    const assistExport = exportBid(assistBid);
+    // One entry group per bid group, one step per rendered preference.
+    assert(assistExport.entrySteps.length === assistBid.groups.length, 'entry assistant: one entry group per bid group');
+    const prefCount = assistBid.groups.reduce((s, g) => s + g.preferences.length, 0);
+    const stepCount = assistExport.entrySteps.reduce((s, g) => s + g.steps.length, 0);
+    assert(stepCount === prefCount, 'entry assistant: one step per preference');
+    // expectText is byte-identical to the exported lines, in order.
+    const flatExpect = assistExport.entrySteps.flatMap(g => g.steps.map(s => s.expectText));
+    const nonHeaderLines = assistExport.lines.filter(l => l !== 'Start Pairings' && l !== 'Start Reserve');
+    assert(
+      JSON.stringify(flatExpect) === JSON.stringify(nonHeaderLines),
+      'entry assistant: step texts are byte-identical to exported lines, in order'
+    );
+    // Group actions carry the NAVBLUE group-start vocabulary.
+    assert(assistExport.entrySteps[0].groupAction.includes('Start Pairings'), 'entry assistant: pairings group action');
+    assert(assistExport.entrySteps[2].groupAction.includes('Start Reserve'), 'entry assistant: reserve group action');
+    // Every step has actions, ending with the save-and-verify step, and
+    // each preference type leads with its NAVBLUE label.
+    for (const g of assistExport.entrySteps) {
+      for (const s of g.steps) {
+        assert(s.actions.length >= 2, 'entry assistant: every step has actions');
+        assert(s.actions[s.actions.length - 1].startsWith('Save the line'), 'entry assistant: steps end with save-and-verify');
+      }
+    }
+    const firstActions = assistExport.entrySteps[0].steps.map(s => s.actions[0]);
+    assert(firstActions[0] === 'Preference type → Set Condition', 'entry assistant: set condition label');
+    assert(firstActions[2] === 'Preference type → Prefer Off', 'entry assistant: prefer off label');
+    assert(firstActions[4] === 'Preference type → Avoid Pairings', 'entry assistant: avoid label');
+    assert(firstActions[5] === 'Preference type → Award Pairings', 'entry assistant: award label');
+    // ESN toggles become explicit actions.
+    assert(
+      assistExport.entrySteps[0].steps[4].actions.some(a => a.includes('Else Start Next')),
+      'entry assistant: ESN toggle action present'
+    );
+
+    // Optimizer-generated bids carry why notes; why never leaks into text.
+    const whyBid = optimizeBid(pairings, profile, { seniorityPercentile: 10, threshold: 40 });
+    const allPrefs = whyBid.bid.groups.flatMap(g => g.preferences);
+    assert(allPrefs.some(p => p.why), 'optimizer annotates preferences with why notes');
+    const strippedBid: DraftBid = {
+      groups: whyBid.bid.groups.map(g => ({
+        type: g.type,
+        preferences: g.preferences.map(p => {
+          const { why: _why, ...rest } = p;
+          return rest as typeof p;
+        }),
+      })),
+    };
+    assert(
+      exportBid(whyBid.bid).text === exportBid(strippedBid).text,
+      'why notes never change the exported NAVBLUE text'
+    );
+    const whySteps = exportBid(whyBid.bid).entrySteps.flatMap(g => g.steps);
+    assert(whySteps.some(s => s.why && s.why.length > 0), 'why notes flow into entry steps');
+  }
 }
 
 // 14) Day-of-week constructs (from the live-bid XML capture)

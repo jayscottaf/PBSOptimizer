@@ -265,11 +265,19 @@ function negativesFromProfile(
   const prefs: BidPreference[] = [];
   const notes: string[] = [];
   if (preferOffDates && preferOffDates.length > 0) {
-    prefs.push({ type: 'preferOff', preferOffDates: [...preferOffDates] });
+    prefs.push({
+      type: 'preferOff',
+      preferOffDates: [...preferOffDates],
+      why: 'Your requested days off this month, most important first — in Denial Mode PBS drops dates from the end of the list.',
+    });
     notes.push(`Prefer Off ${preferOffDates.length} requested dates`);
   }
   if (profile.preferOffDOWs && profile.preferOffDOWs.length > 0) {
-    prefs.push({ type: 'preferOff', preferOffDOWs: [...profile.preferOffDOWs] });
+    prefs.push({
+      type: 'preferOff',
+      preferOffDOWs: [...profile.preferOffDOWs],
+      why: `You ask for ${profile.preferOffDOWs.join('/')} off month after month in your own bid history.`,
+    });
     notes.push(
       `Prefer Off ${profile.preferOffDOWs.join('/')} every week (recurring in your history)`
     );
@@ -278,17 +286,26 @@ function negativesFromProfile(
     prefs.push({
       type: 'avoid',
       filter: { checkInStations: [...profile.checkInStationAvoids] },
+      why: `You avoid ${profile.checkInStationAvoids.join('/')} check-ins recurrently in your own bid history.`,
     });
     notes.push(
       `avoid check-in at ${profile.checkInStationAvoids.join('/')} (recurring in your history)`
     );
   }
   if (profile.avoidsCarryOut) {
-    prefs.push({ type: 'avoid', filter: { carryOutMin: 1 } });
+    prefs.push({
+      type: 'avoid',
+      filter: { carryOutMin: 1 },
+      why: 'You consistently avoid trips that spill into the next bid period.',
+    });
     notes.push('avoid carry-out trips');
   }
   if (profile.avoidsRedeyes) {
-    prefs.push({ type: 'avoid', filter: { hasRedeye: true } });
+    prefs.push({
+      type: 'avoid',
+      filter: { hasRedeye: true },
+      why: 'You consistently avoid redeye flying in your own bid history.',
+    });
     notes.push('avoid redeyes');
   }
   // Soft avoid: disliked layovers — first thing to give up when the
@@ -297,6 +314,7 @@ function negativesFromProfile(
     prefs.push({
       type: 'avoid',
       filter: { excludeLayoverCities: [...profile.layoverDislikes] },
+      why: `Soft avoid: layovers you dislike (${profile.layoverDislikes.join('/')}). Later bid groups drop this first to widen the pool.`,
     });
     notes.push(`avoid layovers in ${profile.layoverDislikes.join('/')}`);
   }
@@ -325,15 +343,20 @@ function awardCascade(
       prefs.push({
         type: 'award',
         filter: { pairingNumbers: top.map(t => t.pairingNumber) },
+        why: `Your top ${top.length} ${len}-day trips this month, ranked by fit with your profile and your odds of holding them.`,
       });
     }
     prefs.push({
       type: 'award',
       filter: { pairingDaysMin: len, pairingDaysMax: len },
+      why: `Backup tier: any ${len}-day trip, in case the named ones above are already taken.`,
     });
   }
   // Generic catch-all so the group can always complete from the pool.
-  prefs.push({ type: 'award' });
+  prefs.push({
+    type: 'award',
+    why: 'Safety net: lets PBS finish your line from whatever remains instead of assigning one for you.',
+  });
   return prefs;
 }
 
@@ -487,7 +510,10 @@ export function optimizeBid(
     const prefs: BidPreference[] = [];
 
     if (spec.bare) {
-      prefs.push({ type: 'award' });
+      prefs.push({
+        type: 'award',
+        why: 'Last resort before reserve: award anything still open so PBS never assigns a line for you.',
+      });
       groups.push({ type: 'pairings', preferences: prefs });
       return;
     }
@@ -499,10 +525,23 @@ export function optimizeBid(
         patternDaysOnMax: spec.pattern.daysOnMax,
         patternDaysOffMin: spec.pattern.daysOffMin,
         elseStartNext: !isLast ? true : undefined,
+        why:
+          g === 0
+            ? `Your learned line shape: ${spec.pattern.daysOnMin}–${spec.pattern.daysOnMax} days on with ${spec.pattern.daysOffMin}+ off between trips. If PBS can't build it, Else Start Next jumps to the next (looser) group.`
+            : `Same shape, relaxed to ${spec.pattern.daysOffMin}+ days off so this group can complete where the stricter one couldn't.`,
       });
     }
     if (creditWindow && spec.includeCreditWindow) {
-      prefs.push({ type: 'setConditionCredit', creditWindow });
+      prefs.push({
+        type: 'setConditionCredit',
+        creditWindow,
+        why:
+          creditWindow === 'min'
+            ? 'You bid minimum-credit windows in your history — fewer hours, more days off.'
+            : creditWindow === 'max'
+              ? 'You chase credit — this asks PBS for the top of the credit window.'
+              : 'Mid-credit window: balanced hours that cannot be capped by seniority.',
+      });
     }
     const negatives = negativesFromProfile(
       profile,
@@ -521,7 +560,11 @@ export function optimizeBid(
         .reverse()
         .find(p => p.type === 'avoid' || p.type === 'preferOff');
       if (lastNegative) lastNegative.elseStartNext = true;
-      else prefs.push({ type: 'clearScheduleStartNext' });
+      else
+        prefs.push({
+          type: 'clearScheduleStartNext',
+          why: 'Exit hatch: if this group cannot build a full line, wipe it and try the next (looser) group.',
+        });
     }
     groups.push({ type: 'pairings', preferences: prefs });
   });
