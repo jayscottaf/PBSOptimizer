@@ -867,6 +867,45 @@ export default function Dashboard() {
     }
   };
 
+  // Star toggle in the pairing tables (matches the Favorites empty-state
+  // promise that starring any pairing saves it).
+  const favoritePairingIds = useMemo(
+    () => new Set<number>((favorites as any[]).map(f => f.id)),
+    [favorites]
+  );
+
+  const handleToggleFavorite = useCallback(
+    async (pairing: any) => {
+      if (!currentUser) {
+        toast({
+          title: 'Profile required',
+          description: 'Set up your profile to save favorites.',
+        });
+        return;
+      }
+      const isFavorited = favoritePairingIds.has(pairing.id);
+      try {
+        if (isFavorited) {
+          await api.removeFavorite(currentUser.id, pairing.id);
+        } else {
+          await api.addFavorite(currentUser.id, pairing.id);
+        }
+        refetchFavorites();
+        toast({
+          title: isFavorited ? 'Removed from favorites' : 'Added to favorites',
+          description: `Pairing ${pairing.pairingNumber}`,
+        });
+      } catch (error: any) {
+        toast({
+          title: 'Could not update favorites',
+          description: error?.message || 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [currentUser, favoritePairingIds, refetchFavorites]
+  );
+
   const removeFilter = (keyToRemove: string) => {
     setActiveFilters(prev => prev.filter(f => f.key !== keyToRemove));
     setFilters(prev => {
@@ -1812,6 +1851,8 @@ export default function Dashboard() {
                           isError={isPairingsError}
                           onRetry={() => refetchPairings()}
                           hasActiveFilters={activeFilters.length > 0 || hideConflicts}
+                          favoritePairingIds={favoritePairingIds}
+                          onToggleFavorite={handleToggleFavorite}
                         />
                       </CardContent>
                     </Card>
@@ -1847,6 +1888,8 @@ export default function Dashboard() {
                         currentUser={currentUser}
                         bidPackageYear={latestBidPackage?.year}
                         conflicts={conflictMap}
+                        favoritePairingIds={favoritePairingIds}
+                        onToggleFavorite={handleToggleFavorite}
                       />
                     ) : (
                       <div className="text-center py-8">

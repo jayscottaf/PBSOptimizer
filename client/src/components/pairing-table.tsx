@@ -45,6 +45,9 @@ interface PairingTableProps {
   isError?: boolean;
   onRetry?: () => void;
   hasActiveFilters?: boolean;
+  /** Pairing ids currently favorited — turns the row star into a toggle. */
+  favoritePairingIds?: Set<number>;
+  onToggleFavorite?: (pairing: Pairing) => void;
 }
 
 export function PairingTable({
@@ -66,6 +69,8 @@ export function PairingTable({
   isError = false,
   onRetry,
   hasActiveFilters = false,
+  favoritePairingIds,
+  onToggleFavorite,
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -551,6 +556,14 @@ export function PairingTable({
           </div>
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 font-medium">
+              <Star className="inline h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+            </dt>
+            <dd className="text-muted-foreground">
+              Tap the star to save a pairing to Favorites
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">
               <AlertTriangle className="inline h-3.5 w-3.5 text-warning" />
             </dt>
             <dd className="text-muted-foreground">
@@ -774,8 +787,38 @@ export function PairingTable({
                       <span className="font-mono font-medium text-foreground text-xs sm:text-sm">
                         {pairing.pairingNumber}
                       </span>
-                      {pairing.holdProbability >= 80 && (
-                        <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                      {onToggleFavorite ? (
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onToggleFavorite(pairing);
+                          }}
+                          title={
+                            favoritePairingIds?.has(pairing.id)
+                              ? 'Remove from favorites'
+                              : 'Add to favorites'
+                          }
+                          aria-label={
+                            favoritePairingIds?.has(pairing.id)
+                              ? `Remove ${pairing.pairingNumber} from favorites`
+                              : `Add ${pairing.pairingNumber} to favorites`
+                          }
+                          aria-pressed={favoritePairingIds?.has(pairing.id)}
+                          className="inline-flex items-center justify-center rounded p-0.5 transition-colors hover:bg-muted"
+                        >
+                          <Star
+                            className={`h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 transition-colors ${
+                              favoritePairingIds?.has(pairing.id)
+                                ? 'fill-yellow-400 text-yellow-400'
+                                : 'text-muted-foreground/50 hover:text-yellow-400'
+                            }`}
+                          />
+                        </button>
+                      ) : (
+                        pairing.holdProbability >= 80 && (
+                          <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                        )
                       )}
                       {conflicts.has(pairing.id) && (
                         <Popover>
