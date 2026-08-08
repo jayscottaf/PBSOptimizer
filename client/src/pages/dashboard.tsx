@@ -33,7 +33,6 @@ import {
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
 import { PairingTable } from '@/components/pairing-table';
-import { PairingModal } from '@/components/pairing-modal';
 import { SmartFilterSystem } from '@/components/smart-filter-system';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
@@ -49,6 +48,11 @@ import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 // the pairing table.
 const PairingChat = lazy(() =>
   import('@/components/pairing-chat').then(m => ({ default: m.PairingChat }))
+);
+// Only mounts once a pairing is clicked — no reason to ship it in the
+// initial bundle everyone downloads to see the table.
+const PairingModal = lazy(() =>
+  import('@/components/pairing-modal').then(m => ({ default: m.PairingModal }))
 );
 const CalendarView = lazy(() =>
   import('@/components/calendar-view').then(m => ({ default: m.CalendarView }))
@@ -623,6 +627,9 @@ export default function Dashboard() {
 
       // Also load unfiltered cache for sorting
       let needsUnfilteredRefetch = false;
+      // Set when the unfiltered pass has fully satisfied the filtered cache
+      // too (same key, data fetched and applied) — see the guard below.
+      let unfilteredSatisfiedFilteredCache = false;
       if (hasUnfiltered) {
         console.log('Dashboard: Loading unfiltered cache for sorting');
         const unfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
@@ -667,13 +674,26 @@ export default function Dashboard() {
             console.log('Dashboard: Updating filtered cache with new unfiltered data');
             setFullLocal(newUnfiltered);
             setIsFullCacheReady(true);
+            unfilteredSatisfiedFilteredCache = true;
           }
         } catch (error) {
           console.error('Unfiltered cache prefetch failed:', error);
         }
       }
 
-      if ((needsFilteredRefetch || !hasFull) && navigator.onLine) {
+      // When no filters are active the filtered and unfiltered cache keys
+      // are identical, so the unfiltered prefetch above already fetched and
+      // applied exactly this dataset. `needsFilteredRefetch` was decided
+      // before that ran, so trusting it here re-fetched the whole package a
+      // second time (with force:true, so it couldn't even short-circuit) —
+      // ~10 paginated requests on a cold load instead of ~5. Skip only when
+      // the unfiltered pass actually succeeded and applied; if it failed,
+      // fall through so this stays a retry path.
+      if (
+        !unfilteredSatisfiedFilteredCache &&
+        (needsFilteredRefetch || !hasFull) &&
+        navigator.onLine
+      ) {
         // Prefetch full dataset (either missing or invalid/incomplete)
         try {
           setIsPrefetching(true);
@@ -1963,11 +1983,13 @@ export default function Dashboard() {
 
       {/* Pairing Modal */}
       {selectedPairing && (
-        <PairingModal
-          pairingId={selectedPairing.id}
-          onClose={() => setSelectedPairing(null)}
-          currentUser={currentUser}
-        />
+        <Suspense fallback={null}>
+          <PairingModal
+            pairingId={selectedPairing.id}
+            onClose={() => setSelectedPairing(null)}
+            currentUser={currentUser}
+          />
+        </Suspense>
       )}
 
       {/* Upload Modal */}
