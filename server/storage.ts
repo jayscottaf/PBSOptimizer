@@ -45,6 +45,20 @@ import {
 const parseDecimal = (value: any): number => parseFloat(String(value)) || 0;
 const parseNullable = (value: any): number =>
   value !== null && value !== undefined ? parseFloat(String(value)) || 0 : 0;
+
+/**
+ * A pairing row minus the two columns the AI coach never reads:
+ * `fullTextBlock` (raw PDF text) and `holdProbabilityReasoning`. Together
+ * those are ~48% of the bytes of a full pairing row, and the coach path
+ * (prompt context, simulator, optimizer, exporter) references neither —
+ * only `flightSegments` is needed, for check-in station and redeye
+ * derivation in bidOptimizer/bidSimulator.
+ */
+export type CoachPairing = Omit<
+  Pairing,
+  'fullTextBlock' | 'holdProbabilityReasoning'
+>;
+
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
@@ -88,6 +102,7 @@ export interface IStorage {
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   createPairingsBatch(pairingsData: InsertPairing[]): Promise<Pairing[]>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
+  getPairingsForCoach(bidPackageId: number): Promise<CoachPairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
   getPairingByNumber(
     pairingNumber: string,
@@ -504,6 +519,40 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(pairings)
+      .orderBy(asc(pairings.pairingNumber));
+  }
+
+  /**
+   * Pairings for the AI coach: every column except `fullTextBlock` and
+   * `holdProbabilityReasoning`, which the coach path never reads but which
+   * are ~48% of the transferred bytes (measured: 1,011 KB -> 526 KB for a
+   * 322-pairing package). Runs on every chat message, so the saving is
+   * per-message.
+   */
+  async getPairingsForCoach(bidPackageId: number): Promise<CoachPairing[]> {
+    return await db
+      .select({
+        id: pairings.id,
+        bidPackageId: pairings.bidPackageId,
+        pairingNumber: pairings.pairingNumber,
+        effectiveDates: pairings.effectiveDates,
+        route: pairings.route,
+        creditHours: pairings.creditHours,
+        blockHours: pairings.blockHours,
+        tafb: pairings.tafb,
+        fdp: pairings.fdp,
+        payHours: pairings.payHours,
+        sitEdpPay: pairings.sitEdpPay,
+        carveouts: pairings.carveouts,
+        checkInTime: pairings.checkInTime,
+        deadheads: pairings.deadheads,
+        layovers: pairings.layovers,
+        flightSegments: pairings.flightSegments,
+        holdProbability: pairings.holdProbability,
+        pairingDays: pairings.pairingDays,
+      })
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId))
       .orderBy(asc(pairings.pairingNumber));
   }
 

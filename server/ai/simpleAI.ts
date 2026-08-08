@@ -28,6 +28,61 @@ export interface SimpleAIResponse {
 }
 
 /**
+ * Per-bid-package memo of the coach's pairing set and its rendered prompt
+ * block. Both are invariant for a package, but were being refetched from
+ * Postgres and re-serialized on every single chat message. The rendered
+ * context in particular MUST come out byte-identical each turn or the
+ * OpenAI prompt cache stops hitting — so recomputing it was strictly
+ * wasted work.
+ *
+ * Module scope, so it survives across requests on a warm serverless
+ * instance and is simply absent on a cold one. Short TTL plus explicit
+ * invalidation on re-parse keeps it from serving stale rows.
+ */
+const PAIRING_CACHE_TTL_MS = 5 * 60 * 1000;
+const pairingContextCache = new Map<
+  number,
+  { pairings: any[]; pairingsContext: string; fetchedAt: number }
+>();
+
+/** Drop a package's cached pairings — call after upload/re-parse. */
+export function invalidatePairingContextCache(bidPackageId?: number): void {
+  if (bidPackageId === undefined) {
+    pairingContextCache.clear();
+    return;
+  }
+  pairingContextCache.delete(bidPackageId);
+}
+
+/**
+ * Memoized results of the two session-invariant aggregations the coach runs
+ * on every message: getStrategyStats (3 SQL statements including a
+ * percent_rank window join over ~96k Reasons rows) and
+ * getCategoryCreditWindow (multi-CTE LATERAL jsonb scan). Both change only
+ * when a new Reasons Report is imported.
+ */
+const AGGREGATE_CACHE_TTL_MS = 10 * 60 * 1000;
+const aggregateCache = new Map<string, { value: any; fetchedAt: number }>();
+
+async function memoizedAggregate<T>(
+  key: string,
+  load: () => Promise<T>
+): Promise<T> {
+  const hit = aggregateCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < AGGREGATE_CACHE_TTL_MS) {
+    return hit.value as T;
+  }
+  const value = await load();
+  aggregateCache.set(key, { value, fetchedAt: Date.now() });
+  return value;
+}
+
+/** Drop cached Reasons-derived aggregates — call after a report import. */
+export function invalidateReasonsAggregateCache(): void {
+  aggregateCache.clear();
+}
+
+/**
  * Simple AI that works like ChatGPT
  * Just send all the pairing data and let GPT analyze it
  */
@@ -45,18 +100,31 @@ export class SimpleAI {
     try {
       console.log('[SimpleAI] Processing query:', query.message);
 
-      // Get ALL pairings for the bid package
-      const pairings = await this.storage.searchPairings({
-        bidPackageId: query.bidPackageId,
-      });
-
-      console.log(`[SimpleAI] Loaded ${pairings.length} pairings`);
+      // Pairings + their rendered prompt block, memoized per package (see
+      // pairingContextCache). Turns 2..N of a session skip both the DB read
+      // and the string build entirely.
+      let cached = pairingContextCache.get(query.bidPackageId);
+      if (!cached || Date.now() - cached.fetchedAt > PAIRING_CACHE_TTL_MS) {
+        const loaded = await this.storage.getPairingsForCoach(
+          query.bidPackageId
+        );
+        cached = {
+          pairings: loaded,
+          pairingsContext: this.buildPairingsContext(loaded),
+          fetchedAt: Date.now(),
+        };
+        pairingContextCache.set(query.bidPackageId, cached);
+        console.log(`[SimpleAI] Loaded ${loaded.length} pairings (fetched)`);
+      } else {
+        console.log(
+          `[SimpleAI] Loaded ${cached.pairings.length} pairings (cached)`
+        );
+      }
+      const pairings = cached.pairings;
+      const pairingsContext = cached.pairingsContext;
 
       // Get bid package info for context
       const bidPackage = await this.storage.getBidPackage(query.bidPackageId);
-
-      // Build the context with ALL pairing data
-      const pairingsContext = this.buildPairingsContext(pairings);
 
       // Personalization context: outcome statistics for pilots near the
       // user's seniority percentile, aggregated in SQL across every
@@ -65,9 +133,16 @@ export class SimpleAI {
       let historyContext = '';
       try {
         if (bidPackage?.base) {
-          const stats = await this.storage.getStrategyStats(
-            bidPackage.base,
-            query.seniorityPercentile ?? 50
+          // Memoized: deterministic in (base, percentile) and only changes
+          // when a new Reasons Report is imported, but this is 3 SQL
+          // statements including a percent_rank window join.
+          // Round for the key AND for the query, so a cache entry is always
+          // the value its key describes (49.6 and 50.4 must not share an
+          // entry computed from whichever arrived first).
+          const percentile = Math.round(query.seniorityPercentile ?? 50);
+          const stats = await memoizedAggregate(
+            `strategy:${bidPackage.base}:${percentile}`,
+            () => this.storage.getStrategyStats(bidPackage.base, percentile)
           );
           historyContext = buildStrategyContext(stats);
         }
@@ -117,9 +192,11 @@ export class SimpleAI {
       // Tool-calling loop: the coach may call simulate_bid / export_bid to
       // ground its draft before answering. Bounded rounds prevent runaway.
       const realWindow = bidPackage?.base
-        ? await this.storage
-            .getCategoryCreditWindow(bidPackage.base)
-            .catch(() => null)
+        ? await memoizedAggregate(`creditWindow:${bidPackage.base}`, () =>
+            this.storage
+              .getCategoryCreditWindow(bidPackage.base)
+              .catch(() => null)
+          )
         : null;
       const base = bidPackage?.base;
       const toolContext = {

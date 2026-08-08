@@ -746,6 +746,17 @@ export async function registerRoutes(app: Express) {
         console.log(`File parsing completed for bid package ${bidPackage.id}`);
         // Status is set to 'completed' inside parseFile() after all batch inserts finish
 
+        // The coach memoizes this package's pairings + rendered prompt
+        // block; a re-parse must not keep serving the old rows.
+        try {
+          const { invalidatePairingContextCache } = await import(
+            './ai/simpleAI'
+          );
+          invalidatePairingContextCache(bidPackage.id);
+        } catch {
+          // Cache invalidation is best-effort; never fail an upload over it.
+        }
+
         // Link any existing unlinked bid_history records to the new pairings
         try {
           // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
@@ -1282,6 +1293,16 @@ export async function registerRoutes(app: Express) {
             console.log(
               `Reasons pane: ${preferencesParsed} preference outcomes stored (banners: ${pane.banners.join(', ') || 'none'})`
             );
+            // The coach memoizes Reasons-derived aggregates (strategy stats,
+            // credit window) — a new import changes both.
+            try {
+              const { invalidateReasonsAggregateCache } = await import(
+                './ai/simpleAI'
+              );
+              invalidateReasonsAggregateCache();
+            } catch {
+              // Best-effort; a stale aggregate expires on its own TTL.
+            }
           } else {
             console.log(
               'Reasons pane: no per-preference outcomes recognized in this report format'

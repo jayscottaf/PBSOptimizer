@@ -511,49 +511,20 @@ export const api = {
 
   // AI Chat Analysis
   async analyzePairings(question: string, bidPackageId?: number, sessionId?: string) {
-    // Include bidPackageId and seniority context automatically
+    // Seniority rides along as a real request field. The pilot's name,
+    // seniority and bid-package identity are NOT prefixed onto the question
+    // text: the server already puts all of that in the system prompt, which
+    // is prompt-cached, whereas anything prepended here is billed as
+    // uncached input on every single turn. (Building that prefix also cost
+    // a full /api/bid-packages round trip per message.)
     let seniorityFromLocal: string | null = null;
-    let nameFromLocal: string | null = null;
     try {
       if (typeof window !== 'undefined') {
         seniorityFromLocal = localStorage.getItem('seniorityPercentile');
-        nameFromLocal = localStorage.getItem('name');
       }
     } catch {
       // Ignore localStorage errors
     }
-
-    const prefixParts: string[] = [];
-
-    // Add name if available
-    if (nameFromLocal) {
-      prefixParts.push(`Pilot: ${nameFromLocal}`);
-    }
-
-    // Add seniority
-    if (seniorityFromLocal) {
-      prefixParts.push(`Seniority: ${seniorityFromLocal}%`);
-    }
-
-    // Add bid package with full details
-    if (bidPackageId) {
-      try {
-        const bidPackages = await this.getBidPackages();
-        const currentPackage = bidPackages.find(pkg => pkg.id === bidPackageId);
-        if (currentPackage) {
-          const pkgDisplay = `${currentPackage.base} ${currentPackage.aircraft} ${currentPackage.month} ${currentPackage.year}`;
-          prefixParts.push(`Current Bid Package: ${pkgDisplay}`);
-        } else {
-          prefixParts.push(`Bid package #${bidPackageId}`);
-        }
-      } catch {
-        prefixParts.push(`Bid package #${bidPackageId}`);
-      }
-    }
-
-    const contextualQuestion = prefixParts.length
-      ? `${prefixParts.join(' | ')}: ${question}`
-      : question;
 
     const response = await fetch('/api/askAssistant', {
       method: 'POST',
@@ -561,7 +532,7 @@ export const api = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        question: contextualQuestion,
+        question,
         bidPackageId,
         seniorityPercentile: seniorityFromLocal
           ? parseFloat(seniorityFromLocal)
