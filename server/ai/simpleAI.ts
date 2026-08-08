@@ -82,11 +82,22 @@ export class SimpleAI {
         historyContext
       );
 
-      // Build messages
+      // Build messages. The pairings block is stable per (bidPackage, user)
+      // and sits immediately after the system message so it lands inside the
+      // cacheable prompt prefix: OpenAI's prompt caching keys on the longest
+      // common message-array prefix, so this way turns 2..N of a session
+      // reuse it at the cached rate instead of re-billing ~30K tokens per
+      // turn (which is what happened when it lived in the newest user
+      // message, after the point where turns diverge).
       const messages: any[] = [
         {
           role: 'system',
           content: systemPrompt,
+        },
+        { role: 'user', content: pairingsContext },
+        {
+          role: 'assistant',
+          content: 'Pairing data for this bid package is loaded. Ask me about it.',
         },
       ];
 
@@ -95,10 +106,10 @@ export class SimpleAI {
         messages.push(...query.conversationHistory);
       }
 
-      // Add current query with pairing data
+      // Current question only — the pairing data is already in context above.
       messages.push({
         role: 'user',
-        content: `${pairingsContext}\n\nUser Question: ${query.message}`,
+        content: `User Question: ${query.message}`,
       });
 
       console.log('[SimpleAI] Sending to GPT-4.1...');
@@ -396,6 +407,7 @@ IMPORTANT RULES:
 5. When asked about "desirable layovers", consider major cities and longer layovers
 6. ALWAYS cite specific pairing numbers in your response
 7. Explain WHY you're recommending each pairing
+8. The full pairing list for this bid package is provided as a data block earlier in this conversation — analyze it directly
 
 TERMINOLOGY:
 - Credit Hours: Pay hours (what pilot gets paid)
