@@ -154,6 +154,19 @@ export class SimpleAI {
           tools: COACH_TOOL_DEFINITIONS,
         });
 
+        // Token accounting per round: `cached` is the prompt-prefix cache
+        // hit. The scoreboard for prompt-layout changes — uncached input is
+        // what actually bills at full rate.
+        {
+          const u = completion.usage;
+          const cached =
+            (u as any)?.prompt_tokens_details?.cached_tokens ?? 0;
+          console.log(
+            `[SimpleAI] round=${round} prompt=${u?.prompt_tokens ?? 0} cached=${cached} ` +
+              `uncached=${(u?.prompt_tokens ?? 0) - cached} completion=${u?.completion_tokens ?? 0}`
+          );
+        }
+
         const choice = completion.choices[0]?.message;
         if (!choice) break;
 
