@@ -356,17 +356,25 @@ export class SimpleAI {
    * Build compact context with all pairing data
    */
   private buildPairingsContext(pairings: any[]): string {
-    const lines = ['AVAILABLE PAIRINGS:'];
+    // Header-declared columns instead of per-row labels: the old format
+    // spent ~15-20 tokens of boilerplate on every one of hundreds of rows.
+    // Pipe delimiter is safe — routes are hyphen-joined, pairing numbers
+    // are alphanumeric, durations are HH.MM.
+    const lines = [
+      'AVAILABLE PAIRINGS',
+      'Pipe-delimited. Columns: id|days|credit|block|tafb|hold_pct|route|layovers',
+      'layovers: CITY:DURATION separated by ";" (empty when none)',
+    ];
 
     pairings.forEach(p => {
-      // Parse layovers
       const layovers = Array.isArray(p.layovers) ? p.layovers : [];
       const layoverInfo = layovers
-        .map((l: any) => `${l.city} (${l.duration || 'unknown duration'})`)
-        .join(', ');
+        .map((l: any) => `${l.city}:${l.duration || '?'}`)
+        .join(';');
 
       lines.push(
-        `Pairing ${p.pairingNumber}: ${p.pairingDays}d | ${p.creditHours}cr | ${p.blockHours}blk | ${p.tafb} TAFB | ${p.holdProbability}% hold | Route: ${p.route}${layoverInfo ? ` | Layovers: ${layoverInfo}` : ''}`
+        `${p.pairingNumber}|${p.pairingDays}|${p.creditHours}|${p.blockHours}|` +
+          `${p.tafb}|${p.holdProbability}|${p.route}|${layoverInfo}`
       );
     });
 
