@@ -130,22 +130,36 @@ export const bidHistory = pgTable(
 // Per-preference outcomes parsed from the Reasons pane of a NAVBLUE Reasons
 // Report. This is the pilot's personal record of what was honored or denied
 // at their seniority - the substrate for personalized coaching.
-export const reasonsReportPreferences = pgTable('reasons_report_preferences', {
-  id: serial('id').primaryKey(),
-  month: text('month').notNull(),
-  year: integer('year').notNull(),
-  base: text('base').notNull(),
-  aircraft: text('aircraft').notNull(),
-  pilotSeniorityNumber: integer('pilot_seniority_number'),
-  pilotEmployeeNumber: text('pilot_employee_number'),
-  preferenceNumber: integer('preference_number').notNull(), // 1-based position in the bid
-  preferenceText: text('preference_text').notNull(), // e.g. "Avoid Pairings If Layovers In MIA"
-  outcome: text('outcome').notNull(), // NAVBLUE reason vocabulary: Honored, Not honored, Not considered, Partially honored, Filtered by higher bid, Beyond bid limit, Awarded to senior bidder, ...
-  outcomeDetail: text('outcome_detail'), // Trailing detail, e.g. the higher bid number or counts
-  awardedPairingNumbers: jsonb('awarded_pairing_numbers'), // string[] pairings this preference awarded
-  reportBanners: jsonb('report_banners'), // string[] top-of-report flags: Affected by Denial Mode / SLG / Coverage
-  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
-});
+export const reasonsReportPreferences = pgTable(
+  'reasons_report_preferences',
+  {
+    id: serial('id').primaryKey(),
+    month: text('month').notNull(),
+    year: integer('year').notNull(),
+    base: text('base').notNull(),
+    aircraft: text('aircraft').notNull(),
+    pilotSeniorityNumber: integer('pilot_seniority_number'),
+    pilotEmployeeNumber: text('pilot_employee_number'),
+    preferenceNumber: integer('preference_number').notNull(), // 1-based position in the bid
+    preferenceText: text('preference_text').notNull(), // e.g. "Avoid Pairings If Layovers In MIA"
+    outcome: text('outcome').notNull(), // NAVBLUE reason vocabulary: Honored, Not honored, Not considered, Partially honored, Filtered by higher bid, Beyond bid limit, Awarded to senior bidder, ...
+    outcomeDetail: text('outcome_detail'), // Trailing detail, e.g. the higher bid number or counts
+    awardedPairingNumbers: jsonb('awarded_pairing_numbers'), // string[] pairings this preference awarded
+    reportBanners: jsonb('report_banners'), // string[] top-of-report flags: Affected by Denial Mode / SLG / Coverage
+    uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+  },
+  table => ({
+    // Every Trends / Bid-Patterns query filters this table by base first
+    // (and often narrows by month/year) — /api/trends alone fires 5 such
+    // queries per page load and /api/bid-patterns 7. Without this the
+    // planner had only a sequential scan over the whole ~96k-row table.
+    baseYearMonthIdx: index('reasons_report_preferences_base_year_month_idx').on(
+      table.base,
+      table.year,
+      table.month
+    ),
+  })
+);
 
 export const userFavorites = pgTable(
   'user_favorites',

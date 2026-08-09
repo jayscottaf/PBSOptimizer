@@ -1743,8 +1743,19 @@ export class DatabaseStorage implements IStorage {
     /** How many pairings overnight in each layover city, most common first. */
     layoverCities: Array<{ city: string; count: number }>;
   }> {
+    // Only the columns the stats below actually read. Previously a
+    // `select()` of full rows — including flightSegments and the raw PDF
+    // fullTextBlock, ~89% of the bytes — pulled over the wire and parsed
+    // just to compute averages and counts. This runs on the dashboard's
+    // hot path.
     const allPairings = await db
-      .select()
+      .select({
+        creditHours: pairings.creditHours,
+        blockHours: pairings.blockHours,
+        pairingDays: pairings.pairingDays,
+        layovers: pairings.layovers,
+        deadheads: pairings.deadheads,
+      })
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
 
@@ -1859,35 +1870,6 @@ export class DatabaseStorage implements IStorage {
       ratioBreakdown,
       layoverCities,
     };
-  }
-
-  async getTopHoldProbabilityPairings(
-    bidPackageId: number,
-    limit: number = 20
-  ): Promise<{ pairings: Pairing[]; stats: any }> {
-    const topPairings = await db
-      .select()
-      .from(pairings)
-      .where(eq(pairings.bidPackageId, bidPackageId))
-      .orderBy(desc(pairings.holdProbability))
-      .limit(limit);
-
-    const allPairings = await db
-      .select()
-      .from(pairings)
-      .where(eq(pairings.bidPackageId, bidPackageId));
-
-    const stats = {
-      totalPairings: allPairings.length,
-      maxHold: topPairings[0]?.holdProbability || 0,
-      avgHold:
-        allPairings.reduce((sum, p) => sum + (p.holdProbability || 0), 0) /
-        allPairings.length,
-      highHoldCount: allPairings.filter(p => (p.holdProbability || 0) >= 80)
-        .length,
-    };
-
-    return { pairings: topPairings, stats };
   }
 
   async getPairingStatsSummary(bidPackageId: number): Promise<any> {

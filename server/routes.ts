@@ -876,20 +876,31 @@ export async function registerRoutes(app: Express) {
                 );
                 try {
                   // CRITICAL: Must unlink bid_history records BEFORE deleting pairings/package
-                  // Foreign key constraint on linked_pairing_id will block deletion otherwise
-                  const dupPairings = await storage.getPairings(dup.id);
-                  if (dupPairings.length > 0) {
+                  // Foreign key constraint on linked_pairing_id will block deletion otherwise.
+                  // Ids only — the full rows carry jsonb + raw PDF text we
+                  // don't need just to unlink.
+                  const dupPairingIds = await db
+                    .select({ id: pairings.id })
+                    .from(pairings)
+                    .where(eq(pairings.bidPackageId, dup.id));
+                  if (dupPairingIds.length > 0) {
                     console.log(
-                      `Auto-linking: Unlinking ${dupPairings.length} pairings from bid_history before deletion`
+                      `Auto-linking: Unlinking ${dupPairingIds.length} pairings from bid_history before deletion`
                     );
 
-                    // Unlink all bid_history records pointing to these pairings one by one
-                    for (const pairing of dupPairings) {
-                      await db
-                        .update(bidHistory)
-                        .set({ linkedPairingId: null })
-                        .where(sql`linked_pairing_id = ${pairing.id}`);
-                    }
+                    // One set-based UPDATE instead of one per pairing: this
+                    // runs inside the synchronous upload request, and 300-450
+                    // sequential Neon round trips here could push it past the
+                    // serverless function timeout.
+                    await db
+                      .update(bidHistory)
+                      .set({ linkedPairingId: null })
+                      .where(
+                        inArray(
+                          bidHistory.linkedPairingId,
+                          dupPairingIds.map(p => p.id)
+                        )
+                      );
                     console.log(
                       `Auto-linking: Successfully unlinked bid_history records`
                     );
