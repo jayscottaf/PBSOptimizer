@@ -276,6 +276,17 @@ let keepAliveInterval: NodeJS.Timeout;
 
 const startKeepAlive = () => {
   keepAliveInterval = setInterval(async () => {
+    // Only ping when the pool actually holds a connection worth keeping
+    // alive. The pool is configured to drain when idle (min: 0,
+    // allowExitOnIdle, 20s idle timeout), so an unconditional ping did the
+    // opposite of what that config wants: it opened a brand-new connection
+    // every 45s on an idle instance purely to close it again. On serverless
+    // that is pure recurring cost across every warm instance, and it works
+    // against the drain-when-idle design. When traffic is actually flowing
+    // there are connections open and this behaves exactly as before.
+    if (pool.totalCount === 0) {
+      return;
+    }
     if (circuitBreaker.canExecute()) {
       try {
         await pool.query('SELECT 1');
