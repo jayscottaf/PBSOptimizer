@@ -2178,9 +2178,16 @@ export async function registerRoutes(app: Express) {
       const currentLayoverPattern =
         layoverCities.length > 0 ? layoverCities.join('-') : 'none';
 
-      // Get all historical data - fingerprint matching already ensures relevant trips match
-      // No base/aircraft filter needed since similarity scoring handles relevance
-      const historicalData = await db.select().from(bidHistory);
+      // Fingerprint matching (not base/aircraft) decides relevance, so no
+      // base filter here — but the loop below hard-filters on pairingDays
+      // and discards everything else, so push that into SQL. `pairing_days`
+      // is NOT NULL, making this exactly equivalent to the JS skip while
+      // avoiding transferring the whole ~11k-row history table on every
+      // pairing-detail view.
+      const historicalData = await db
+        .select()
+        .from(bidHistory)
+        .where(eq(bidHistory.pairingDays, pairingDays));
 
       // Find similar matches using fingerprint comparison
       const matches: Array<{
