@@ -871,21 +871,24 @@ export default function Dashboard() {
     refetchOnReconnect: false,
   });
 
-  const handleDeleteFavorite = async (pairingId: number) => {
-    try {
-      if (!currentUser) {
-        return;
+  const handleDeleteFavorite = useCallback(
+    async (pairingId: number) => {
+      try {
+        if (!currentUser) {
+          return;
+        }
+
+        // Remove from favorites
+        await api.removeFavorite(currentUser.id, pairingId);
+
+        // Refresh favorites list
+        refetchFavorites();
+      } catch (error) {
+        console.error('Error removing favorite:', error);
       }
-
-      // Remove from favorites
-      await api.removeFavorite(currentUser.id, pairingId);
-
-      // Refresh favorites list
-      refetchFavorites();
-    } catch (error) {
-      console.error('Error removing favorite:', error);
-    }
-  };
+    },
+    [currentUser, refetchFavorites]
+  );
 
   // Star toggle in the pairing tables (matches the Favorites empty-state
   // promise that starring any pairing saves it).
@@ -1028,18 +1031,31 @@ export default function Dashboard() {
     }
   };
 
-  const handlePairingClick = (pairing: any) => {
+  // These are passed to the memoized PairingTable, so they must keep a
+  // stable identity across renders or the memo never holds. The functional
+  // setState form keeps the deps empty.
+  const handlePairingClick = useCallback((pairing: any) => {
     setSelectedPairing(pairing);
-  };
+  }, []);
 
-  const handleSort = (column: string) => {
-    if (column === sortColumn) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
-    }
-  };
+  const handleRetryPairings = useCallback(() => {
+    refetchPairings();
+  }, [refetchPairings]);
+
+  // Depends on the current sort, so its identity changes when the sort
+  // changes — which is fine: the table has to re-render then anyway. What
+  // matters is that it stays stable through unrelated Dashboard state.
+  const handleSort = useCallback(
+    (column: string) => {
+      if (column === sortColumn) {
+        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortColumn(column);
+        setSortDirection('desc');
+      }
+    },
+    [sortColumn, sortDirection]
+  );
 
   // Shared comparator so any pairing list (main table, favorites) sorts the
   // same way when the pilot clicks a column header.
@@ -1860,7 +1876,7 @@ export default function Dashboard() {
                           </div>
                         )}
                         <PairingTable
-                          pairings={filteredDisplayPairings || []}
+                          pairings={filteredDisplayPairings || EMPTY_ARRAY}
                           onSort={handleSort}
                           sortColumn={sortColumn || ''}
                           sortDirection={sortDirection}
@@ -1869,7 +1885,7 @@ export default function Dashboard() {
                           showHeader={false}
                           isLoading={isLoadingPairings}
                           isError={isPairingsError}
-                          onRetry={() => refetchPairings()}
+                          onRetry={handleRetryPairings}
                           hasActiveFilters={activeFilters.length > 0 || hideConflicts}
                           favoritePairingIds={favoritePairingIds}
                           onToggleFavorite={handleToggleFavorite}

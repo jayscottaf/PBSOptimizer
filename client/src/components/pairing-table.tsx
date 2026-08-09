@@ -10,7 +10,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Eye, Bookmark, Star, X, Calendar, Info, AlertTriangle } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -50,7 +50,229 @@ interface PairingTableProps {
   onToggleFavorite?: (pairing: Pairing) => void;
 }
 
-export function PairingTable({
+// Pure per-pairing formatters, hoisted to module scope so the component
+// can memoize their results. Previously redefined on every render and
+// re-run for all ~438 rows (formatEffectiveDisplay twice per row) on any
+// incidental parent re-render.
+// Format route with day-by-day grouping, layover highlighting, and DH markers
+function formatRouteDisplay(pairing: Pairing) {
+  if (!pairing.flightSegments || !Array.isArray(pairing.flightSegments) || pairing.flightSegments.length === 0) {
+    return <span className="text-foreground">{pairing.route || ''}</span>;
+  }
+
+  // Build deadhead segments set
+  const deadheadSegments = new Set<string>();
+  pairing.flightSegments.forEach((segment: any) => {
+    if (segment.isDeadhead && segment.departure && segment.arrival) {
+      deadheadSegments.add(
+        `${segment.departure.toUpperCase()}-${segment.arrival.toUpperCase()}`
+      );
+    }
+  });
+
+  // Sort segments chronologically
+  const sortedSegments = [...pairing.flightSegments].sort((a: any, b: any) => {
+    const dateCompare = (a.date || 'A').localeCompare(b.date || 'A');
+    if (dateCompare !== 0) return dateCompare;
+    return (a.departureTime || '').localeCompare(b.departureTime || '');
+  });
+
+  // Group segments by day
+  const flightsByDay = new Map<string, any[]>();
+  sortedSegments.forEach((seg: any) => {
+    const day = seg.date || 'A';
+    if (!flightsByDay.has(day)) {
+      flightsByDay.set(day, []);
+    }
+    flightsByDay.get(day)!.push(seg);
+  });
+
+  const sortedDays = Array.from(flightsByDay.keys()).sort();
+  const lastDayWithFlights = sortedDays[sortedDays.length - 1];
+
+  // Build route for each day
+  const dayRoutes: { day: string; segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] }[] = [];
+  
+  sortedDays.forEach((day, dayIdx) => {
+    const dayFlights = flightsByDay.get(day)!;
+    const segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] = [];
+    
+    dayFlights.forEach((seg: any, segIdx: number) => {
+      const departure = (seg.departure || '').toUpperCase();
+      const arrival = (seg.arrival || '').toUpperCase();
+      const segmentKey = `${departure}-${arrival}`;
+      const isDeadhead = deadheadSegments.has(segmentKey);
+      
+      // Add departure if it's the first segment of the day
+      if (segIdx === 0) {
+        segments.push({ airport: departure, isDeadhead: false, isLayover: false });
+      }
+      
+      // Add arrival - mark as layover if it's the last segment of the day (except last day)
+      const isLastSegmentOfDay = segIdx === dayFlights.length - 1;
+      const isLayover = isLastSegmentOfDay && day !== lastDayWithFlights;
+      
+      segments.push({ airport: arrival, isDeadhead, isLayover });
+    });
+    
+    dayRoutes.push({ day, segments });
+  });
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {dayRoutes.map((dayRoute, dayIdx) => (
+        <div key={dayRoute.day} className="flex items-center gap-1">
+          {dayIdx > 0 && (
+            <span className="text-muted-foreground mx-1">|</span>
+          )}
+          <span className="text-xs font-medium text-muted-foreground mr-1">
+            {dayRoute.day}:
+          </span>
+          {dayRoute.segments.map((seg, segIdx) => (
+            <div key={`${seg.airport}-${segIdx}`} className="flex items-center">
+              {segIdx > 0 && <span className="text-muted-foreground dark:text-muted-foreground">-</span>}
+              <span
+                className={`${
+                  seg.isDeadhead ? 'text-muted-foreground italic' : ''
+                } ${
+                  seg.isLayover
+                    ? 'font-bold text-teal-600 dark:text-teal-400'
+                    : seg.isDeadhead ? '' : 'text-foreground'
+                }`}
+              >
+                {seg.isDeadhead ? `(DH)${seg.airport}` : seg.airport}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatEffectiveDisplay(pairing: Pairing): string {
+  try {
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+    const monthRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/g;
+    const raw = (pairing.effectiveDates || '').toUpperCase();
+    const cleanedFromField = raw
+      .replace(/EFFECTIVE/g, '')
+      .replace(/ONLY/g, '')
+      .replace(/\./g, '')
+      .trim();
+
+    // EFFECTIVE line and weekday qualifiers from full text, if present
+    const full = (pairing.fullTextBlock || '').toUpperCase();
+    const effIndex = full.indexOf('EFFECTIVE');
+    const beforeEff = effIndex >= 0 ? full.substring(0, effIndex) : full;
+    const effTail =
+      effIndex >= 0 ? full.substring(effIndex + 'EFFECTIVE'.length) : '';
+    const cleanedFromFull =
+      effTail
+        .replace(/ONLY/g, '')
+        .replace(/\./g, '')
+        .trim()
+        .split(/\n|CHECK-IN|DAY\s+[A-Z]/)[0] || '';
+
+    const weekdayTokens = Array.from(
+      beforeEff.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)
+    ).map(m => m[1]);
+    const weekdaySuffix =
+      weekdayTokens.length > 0 ? ` ${weekdayTokens.join(',')}` : '';
+
+    const normalizeToken = (mon: string, day: string) =>
+      `${mon}${parseInt(day, 10)}`;
+
+    const collectExplicitDates = (s: string): string[] => {
+      const out: string[] = [];
+      // token forms: MONdd or ddMON possibly separated by commas/spaces
+      const tokenRegex =
+        /\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*\d{1,2}|\d{1,2}\s*(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))\b/g;
+      for (const m of Array.from(s.matchAll(tokenRegex))) {
+        const part = m[1];
+        const md = part.match(
+          /^(?:([A-Z]{3})\s*(\d{1,2})|(\d{1,2})\s*([A-Z]{3}))$/
+        );
+        if (md) {
+          const mon = (md[1] || md[4]) as string;
+          const day = (md[2] || md[3]) as string;
+          if (months.includes(mon)) {
+            out.push(normalizeToken(mon, day));
+          }
+        }
+      }
+      return Array.from(new Set(out));
+    };
+
+    // Prefer richer EFFECTIVE tail when it contains months
+    const source =
+      (cleanedFromFull.match(monthRegex)
+        ? cleanedFromFull
+        : cleanedFromField) || cleanedFromField;
+
+    // 1) Explicit comma/space-separated dates
+    const explicitDates = collectExplicitDates(source);
+
+    // 2) Ranges → for rows, prefer listing endpoints only; if no weekdays, show as a range; if weekdays exist, list endpoints
+    const dayFirst = source.match(
+      /\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*-\s*(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/
+    );
+    const monFirst = source.match(
+      /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\s*-\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b/
+    );
+    if (dayFirst || monFirst) {
+      const sm = monFirst ? monFirst[1] : dayFirst![2];
+      const sd = monFirst ? monFirst[2] : dayFirst![1];
+      const em = monFirst ? monFirst[3] : dayFirst![4];
+      const ed = monFirst ? monFirst[4] : dayFirst![3];
+      const startToken = normalizeToken(sm, sd);
+      const endToken = normalizeToken(em, ed);
+      if (weekdayTokens.length > 0) {
+        // Prioritize explicit endpoints when weekdays are present (avoid mid-range extras like SEP26)
+        const parts = Array.from(new Set([startToken, endToken]));
+        return `${parts.join(', ')}${weekdaySuffix}`.trim();
+      }
+      return `${sm}${parseInt(sd, 10)} - ${em}${parseInt(ed, 10)}${weekdaySuffix}`.trim();
+    }
+
+    const allDates = Array.from(new Set(explicitDates));
+    if (allDates.length > 1) {
+      return `${allDates.join(', ')}${weekdaySuffix}`.trim();
+    }
+    if (allDates.length === 1) {
+      return `${allDates[0]}${weekdaySuffix}`.trim();
+    }
+
+    // Fallback: single normalized token from source if present
+    const md = source.match(
+      /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b|\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/
+    );
+    if (md) {
+      const mon = (md[1] || md[4]) as string;
+      const day = (md[2] || md[3]) as string;
+      return `${normalizeToken(mon, day)}${weekdaySuffix}`.trim();
+    }
+
+    return pairing.effectiveDates;
+  } catch {
+    return pairing.effectiveDates;
+  }
+}
+
+function PairingTableImpl({
   pairings,
   onSort,
   sortColumn,
@@ -97,239 +319,6 @@ export function PairingTable({
         : 'descending'
       : 'none') as React.AriaAttributes['aria-sort'],
   });
-
-  // Format route with day-by-day grouping, layover highlighting, and DH markers
-  const formatRouteDisplay = (pairing: Pairing) => {
-    if (!pairing.flightSegments || !Array.isArray(pairing.flightSegments) || pairing.flightSegments.length === 0) {
-      return <span className="text-foreground">{pairing.route || ''}</span>;
-    }
-
-    // Build deadhead segments set
-    const deadheadSegments = new Set<string>();
-    pairing.flightSegments.forEach((segment: any) => {
-      if (segment.isDeadhead && segment.departure && segment.arrival) {
-        deadheadSegments.add(
-          `${segment.departure.toUpperCase()}-${segment.arrival.toUpperCase()}`
-        );
-      }
-    });
-
-    // Sort segments chronologically
-    const sortedSegments = [...pairing.flightSegments].sort((a: any, b: any) => {
-      const dateCompare = (a.date || 'A').localeCompare(b.date || 'A');
-      if (dateCompare !== 0) return dateCompare;
-      return (a.departureTime || '').localeCompare(b.departureTime || '');
-    });
-
-    // Group segments by day
-    const flightsByDay = new Map<string, any[]>();
-    sortedSegments.forEach((seg: any) => {
-      const day = seg.date || 'A';
-      if (!flightsByDay.has(day)) {
-        flightsByDay.set(day, []);
-      }
-      flightsByDay.get(day)!.push(seg);
-    });
-
-    const sortedDays = Array.from(flightsByDay.keys()).sort();
-    const lastDayWithFlights = sortedDays[sortedDays.length - 1];
-
-    // Build route for each day
-    const dayRoutes: { day: string; segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] }[] = [];
-    
-    sortedDays.forEach((day, dayIdx) => {
-      const dayFlights = flightsByDay.get(day)!;
-      const segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] = [];
-      
-      dayFlights.forEach((seg: any, segIdx: number) => {
-        const departure = (seg.departure || '').toUpperCase();
-        const arrival = (seg.arrival || '').toUpperCase();
-        const segmentKey = `${departure}-${arrival}`;
-        const isDeadhead = deadheadSegments.has(segmentKey);
-        
-        // Add departure if it's the first segment of the day
-        if (segIdx === 0) {
-          segments.push({ airport: departure, isDeadhead: false, isLayover: false });
-        }
-        
-        // Add arrival - mark as layover if it's the last segment of the day (except last day)
-        const isLastSegmentOfDay = segIdx === dayFlights.length - 1;
-        const isLayover = isLastSegmentOfDay && day !== lastDayWithFlights;
-        
-        segments.push({ airport: arrival, isDeadhead, isLayover });
-      });
-      
-      dayRoutes.push({ day, segments });
-    });
-
-    return (
-      <div className="flex flex-wrap items-center gap-1">
-        {dayRoutes.map((dayRoute, dayIdx) => (
-          <div key={dayRoute.day} className="flex items-center gap-1">
-            {dayIdx > 0 && (
-              <span className="text-muted-foreground mx-1">|</span>
-            )}
-            <span className="text-xs font-medium text-muted-foreground mr-1">
-              {dayRoute.day}:
-            </span>
-            {dayRoute.segments.map((seg, segIdx) => (
-              <div key={`${seg.airport}-${segIdx}`} className="flex items-center">
-                {segIdx > 0 && <span className="text-muted-foreground dark:text-muted-foreground">-</span>}
-                <span
-                  className={`${
-                    seg.isDeadhead ? 'text-muted-foreground italic' : ''
-                  } ${
-                    seg.isLayover
-                      ? 'font-bold text-teal-600 dark:text-teal-400'
-                      : seg.isDeadhead ? '' : 'text-foreground'
-                  }`}
-                >
-                  {seg.isDeadhead ? `(DH)${seg.airport}` : seg.airport}
-                </span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  const formatEffectiveDisplay = (pairing: Pairing): string => {
-    try {
-      const months = [
-        'JAN',
-        'FEB',
-        'MAR',
-        'APR',
-        'MAY',
-        'JUN',
-        'JUL',
-        'AUG',
-        'SEP',
-        'OCT',
-        'NOV',
-        'DEC',
-      ];
-      const monthRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/g;
-      const raw = (pairing.effectiveDates || '').toUpperCase();
-      const cleanedFromField = raw
-        .replace(/EFFECTIVE/g, '')
-        .replace(/ONLY/g, '')
-        .replace(/\./g, '')
-        .trim();
-
-      // EFFECTIVE line and weekday qualifiers from full text, if present
-      const full = (pairing.fullTextBlock || '').toUpperCase();
-      const effIndex = full.indexOf('EFFECTIVE');
-      const beforeEff = effIndex >= 0 ? full.substring(0, effIndex) : full;
-      const effTail =
-        effIndex >= 0 ? full.substring(effIndex + 'EFFECTIVE'.length) : '';
-      const cleanedFromFull =
-        effTail
-          .replace(/ONLY/g, '')
-          .replace(/\./g, '')
-          .trim()
-          .split(/\n|CHECK-IN|DAY\s+[A-Z]/)[0] || '';
-
-      const weekdayTokens = Array.from(
-        beforeEff.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)
-      ).map(m => m[1]);
-      const weekdaySuffix =
-        weekdayTokens.length > 0 ? ` ${weekdayTokens.join(',')}` : '';
-
-      const normalizeToken = (mon: string, day: string) =>
-        `${mon}${parseInt(day, 10)}`;
-
-      const collectExplicitDates = (s: string): string[] => {
-        const out: string[] = [];
-        // token forms: MONdd or ddMON possibly separated by commas/spaces
-        const tokenRegex =
-          /\b((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*\d{1,2}|\d{1,2}\s*(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))\b/g;
-        for (const m of Array.from(s.matchAll(tokenRegex))) {
-          const part = m[1];
-          const md = part.match(
-            /^(?:([A-Z]{3})\s*(\d{1,2})|(\d{1,2})\s*([A-Z]{3}))$/
-          );
-          if (md) {
-            const mon = (md[1] || md[4]) as string;
-            const day = (md[2] || md[3]) as string;
-            if (months.includes(mon)) {
-              out.push(normalizeToken(mon, day));
-            }
-          }
-        }
-        return Array.from(new Set(out));
-      };
-
-      // Prefer richer EFFECTIVE tail when it contains months
-      const source =
-        (cleanedFromFull.match(monthRegex)
-          ? cleanedFromFull
-          : cleanedFromField) || cleanedFromField;
-
-      // 1) Explicit comma/space-separated dates
-      const explicitDates = collectExplicitDates(source);
-
-      // 2) Ranges → for rows, prefer listing endpoints only; if no weekdays, show as a range; if weekdays exist, list endpoints
-      const currentYear = new Date().getFullYear();
-      const monthMap: Record<string, number> = {
-        JAN: 0,
-        FEB: 1,
-        MAR: 2,
-        APR: 3,
-        MAY: 4,
-        JUN: 5,
-        JUL: 6,
-        AUG: 7,
-        SEP: 8,
-        OCT: 9,
-        NOV: 10,
-        DEC: 11,
-      };
-      const dayFirst = source.match(
-        /\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*-\s*(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/
-      );
-      const monFirst = source.match(
-        /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\s*-\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b/
-      );
-      if (dayFirst || monFirst) {
-        const sm = monFirst ? monFirst[1] : dayFirst![2];
-        const sd = monFirst ? monFirst[2] : dayFirst![1];
-        const em = monFirst ? monFirst[3] : dayFirst![4];
-        const ed = monFirst ? monFirst[4] : dayFirst![3];
-        const startToken = normalizeToken(sm, sd);
-        const endToken = normalizeToken(em, ed);
-        if (weekdayTokens.length > 0) {
-          // Prioritize explicit endpoints when weekdays are present (avoid mid-range extras like SEP26)
-          const parts = Array.from(new Set([startToken, endToken]));
-          return `${parts.join(', ')}${weekdaySuffix}`.trim();
-        }
-        return `${sm}${parseInt(sd, 10)} - ${em}${parseInt(ed, 10)}${weekdaySuffix}`.trim();
-      }
-
-      const allDates = Array.from(new Set(explicitDates));
-      if (allDates.length > 1) {
-        return `${allDates.join(', ')}${weekdaySuffix}`.trim();
-      }
-      if (allDates.length === 1) {
-        return `${allDates[0]}${weekdaySuffix}`.trim();
-      }
-
-      // Fallback: single normalized token from source if present
-      const md = source.match(
-        /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})\b|\b(\d{1,2})\s*(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/
-      );
-      if (md) {
-        const mon = (md[1] || md[4]) as string;
-        const day = (md[2] || md[3]) as string;
-        return `${normalizeToken(mon, day)}${weekdaySuffix}`.trim();
-      }
-
-      return pairing.effectiveDates;
-    } catch {
-      return pairing.effectiveDates;
-    }
-  };
 
   // Add to calendar mutation
   const addToCalendarMutation = useMutation({
@@ -491,6 +480,21 @@ export function PairingTable({
 
   // Ensure pairings is always an array
   const safePairings = Array.isArray(pairings) ? pairings : [];
+
+  // Per-row display strings/elements, computed once per pairing list rather
+  // than on every render. formatRouteDisplay sorts segments and builds two
+  // collections; formatEffectiveDisplay runs ~10 regexes and was called
+  // twice per row (title + body). At 438 rows that was thousands of
+  // needless operations whenever anything in the parent re-rendered.
+  const rowDisplay = useMemo(
+    () =>
+      safePairings.map(p => ({
+        route: formatRouteDisplay(p),
+        effective: formatEffectiveDisplay(p),
+        layover: formatLayoverMinutes(maxLayoverMinutes(p)),
+      })),
+    [safePairings]
+  );
 
   const legend = (
     <Popover>
@@ -906,13 +910,13 @@ export function PairingTable({
                       className="text-xs sm:text-sm"
                       title={pairing.route}
                     >
-                      {formatRouteDisplay(pairing)}
+                      {rowDisplay[index]?.route}
                     </div>
                     <div
                       className="text-xs text-muted-foreground"
-                      title={formatEffectiveDisplay(pairing)}
+                      title={rowDisplay[index]?.effective}
                     >
-                      {formatEffectiveDisplay(pairing)}
+                      {rowDisplay[index]?.effective}
                     </div>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
@@ -932,7 +936,7 @@ export function PairingTable({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="text-xs sm:text-sm text-muted-foreground">
-                      {formatLayoverMinutes(maxLayoverMinutes(pairing))}
+                      {rowDisplay[index]?.layover}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
@@ -1130,3 +1134,12 @@ export function PairingTable({
     </Card>
   );
 }
+
+/**
+ * Memoized: Dashboard is one large component holding ~40 pieces of state,
+ * several bound to per-keystroke inputs. Without this boundary, typing in
+ * the profile modal (or any unrelated toggle) re-rendered all ~438 rows.
+ * Props are compared shallowly, so the handlers Dashboard passes in must
+ * be stable (they are — see the useCallbacks in dashboard.tsx).
+ */
+export const PairingTable = memo(PairingTableImpl);
