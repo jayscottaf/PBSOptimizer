@@ -82,7 +82,7 @@ import {
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
-import { filterFieldMeta } from '@shared/pbsFilterLabels';
+import { filterFieldMeta, formatBidPeriod } from '@shared/pbsFilterLabels';
 import * as pbs from '@/lib/pbsDerivations';
 import { maxLayoverMinutes } from '@/lib/layover';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
@@ -1849,6 +1849,11 @@ export default function Dashboard() {
                                     <SelectItem key={pkg.id} value={String(pkg.id)}>
                                       {pkg.month} {pkg.year} · {pkg.base} {pkg.aircraft}
                                       {pkg.status !== 'completed' ? ` (${pkg.status})` : ''}
+                                      {/* Period runs into the prior month for
+                                          some packages (Sep = Aug 31–Sep 30) */}
+                                      {formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)
+                                        ? ` · ${formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)}`
+                                        : ''}
                                     </SelectItem>
                                   ))}
                               </SelectContent>

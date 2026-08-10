@@ -15,6 +15,7 @@ import {
   normalizeMonth3,
 } from '../server/lib/empiricalHold';
 import { extractBaseAndAircraft } from '../server/lib/packageHeader';
+import { PDFParser } from '../server/pdfParser';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -1008,6 +1009,50 @@ assert(
   assert(
     okPlace.caveats.some(c => c.includes('calendar placement')),
     'caveats reflect calendar placement when anchored'
+  );
+}
+
+// --- Bid package month labeling -------------------------------------------
+// A package is named for the month owning most of its bid period, which is
+// not always the period's start month. Delta uses both shapes:
+//   May 2 – Jun 1   -> "May" package (30 of 31 days in May)
+//   Aug 31 – Sep 30 -> "September" package (1 day in August)
+// Labeling by start month mislabeled the second shape by a month, which is
+// what shipped a September package to users as "August 2026".
+{
+  const parser: any = new (PDFParser as any)();
+  const monthCases: Array<[string, string]> = [
+    ['May 2, 2026 – June 1, 2026', 'May 2026'],
+    ['August 31, 2026 – September 30, 2026', 'September 2026'],
+    ['July 2, 2026 – August 1, 2026', 'July 2026'],
+    ['November 30, 2025 – December 30, 2025', 'December 2025'],
+    ['December 2, 2025 – January 1, 2026', 'December 2025'],
+    ['March 1, 2026 – March 31, 2026', 'March 2026'],
+  ];
+  for (const [range, expected] of monthCases) {
+    assert(
+      parser.extractBidPackageDate(`\n\n${range} (31 days)\n`) === expected,
+      `package month from period "${range}" is ${expected}`
+    );
+  }
+
+  // The cover wraps the month and year onto separate lines; the header must
+  // still win over the period-range fallback.
+  const wrappedCover = [
+    'NEW YORK CITY                      ',
+    '220                                      September  ',
+    'PILOT BID PACKAGE  2026 ',
+    '  ',
+    'August 31, 2026 – September 30, 2026 (31 days) ',
+  ].join('\n');
+  assert(
+    parser.extractBidPackageDate(wrappedCover) === 'September 2026',
+    'wrapped cover header (month and year on separate lines) resolves the month'
+  );
+  const period = parser.extractBidPeriod(wrappedCover);
+  assert(
+    period?.startDate === '2026-08-31' && period?.endDate === '2026-09-30',
+    'bid period start/end parsed alongside the package month'
   );
 }
 

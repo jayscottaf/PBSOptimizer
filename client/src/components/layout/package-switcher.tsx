@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenuButton } from '@/components/ui/sidebar';
+import { formatBidPeriod } from '@shared/pbsFilterLabels';
 
 interface PackageSwitcherProps {
   bidPackages: any[];
@@ -53,8 +54,17 @@ export function PackageSwitcher({
                 : 'Select package'}
             </span>
             {selectedPackage ? (
-              <span className="text-xs text-sidebar-foreground/60">
+              <span className="truncate text-xs text-sidebar-foreground/60">
                 {selectedPackage.base} {selectedPackage.aircraft}
+                {/* The period often starts in the prior month (Sep package
+                    runs Aug 31 – Sep 30); showing it stops the month name
+                    from looking wrong. */}
+                {formatBidPeriod(
+                  selectedPackage.bidPeriodStart,
+                  selectedPackage.bidPeriodEnd
+                )
+                  ? ` · ${formatBidPeriod(selectedPackage.bidPeriodStart, selectedPackage.bidPeriodEnd)}`
+                  : ''}
                 {selectedPackage.status !== 'completed'
                   ? ` · ${selectedPackage.status}`
                   : ''}
@@ -70,9 +80,16 @@ export function PackageSwitcher({
         <DropdownMenuLabel>Bid packages</DropdownMenuLabel>
         {sorted.map(pkg => (
           <DropdownMenuItem key={pkg.id} onClick={() => onSelect(pkg.id)}>
-            <span className="flex-1 truncate">
-              {pkg.month} {pkg.year} · {pkg.base} {pkg.aircraft}
-              {pkg.status !== 'completed' ? ` (${pkg.status})` : ''}
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+              <span className="truncate">
+                {pkg.month} {pkg.year} · {pkg.base} {pkg.aircraft}
+                {pkg.status !== 'completed' ? ` (${pkg.status})` : ''}
+              </span>
+              {formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd) ? (
+                <span className="truncate text-xs text-muted-foreground">
+                  {formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)}
+                </span>
+              ) : null}
             </span>
             {selectedPackage?.id === pkg.id && (
               <Check className="ml-2 h-4 w-4 shrink-0" />

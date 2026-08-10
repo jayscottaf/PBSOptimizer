@@ -10,6 +10,11 @@ import { samplePdfText } from './samplePdfText';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { extractBaseAndAircraft } from './lib/packageHeader';
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 interface FlightSegment {
   date: string;
   flightNumber: string;
@@ -306,6 +311,37 @@ export class PDFParser {
       }
     }
 
+    // Pattern 2b: the cover page wraps, so the package month and its year can
+    // land on different lines and never match a single-line pattern:
+    //   "220                                      September  "
+    //   "PILOT BID PACKAGE  2026 "
+    // Pair a standalone month with the nearest following year. A month that is
+    // immediately followed by a day number belongs to the bid-period range
+    // ("August 31, 2026 – ..."), which names the period, not the package.
+    const MONTH_WORD =
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i;
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const match = lines[i].match(MONTH_WORD);
+      if (!match) {
+        continue;
+      }
+      const rest = lines[i].slice((match.index ?? 0) + match[0].length);
+      if (/^\s*\d{1,2}\s*,/.test(rest)) {
+        continue; // part of a "Month D, YYYY" date range
+      }
+      for (let j = i; j <= Math.min(i + 2, lines.length - 1); j++) {
+        const yearMatch = lines[j].match(/\b(20\d{2})\b/);
+        if (yearMatch) {
+          const name = match[1];
+          const monthYear = `${name[0].toUpperCase()}${name.slice(1).toLowerCase()} ${yearMatch[1]}`;
+          console.log(
+            `Found bid package date from wrapped header: ${monthYear}`
+          );
+          return monthYear;
+        }
+      }
+    }
+
     // Pattern 3: Look for the specific header format from the image
     // The header shows "NEW YORK CITY 220 PILOT BID PACKAGE" and the month appears separately
     // We need to look for lines that contain "PILOT BID PACKAGE" and then find the month in nearby lines
@@ -339,27 +375,42 @@ export class PDFParser {
     for (let i = 0; i < Math.min(20, lines.length); i++) {
       const line = lines[i].trim();
       const dateRangeMatch = line.match(
-        /([A-Za-z]+)\s+\d{1,2},\s+(\d{4})\s*[–-]\s*([A-Za-z]+)\s+\d{1,2},\s+(\d{4})/
+        /([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s*[–-]\s*([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/
       );
       if (dateRangeMatch) {
-        const startMonth = dateRangeMatch[1];
-        const startYear = dateRangeMatch[2];
-        const endMonth = dateRangeMatch[3];
-        const endYear = dateRangeMatch[4];
+        const [, startMonth, startDay, startYear, endMonth, endDay, endYear] =
+          dateRangeMatch;
 
-        // If the date range spans multiple months, we need to determine which month
-        // contains the majority of the bid period
         if (startMonth !== endMonth || startYear !== endYear) {
-          // Delta bid packages span "Mon 2 → next-Mon 1" (e.g. May 2 → June 1).
-          // The package is named after the START month — that's the month with
-          // ~30 of the 31 days. The previous code picked the end month, which
-          // mislabels every package by one month.
+          // The package is named after the month owning MOST of the period,
+          // which is not always the start month. Both shapes occur:
+          //   May 2 – Jun 1   -> 30 days in May       -> "May" package
+          //   Aug 31 – Sep 30 -> 1 day in August      -> "September" package
+          // Taking the start month labeled the second shape a month early.
+          // The period midpoint lands in the majority month either way.
+          const MONTHS: Record<string, number> = {
+            january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+            july: 6, august: 7, september: 8, october: 9, november: 10,
+            december: 11,
+          };
+          const sm = MONTHS[startMonth.toLowerCase()];
+          const em = MONTHS[endMonth.toLowerCase()];
+          if (sm !== undefined && em !== undefined) {
+            const start = new Date(+startYear, sm, +startDay);
+            const end = new Date(+endYear, em, +endDay);
+            const mid = new Date((start.getTime() + end.getTime()) / 2);
+            const monthYear = `${MONTH_NAMES[mid.getMonth()]} ${mid.getFullYear()}`;
+            console.log(
+              `Found bid package date from date range (majority month): ${monthYear}`
+            );
+            console.log(
+              `Note: period spans ${startMonth} ${startDay}, ${startYear} to ${endMonth} ${endDay}, ${endYear}`
+            );
+            return monthYear;
+          }
           const monthYear = `${startMonth} ${startYear}`;
           console.log(
-            `Found bid package date from date range (using start month): ${monthYear}`
-          );
-          console.log(
-            `Note: Date range spans ${startMonth} ${startYear} to ${endMonth} ${endYear}`
+            `Found bid package date from date range (unparsed months, using start): ${monthYear}`
           );
           return monthYear;
         } else {

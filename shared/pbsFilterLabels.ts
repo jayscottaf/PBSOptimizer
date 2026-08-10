@@ -134,6 +134,39 @@ export const PBS_FILTER_FIELDS: Record<string, FilterFieldMeta> = {
   },
 };
 
+/**
+ * Short bid-period range, e.g. "Aug 31 – Sep 30".
+ *
+ * A package's month name and its bid period are different things: the
+ * September 2026 package runs Aug 31 – Sep 30. Showing the period next to
+ * the month name keeps that from reading as a labeling error.
+ * Dates are plain "YYYY-MM-DD" strings; parsed as local parts rather than
+ * via Date(string), which would treat them as UTC and shift the day back in
+ * western timezones.
+ */
+export function formatBidPeriod(
+  start?: string | null,
+  end?: string | null
+): string | null {
+  const parse = (value?: string | null) => {
+    const m = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const s = parse(start);
+  const e = parse(end);
+  if (!s || !e) {
+    return null;
+  }
+  const fmt = (d: Date) =>
+    `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return `${fmt(s)} – ${fmt(e)}`;
+}
+
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 /** Look up meta for a filter key, tolerating Min/Max suffix variants. */
 export function filterFieldMeta(key: string): FilterFieldMeta | undefined {
   if (PBS_FILTER_FIELDS[key]) {
