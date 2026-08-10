@@ -1572,29 +1572,39 @@ export class DatabaseStorage implements IStorage {
       ORDER BY year, ${monthNum}
     `);
 
-    const requestedLayovers = await db.execute(sql`
-      SELECT city, count(*) AS n FROM (
-        SELECT unnest(string_to_array(
-          (regexp_matches(preference_text, 'Layover In ((?:[A-Z]{3}(?:, )?)+)'))[1],
-          ', '
-        )) AS city
+    // Requested vs avoided is NOT simply Award vs Avoid: a negated condition
+    // flips the meaning. "Award Pairings If Not Any Layover In BOS" is a
+    // pilot steering AWAY from BOS, and "Avoid Pairings If Not Any Layover
+    // In BOS" is a pilot steering TOWARD it. Classifying on the leading verb
+    // alone (as this did) filed every negated preference in the wrong
+    // column. XOR of (is-award, is-negated) gives the true intent.
+    const layoverIntent = await db.execute(sql`
+      SELECT kind, city, count(*) AS n FROM (
+        SELECT
+          CASE
+            WHEN (preference_text ILIKE 'award%')
+                 <> (preference_text ~* 'Not (Any|Every) Layover In')
+              THEN 'requested'
+            ELSE 'avoided'
+          END AS kind,
+          unnest(string_to_array(
+            (regexp_matches(preference_text, 'Layover In ((?:[A-Z]{3}(?:, )?)+)'))[1],
+            ', '
+          )) AS city
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%layover in%'
+        WHERE base = ${base} ${monthCond}
+          AND (preference_text ILIKE 'award%layover in%'
+            OR preference_text ILIKE 'avoid%layover in%')
       ) t
-      GROUP BY city ORDER BY n DESC LIMIT 12
+      GROUP BY kind, city ORDER BY n DESC
     `);
-
-    const avoidedLayovers = await db.execute(sql`
-      SELECT city, count(*) AS n FROM (
-        SELECT unnest(string_to_array(
-          (regexp_matches(preference_text, 'Layover In ((?:[A-Z]{3}(?:, )?)+)'))[1],
-          ', '
-        )) AS city
-        FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%layover in%'
-      ) t
-      GROUP BY city ORDER BY n DESC LIMIT 12
-    `);
+    const intentRows = layoverIntent.rows as any[];
+    const topBy = (kind: string) =>
+      intentRows
+        .filter(r => r.kind === kind)
+        .map(r => ({ city: String(r.city), count: Number(r.n) }))
+        .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
+        .slice(0, 12);
 
     // Two phrasings of the same wish (later report time): Award...Check-In
     // Time > HH:MM and Avoid...Check-In Time < HH:MM — same threshold hour.
@@ -1697,14 +1707,8 @@ export class DatabaseStorage implements IStorage {
         avgPrefsPerPilot: Number(r.total_prefs) / Math.max(1, Number(r.pilots)),
         preferOffDays: Number(r.prefer_off_days),
       })),
-      topRequestedLayovers: (requestedLayovers.rows as any[]).map(r => ({
-        city: r.city,
-        count: Number(r.n),
-      })),
-      topAvoidedLayovers: (avoidedLayovers.rows as any[]).map(r => ({
-        city: r.city,
-        count: Number(r.n),
-      })),
+      topRequestedLayovers: topBy('requested'),
+      topAvoidedLayovers: topBy('avoided'),
       earlyCheckInAvoidance: (earlyCheckIn.rows as any[]).map(r => ({
         hour: Number(r.hour),
         count: Number(r.n),

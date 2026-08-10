@@ -350,8 +350,12 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
   const PAD_L = 40;
   const PAD_B = 42;
   const PAD_T = 10;
+  // Right padding has to clear the last x-axis label, not just the last
+  // data point: labels are centre-anchored and rotated, so a 10px gutter
+  // let "AUG 2026" render past the viewBox edge and get clipped.
+  const PAD_R = 38;
   const x = (i: number) =>
-    PAD_L + (i / (periods.length - 1)) * (W - PAD_L - 10);
+    PAD_L + (i / (periods.length - 1)) * (W - PAD_L - PAD_R);
   const y = (pct: number) => PAD_T + ((100 - pct) / 100) * (H - PAD_T - PAD_B);
 
   return (
@@ -367,7 +371,7 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
             <line
               x1={PAD_L}
               y1={y(g)}
-              x2={W - 10}
+              x2={W - PAD_R}
               y2={y(g)}
               stroke="currentColor"
               strokeOpacity={0.12}
@@ -728,8 +732,10 @@ export function TrendsPanel({
             <CardHeader>
               <CardTitle className="text-base">Layover preferences</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Cities named in Award (requested) vs. Avoid preferences,
-                ranked by how often they're bid.
+                Cities pilots bid toward vs. away from, ranked by how often
+                they're named. Counted by intent, so &quot;Award … If Not Any
+                Layover In BOS&quot; counts as avoiding BOS. A city can appear
+                on both sides — pilots want different things.
               </p>
             </CardHeader>
             <CardContent>
