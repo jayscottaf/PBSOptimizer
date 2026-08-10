@@ -834,6 +834,45 @@ export function SmartFilterSystem({
               <div className="space-y-1.5">
                 <label
                   className="text-sm font-medium text-secondary-foreground"
+                  title={PBS_FILTER_FIELDS.excludeCheckInStations?.gloss}
+                >
+                  {PBS_FILTER_FIELDS.excludeCheckInStations?.navblueLabel}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. EWR"
+                  value={pbsInputs.excludeCheckInStations ?? ''}
+                  onFocus={() => onPbsFocus('excludeCheckInStations')}
+                  onChange={e =>
+                    setPbsInputs(prev => ({
+                      ...prev,
+                      excludeCheckInStations: e.target.value,
+                    }))
+                  }
+                  onBlur={e =>
+                    onPbsBlur(
+                      'excludeCheckInStations',
+                      e.target.value,
+                      applyPbsList
+                    )
+                  }
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      onPbsEnter(
+                        'excludeCheckInStations',
+                        pbsInputs.excludeCheckInStations ?? '',
+                        applyPbsList
+                      );
+                    }
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm uppercase ring-offset-background placeholder:normal-case placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="input-pbs-excludeCheckInStations"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-secondary-foreground"
                   title={PBS_FILTER_FIELDS.excludeLayoverCities?.gloss}
                 >
                   {PBS_FILTER_FIELDS.excludeLayoverCities?.navblueLabel}

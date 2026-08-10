@@ -113,6 +113,13 @@ export const PBS_FILTER_FIELDS: Record<string, FilterFieldMeta> = {
       'Airport where the pairing begins (first leg departure), e.g. avoid EWR check-ins.',
     source: 'pbs',
   },
+  excludeCheckInStations: {
+    navblueLabel: 'Check-In Station Not',
+    shortLabel: 'No Check-In At',
+    gloss:
+      'Exclude pairings that begin at these airports (NAVBLUE: Avoid ... If Pairing Check-In Station).',
+    source: 'pbs',
+  },
   hasRedeye: {
     navblueLabel: 'Duty Is Redeye',
     shortLabel: 'Redeye',

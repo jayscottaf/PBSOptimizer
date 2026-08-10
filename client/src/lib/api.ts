@@ -93,6 +93,7 @@ export interface SearchFilters {
   checkInHourMin?: number;
   checkInHourMax?: number;
   checkInStations?: string[];
+  excludeCheckInStations?: string[];
   hasRedeye?: boolean;
   page?: number;
   limit?: number;

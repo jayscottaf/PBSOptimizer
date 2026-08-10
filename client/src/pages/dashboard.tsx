@@ -1228,6 +1228,9 @@ export default function Dashboard() {
           case 'checkInStations':
             label = `Check-In Station: ${Array.isArray(value) ? value.join(', ') : value}`;
             break;
+          case 'excludeCheckInStations':
+            label = `No Check-In At: ${Array.isArray(value) ? value.join(', ') : value}`;
+            break;
           case 'hasRedeye':
             label = value ? 'Redeye: has' : 'Redeye: none';
             break;
@@ -1473,6 +1476,19 @@ export default function Dashboard() {
           const station = pbs.checkInStation(pairing);
           const wanted = filters.checkInStations.map(s => s.toUpperCase());
           if (!station || !wanted.includes(station)) {
+            return false;
+          }
+        }
+        if (
+          filters.excludeCheckInStations &&
+          filters.excludeCheckInStations.length > 0
+        ) {
+          const station = pbs.checkInStation(pairing);
+          const banned = filters.excludeCheckInStations.map(s =>
+            s.toUpperCase()
+          );
+          // No parseable station → keep (mirrors the SQL's IS NULL branch)
+          if (station && banned.includes(station)) {
             return false;
           }
         }

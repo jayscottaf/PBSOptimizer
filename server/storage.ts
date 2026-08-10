@@ -764,6 +764,7 @@ export class DatabaseStorage implements IStorage {
     checkInHourMin?: number;
     checkInHourMax?: number;
     checkInStations?: string[];
+    excludeCheckInStations?: string[];
     hasRedeye?: boolean;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
@@ -1026,6 +1027,22 @@ export class DatabaseStorage implements IStorage {
         const stationsArray = `{${filters.checkInStations.map(s => `"${s.toUpperCase()}"`).join(',')}}`;
         conditions.push(
           sql`UPPER(${pairings.flightSegments}->0->>'departure') = ANY(${stationsArray}::text[])`
+        );
+      }
+
+      // Check-In Station Not — inverse of checkInStations. A pairing with no
+      // parseable first segment has no station to match, so it is kept (it
+      // cannot be shown to check in at an excluded airport).
+      if (
+        filters.excludeCheckInStations &&
+        filters.excludeCheckInStations.length > 0
+      ) {
+        const excludedArray = `{${filters.excludeCheckInStations.map(s => `"${s.toUpperCase()}"`).join(',')}}`;
+        conditions.push(
+          sql`(
+            UPPER(${pairings.flightSegments}->0->>'departure') IS NULL
+            OR UPPER(${pairings.flightSegments}->0->>'departure') <> ALL(${excludedArray}::text[])
+          )`
         );
       }
 
