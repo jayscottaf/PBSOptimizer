@@ -82,6 +82,8 @@ import {
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
+import { filterFieldMeta } from '@shared/pbsFilterLabels';
+import * as pbs from '@/lib/pbsDerivations';
 import { maxLayoverMinutes } from '@/lib/layover';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
 import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
@@ -99,27 +101,7 @@ import {
 } from '@/components/ui/collapsible';
 import { toast } from '@/hooks/use-toast';
 import { useTheme } from 'next-themes';
-interface SearchFilters {
-  [key: string]: string | number | Date[] | string[] | undefined;
-  search?: string;
-  rotationNumber?: string;
-  creditMin?: number;
-  creditMax?: number;
-  blockMin?: number;
-  blockMax?: number;
-  tafb?: string;
-  tafbMin?: number;
-  tafbMax?: number;
-  holdProbabilityMin?: number;
-  pairingDays?: number;
-  pairingDaysMin?: number;
-  pairingDaysMax?: number;
-  efficiency?: number;
-  preferredDaysOff?: Date[];
-  layoverLocations?: string[];
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
+import type { SearchFilters } from '@/lib/api';
 
 // Placeholder for Pairing type if not defined elsewhere
 interface Pairing {
@@ -1237,8 +1219,29 @@ export default function Dashboard() {
           case 'efficiency':
             label = `Efficiency: ≥${value}`;
             break;
-          default:
-            label = `${key}: ${value}`;
+          case 'layoverLocations':
+            label = `Layovers In: ${Array.isArray(value) ? value.join(', ') : value}`;
+            break;
+          case 'excludeLayoverCities':
+            label = `No Layovers In: ${Array.isArray(value) ? value.join(', ') : value}`;
+            break;
+          case 'checkInStations':
+            label = `Check-In Station: ${Array.isArray(value) ? value.join(', ') : value}`;
+            break;
+          case 'hasRedeye':
+            label = value ? 'Redeye: has' : 'Redeye: none';
+            break;
+          default: {
+            // New PBS min/max fields share meta via the shared vocabulary
+            // module; fall back to raw key for anything unknown.
+            const meta = filterFieldMeta(key);
+            if (meta) {
+              const op = key.endsWith('Max') ? '≤' : '≥';
+              label = `${meta.shortLabel}: ${op}${value}`;
+            } else {
+              label = `${key}: ${value}`;
+            }
+          }
         }
 
         updatedActiveFilters.push({ key, label, value });
@@ -1370,6 +1373,130 @@ export default function Dashboard() {
           const block = parseFloat(pairing.blockHours?.toString() || '0');
           const efficiency = block > 0 ? credit / block : 0;
           if (efficiency < filters.efficiency) {
+            return false;
+          }
+        }
+
+        // ---- PBS-native filters (must mirror server/storage.ts SQL) ----
+        if (filters.deadheadsMin !== undefined) {
+          if ((pairing.deadheads || 0) < filters.deadheadsMin) {
+            return false;
+          }
+        }
+        if (filters.deadheadsMax !== undefined) {
+          if ((pairing.deadheads || 0) > filters.deadheadsMax) {
+            return false;
+          }
+        }
+        if (filters.layoverCountMin !== undefined) {
+          if (pbs.layoverCount(pairing) < filters.layoverCountMin) {
+            return false;
+          }
+        }
+        if (filters.layoverCountMax !== undefined) {
+          if (pbs.layoverCount(pairing) > filters.layoverCountMax) {
+            return false;
+          }
+        }
+        if (filters.totalLayoverHoursMin !== undefined) {
+          if (pbs.totalLayoverHours(pairing) < filters.totalLayoverHoursMin) {
+            return false;
+          }
+        }
+        if (filters.totalLayoverHoursMax !== undefined) {
+          if (pbs.totalLayoverHours(pairing) > filters.totalLayoverHoursMax) {
+            return false;
+          }
+        }
+        if (
+          filters.averageDailyCreditMin !== undefined ||
+          filters.averageDailyCreditMax !== undefined
+        ) {
+          const credit = parseFloat(pairing.creditHours?.toString() || '0');
+          const days = pairing.pairingDays || 0;
+          const avg = days > 0 ? credit / days : 0;
+          if (
+            filters.averageDailyCreditMin !== undefined &&
+            avg < filters.averageDailyCreditMin
+          ) {
+            return false;
+          }
+          if (
+            filters.averageDailyCreditMax !== undefined &&
+            avg > filters.averageDailyCreditMax
+          ) {
+            return false;
+          }
+        }
+        if (
+          filters.averageDailyBlockMin !== undefined ||
+          filters.averageDailyBlockMax !== undefined
+        ) {
+          const block = parseFloat(pairing.blockHours?.toString() || '0');
+          const days = pairing.pairingDays || 0;
+          const avg = days > 0 ? block / days : 0;
+          if (
+            filters.averageDailyBlockMin !== undefined &&
+            avg < filters.averageDailyBlockMin
+          ) {
+            return false;
+          }
+          if (
+            filters.averageDailyBlockMax !== undefined &&
+            avg > filters.averageDailyBlockMax
+          ) {
+            return false;
+          }
+        }
+        if (
+          filters.checkInHourMin !== undefined ||
+          filters.checkInHourMax !== undefined
+        ) {
+          const hour = pbs.checkInHour(pairing);
+          if (hour === null) {
+            return false;
+          }
+          if (
+            filters.checkInHourMin !== undefined &&
+            hour < filters.checkInHourMin
+          ) {
+            return false;
+          }
+          if (
+            filters.checkInHourMax !== undefined &&
+            hour > filters.checkInHourMax
+          ) {
+            return false;
+          }
+        }
+        if (filters.checkInStations && filters.checkInStations.length > 0) {
+          const station = pbs.checkInStation(pairing);
+          const wanted = filters.checkInStations.map(s => s.toUpperCase());
+          if (!station || !wanted.includes(station)) {
+            return false;
+          }
+        }
+        if (filters.hasRedeye !== undefined) {
+          if (pbs.hasRedeye(pairing) !== filters.hasRedeye) {
+            return false;
+          }
+        }
+        if (
+          filters.excludeLayoverCities &&
+          filters.excludeLayoverCities.length > 0
+        ) {
+          const cities = pbs.layoverCities(pairing);
+          const banned = filters.excludeLayoverCities.map(c => c.toUpperCase());
+          if (cities.some(c => banned.includes(c))) {
+            return false;
+          }
+        }
+        // Layovers In (include list) — mirrors the server's EXISTS clause;
+        // previously missing from this client-side path entirely.
+        if (filters.layoverLocations && filters.layoverLocations.length > 0) {
+          const cities = pbs.layoverCities(pairing);
+          const wanted = filters.layoverLocations.map(c => c.toUpperCase());
+          if (!cities.some(c => wanted.includes(c))) {
             return false;
           }
         }

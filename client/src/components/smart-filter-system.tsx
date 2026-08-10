@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { PBS_FILTER_FIELDS } from '@shared/pbsFilterLabels';
 interface FilterOption {
   key: string;
   label: string;
@@ -52,7 +53,7 @@ interface SmartFilterSystemProps {
 const filterOptions: FilterOption[] = [
   {
     key: 'pairingDays',
-    label: 'Pairing Days',
+    label: 'Pairing Length',
     dataOptions: [
       { value: 1, label: '1 Day (Turns)' },
       { value: 2, label: '2 Days' },
@@ -63,7 +64,7 @@ const filterOptions: FilterOption[] = [
   },
   {
     key: 'creditHours',
-    label: 'Credit Hours',
+    label: 'Credit',
     dataOptions: [
       {
         value: 4.0,
@@ -89,7 +90,7 @@ const filterOptions: FilterOption[] = [
 
   {
     key: 'blockHours',
-    label: 'Block Hours',
+    label: 'Block',
     dataOptions: [
       {
         value: 3.0,
@@ -115,7 +116,8 @@ const filterOptions: FilterOption[] = [
   },
   {
     key: 'holdProbability',
-    label: 'Hold Probability',
+    // App-computed insight, not a NAVBLUE bid property — labeled as such
+    label: 'Hold Probability (App insight)',
     dataOptions: [
       { value: 90, label: 'Senior (90%+)', filterKey: 'holdProbabilityMin' },
       { value: 70, label: 'Good (70%+)', filterKey: 'holdProbabilityMin' },
@@ -142,7 +144,8 @@ const filterOptions: FilterOption[] = [
 
   {
     key: 'efficiency',
-    label: 'Credit/Block Ratio',
+    // App-computed insight, not a NAVBLUE bid property — labeled as such
+    label: 'Credit/Block Ratio (App insight)',
     dataOptions: [
       { value: 1.3, label: 'Excellent (≥1.30)', filterKey: 'efficiency' },
       { value: 1.2, label: 'Very Good (≥1.20)', filterKey: 'efficiency' },
@@ -153,10 +156,26 @@ const filterOptions: FilterOption[] = [
   },
 ];
 
+// PBS-native range filters shown in the "PBS Filters" section. metaKey
+// looks up the NAVBLUE label/gloss in shared/pbsFilterLabels.ts.
+const pbsRangeFields: Array<{
+  minKey: string;
+  maxKey: string;
+  metaKey: string;
+  step: string;
+}> = [
+  { minKey: 'deadheadsMin', maxKey: 'deadheadsMax', metaKey: 'deadheadsMin', step: '1' },
+  { minKey: 'layoverCountMin', maxKey: 'layoverCountMax', metaKey: 'layoverCountMin', step: '1' },
+  { minKey: 'totalLayoverHoursMin', maxKey: 'totalLayoverHoursMax', metaKey: 'totalLayoverHoursMin', step: '0.5' },
+  { minKey: 'averageDailyCreditMin', maxKey: 'averageDailyCreditMax', metaKey: 'averageDailyCreditMin', step: '0.5' },
+  { minKey: 'averageDailyBlockMin', maxKey: 'averageDailyBlockMax', metaKey: 'averageDailyBlockMin', step: '0.5' },
+  { minKey: 'checkInHourMin', maxKey: 'checkInHourMax', metaKey: 'checkInHourMin', step: '1' },
+];
+
 // Special filter for layover locations - will be populated dynamically
 const layoverFilterOption: FilterOption = {
   key: 'layoverLocations',
-  label: 'Layover Locations',
+  label: 'Layovers In', // NAVBLUE term; wire key stays layoverLocations
   dataOptions: [],
 };
 
@@ -377,6 +396,106 @@ export function SmartFilterSystem({
   const [quickFilterKeys, setQuickFilterKeys] = useState<QuickFilterKey[]>([]);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPbsFilters, setShowPbsFilters] = useState(false);
+
+  // PBS Filters section — local input text, applied on blur/Enter so we
+  // don't fire a search per keystroke. Keyed by SearchFilters wire key.
+  const [pbsInputs, setPbsInputs] = useState<Record<string, string>>({});
+  // Which field is focused and what it held when focus began. Blur only
+  // applies when the value changed during the focus session — otherwise
+  // clicking into a field and away would re-apply a filter the user just
+  // removed via its chip while the field was focused.
+  const focusedPbs = React.useRef<{ key: string; value: string } | null>(null);
+
+  // When a PBS filter is cleared elsewhere (chip X, Clear all without a
+  // remount), blank its input so blur can't silently re-apply a stale value.
+  useEffect(() => {
+    setPbsInputs(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (key === focusedPbs.current?.key) {
+          continue;
+        }
+        if (next[key] !== '' && !activeFilters.some(f => f.key === key)) {
+          next[key] = '';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [activeFilters]);
+
+  const onPbsFocus = (key: string) => {
+    focusedPbs.current = { key, value: pbsInputs[key] ?? '' };
+  };
+
+  const onPbsBlur = (
+    key: string,
+    raw: string,
+    apply: (filterKey: string, raw: string) => void
+  ) => {
+    const started = focusedPbs.current;
+    focusedPbs.current = null;
+    if (started?.key === key && started.value === raw) {
+      // Unchanged during this focus session — never re-apply. If the filter
+      // was cleared externally while focused, blank the stale text too.
+      if (!activeFilters.some(f => f.key === key)) {
+        setPbsInputs(prev => (prev[key] ? { ...prev, [key]: '' } : prev));
+      }
+      return;
+    }
+    apply(key, raw);
+  };
+
+  // Explicit Enter apply: also reset the focus-session baseline so a
+  // subsequent chip removal + blur can't re-apply this same value.
+  const onPbsEnter = (
+    key: string,
+    raw: string,
+    apply: (filterKey: string, raw: string) => void
+  ) => {
+    apply(key, raw);
+    if (focusedPbs.current?.key === key) {
+      focusedPbs.current = { key, value: raw };
+    }
+  };
+
+  const applyPbsNumber = (filterKey: string, raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      onFiltersChange({ [filterKey]: undefined });
+      return;
+    }
+    const num = parseFloat(trimmed);
+    if (Number.isNaN(num)) {
+      return;
+    }
+    onFiltersChange({ [filterKey]: num });
+  };
+
+  const applyPbsList = (filterKey: string, raw: string) => {
+    const list = raw
+      .split(/[,\s]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean);
+    onFiltersChange({ [filterKey]: list.length > 0 ? list : undefined });
+  };
+
+  // Redeye tri-state derives from the live filter set, like quick filters
+  const redeyeState: '' | 'has' | 'none' = (() => {
+    const f = activeFilters.find(x => x.key === 'hasRedeye');
+    if (!f) {
+      return '';
+    }
+    return f.value ? 'has' : 'none';
+  })();
+
+  const setRedeye = (state: '' | 'has' | 'none') => {
+    onFiltersChange({
+      hasRedeye: state === '' ? undefined : state === 'has',
+    });
+  };
 
   // Load persisted preferences
   useEffect(() => {
@@ -522,7 +641,7 @@ export function SmartFilterSystem({
             data-testid="button-select-layovers"
           >
             <MapPin className="h-4 w-4" />
-            Layovers
+            Layovers In
             {selectedLayovers.length > 0 && (
               <Badge variant="secondary" className="ml-0.5 px-1.5 text-xs">
                 {selectedLayovers.length}
@@ -533,9 +652,25 @@ export function SmartFilterSystem({
 
         <button
           type="button"
+          onClick={() => setShowPbsFilters(v => !v)}
+          aria-expanded={showPbsFilters}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          PBS Filters
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 transition-transform',
+              showPbsFilters && 'rotate-180'
+            )}
+          />
+        </button>
+
+        <button
+          type="button"
           onClick={() => setShowAdvanced(v => !v)}
           aria-expanded={showAdvanced}
-          className="ml-auto flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <SlidersHorizontal className="h-4 w-4" />
           Advanced
@@ -605,6 +740,174 @@ export function SmartFilterSystem({
           )}
         </div>
       )}
+
+      {/* PBS Filters — real NAVBLUE bid properties, matching the terms
+          pilots use in the actual PBS system (see shared/pbsFilterLabels.ts) */}
+      <Collapsible open={showPbsFilters} onOpenChange={setShowPbsFilters}>
+        <CollapsibleTrigger className="sr-only">PBS filters</CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-xs text-muted-foreground">
+              Filter with the same properties you bid with in PBS. Leave a
+              field blank to ignore it; press Enter or click away to apply.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pbsRangeFields.map(field => {
+                const meta = PBS_FILTER_FIELDS[field.metaKey];
+                return (
+                  <div key={field.metaKey} className="space-y-1.5">
+                    <label
+                      className="text-sm font-medium text-secondary-foreground"
+                      title={meta?.gloss}
+                    >
+                      {meta?.navblueLabel ?? field.metaKey}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[field.minKey, field.maxKey].map((key, i) => (
+                        <input
+                          key={key}
+                          type="number"
+                          inputMode="decimal"
+                          step={field.step}
+                          min="0"
+                          placeholder={i === 0 ? 'Min' : 'Max'}
+                          value={pbsInputs[key] ?? ''}
+                          onFocus={() => onPbsFocus(key)}
+                          onChange={e =>
+                            setPbsInputs(prev => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          onBlur={e =>
+                            onPbsBlur(key, e.target.value, applyPbsNumber)
+                          }
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              onPbsEnter(key, pbsInputs[key] ?? '', applyPbsNumber);
+                            }
+                          }}
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          data-testid={`input-pbs-${key}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-secondary-foreground"
+                  title={PBS_FILTER_FIELDS.checkInStations?.gloss}
+                >
+                  {PBS_FILTER_FIELDS.checkInStations?.navblueLabel}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. JFK, LGA"
+                  value={pbsInputs.checkInStations ?? ''}
+                  onFocus={() => onPbsFocus('checkInStations')}
+                  onChange={e =>
+                    setPbsInputs(prev => ({
+                      ...prev,
+                      checkInStations: e.target.value,
+                    }))
+                  }
+                  onBlur={e =>
+                    onPbsBlur('checkInStations', e.target.value, applyPbsList)
+                  }
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      onPbsEnter(
+                        'checkInStations',
+                        pbsInputs.checkInStations ?? '',
+                        applyPbsList
+                      );
+                    }
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm uppercase ring-offset-background placeholder:normal-case placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="input-pbs-checkInStations"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-secondary-foreground"
+                  title={PBS_FILTER_FIELDS.excludeLayoverCities?.gloss}
+                >
+                  {PBS_FILTER_FIELDS.excludeLayoverCities?.navblueLabel}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. EWR, BOS"
+                  value={pbsInputs.excludeLayoverCities ?? ''}
+                  onFocus={() => onPbsFocus('excludeLayoverCities')}
+                  onChange={e =>
+                    setPbsInputs(prev => ({
+                      ...prev,
+                      excludeLayoverCities: e.target.value,
+                    }))
+                  }
+                  onBlur={e =>
+                    onPbsBlur(
+                      'excludeLayoverCities',
+                      e.target.value,
+                      applyPbsList
+                    )
+                  }
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      onPbsEnter(
+                        'excludeLayoverCities',
+                        pbsInputs.excludeLayoverCities ?? '',
+                        applyPbsList
+                      );
+                    }
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm uppercase ring-offset-background placeholder:normal-case placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="input-pbs-excludeLayoverCities"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  className="text-sm font-medium text-secondary-foreground"
+                  title={PBS_FILTER_FIELDS.hasRedeye?.gloss}
+                >
+                  {PBS_FILTER_FIELDS.hasRedeye?.navblueLabel}
+                </label>
+                <div className="flex gap-1" role="radiogroup" aria-label="Redeye">
+                  {(
+                    [
+                      { state: '' as const, label: 'Any' },
+                      { state: 'has' as const, label: 'Has redeye' },
+                      { state: 'none' as const, label: 'No redeye' },
+                    ] as const
+                  ).map(opt => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={redeyeState === opt.state}
+                      onClick={() => setRedeye(opt.state)}
+                      className={cn(
+                        'h-9 flex-1 rounded-md border px-2 text-xs font-medium transition-colors',
+                        redeyeState === opt.state
+                          ? 'border-primary bg-primary/15 text-primary'
+                          : 'border-border bg-background text-secondary-foreground hover:bg-accent'
+                      )}
+                      data-testid={`button-pbs-redeye-${opt.label.replace(/\s/g, '-').toLowerCase()}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Advanced — the function/value picker, unchanged behavior */}
       <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>

@@ -59,7 +59,7 @@ export interface Pairing {
 }
 
 export interface SearchFilters {
-  [key: string]: string | number | Date[] | string[] | undefined;
+  [key: string]: string | number | boolean | Date[] | string[] | undefined;
   bidPackageId?: number;
   search?: string;
   rotationNumber?: string;
@@ -78,6 +78,22 @@ export interface SearchFilters {
   seniorityPercentage?: number;
   preferredDaysOff?: Date[];
   layoverLocations?: string[];
+  // PBS-native filters (NAVBLUE terms; see shared/pbsFilterLabels.ts)
+  excludeLayoverCities?: string[];
+  deadheadsMin?: number;
+  deadheadsMax?: number;
+  layoverCountMin?: number;
+  layoverCountMax?: number;
+  totalLayoverHoursMin?: number;
+  totalLayoverHoursMax?: number;
+  averageDailyCreditMin?: number;
+  averageDailyCreditMax?: number;
+  averageDailyBlockMin?: number;
+  averageDailyBlockMax?: number;
+  checkInHourMin?: number;
+  checkInHourMax?: number;
+  checkInStations?: string[];
+  hasRedeye?: boolean;
   page?: number;
   limit?: number;
   sortBy?: string;

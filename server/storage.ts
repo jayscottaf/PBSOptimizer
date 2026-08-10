@@ -749,6 +749,22 @@ export class DatabaseStorage implements IStorage {
     pairingDaysMax?: number;
     efficiency?: number;
     layoverLocations?: string[];
+    // PBS-native filters (NAVBLUE terms; see shared/pbsFilterLabels.ts)
+    excludeLayoverCities?: string[];
+    deadheadsMin?: number;
+    deadheadsMax?: number;
+    layoverCountMin?: number;
+    layoverCountMax?: number;
+    totalLayoverHoursMin?: number;
+    totalLayoverHoursMax?: number;
+    averageDailyCreditMin?: number;
+    averageDailyCreditMax?: number;
+    averageDailyBlockMin?: number;
+    averageDailyBlockMax?: number;
+    checkInHourMin?: number;
+    checkInHourMax?: number;
+    checkInStations?: string[];
+    hasRedeye?: boolean;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<{
@@ -885,6 +901,150 @@ export class DatabaseStorage implements IStorage {
             SELECT 1 FROM jsonb_array_elements(${pairings.layovers}) AS layover
             WHERE layover->>'city' = ANY(${citiesArray}::text[])
           )`
+        );
+      }
+
+      // ---- PBS-native filters (NAVBLUE grammar; JS reference semantics in
+      // server/lib/bidSimulator.ts toSimPairing/parseCheckInHour) ----------
+
+      // Deadhead Legs — direct integer column
+      if (filters.deadheadsMin !== undefined) {
+        conditions.push(gte(pairings.deadheads, filters.deadheadsMin));
+      }
+      if (filters.deadheadsMax !== undefined) {
+        conditions.push(lte(pairings.deadheads, filters.deadheadsMax));
+      }
+
+      // Number Of Layovers — guard non-array jsonb like maxLayoverMinutesExpr
+      const layoverCountExpr = sql`
+        jsonb_array_length(
+          CASE WHEN jsonb_typeof(${pairings.layovers}) = 'array'
+            THEN ${pairings.layovers}
+            ELSE '[]'::jsonb
+          END
+        )`;
+      if (filters.layoverCountMin !== undefined) {
+        conditions.push(sql`${layoverCountExpr} >= ${filters.layoverCountMin}`);
+      }
+      if (filters.layoverCountMax !== undefined) {
+        conditions.push(sql`${layoverCountExpr} <= ${filters.layoverCountMax}`);
+      }
+
+      // Total Layover Time — sum of "HH.MM" durations, in minutes (same
+      // duration parsing as maxLayoverMinutesExpr below)
+      const totalLayoverMinutesExpr = sql`
+        COALESCE((
+          SELECT SUM(
+            CASE
+              WHEN elem->>'duration' ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
+                (split_part(elem->>'duration', '.', 1)::int * 60 + split_part(elem->>'duration', '.', 2)::int)
+              ELSE 0
+            END
+          )
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(${pairings.layovers}) = 'array'
+              THEN ${pairings.layovers}
+              ELSE '[]'::jsonb
+            END
+          ) AS elem
+        ), 0)`;
+      if (filters.totalLayoverHoursMin !== undefined) {
+        conditions.push(
+          sql`${totalLayoverMinutesExpr} >= ${Math.round(filters.totalLayoverHoursMin * 60)}`
+        );
+      }
+      if (filters.totalLayoverHoursMax !== undefined) {
+        conditions.push(
+          sql`${totalLayoverMinutesExpr} <= ${Math.round(filters.totalLayoverHoursMax * 60)}`
+        );
+      }
+
+      // Average Daily Credit / Block — hours ÷ pairing length
+      const avgDailyCreditExpr = sql`(CAST(${pairings.creditHours} AS numeric) / NULLIF(${pairings.pairingDays}, 0))`;
+      const avgDailyBlockExpr = sql`(CAST(${pairings.blockHours} AS numeric) / NULLIF(${pairings.pairingDays}, 0))`;
+      if (filters.averageDailyCreditMin !== undefined) {
+        conditions.push(
+          sql`${avgDailyCreditExpr} >= ${filters.averageDailyCreditMin}`
+        );
+      }
+      if (filters.averageDailyCreditMax !== undefined) {
+        conditions.push(
+          sql`${avgDailyCreditExpr} <= ${filters.averageDailyCreditMax}`
+        );
+      }
+      if (filters.averageDailyBlockMin !== undefined) {
+        conditions.push(
+          sql`${avgDailyBlockExpr} >= ${filters.averageDailyBlockMin}`
+        );
+      }
+      if (filters.averageDailyBlockMax !== undefined) {
+        conditions.push(
+          sql`${avgDailyBlockExpr} <= ${filters.averageDailyBlockMax}`
+        );
+      }
+
+      // Layovers Not In — inverse of the layoverLocations EXISTS above
+      if (
+        filters.excludeLayoverCities &&
+        filters.excludeLayoverCities.length > 0
+      ) {
+        const citiesArray = `{${filters.excludeLayoverCities.map(c => `"${c.toUpperCase()}"`).join(',')}}`;
+        conditions.push(
+          sql`NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(
+              CASE WHEN jsonb_typeof(${pairings.layovers}) = 'array'
+                THEN ${pairings.layovers}
+                ELSE '[]'::jsonb
+              END
+            ) AS layover
+            WHERE UPPER(layover->>'city') = ANY(${citiesArray}::text[])
+          )`
+        );
+      }
+
+      // Check-In Time (hour of day) — checkInTime formats: "10.35" (HH.MM),
+      // "05:00", "0500", or a bare hour (mirrors parseCheckInHour)
+      const checkInHourExpr = sql`
+        (CASE
+          WHEN ${pairings.checkInTime} ~ '^[0-9]{1,2}[.:][0-9]{2}$' THEN
+            (regexp_replace(${pairings.checkInTime}, '[.:].*$', ''))::int
+          WHEN ${pairings.checkInTime} ~ '^[0-9]{4}$' THEN
+            LEFT(${pairings.checkInTime}, 2)::int
+          WHEN ${pairings.checkInTime} ~ '^[0-9]+$' THEN
+            LEAST(23, ${pairings.checkInTime}::int)
+          ELSE NULL
+        END)`;
+      if (filters.checkInHourMin !== undefined) {
+        conditions.push(sql`${checkInHourExpr} >= ${filters.checkInHourMin}`);
+      }
+      if (filters.checkInHourMax !== undefined) {
+        conditions.push(sql`${checkInHourExpr} <= ${filters.checkInHourMax}`);
+      }
+
+      // Pairing Check-In Station — first flight segment's departure airport
+      if (filters.checkInStations && filters.checkInStations.length > 0) {
+        const stationsArray = `{${filters.checkInStations.map(s => `"${s.toUpperCase()}"`).join(',')}}`;
+        conditions.push(
+          sql`UPPER(${pairings.flightSegments}->0->>'departure') = ANY(${stationsArray}::text[])`
+        );
+      }
+
+      // Duty Is Redeye — any leg departing 22:00-04:59 (mirrors the
+      // two-leading-digit hour parse in bidSimulator's hasRedeye)
+      if (filters.hasRedeye !== undefined) {
+        const redeyeExists = sql`EXISTS (
+          SELECT 1 FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(${pairings.flightSegments}) = 'array'
+              THEN ${pairings.flightSegments}
+              ELSE '[]'::jsonb
+            END
+          ) AS seg
+          WHERE seg->>'departureTime' ~ '^[0-9]{2}'
+            AND (LEFT(seg->>'departureTime', 2)::int >= 22
+              OR LEFT(seg->>'departureTime', 2)::int < 5)
+        )`;
+        conditions.push(
+          filters.hasRedeye ? redeyeExists : sql`NOT ${redeyeExists}`
         );
       }
 
