@@ -71,7 +71,103 @@ interface BidPatternsResponse {
   topAvoidedLayovers: CityCount[];
   earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
   checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+  checkInStationSupply: Array<{
+    period: string;
+    total: number;
+    stations: Array<{ station: string; count: number }>;
+  }>;
   daysOffPatterns: Array<{ days: number; count: number }>;
+}
+
+// Stable colors per station so a station keeps its color across periods.
+const STATION_COLORS = [
+  '#60a5fa',
+  '#34d399',
+  '#f59e0b',
+  '#c084fc',
+  '#f87171',
+  '#22d3ee',
+];
+
+/**
+ * Supply mix: what share of each period's pairings start at each station.
+ * Stacked bar per period so a shift over time is visible at a glance.
+ */
+function StationSupplyChart({
+  periods,
+}: {
+  periods: BidPatternsResponse['checkInStationSupply'];
+}) {
+  const stationOrder: string[] = [];
+  for (const p of periods) {
+    for (const s of p.stations) {
+      if (!stationOrder.includes(s.station)) {
+        stationOrder.push(s.station);
+      }
+    }
+  }
+  const colorFor = (station: string) =>
+    STATION_COLORS[stationOrder.indexOf(station) % STATION_COLORS.length];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {stationOrder.map(station => (
+          <span
+            key={station}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground"
+          >
+            <span
+              className="h-2 w-2 rounded-sm"
+              style={{ backgroundColor: colorFor(station) }}
+            />
+            {station}
+          </span>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {periods.map(p => (
+          <div
+            key={p.period}
+            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+          >
+            <span className="w-16 shrink-0 font-mono text-secondary-foreground">
+              {p.period}
+            </span>
+            <div className="flex h-4 min-w-0 flex-1 overflow-hidden rounded bg-muted">
+              {p.stations.map(s => {
+                const pct = p.total > 0 ? (s.count / p.total) * 100 : 0;
+                return (
+                  <div
+                    key={s.station}
+                    className="h-full"
+                    style={{
+                      width: `${pct}%`,
+                      backgroundColor: colorFor(s.station),
+                    }}
+                    title={`${s.station}: ${s.count} of ${p.total} (${pct.toFixed(0)}%)`}
+                  />
+                );
+              })}
+            </div>
+            {/* Every station, not just the top few — a pilot avoiding a
+                specific co-terminal needs to see its share even when it is
+                the smallest slice. Wraps under the bar on narrow screens
+                rather than hiding: the hover tooltip is unreachable on
+                touch, so this is the only way to read the numbers there. */}
+            <span className="w-full shrink-0 whitespace-nowrap pl-[4.5rem] text-left text-[11px] tabular-nums text-muted-foreground sm:w-48 sm:pl-0 sm:text-right">
+              {p.stations
+                .map(
+                  s =>
+                    `${s.station} ${p.total > 0 ? Math.round((s.count / p.total) * 100) : 0}%`
+                )
+                .join(' · ')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -651,6 +747,25 @@ export function TrendsPanel({
               </div>
             </CardContent>
           </Card>
+
+          {patterns.checkInStationSupply?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Check-in station mix
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Share of each month&apos;s pairings that begin at each
+                  station — what the base actually offers, from the parsed bid
+                  packages. Pairs with the preference data below, which is what
+                  pilots asked for.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <StationSupplyChart periods={patterns.checkInStationSupply} />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

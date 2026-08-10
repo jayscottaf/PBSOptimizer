@@ -1524,6 +1524,17 @@ export class DatabaseStorage implements IStorage {
     topAvoidedLayovers: Array<{ city: string; count: number }>;
     earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
     checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+    /**
+     * Supply side: share of pairings actually starting at each station, by
+     * bid-package period. Sourced from parsed pairings, not Reasons Reports,
+     * so it answers "what does the base offer" alongside checkInStations'
+     * "what did pilots ask for".
+     */
+    checkInStationSupply: Array<{
+      period: string;
+      total: number;
+      stations: Array<{ station: string; count: number }>;
+    }>;
     daysOffPatterns: Array<{ days: number; count: number }>;
   }> {
     const monthNum = sql`CASE upper(left(trim(month), 3))
@@ -1631,6 +1642,48 @@ export class DatabaseStorage implements IStorage {
       GROUP BY 1 ORDER BY 1
     `);
 
+    // Supply mix per bid-package period, from parsed pairings. Uses the
+    // bid_packages month/year (not the Reasons Report months) since this is
+    // package supply, so it can cover periods with no report imported.
+    const supplyMonthCond = month
+      ? sql`AND upper(left(trim(bp.month), 3)) = ${month.toUpperCase()}`
+      : sql``;
+    const stationSupply = await db.execute(sql`
+      SELECT upper(left(trim(bp.month), 3)) AS mon, bp.year AS yr,
+        CASE upper(left(trim(bp.month), 3))
+          WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
+          WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
+          WHEN 'SEP' THEN 9 WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+          ELSE 0 END AS mon_num,
+        UPPER(p.flight_segments->0->>'departure') AS station,
+        COUNT(*)::int AS n
+      FROM pairings p
+      JOIN bid_packages bp ON bp.id = p.bid_package_id
+      WHERE bp.base = ${base} ${supplyMonthCond}
+        AND p.flight_segments->0->>'departure' IS NOT NULL
+      GROUP BY 1, 2, 3, 4
+      ORDER BY bp.year DESC, mon_num DESC, n DESC
+    `);
+    const supplyByPeriod = new Map<
+      string,
+      { period: string; total: number; stations: Array<{ station: string; count: number }> }
+    >();
+    for (const r of stationSupply.rows as any[]) {
+      if (!r.station) {
+        continue;
+      }
+      const period = `${String(r.mon).toUpperCase()} ${r.yr}`;
+      let entry = supplyByPeriod.get(period);
+      if (!entry) {
+        entry = { period, total: 0, stations: [] };
+        supplyByPeriod.set(period, entry);
+      }
+      const count = Number(r.n);
+      entry.total += count;
+      entry.stations.push({ station: String(r.station), count });
+    }
+    const checkInStationSupply = [...supplyByPeriod.values()];
+
     return {
       typeMixByPeriod: (typeMix.rows as any[]).map(r => ({
         period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
@@ -1661,6 +1714,7 @@ export class DatabaseStorage implements IStorage {
         awarded: Number(r.awarded),
         avoided: Number(r.avoided),
       })),
+      checkInStationSupply,
       daysOffPatterns: (daysOff.rows as any[]).map(r => ({
         days: Number(r.days),
         count: Number(r.n),
@@ -1919,6 +1973,13 @@ export class DatabaseStorage implements IStorage {
     };
     /** How many pairings overnight in each layover city, most common first. */
     layoverCities: Array<{ city: string; count: number }>;
+    /**
+     * Supply mix: how many pairings begin at each check-in station (the
+     * first flight segment's departure airport), most common first. This is
+     * what the base actually offers — distinct from the Reasons Report
+     * check-in station data on Trends, which is what pilots asked for.
+     */
+    checkInStations: Array<{ station: string; count: number }>;
   }> {
     // Only the columns the stats below actually read. Previously a
     // `select()` of full rows — including flightSegments and the raw PDF
@@ -1946,8 +2007,25 @@ export class DatabaseStorage implements IStorage {
         pairingTypeBreakdown: {},
         ratioBreakdown: { excellent: 0, good: 0, average: 0, poor: 0 },
         layoverCities: [],
+        checkInStations: [],
       };
     }
+
+    // Check-in station mix. Deliberately a separate SQL aggregate rather
+    // than adding flightSegments to the select above: that column is a large
+    // jsonb blob and pulling it for every row purely to read segment[0]
+    // would undo the payload narrowing this method was optimized for.
+    const stationRows = await db.execute(sql`
+      SELECT UPPER(flight_segments->0->>'departure') AS station, COUNT(*)::int AS n
+      FROM pairings
+      WHERE bid_package_id = ${bidPackageId}
+        AND flight_segments->0->>'departure' IS NOT NULL
+      GROUP BY 1
+      ORDER BY n DESC, station ASC
+    `);
+    const checkInStations = (stationRows.rows as any[])
+      .filter(r => r.station)
+      .map(r => ({ station: String(r.station), count: Number(r.n) }));
 
     // Count how many pairings include a layover in each city. A pairing that
     // overnights in the same city more than once still counts once, so the
@@ -2046,6 +2124,7 @@ export class DatabaseStorage implements IStorage {
       pairingTypeBreakdown,
       ratioBreakdown,
       layoverCities,
+      checkInStations,
     };
   }
 

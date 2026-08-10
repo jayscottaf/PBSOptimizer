@@ -49,6 +49,7 @@ interface StatsPanelProps {
       poor: number;
     };
     layoverCities?: Array<{ city: string; count: number }>;
+    checkInStations?: Array<{ station: string; count: number }>;
   } | null;
   onTripLengthFilter?: (days: number) => void;
 }
@@ -313,6 +314,56 @@ export function StatsPanel({
       </div>
     ) : null;
 
+  // Check-in station mix — where this month's pairings actually start.
+  // Percentages are of pairings with a parseable first segment (the same
+  // denominator the backend groups over), not of every pairing, so the
+  // shares always total 100%.
+  const stationStats = bidPackageStats?.checkInStations ?? [];
+  const stationTotal = stationStats.reduce((sum, s) => sum + s.count, 0);
+
+  const checkInStationSection =
+    stationStats.length > 0 ? (
+      <div className="mt-6 pt-4 border-t border-border">
+        <h4 className="text-sm font-medium text-foreground mb-3">
+          🛫 Check-In Stations
+        </h4>
+        <div className="space-y-1">
+          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
+            <div>Station</div>
+            <div className="text-right">#</div>
+            <div className="text-right">%</div>
+          </div>
+          <div className="space-y-1">
+            {stationStats.map(({ station, count }) => {
+              const pct =
+                stationTotal > 0
+                  ? ((count / stationTotal) * 100).toFixed(0)
+                  : '0';
+              return (
+                <div
+                  key={station}
+                  className="grid grid-cols-3 gap-2 text-xs py-1"
+                >
+                  <span className="text-secondary-foreground font-medium">
+                    {station}
+                  </span>
+                  <span className="text-foreground font-medium text-right">
+                    {count}
+                  </span>
+                  <span className="text-foreground font-medium text-right">
+                    {pct}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="pt-1 text-[11px] text-muted-foreground">
+            Where each pairing begins (first leg departure).
+          </p>
+        </div>
+      </div>
+    ) : null;
+
   // Show processing status for current bid package. There's no reliable way
   // to know the expected pairing count until parsing finishes, so this is an
   // indeterminate indicator rather than a percentage — a real total was
@@ -496,6 +547,7 @@ export function StatsPanel({
           </div>
         )}
 
+        {checkInStationSection}
         {layoverSection}
       </div>
     );
@@ -673,6 +725,7 @@ export function StatsPanel({
           </div>
         )}
 
+        {checkInStationSection}
         {layoverSection}
       </CardContent>
     </Card>
