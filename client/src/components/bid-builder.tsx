@@ -1829,19 +1829,39 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                 </p>
               )}
 
+              {/* Every preference gets a disposition, the way the real
+                  Reasons Report reads: honored or denied with the reason,
+                  in bid order (top-down, as PBS evaluates). */}
               {simulation.groupResults.some(
-                g => g.inertPreferences.length > 0
+                g => (g.preferenceOutcomes ?? []).length > 0
               ) && (
                 <div className="space-y-1 text-sm">
-                  <p className="font-medium">Preferences that did nothing:</p>
+                  <p className="font-medium">Preference results</p>
                   {simulation.groupResults.flatMap(g =>
-                    g.inertPreferences.map((inert, i) => (
+                    (g.preferenceOutcomes ?? []).map((o, i) => (
                       <p
                         key={`${g.groupIndex}-${i}`}
-                        className="text-muted-foreground"
+                        className="flex items-baseline gap-1.5 text-muted-foreground"
                       >
-                        Group {g.groupIndex + 1}, pref{' '}
-                        {inert.preferenceIndex + 1}: {inert.reason}
+                        <span
+                          className={
+                            o.status === 'honored'
+                              ? 'shrink-0 font-medium text-emerald-600 dark:text-emerald-400'
+                              : o.status === 'denied'
+                                ? 'shrink-0 font-medium text-red-600 dark:text-red-400'
+                                : 'shrink-0 font-medium text-amber-600 dark:text-amber-400'
+                          }
+                        >
+                          {o.status === 'honored'
+                            ? 'Honored'
+                            : o.status === 'denied'
+                              ? 'Denied'
+                              : 'Not scored'}
+                        </span>
+                        <span>
+                          — Group {g.groupIndex + 1}, pref{' '}
+                          {o.preferenceIndex + 1}: {o.detail}
+                        </span>
                       </p>
                     ))
                   )}

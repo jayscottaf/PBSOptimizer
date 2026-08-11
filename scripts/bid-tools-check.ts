@@ -232,8 +232,10 @@ assert(
   'Pattern adds a not-scored caveat to simulation'
 );
 assert(
-  rp.groupResults[0].inertPreferences.some(p => p.reason.includes('not simulated')),
-  'Pattern preference marked not-simulated in group results'
+  rp.groupResults[0].preferenceOutcomes.some(
+    o => o.status === 'notScored' && o.detail.includes('bid-period')
+  ),
+  'Pattern preference marked notScored without a bid-period anchor'
 );
 // Set Condition after an Award warns
 const latePattern = exportBid({
@@ -861,8 +863,10 @@ assert(
     'simulation carries a day-of-week not-scored caveat'
   );
   assert(
-    ds.groupResults[0].inertPreferences.some(p => p.reason.includes('Day-of-week')),
-    'DOW Prefer Off marked not-simulated in group results'
+    ds.groupResults[0].preferenceOutcomes.some(
+      o => o.status === 'notScored' && o.detail.includes('Weekday Prefer Off')
+    ),
+    'DOW Prefer Off marked notScored without a bid-period anchor'
   );
 
   // Optimizer emits the learned DOW prefer-off
@@ -1009,6 +1013,129 @@ assert(
   assert(
     okPlace.caveats.some(c => c.includes('calendar placement')),
     'caveats reflect calendar placement when anchored'
+  );
+}
+
+// --- Set Condition Pattern: honor-or-cascade ------------------------------
+// PBS reads top-down and must honor a Set Condition or fail the group. A
+// calendar-aware group whose awards cannot place under its own Pattern must
+// NOT complete — the cascade moves to the next group.
+{
+  const mkTrip = (n: string, days: number, eff: string, credit = '6.00') => ({
+    pairingNumber: n,
+    pairingDays: days,
+    creditHours: credit,
+    blockHours: '5.00',
+    tafb: '30.00',
+    holdProbability: '95',
+    effectiveDates: eff,
+    layovers: [],
+    deadheads: 0,
+    route: 'LGA-BOS',
+    flightSegments: [
+      { departure: 'LGA', arrival: 'BOS', departureTime: '0900' },
+    ],
+    checkInTime: '08.00',
+  });
+  // Widely spaced 1-day trips: none adjacent, so no stretch can reach a
+  // 3-day minimum.
+  const sparse = [
+    mkTrip('9001', 1, 'SEP02', '15.00'),
+    mkTrip('9002', 1, 'SEP10', '15.00'),
+    mkTrip('9003', 1, 'SEP20', '15.00'),
+  ];
+  const cascadeBid = {
+    groups: [
+      {
+        type: 'pairings',
+        preferences: [
+          {
+            type: 'setConditionPattern',
+            patternDaysOnMin: 3,
+            patternDaysOnMax: 5,
+            patternDaysOffMin: 2,
+          },
+          { type: 'award' },
+        ],
+      },
+      { type: 'pairings', preferences: [{ type: 'award' }] },
+    ],
+  } as any;
+  const cr = simulateBid(cascadeBid, sparse, {
+    periodMonth: 9,
+    periodYear: 2026,
+    alv: 45,
+    threshold: 40,
+  });
+  assert(
+    cr.groupResults[0].placement?.feasible === false,
+    'group 1 placement infeasible when no stretch can reach the Pattern minimum'
+  );
+  assert(
+    cr.awards.length > 0 && cr.awards.every(a => a.groupIndex === 1),
+    'cascade moves to group 2 when group 1 cannot honor its Pattern'
+  );
+  assert(
+    cr.groupResults[0].preferenceOutcomes.some(
+      o => o.status === 'denied' && o.detail.includes('minimum')
+    ),
+    'Pattern preference reported as denied with the stretch reason'
+  );
+  assert(
+    cr.caveats.some(c => c.includes('cascade moved to the next group')),
+    'cascade fallthrough is explained in caveats'
+  );
+
+  // Back-to-back trips CAN combine into a legal stretch: two adjacent 2-day
+  // trips form one 4-day stretch, satisfying a 3-5 day Pattern.
+  const adjacent = [
+    mkTrip('9101', 2, 'SEP02', '20.00'), // Sep 2-3
+    mkTrip('9102', 2, 'SEP04', '20.00'), // Sep 4-5 -> extends the stretch
+  ];
+  const okBid = {
+    groups: [
+      {
+        type: 'pairings',
+        preferences: [
+          {
+            type: 'setConditionPattern',
+            patternDaysOnMin: 3,
+            patternDaysOnMax: 5,
+            patternDaysOffMin: 2,
+          },
+          { type: 'award' },
+        ],
+      },
+    ],
+  } as any;
+  const ok = simulateBid(okBid, adjacent, {
+    periodMonth: 9,
+    periodYear: 2026,
+    alv: 45,
+    threshold: 35,
+  });
+  assert(
+    ok.placement?.feasible === true,
+    'adjacent short trips combine into one stretch that satisfies the Pattern'
+  );
+  assert(
+    ok.groupResults[0].preferenceOutcomes.some(
+      o => o.status === 'honored' && o.detail.includes('stretch')
+    ),
+    'Pattern preference reported as honored with the stretch breakdown'
+  );
+
+  // Reasons-Report-style outcomes: every preference gets a disposition.
+  assert(
+    ok.groupResults[0].preferenceOutcomes.length ===
+      okBid.groups[0].preferences.length,
+    'every preference in the group gets an outcome entry'
+  );
+  assert(
+    ok.groupResults[0].preferenceOutcomes.some(
+      o => o.status === 'honored' && o.detail.includes('Awarded')
+    ),
+    'award preference reports an honored outcome with counts'
   );
 }
 

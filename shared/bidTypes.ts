@@ -181,14 +181,47 @@ export interface SimulatedAward {
   groupIndex: number;
 }
 
+/**
+ * Per-preference disposition, mirroring how the real Reasons Report reads:
+ * every bid line is either honored or denied with a stated reason.
+ * - honored: the preference did what it asked (possibly vacuously — an
+ *   Avoid that matched nothing is still honored).
+ * - denied: the engine could not satisfy it (window ceiling, empty pool,
+ *   Pattern that cannot place).
+ * - notScored: this static pass cannot evaluate it (e.g. weekday Prefer
+ *   Off without a bid-period anchor); exported to PBS verbatim regardless.
+ */
+export interface PreferenceOutcome {
+  preferenceIndex: number;
+  status: 'honored' | 'denied' | 'notScored';
+  detail: string;
+}
+
 export interface SimulationGroupResult {
   groupIndex: number;
   type: 'pairings' | 'reserve';
   poolAfterNegatives: number;
   awards: SimulatedAward[];
   creditFromAwards: number;
-  /** Preferences that matched nothing, with the reason. */
+  /** One entry per preference, in bid order (top-down, like PBS reads). */
+  preferenceOutcomes: PreferenceOutcome[];
+  /**
+   * Preferences that matched nothing, with the reason.
+   * @deprecated Derived from preferenceOutcomes (denied/notScored entries);
+   * kept so older consumers keep working.
+   */
   inertPreferences: Array<{ preferenceIndex: number; reason: string }>;
+  /**
+   * Calendar placement of this group's awards (calendar-aware runs only).
+   * PBS reads top-down: a group whose Set Condition Pattern cannot be
+   * honored does not complete — the cascade moves to the next group — so
+   * an infeasible placement here disqualifies the group even when its
+   * credit reaches the window minimum.
+   */
+  placement?: {
+    feasible: boolean;
+    notes: string[];
+  };
 }
 
 export interface SimulationResult {

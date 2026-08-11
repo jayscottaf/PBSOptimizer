@@ -506,6 +506,108 @@ function creditWindow(
   }
 }
 
+/**
+ * Greedy calendar placement of a group's awards, honoring the group's Set
+ * Condition Pattern. PBS reads a group top-down and must honor a Set
+ * Condition or fail the group, so an infeasible placement here disqualifies
+ * the group from completing (the cascade moves on) rather than being a
+ * post-hoc warning.
+ *
+ * Work stretches are modeled the way PBS builds them: a trip may start the
+ * day after the previous one ends (back-to-back, extending the current
+ * stretch) or after at least patternDaysOffMin days off (starting a new
+ * stretch). Each completed stretch must fall within
+ * [patternDaysOnMin, patternDaysOnMax]. Placement is greedy
+ * (earliest-fitting instance, no backtracking), so infeasible here means
+ * "this greedy pass could not place them", not a proof that PBS couldn't.
+ */
+function placeGroupAwards(
+  prefs: BidPreference[],
+  awards: SimulatedAward[],
+  byNumber: Map<string, SimPairing>
+): { feasible: boolean; notes: string[] } {
+  const pattern = prefs.find(p => p.type === 'setConditionPattern');
+  const gap = pattern?.patternDaysOffMin ?? 0;
+  const minOn = pattern?.patternDaysOnMin;
+  const maxOn = pattern?.patternDaysOnMax;
+  const notes: string[] = [];
+  let feasible = true;
+
+  const withInstances = awards
+    .map(a => ({ award: a, sim: byNumber.get(a.pairingNumber) }))
+    .filter(x => x.sim && x.sim.instances.length > 0) as {
+    award: SimulatedAward;
+    sim: SimPairing;
+  }[];
+  if (withInstances.length < awards.length) {
+    notes.push(
+      `${awards.length - withInstances.length} award(s) had no parseable operating dates and were skipped in the placement check.`
+    );
+  }
+  withInstances.sort(
+    (a, b) => a.sim.instances[0].startDay - b.sim.instances[0].startDay
+  );
+
+  let lastEnd = -Infinity;
+  let stretchStart: number | null = null;
+  const stretches: number[] = [];
+  const closeStretch = (end: number) => {
+    if (stretchStart !== null) {
+      stretches.push(end - stretchStart + 1);
+      stretchStart = null;
+    }
+  };
+
+  for (const { award, sim } of withInstances) {
+    // With a Pattern, prefer extending the current stretch back-to-back —
+    // that is how PBS assembles a >=min stretch out of shorter trips —
+    // before starting a new stretch after the required days off.
+    const inst = pattern
+      ? (sim.instances.find(x => x.startDay === lastEnd + 1) ??
+        sim.instances.find(x => x.startDay > lastEnd + gap))
+      : sim.instances.find(x => x.startDay > lastEnd);
+    if (!inst) {
+      feasible = false;
+      notes.push(
+        `Pairing ${award.pairingNumber} has no operating date that fits after the previous award${gap > 0 ? ` with ${gap} days off between stretches` : ''}.`
+      );
+      continue;
+    }
+    if (!(inst.startDay === lastEnd + 1 && stretchStart !== null)) {
+      closeStretch(lastEnd);
+      stretchStart = inst.startDay;
+    }
+    lastEnd = inst.endDay;
+  }
+  closeStretch(lastEnd);
+
+  if (pattern) {
+    for (const len of stretches) {
+      if (maxOn !== undefined && len > maxOn) {
+        feasible = false;
+        notes.push(
+          `A ${len}-day work stretch exceeds the Pattern's ${maxOn}-day maximum.`
+        );
+      }
+      if (minOn !== undefined && len < minOn) {
+        feasible = false;
+        notes.push(
+          `A ${len}-day work stretch is shorter than the Pattern's ${minOn}-day minimum (no adjacent trip available to extend it).`
+        );
+      }
+    }
+  }
+
+  if (feasible && notes.length === 0) {
+    notes.push(
+      pattern
+        ? `Awards place into work stretch(es) of ${stretches.join(', ')} day(s)${gap > 0 ? ` with ≥${gap} days off between stretches` : ''}.`
+        : 'All awards place on the calendar without overlapping.'
+    );
+  }
+  return { feasible, notes };
+}
+
 export function simulateBid(
   bid: DraftBid,
   rawPairings: any[],
@@ -542,7 +644,9 @@ export function simulateBid(
     )
   ) {
     caveats.push(
-      'Set Condition Pattern is exported verbatim but not scored — the awards shown may violate the requested days-on/days-off shape.'
+      calendarAware
+        ? 'Set Condition Pattern is enforced: a group completes only if its awards place into work stretches within the Pattern (back-to-back trips may combine into one stretch). Placement is greedy, so a failed group might still be placeable by the real engine.'
+        : 'Set Condition Pattern is exported verbatim but not scored — pass the bid period month/year to enforce it.'
     );
   }
   if (
@@ -561,6 +665,7 @@ export function simulateBid(
     );
   }
 
+  const simByNumber = new Map(allPairings.map(p => [p.pairingNumber, p]));
   const groupResults: SimulationGroupResult[] = [];
   let chosen: SimulationGroupResult | null = null;
   let chosenWindow = creditWindow('normal', alv, cap, realBounds);
@@ -574,6 +679,14 @@ export function simulateBid(
         poolAfterNegatives: 0,
         awards: [],
         creditFromAwards: 0,
+        preferenceOutcomes: [
+          {
+            preferenceIndex: 0,
+            status: 'notScored',
+            detail:
+              'Reserve line construction is not simulated (no optimization or Denial Mode applies to reserve anyway).',
+          },
+        ],
         inertPreferences: [
           {
             preferenceIndex: 0,
@@ -588,7 +701,8 @@ export function simulateBid(
     let windowType: 'normal' | 'min' | 'max' | 'mid' = 'normal';
     let pool = [...allPairings];
     const awards: SimulatedAward[] = [];
-    const inert: SimulationGroupResult['inertPreferences'] = [];
+    const outcomes: SimulationGroupResult['preferenceOutcomes'] = [];
+    let patternPrefIndex: number | null = null;
     let awardPrefCount = 0;
     const threshold = options.threshold ?? alv;
 
@@ -596,36 +710,63 @@ export function simulateBid(
       const pref: BidPreference = group.preferences[i];
       if (pref.type === 'setConditionCredit') {
         windowType = pref.creditWindow ?? 'normal';
+        const w = creditWindow(windowType, alv, cap, realBounds);
+        outcomes.push({
+          preferenceIndex: i,
+          status: 'honored',
+          detail: `Credit window set to ${windowType} (${w.min.toFixed(1)}–${w.max.toFixed(1)}).`,
+        });
         continue;
       }
       if (pref.type === 'clearScheduleStartNext') {
-        // CSSN is forced to the bottom of the group; nothing to evaluate
-        // statically - it only matters when the group cannot complete.
+        // CSSN is forced to the bottom of the group; it only acts when the
+        // group cannot complete.
+        outcomes.push({
+          preferenceIndex: i,
+          status: 'notScored',
+          detail:
+            'CSSN only acts when this group cannot complete — nothing to score statically.',
+        });
         continue;
       }
       if (pref.type === 'setConditionPattern') {
-        // Line-shape constraints need calendar placement of awards, which
-        // this static pass does not model. Exported verbatim; surfaced
-        // here so the pilot knows it is not scored.
-        inert.push({
-          preferenceIndex: i,
-          reason:
-            'Set Condition Pattern is exported but not simulated (line-shape placement is not modeled in this static pass).',
-        });
+        if (calendarAware) {
+          // Resolved after the awards are placed on the calendar below —
+          // PBS must honor a Set Condition or fail the group, so the
+          // verdict comes from the placement check.
+          patternPrefIndex = i;
+          outcomes.push({
+            preferenceIndex: i,
+            status: 'notScored',
+            detail: 'Pending calendar placement…',
+          });
+        } else {
+          outcomes.push({
+            preferenceIndex: i,
+            status: 'notScored',
+            detail:
+              'Set Condition Pattern needs the bid-period month/year to check placement; exported to PBS verbatim.',
+          });
+        }
         continue;
       }
       if (pref.type === 'avoid' && pref.filter) {
         const before = pool.length;
         pool = pool.filter(p => !matchesFilter(p, pref.filter!));
-        if (pool.length === before) {
-          inert.push({
-            preferenceIndex: i,
-            reason: 'Avoid matched no pairings in this package.',
-          });
-        }
+        const removed = before - pool.length;
+        outcomes.push({
+          preferenceIndex: i,
+          status: 'honored',
+          detail:
+            removed > 0
+              ? `Removed ${removed} pairing(s) from consideration.`
+              : 'Honored vacuously — no pairings in this package match.',
+        });
         continue;
       }
       if (pref.type === 'preferOff') {
+        const offDetails: string[] = [];
+        let offUnscored = false;
         if (pref.preferOffDates && pref.preferOffDates.length > 0) {
           const before = pool.length;
           if (calendarAware) {
@@ -651,12 +792,12 @@ export function simulateBid(
               p => !pref.preferOffDates!.some(date => touchesDate(p, date))
             );
           }
-          if (pool.length === before) {
-            inert.push({
-              preferenceIndex: i,
-              reason: 'No pairings touch the requested days off.',
-            });
-          }
+          const removed = before - pool.length;
+          offDetails.push(
+            removed > 0
+              ? `Excluded ${removed} pairing(s) that cannot avoid the requested days off.`
+              : 'No pairings conflict with the requested days off.'
+          );
         }
         if (pref.preferOffDOWs && pref.preferOffDOWs.length > 0) {
           if (calendarAware) {
@@ -673,23 +814,26 @@ export function simulateBid(
                 ? true
                 : p.instances.some(inst => !instanceTouchesDow(inst, banned))
             );
-            if (pool.length === before) {
-              inert.push({
-                preferenceIndex: i,
-                reason:
-                  'Every pairing has at least one operating date clear of the requested weekdays.',
-              });
-            }
+            const removed = before - pool.length;
+            offDetails.push(
+              removed > 0
+                ? `Excluded ${removed} pairing(s) that operate only on the requested weekdays.`
+                : 'Every pairing has at least one operating date clear of the requested weekdays.'
+            );
           } else {
             // Without a period anchor, weekday Prefer Off cannot be mapped
             // onto date ranges. Exported verbatim; not scored.
-            inert.push({
-              preferenceIndex: i,
-              reason:
-                'Day-of-week Prefer Off is exported but not simulated (no bid-period anchor to derive operating weekdays).',
-            });
+            offUnscored = true;
+            offDetails.push(
+              'Weekday Prefer Off needs the bid-period month/year to score; exported to PBS verbatim.'
+            );
           }
         }
+        outcomes.push({
+          preferenceIndex: i,
+          status: offUnscored && offDetails.length === 1 ? 'notScored' : 'honored',
+          detail: offDetails.join(' ') || 'Nothing to evaluate.',
+        });
         continue;
       }
       if (pref.type === 'award') {
@@ -697,9 +841,11 @@ export function simulateBid(
         const window = creditWindow(windowType, alv, cap, realBounds);
         const currentCredit = awards.reduce((s, a) => s + a.creditHours, 0);
         if (currentCredit > Math.min(threshold, window.max)) {
-          inert.push({
+          outcomes.push({
             preferenceIndex: i,
-            reason: 'Block already complete before this preference (credit past threshold).',
+            status: 'denied',
+            detail:
+              'Block already complete before this preference (credit past threshold).',
           });
           continue;
         }
@@ -712,9 +858,11 @@ export function simulateBid(
             return b.creditHours - a.creditHours;
           });
         if (matches.length === 0) {
-          inert.push({
+          outcomes.push({
             preferenceIndex: i,
-            reason: 'No pairings available (pool emptied by earlier negatives or no attribute match).',
+            status: 'denied',
+            detail:
+              'No pairings available (pool emptied by earlier negatives or no attribute match).',
           });
           continue;
         }
@@ -736,14 +884,48 @@ export function simulateBid(
           taken++;
         }
         if (taken === 0) {
-          inert.push({
+          outcomes.push({
             preferenceIndex: i,
-            reason:
+            status: 'denied',
+            detail:
               pref.limit !== undefined
                 ? 'Matched pairings but none taken (limit or window ceiling).'
                 : 'Matched pairings would exceed the credit window ceiling.',
           });
+        } else {
+          const credit = awards
+            .filter(a => a.awardedByPreference === i + 1)
+            .reduce((s, a) => s + a.creditHours, 0);
+          outcomes.push({
+            preferenceIndex: i,
+            status: 'honored',
+            detail: `Awarded ${taken} pairing(s), ${credit.toFixed(2)} credit.`,
+          });
         }
+      }
+    }
+
+    // Place this group's awards on the calendar. PBS reads top-down and
+    // must honor a Set Condition or fail the group, so the Pattern verdict
+    // lands here — and an infeasible placement disqualifies the group.
+    let placement: SimulationGroupResult['placement'];
+    if (calendarAware && awards.length > 0) {
+      placement = placeGroupAwards(group.preferences, awards, simByNumber);
+      if (patternPrefIndex !== null) {
+        const outcome = outcomes.find(
+          o => o.preferenceIndex === patternPrefIndex
+        );
+        if (outcome) {
+          outcome.status = placement.feasible ? 'honored' : 'denied';
+          outcome.detail = placement.notes.join(' ');
+        }
+      }
+    } else if (patternPrefIndex !== null && awards.length === 0) {
+      const outcome = outcomes.find(
+        o => o.preferenceIndex === patternPrefIndex
+      );
+      if (outcome) {
+        outcome.detail = 'No awards to place against the Pattern.';
       }
     }
 
@@ -753,7 +935,12 @@ export function simulateBid(
       poolAfterNegatives: pool.length,
       awards,
       creditFromAwards: awards.reduce((s, a) => s + a.creditHours, 0),
-      inertPreferences: inert,
+      preferenceOutcomes: outcomes,
+      // Kept for older consumers; derived so it cannot drift from outcomes.
+      inertPreferences: outcomes
+        .filter(o => o.status !== 'honored')
+        .map(o => ({ preferenceIndex: o.preferenceIndex, reason: o.detail })),
+      ...(placement ? { placement } : {}),
     };
     if (awardPrefCount === 0) {
       result.inertPreferences.push({
@@ -764,12 +951,27 @@ export function simulateBid(
     }
     groupResults.push(result);
 
-    // First pairing group that reaches the window minimum wins.
+    // First pairing group that reaches the window minimum AND can place its
+    // awards under its own Set Condition wins; a group whose Pattern cannot
+    // be honored does not complete, so the cascade moves on.
     const window = creditWindow(windowType, alv, cap, realBounds);
-    if (!chosen && result.creditFromAwards >= window.min) {
+    if (
+      !chosen &&
+      result.creditFromAwards >= window.min &&
+      (!placement || placement.feasible)
+    ) {
       chosen = result;
       chosenWindow = window;
       chosenThreshold = threshold;
+    } else if (
+      !chosen &&
+      result.creditFromAwards >= window.min &&
+      placement &&
+      !placement.feasible
+    ) {
+      caveats.push(
+        `Group ${groupIndex + 1} reached the credit window but its Set Condition Pattern could not be honored (${placement.notes.join(' ')}) — the cascade moved to the next group, as PBS would.`
+      );
     }
   });
 
@@ -791,72 +993,12 @@ export function simulateBid(
     0
   );
 
-  // Calendar placement check for the winning group (period anchor known):
-  // greedily place one operating instance per award, earliest-first,
-  // without overlap and honoring the group's Pattern gap if present.
-  let placement: SimulationResult['placement'];
-  if (calendarAware && chosen && awards.length > 0) {
-    const byNumber = new Map(allPairings.map(p => [p.pairingNumber, p]));
-    const groupPrefs =
-      bid.groups[(chosen as SimulationGroupResult).groupIndex]?.preferences ??
-      [];
-    const pattern = groupPrefs.find(p => p.type === 'setConditionPattern');
-    const gap = pattern?.patternDaysOffMin ?? 0;
-    const notes: string[] = [];
-    let feasible = true;
-
-    const withInstances = awards
-      .map(a => ({ award: a, sim: byNumber.get(a.pairingNumber) }))
-      .filter(x => x.sim && x.sim.instances.length > 0) as {
-      award: SimulatedAward;
-      sim: SimPairing;
-    }[];
-    if (withInstances.length < awards.length) {
-      notes.push(
-        `${awards.length - withInstances.length} award(s) had no parseable operating dates and were skipped in the placement check.`
-      );
-    }
-    withInstances.sort(
-      (a, b) => a.sim.instances[0].startDay - b.sim.instances[0].startDay
-    );
-    let lastEnd = -Infinity;
-    for (const { award, sim } of withInstances) {
-      const inst = sim.instances.find(i => i.startDay > lastEnd + gap);
-      if (!inst) {
-        feasible = false;
-        notes.push(
-          `Pairing ${award.pairingNumber} has no operating date that fits after the previous award${gap > 0 ? ` with ${gap} days off between trips` : ''}.`
-        );
-        continue;
-      }
-      lastEnd = inst.endDay;
-      if (
-        pattern?.patternDaysOnMax !== undefined &&
-        award.pairingDays > pattern.patternDaysOnMax
-      ) {
-        feasible = false;
-        notes.push(
-          `Pairing ${award.pairingNumber} is ${award.pairingDays} days — longer than the Pattern's ${pattern.patternDaysOnMax}-day maximum work stretch.`
-        );
-      }
-      if (
-        pattern?.patternDaysOnMin !== undefined &&
-        award.pairingDays < pattern.patternDaysOnMin
-      ) {
-        notes.push(
-          `Pairing ${award.pairingNumber} (${award.pairingDays}d) is shorter than the Pattern's ${pattern.patternDaysOnMin}-day minimum stretch — PBS would need to pair it back-to-back with another trip.`
-        );
-      }
-    }
-    if (feasible && notes.length === 0) {
-      notes.push(
-        gap > 0
-          ? `All awards place on the calendar without overlap and with ≥${gap} days off between trips.`
-          : 'All awards place on the calendar without overlapping.'
-      );
-    }
-    placement = { feasible, notes };
-  }
+  // The winning group's placement was computed inside the loop (it decides
+  // whether a group may complete at all); surface it at the top level too.
+  const placement: SimulationResult['placement'] =
+    chosen && (chosen as SimulationGroupResult).placement
+      ? (chosen as SimulationGroupResult).placement
+      : undefined;
 
   return {
     ...(placement ? { placement } : {}),

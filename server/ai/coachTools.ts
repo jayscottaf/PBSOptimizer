@@ -351,11 +351,14 @@ export async function executeCoachTool(
           byPreference: a.awardedByPreference,
         })),
         awardsTruncated: result.awards.length > 30,
-        inertPreferences: result.groupResults.flatMap(g =>
-          g.inertPreferences.map(p => ({
+        // Reasons-Report style: every preference line honored/denied/notScored
+        // with the reason, in bid order.
+        preferenceOutcomes: result.groupResults.flatMap(g =>
+          (g.preferenceOutcomes ?? []).map(o => ({
             group: g.groupIndex + 1,
-            preference: p.preferenceIndex + 1,
-            reason: p.reason,
+            preference: o.preferenceIndex + 1,
+            status: o.status,
+            detail: o.detail,
           }))
         ),
         caveats: result.caveats,
