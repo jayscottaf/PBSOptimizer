@@ -4,6 +4,7 @@ import { api, type BidExportResult } from '@/lib/api';
 import type {
   BidGroup,
   BidPreference,
+  DayOfWeek,
   DraftBid,
   PairingFilter,
   SimulationResult,
@@ -395,7 +396,19 @@ interface PreferenceFormState {
   patternDaysOnMax: string;
   patternDaysOffMin: string;
   preferOffDates: Date[];
+  /** Recurring weekdays off, e.g. ['Saturday','Sunday']. */
+  preferOffDOWs: DayOfWeek[];
 }
+
+const WEEKDAYS: { value: DayOfWeek; short: string }[] = [
+  { value: 'Monday', short: 'Mon' },
+  { value: 'Tuesday', short: 'Tue' },
+  { value: 'Wednesday', short: 'Wed' },
+  { value: 'Thursday', short: 'Thu' },
+  { value: 'Friday', short: 'Fri' },
+  { value: 'Saturday', short: 'Sat' },
+  { value: 'Sunday', short: 'Sun' },
+];
 
 const EMPTY_FORM: PreferenceFormState = {
   kind: 'award',
@@ -431,6 +444,7 @@ const EMPTY_FORM: PreferenceFormState = {
   patternDaysOnMax: '',
   patternDaysOffMin: '',
   preferOffDates: [],
+  preferOffDOWs: [],
 };
 
 function buildPreference(form: PreferenceFormState): BidPreference | null {
@@ -507,7 +521,11 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
     return pref;
   }
   if (form.kind === 'preferOff') {
-    if (form.preferOffDates.length === 0) return null;
+    // A Prefer Off may carry specific dates, recurring weekdays, or both —
+    // NAVBLUE supports either, so accept the preference when either is set.
+    if (form.preferOffDates.length === 0 && form.preferOffDOWs.length === 0) {
+      return null;
+    }
     const dates = form.preferOffDates
       .map(date => {
         const y = date.getFullYear();
@@ -516,9 +534,14 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
         return `${y}-${m}-${d}`;
       })
       .sort();
+    // Keep calendar order (Mon..Sun) regardless of click order.
+    const dows = WEEKDAYS.filter(d => form.preferOffDOWs.includes(d.value)).map(
+      d => d.value
+    );
     return {
       type: 'preferOff',
-      preferOffDates: dates,
+      ...(dates.length > 0 ? { preferOffDates: dates } : {}),
+      ...(dows.length > 0 ? { preferOffDOWs: dows } : {}),
       ...(form.elseStartNext ? { elseStartNext: true } : {}),
     };
   }
@@ -705,7 +728,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
     if (!pref) {
       toast({
         title: 'Incomplete preference',
-        description: 'Prefer Off needs at least one date selected.',
+        description: 'Prefer Off needs at least one date or weekday selected.',
         variant: 'destructive',
       });
       return;
@@ -1587,6 +1610,48 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               }))
                             }
                           />
+                          {/* Recurring weekdays are a separate NAVBLUE form
+                              of Prefer Off; either or both may be set. */}
+                          <div className="space-y-1.5 pt-1">
+                            <Label className="text-xs">
+                              Every week (optional)
+                            </Label>
+                            <div className="flex flex-wrap gap-1">
+                              {WEEKDAYS.map(day => {
+                                const on = form.preferOffDOWs.includes(
+                                  day.value
+                                );
+                                return (
+                                  <Button
+                                    key={day.value}
+                                    type="button"
+                                    size="sm"
+                                    variant={on ? 'default' : 'outline'}
+                                    className="h-7 px-2 text-xs"
+                                    aria-pressed={on}
+                                    data-testid={`preferoff-dow-${day.short.toLowerCase()}`}
+                                    onClick={() =>
+                                      setForm(p => ({
+                                        ...p,
+                                        preferOffDOWs: on
+                                          ? p.preferOffDOWs.filter(
+                                              d => d !== day.value
+                                            )
+                                          : [...p.preferOffDOWs, day.value],
+                                      }))
+                                    }
+                                  >
+                                    {day.short}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              Applies to every one of these weekdays in the
+                              bid period — use instead of, or alongside,
+                              specific dates.
+                            </p>
+                          </div>
                           <div className="flex items-center gap-2">
                             <Switch
                               checked={form.elseStartNext}
