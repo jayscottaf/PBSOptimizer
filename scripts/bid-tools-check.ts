@@ -1139,6 +1139,182 @@ assert(
   );
 }
 
+// --- Pattern-aware line construction --------------------------------------
+// PBS constructs the line WITH the Set Condition as a constraint. The
+// simulator must find combinations a pattern-blind pick would miss: e.g. a
+// 4-day trip extended by an adjacent 1-day trip forms one legal 5-day
+// stretch under a 5-18 day Pattern.
+{
+  const mkTrip = (n: string, days: number, eff: string, credit = '6.00') => ({
+    pairingNumber: n,
+    pairingDays: days,
+    creditHours: credit,
+    blockHours: '5.00',
+    tafb: '30.00',
+    holdProbability: '95',
+    effectiveDates: eff,
+    layovers: [],
+    deadheads: 0,
+    route: 'LGA-BOS',
+    flightSegments: [
+      { departure: 'LGA', arrival: 'BOS', departureTime: '0900' },
+    ],
+    checkInTime: '08.00',
+  });
+  const pattern518 = {
+    type: 'setConditionPattern',
+    patternDaysOnMin: 5,
+    patternDaysOnMax: 18,
+    patternDaysOffMin: 3,
+  };
+
+  // (a) The user's exact scenario: 4-day Sep 2-5 + 1-day Sep 6 = one 5-day
+  // stretch; another pair later in the month. Both awards come from a
+  // single broad preference.
+  const comboTrips = [
+    mkTrip('9201', 4, 'SEP02', '24.00'), // Sep 2-5
+    mkTrip('9202', 1, 'SEP06', '8.00'), // Sep 6 -> extends to 5 days
+    mkTrip('9203', 4, 'SEP12', '24.00'), // Sep 12-15
+    mkTrip('9204', 1, 'SEP16', '8.00'), // Sep 16 -> extends to 5 days
+  ];
+  const comboBid = {
+    groups: [
+      { type: 'pairings', preferences: [pattern518, { type: 'award' }] },
+    ],
+  } as any;
+  const combo = simulateBid(comboBid, comboTrips, {
+    periodMonth: 9,
+    periodYear: 2026,
+    alv: 45,
+    threshold: 40,
+    windowMin: 60,
+    windowMax: 70,
+  });
+  assert(
+    combo.placement?.feasible === true,
+    'construction combines 4-day + adjacent 1-day into a legal 5-day stretch'
+  );
+  assert(
+    (combo.placement?.stretches ?? []).every(s => s >= 5 && s <= 18),
+    'every constructed stretch is within the Pattern band'
+  );
+  assert(
+    combo.awards.length === 4 && combo.totalCredit === 64,
+    'construction uses all four trips to reach the window'
+  );
+
+  // Pulled-forward attribution: the 1-day extenders match only a LATER
+  // preference, and the notes say they were added to complete a stretch.
+  const tieredBid = {
+    groups: [
+      {
+        type: 'pairings',
+        preferences: [
+          pattern518,
+          { type: 'award', filter: { pairingDaysMin: 4 } },
+          { type: 'award', filter: { pairingDaysMax: 1 } },
+        ],
+      },
+    ],
+  } as any;
+  const tiered = simulateBid(tieredBid, comboTrips, {
+    periodMonth: 9,
+    periodYear: 2026,
+    alv: 45,
+    threshold: 40,
+    windowMin: 60,
+    windowMax: 70,
+  });
+  assert(
+    tiered.placement?.feasible === true,
+    'tiered preferences still construct legal stretches'
+  );
+  assert(
+    tiered.groupResults[0].preferenceOutcomes.some(
+      o => o.status === 'honored' && o.detail.includes('complete a work stretch')
+    ),
+    'later-preference trips used to legalize a stretch are called out'
+  );
+  assert(
+    tiered.awards.some(
+      a => a.pairingNumber === '9202' && a.awardedByPreference === 3
+    ),
+    'pulled-forward trip is attributed to its own preference'
+  );
+
+  // (b) Genuinely unbuildable: isolated 4-day trips, nothing adjacent.
+  const sparse4 = [
+    mkTrip('9301', 4, 'SEP02', '24.00'),
+    mkTrip('9302', 4, 'SEP12', '24.00'),
+    mkTrip('9303', 4, 'SEP22', '24.00'),
+  ];
+  const denied = simulateBid(
+    {
+      groups: [
+        { type: 'pairings', preferences: [pattern518, { type: 'award' }] },
+        { type: 'pairings', preferences: [{ type: 'award' }] },
+      ],
+    } as any,
+    sparse4,
+    { periodMonth: 9, periodYear: 2026, alv: 45, threshold: 40, windowMin: 60, windowMax: 70 }
+  );
+  assert(
+    denied.groupResults[0].placement?.feasible === false,
+    'isolated short trips cannot be constructed into the Pattern'
+  );
+  assert(
+    (denied.groupResults[0].placement?.notes ?? []).some(n =>
+      n.includes('Could not assemble')
+    ),
+    'denial says "could not assemble", never "impossible"'
+  );
+  assert(
+    denied.awards.length > 0 && denied.awards.every(a => a.groupIndex === 1),
+    'construction failure cascades to the next group'
+  );
+
+  // (e) Determinism: identical output on repeat and on shuffled input.
+  const again = simulateBid(comboBid, comboTrips, {
+    periodMonth: 9,
+    periodYear: 2026,
+    alv: 45,
+    threshold: 40,
+    windowMin: 60,
+    windowMax: 70,
+  });
+  assert(
+    JSON.stringify(again) === JSON.stringify(combo),
+    'construction is deterministic across runs'
+  );
+  const shuffled = simulateBid(
+    comboBid,
+    [...comboTrips].reverse(),
+    { periodMonth: 9, periodYear: 2026, alv: 45, threshold: 40, windowMin: 60, windowMax: 70 }
+  );
+  assert(
+    JSON.stringify(shuffled.awards) === JSON.stringify(combo.awards),
+    'construction is insensitive to input pairing order'
+  );
+
+  // (d) No-Pattern groups keep the exact pre-construction behavior:
+  // hold desc then credit desc greedy.
+  const noPattern = simulateBid(
+    { groups: [{ type: 'pairings', preferences: [{ type: 'award' }] }] } as any,
+    [
+      mkTrip('9401', 3, 'SEP02', '20.00'),
+      mkTrip('9402', 3, 'SEP10', '22.00'),
+      mkTrip('9403', 3, 'SEP20', '21.00'),
+    ],
+    { periodMonth: 9, periodYear: 2026, alv: 45, threshold: 40, windowMin: 40, windowMax: 70 }
+  );
+  // Equal hold -> credit desc; stops once credit (43) passes threshold (40)
+  // before taking the third trip. Pins the untouched greedy path.
+  assert(
+    noPattern.awards.map(a => a.pairingNumber).join(',') === '9402,9403',
+    'no-Pattern groups keep the hold-then-credit greedy order and stop rule'
+  );
+}
+
 // --- Bid package month labeling -------------------------------------------
 // A package is named for the month owning most of its bid period, which is
 // not always the period's start month. Delta uses both shapes:

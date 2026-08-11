@@ -327,11 +327,25 @@ function summarizePreference(pref: BidPreference): string {
         `Avoid: ${summarizeFilter(pref.filter)}` +
         (pref.elseStartNext ? ' + Else Start Next' : '')
       );
-    case 'preferOff':
+    case 'preferOff': {
+      // A preference can carry specific dates, recurring weekdays, or both.
+      // Weekday-only Prefer Offs (the common auto-drafted kind) previously
+      // rendered as a blank label while silently excluding hundreds of
+      // pairings.
+      const parts: string[] = [];
+      if (pref.preferOffDates?.length) {
+        parts.push(pref.preferOffDates.join(', '));
+      }
+      if (pref.preferOffDOWs?.length) {
+        parts.push(
+          `${pref.preferOffDOWs.map(d => d.slice(0, 3)).join('/')} (weekly)`
+        );
+      }
       return (
-        `Prefer Off: ${(pref.preferOffDates ?? []).join(', ')}` +
+        `Prefer Off: ${parts.join('; ') || '—'}` +
         (pref.elseStartNext ? ' + Else Start Next' : '')
       );
+    }
     case 'setConditionCredit': {
       const labels = { min: 'Minimum', max: 'Maximum', mid: 'Mid', normal: 'Normal' };
       return `Set Condition: ${labels[pref.creditWindow ?? 'normal']} Credit`;

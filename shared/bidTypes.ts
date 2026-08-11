@@ -221,6 +221,8 @@ export interface SimulationGroupResult {
   placement?: {
     feasible: boolean;
     notes: string[];
+    /** Work-stretch lengths of the constructed line (Pattern groups). */
+    stretches?: number[];
   };
 }
 

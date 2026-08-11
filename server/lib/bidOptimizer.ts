@@ -257,6 +257,43 @@ export function estimateCompletion(
   return Math.max(0, Math.min(1, expected / threshold));
 }
 
+const WEEKDAY_ORDER = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+/**
+ * Longest cyclic run of weekdays for which `member` holds (week wraps
+ * Sun -> Mon). Used both ways: the longest run of ALLOWED days bounds the
+ * work stretch, and the longest run of BANNED days bounds the weekly days
+ * off between stretches.
+ */
+function maxWeeklyRunWhere(
+  days: string[] | undefined,
+  member: boolean
+): number {
+  const set = new Set(days ?? []);
+  if (member ? set.size === 0 : set.size >= 7) return 0;
+  if (member ? set.size >= 7 : set.size === 0) return Infinity;
+  let best = 0;
+  let run = 0;
+  // Two passes over the week handle the cyclic wrap.
+  for (let i = 0; i < 14; i++) {
+    if (set.has(WEEKDAY_ORDER[i % 7]) === member) {
+      run++;
+      best = Math.max(best, Math.min(run, 7));
+    } else {
+      run = 0;
+    }
+  }
+  return best;
+}
+
 function negativesFromProfile(
   profile: BidProfileWeights,
   preferOffDates: string[] | undefined,
@@ -518,7 +555,36 @@ export function optimizeBid(
       return;
     }
 
-    if (spec.pattern) {
+    // A Pattern can contradict the profile's weekly days off under the
+    // simulator's hard Prefer Off, in two ways:
+    //   1. The minimum stretch is longer than the longest run of allowed
+    //      weekdays (Fri/Sat/Sun off leaves Mon-Thu = 4 days; a 5-day
+    //      minimum can never form).
+    //   2. The required days off between stretches are longer than the
+    //      weekly off-block the banned days provide (Sat/Sun off gives a
+    //      2-day weekend; a 3+ days-off Pattern then forbids working
+    //      consecutive weeks, roughly halving the month — the line can't
+    //      reach the credit window).
+    // Real PBS resolves either case in Denial Mode by relaxing the days
+    // off; this static model does not relax, so emitting both would make
+    // the group unbuildable — omit the Pattern and record why.
+    const dows = profile.preferOffDOWs ?? [];
+    const maxAllowedRun = maxWeeklyRunWhere(dows, false);
+    const weeklyOffBlock = maxWeeklyRunWhere(dows, true);
+    const patternConflict =
+      spec.pattern &&
+      dows.length > 0 &&
+      (spec.pattern.daysOnMin > maxAllowedRun ||
+        spec.pattern.daysOffMin > weeklyOffBlock);
+    if (spec.pattern && patternConflict) {
+      const reason =
+        spec.pattern.daysOnMin > maxAllowedRun
+          ? `the longest possible work stretch is ${maxAllowedRun} day(s), shorter than the Pattern's ${spec.pattern.daysOnMin}-day minimum`
+          : `the weekly off-block is only ${weeklyOffBlock} day(s), so requiring ${spec.pattern.daysOffMin}+ days off would forbid working consecutive weeks`;
+      rationale.push(
+        `Pattern ${spec.pattern.daysOnMin}–${spec.pattern.daysOnMax} on omitted from group ${g + 1}: with ${dows.join('/')} off every week, ${reason}. In real PBS, Denial Mode would relax the days off instead.`
+      );
+    } else if (spec.pattern) {
       prefs.push({
         type: 'setConditionPattern',
         patternDaysOnMin: spec.pattern.daysOnMin,

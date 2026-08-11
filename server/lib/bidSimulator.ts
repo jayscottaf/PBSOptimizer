@@ -22,6 +22,7 @@ import type {
   SimulationGroupResult,
   SimulationResult,
 } from '../../shared/bidTypes';
+import { constructPatternLine } from './lineConstructor';
 
 export interface SimulatorOptions {
   /** Average Line Value for the category. Defaults to 78:00. */
@@ -55,7 +56,7 @@ export interface SimulatorOptions {
   windowSource?: string;
 }
 
-interface SimPairing {
+export interface SimPairing {
   pairingNumber: string;
   creditHours: number;
   blockHours: number;
@@ -645,7 +646,7 @@ export function simulateBid(
   ) {
     caveats.push(
       calendarAware
-        ? 'Set Condition Pattern is enforced: a group completes only if its awards place into work stretches within the Pattern (back-to-back trips may combine into one stretch). Placement is greedy, so a failed group might still be placeable by the real engine.'
+        ? 'Set Condition Pattern is enforced by constructing the line: trips and operating dates are chosen so work stretches fit the Pattern (back-to-back trips combine into stretches). The search is deterministic and bounded, so a denied group might still be assemblable by the real engine in an arrangement it did not try.'
         : 'Set Condition Pattern is exported verbatim but not scored — pass the bid period month/year to enforce it.'
     );
   }
@@ -705,6 +706,20 @@ export function simulateBid(
     let patternPrefIndex: number | null = null;
     let awardPrefCount = 0;
     const threshold = options.threshold ?? alv;
+
+    // With a Pattern and a calendar anchor, awards are not taken greedily —
+    // the line is CONSTRUCTED with the Pattern as a constraint (as PBS
+    // does). Award preferences snapshot their matches at their position in
+    // the bid (so negatives between prefs still scope correctly) and the
+    // constructor chooses trips and operating dates from those snapshots.
+    const useConstruction =
+      calendarAware &&
+      group.preferences.some(p => p.type === 'setConditionPattern');
+    const awardSnapshots: {
+      prefIndex: number;
+      matches: SimPairing[];
+      limit?: number;
+    }[] = [];
 
     for (let i = 0; i < group.preferences.length; i++) {
       const pref: BidPreference = group.preferences[i];
@@ -838,6 +853,33 @@ export function simulateBid(
       }
       if (pref.type === 'award') {
         awardPrefCount++;
+        if (useConstruction) {
+          // Snapshot this preference's matches from the pool at its
+          // position; the constructor decides what is actually taken.
+          const matches = pool.filter(p =>
+            pref.filter ? matchesFilter(p, pref.filter) : true
+          );
+          if (matches.length === 0) {
+            outcomes.push({
+              preferenceIndex: i,
+              status: 'denied',
+              detail:
+                'No pairings available (pool emptied by earlier negatives or no attribute match).',
+            });
+          } else {
+            awardSnapshots.push({
+              prefIndex: i,
+              matches,
+              limit: pref.limit,
+            });
+            outcomes.push({
+              preferenceIndex: i,
+              status: 'notScored',
+              detail: 'Pending line construction…',
+            });
+          }
+          continue;
+        }
         const window = creditWindow(windowType, alv, cap, realBounds);
         const currentCredit = awards.reduce((s, a) => s + a.creditHours, 0);
         if (currentCredit > Math.min(threshold, window.max)) {
@@ -905,11 +947,96 @@ export function simulateBid(
       }
     }
 
-    // Place this group's awards on the calendar. PBS reads top-down and
-    // must honor a Set Condition or fail the group, so the Pattern verdict
-    // lands here — and an infeasible placement disqualifies the group.
+    // Pattern groups: construct the line with the Pattern as a constraint.
+    // The verdict (and the whole award set) comes from the constructor; a
+    // failed construction disqualifies the group and the cascade moves on.
     let placement: SimulationGroupResult['placement'];
-    if (calendarAware && awards.length > 0) {
+    if (useConstruction) {
+      const window = creditWindow(windowType, alv, cap, realBounds);
+      const pattern = group.preferences.find(
+        p => p.type === 'setConditionPattern'
+      )!;
+      // Dedupe across snapshots: a trip keeps its earliest preference.
+      const byNumberSeen = new Set<string>();
+      const candidates = awardSnapshots.flatMap(snap =>
+        snap.matches
+          .filter(m => {
+            if (byNumberSeen.has(m.pairingNumber)) return false;
+            byNumberSeen.add(m.pairingNumber);
+            return true;
+          })
+          .map(m => ({
+            pairingNumber: m.pairingNumber,
+            creditHours: m.creditHours,
+            pairingDays: m.pairingDays,
+            holdProbability: m.holdProbability,
+            prefIndex: snap.prefIndex,
+            limit: snap.limit,
+            instances: m.instances,
+          }))
+      );
+      const built = constructPatternLine({
+        candidates,
+        pattern: {
+          minOn: pattern.patternDaysOnMin ?? 1,
+          maxOn: pattern.patternDaysOnMax ?? 31,
+          gap: pattern.patternDaysOffMin ?? 0,
+        },
+        window: { min: window.min, max: window.max },
+        threshold,
+      });
+      // Awards come from the constructed (or best partial) line, in
+      // calendar order.
+      for (const t of [...built.placed].sort(
+        (a, b) => a.startDay - b.startDay
+      )) {
+        awards.push({
+          pairingNumber: t.pairingNumber,
+          creditHours: t.creditHours,
+          pairingDays: t.pairingDays,
+          holdProbability: t.holdProbability,
+          awardedByPreference: t.prefIndex + 1,
+          groupIndex,
+        });
+      }
+      placement = {
+        feasible: built.feasible,
+        notes: built.notes,
+        stretches: built.stretches,
+      };
+      // Resolve the pending award-pref outcomes from what construction took.
+      for (const snap of awardSnapshots) {
+        const outcome = outcomes.find(
+          o => o.preferenceIndex === snap.prefIndex
+        );
+        if (!outcome) continue;
+        const mine = built.placed.filter(t => t.prefIndex === snap.prefIndex);
+        if (mine.length > 0) {
+          const credit = mine.reduce((s, t) => s + t.creditHours, 0);
+          const pulled = mine
+            .filter(t => t.pulledForward)
+            .map(t => `#${t.pairingNumber} added to complete a work stretch`);
+          outcome.status = 'honored';
+          outcome.detail =
+            `Awarded ${mine.length} pairing(s), ${credit.toFixed(2)} credit.` +
+            (pulled.length > 0 ? ` ${pulled.join('; ')}.` : '');
+        } else {
+          outcome.status = 'denied';
+          outcome.detail = built.feasible
+            ? 'Matched pairings, but none were needed in the constructed line.'
+            : 'Matched pairings, but none fit a legal work stretch.';
+        }
+      }
+      if (patternPrefIndex !== null) {
+        const outcome = outcomes.find(
+          o => o.preferenceIndex === patternPrefIndex
+        );
+        if (outcome) {
+          outcome.status = built.feasible ? 'honored' : 'denied';
+          outcome.detail = built.notes.join(' ');
+        }
+      }
+    } else if (calendarAware && awards.length > 0) {
       placement = placeGroupAwards(group.preferences, awards, simByNumber);
       if (patternPrefIndex !== null) {
         const outcome = outcomes.find(
@@ -963,14 +1090,13 @@ export function simulateBid(
       chosen = result;
       chosenWindow = window;
       chosenThreshold = threshold;
-    } else if (
-      !chosen &&
-      result.creditFromAwards >= window.min &&
-      placement &&
-      !placement.feasible
-    ) {
+    } else if (!chosen && placement && !placement.feasible) {
+      // Construction/placement failure is itself the reason the group did
+      // not complete — a denied Pattern group may show little or no credit
+      // (only its best legal partial), so the caveat cannot depend on
+      // having reached the window.
       caveats.push(
-        `Group ${groupIndex + 1} reached the credit window but its Set Condition Pattern could not be honored (${placement.notes.join(' ')}) — the cascade moved to the next group, as PBS would.`
+        `Group ${groupIndex + 1} could not honor its Set Condition Pattern (${placement.notes.join(' ')}) — the cascade moved to the next group, as PBS would.`
       );
     }
   });
