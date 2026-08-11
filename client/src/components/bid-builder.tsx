@@ -1789,6 +1789,16 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                 >
                   {simulation.lineComplete ? 'Line complete' : 'Incomplete'}
                 </Badge>
+                {/* Which group won matters: earlier groups may have set a
+                    different credit window or failed their Pattern, and
+                    their settings do not apply to this line. */}
+                {simulation.awards.length > 0 &&
+                  simulation.awards[0].groupIndex > 0 && (
+                    <Badge variant="outline">
+                      From group {simulation.awards[0].groupIndex + 1} — earlier
+                      group(s) failed
+                    </Badge>
+                  )}
               </div>
 
               {simulation.awards.length > 0 ? (
@@ -1837,34 +1847,73 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
               ) && (
                 <div className="space-y-1 text-sm">
                   <p className="font-medium">Preference results</p>
-                  {simulation.groupResults.flatMap(g =>
-                    (g.preferenceOutcomes ?? []).map((o, i) => (
-                      <p
-                        key={`${g.groupIndex}-${i}`}
-                        className="flex items-baseline gap-1.5 text-muted-foreground"
-                      >
-                        <span
-                          className={
-                            o.status === 'honored'
-                              ? 'shrink-0 font-medium text-emerald-600 dark:text-emerald-400'
-                              : o.status === 'denied'
-                                ? 'shrink-0 font-medium text-red-600 dark:text-red-400'
-                                : 'shrink-0 font-medium text-amber-600 dark:text-amber-400'
-                          }
-                        >
-                          {o.status === 'honored'
-                            ? 'Honored'
-                            : o.status === 'denied'
-                              ? 'Denied'
-                              : 'Not scored'}
-                        </span>
-                        <span>
-                          — Group {g.groupIndex + 1}, pref{' '}
-                          {o.preferenceIndex + 1}: {o.detail}
-                        </span>
-                      </p>
-                    ))
-                  )}
+                  {(() => {
+                    // Which group actually built the line — settings shown
+                    // under a failed group (e.g. its credit window) do NOT
+                    // apply to the predicted line, so each group is headed
+                    // with its fate to keep those from reading as
+                    // contradictions.
+                    const winningGroup =
+                      simulation.awards[0]?.groupIndex ?? null;
+                    return simulation.groupResults.map(g => {
+                      const outcomes = g.preferenceOutcomes ?? [];
+                      if (outcomes.length === 0) {
+                        return null;
+                      }
+                      const won = g.groupIndex === winningGroup;
+                      const patternFailed =
+                        g.placement && !g.placement.feasible;
+                      return (
+                        <div key={g.groupIndex} className="space-y-1">
+                          <p className="flex items-baseline gap-1.5 pt-1 font-medium">
+                            <span>Group {g.groupIndex + 1}</span>
+                            {won ? (
+                              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                ✓ built the predicted line
+                              </span>
+                            ) : winningGroup !== null &&
+                              g.groupIndex < winningGroup ? (
+                              <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                                {patternFailed
+                                  ? 'failed — Pattern could not be honored, moved to next group'
+                                  : 'failed — credit did not reach the window minimum'}
+                              </span>
+                            ) : winningGroup !== null &&
+                              g.groupIndex > winningGroup ? (
+                              <span className="text-xs text-muted-foreground">
+                                not reached
+                              </span>
+                            ) : null}
+                          </p>
+                          {outcomes.map((o, i) => (
+                            <p
+                              key={`${g.groupIndex}-${i}`}
+                              className="flex items-baseline gap-1.5 pl-3 text-muted-foreground"
+                            >
+                              <span
+                                className={
+                                  o.status === 'honored'
+                                    ? 'shrink-0 font-medium text-emerald-600 dark:text-emerald-400'
+                                    : o.status === 'denied'
+                                      ? 'shrink-0 font-medium text-red-600 dark:text-red-400'
+                                      : 'shrink-0 font-medium text-amber-600 dark:text-amber-400'
+                                }
+                              >
+                                {o.status === 'honored'
+                                  ? 'Honored'
+                                  : o.status === 'denied'
+                                    ? 'Denied'
+                                    : 'Not scored'}
+                              </span>
+                              <span>
+                                — pref {o.preferenceIndex + 1}: {o.detail}
+                              </span>
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
 
