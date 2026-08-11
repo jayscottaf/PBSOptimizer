@@ -507,108 +507,6 @@ function creditWindow(
   }
 }
 
-/**
- * Greedy calendar placement of a group's awards, honoring the group's Set
- * Condition Pattern. PBS reads a group top-down and must honor a Set
- * Condition or fail the group, so an infeasible placement here disqualifies
- * the group from completing (the cascade moves on) rather than being a
- * post-hoc warning.
- *
- * Work stretches are modeled the way PBS builds them: a trip may start the
- * day after the previous one ends (back-to-back, extending the current
- * stretch) or after at least patternDaysOffMin days off (starting a new
- * stretch). Each completed stretch must fall within
- * [patternDaysOnMin, patternDaysOnMax]. Placement is greedy
- * (earliest-fitting instance, no backtracking), so infeasible here means
- * "this greedy pass could not place them", not a proof that PBS couldn't.
- */
-function placeGroupAwards(
-  prefs: BidPreference[],
-  awards: SimulatedAward[],
-  byNumber: Map<string, SimPairing>
-): { feasible: boolean; notes: string[] } {
-  const pattern = prefs.find(p => p.type === 'setConditionPattern');
-  const gap = pattern?.patternDaysOffMin ?? 0;
-  const minOn = pattern?.patternDaysOnMin;
-  const maxOn = pattern?.patternDaysOnMax;
-  const notes: string[] = [];
-  let feasible = true;
-
-  const withInstances = awards
-    .map(a => ({ award: a, sim: byNumber.get(a.pairingNumber) }))
-    .filter(x => x.sim && x.sim.instances.length > 0) as {
-    award: SimulatedAward;
-    sim: SimPairing;
-  }[];
-  if (withInstances.length < awards.length) {
-    notes.push(
-      `${awards.length - withInstances.length} award(s) had no parseable operating dates and were skipped in the placement check.`
-    );
-  }
-  withInstances.sort(
-    (a, b) => a.sim.instances[0].startDay - b.sim.instances[0].startDay
-  );
-
-  let lastEnd = -Infinity;
-  let stretchStart: number | null = null;
-  const stretches: number[] = [];
-  const closeStretch = (end: number) => {
-    if (stretchStart !== null) {
-      stretches.push(end - stretchStart + 1);
-      stretchStart = null;
-    }
-  };
-
-  for (const { award, sim } of withInstances) {
-    // With a Pattern, prefer extending the current stretch back-to-back —
-    // that is how PBS assembles a >=min stretch out of shorter trips —
-    // before starting a new stretch after the required days off.
-    const inst = pattern
-      ? (sim.instances.find(x => x.startDay === lastEnd + 1) ??
-        sim.instances.find(x => x.startDay > lastEnd + gap))
-      : sim.instances.find(x => x.startDay > lastEnd);
-    if (!inst) {
-      feasible = false;
-      notes.push(
-        `Pairing ${award.pairingNumber} has no operating date that fits after the previous award${gap > 0 ? ` with ${gap} days off between stretches` : ''}.`
-      );
-      continue;
-    }
-    if (!(inst.startDay === lastEnd + 1 && stretchStart !== null)) {
-      closeStretch(lastEnd);
-      stretchStart = inst.startDay;
-    }
-    lastEnd = inst.endDay;
-  }
-  closeStretch(lastEnd);
-
-  if (pattern) {
-    for (const len of stretches) {
-      if (maxOn !== undefined && len > maxOn) {
-        feasible = false;
-        notes.push(
-          `A ${len}-day work stretch exceeds the Pattern's ${maxOn}-day maximum.`
-        );
-      }
-      if (minOn !== undefined && len < minOn) {
-        feasible = false;
-        notes.push(
-          `A ${len}-day work stretch is shorter than the Pattern's ${minOn}-day minimum (no adjacent trip available to extend it).`
-        );
-      }
-    }
-  }
-
-  if (feasible && notes.length === 0) {
-    notes.push(
-      pattern
-        ? `Awards place into work stretch(es) of ${stretches.join(', ')} day(s)${gap > 0 ? ` with ≥${gap} days off between stretches` : ''}.`
-        : 'All awards place on the calendar without overlapping.'
-    );
-  }
-  return { feasible, notes };
-}
-
 export function simulateBid(
   bid: DraftBid,
   rawPairings: any[],
@@ -707,14 +605,18 @@ export function simulateBid(
     let awardPrefCount = 0;
     const threshold = options.threshold ?? alv;
 
-    // With a Pattern and a calendar anchor, awards are not taken greedily —
-    // the line is CONSTRUCTED with the Pattern as a constraint (as PBS
-    // does). Award preferences snapshot their matches at their position in
-    // the bid (so negatives between prefs still scope correctly) and the
-    // constructor chooses trips and operating dates from those snapshots.
-    const useConstruction =
-      calendarAware &&
-      group.preferences.some(p => p.type === 'setConditionPattern');
+    // Whenever the calendar is known, awards are not taken greedily — the
+    // line is CONSTRUCTED (as PBS does), so trips and operating dates are
+    // chosen together. With a Set Condition Pattern the work-stretch band
+    // constrains the build; without one the constraint is only "no two
+    // awards overlap", which the constructor expresses as a permissive
+    // pattern. Building it this way means a date conflict costs the
+    // conflicting trip, not the whole group — PBS awards what fits rather
+    // than abandoning a group over a collision.
+    // Award preferences snapshot their matches at their position in the
+    // bid (so negatives between prefs still scope correctly) and the
+    // constructor chooses from those snapshots.
+    const useConstruction = calendarAware;
     const awardSnapshots: {
       prefIndex: number;
       matches: SimPairing[];
@@ -955,7 +857,7 @@ export function simulateBid(
       const window = creditWindow(windowType, alv, cap, realBounds);
       const pattern = group.preferences.find(
         p => p.type === 'setConditionPattern'
-      )!;
+      );
       // Dedupe across snapshots: a trip keeps its earliest preference.
       const byNumberSeen = new Set<string>();
       const candidates = awardSnapshots.flatMap(snap =>
@@ -975,12 +877,15 @@ export function simulateBid(
             instances: m.instances,
           }))
       );
+      // No Set Condition Pattern -> permissive band: any stretch length,
+      // no required days off. The only surviving constraint is that a
+      // trip must start after the previous one ends, i.e. no overlap.
       const built = constructPatternLine({
         candidates,
         pattern: {
-          minOn: pattern.patternDaysOnMin ?? 1,
-          maxOn: pattern.patternDaysOnMax ?? 31,
-          gap: pattern.patternDaysOffMin ?? 0,
+          minOn: pattern?.patternDaysOnMin ?? 1,
+          maxOn: pattern?.patternDaysOnMax ?? 31,
+          gap: pattern?.patternDaysOffMin ?? 0,
         },
         window: { min: window.min, max: window.max },
         threshold,
@@ -1036,17 +941,6 @@ export function simulateBid(
           outcome.detail = built.notes.join(' ');
         }
       }
-    } else if (calendarAware && awards.length > 0) {
-      placement = placeGroupAwards(group.preferences, awards, simByNumber);
-      if (patternPrefIndex !== null) {
-        const outcome = outcomes.find(
-          o => o.preferenceIndex === patternPrefIndex
-        );
-        if (outcome) {
-          outcome.status = placement.feasible ? 'honored' : 'denied';
-          outcome.detail = placement.notes.join(' ');
-        }
-      }
     } else if (patternPrefIndex !== null && awards.length === 0) {
       const outcome = outcomes.find(
         o => o.preferenceIndex === patternPrefIndex
@@ -1091,12 +985,16 @@ export function simulateBid(
       chosenWindow = window;
       chosenThreshold = threshold;
     } else if (!chosen && placement && !placement.feasible) {
-      // Construction/placement failure is itself the reason the group did
-      // not complete — a denied Pattern group may show little or no credit
-      // (only its best legal partial), so the caveat cannot depend on
-      // having reached the window.
+      // Construction failure is itself the reason the group did not
+      // complete — a denied group may show little or no credit (only its
+      // best legal partial), so the caveat cannot depend on having reached
+      // the window. Name the real constraint: only a group that actually
+      // carries a Set Condition Pattern failed one.
+      const hasPattern = group.preferences.some(
+        p => p.type === 'setConditionPattern'
+      );
       caveats.push(
-        `Group ${groupIndex + 1} could not honor its Set Condition Pattern (${placement.notes.join(' ')}) — the cascade moved to the next group, as PBS would.`
+        `Group ${groupIndex + 1} ${hasPattern ? 'could not honor its Set Condition Pattern' : 'could not build a line from its awards'} (${placement.notes.join(' ')}) — the cascade moved to the next group, as PBS would.`
       );
     }
   });

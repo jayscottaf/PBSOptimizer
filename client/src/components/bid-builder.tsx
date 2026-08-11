@@ -1940,7 +1940,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                         return null;
                       }
                       const won = g.groupIndex === winningGroup;
-                      const patternFailed =
+                      // Only a group that actually carries a Set Condition
+                      // Pattern can fail one — otherwise an infeasible
+                      // placement means its awards could not be arranged on
+                      // the calendar at all.
+                      const hasPattern = (
+                        bid.groups[g.groupIndex]?.preferences ?? []
+                      ).some(p => p.type === 'setConditionPattern');
+                      const placementFailed =
                         g.placement && !g.placement.feasible;
                       return (
                         <div key={g.groupIndex} className="space-y-1">
@@ -1953,8 +1960,10 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                             ) : winningGroup !== null &&
                               g.groupIndex < winningGroup ? (
                               <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                                {patternFailed
-                                  ? 'failed — Pattern could not be honored, moved to next group'
+                                {placementFailed
+                                  ? hasPattern
+                                    ? 'failed — Pattern could not be honored, moved to next group'
+                                    : 'failed — awards could not be built into a line, moved to next group'
                                   : 'failed — credit did not reach the window minimum'}
                               </span>
                             ) : winningGroup !== null &&

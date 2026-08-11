@@ -1296,6 +1296,53 @@ assert(
     'construction is insensitive to input pairing order'
   );
 
+  // A group WITHOUT a Set Condition Pattern must not be described as
+  // failing one, and a date collision must cost the colliding trip rather
+  // than the whole group: PBS awards what fits.
+  const collide = [
+    mkTrip('9501', 3, 'SEP02', '20.00'), // Sep 2-4
+    mkTrip('9502', 3, 'SEP03', '20.00'), // Sep 3-5, overlaps 9501
+    mkTrip('9503', 3, 'SEP10', '20.00'), // Sep 10-12, clear
+    mkTrip('9504', 3, 'SEP20', '20.00'), // Sep 20-22, clear
+  ];
+  const noPat = simulateBid(
+    { groups: [{ type: 'pairings', preferences: [{ type: 'award' }] }] } as any,
+    collide,
+    { periodMonth: 9, periodYear: 2026, alv: 45, threshold: 55, windowMin: 55, windowMax: 70 }
+  );
+  assert(
+    noPat.placement?.feasible === true,
+    'a date collision drops the colliding trip instead of failing the group'
+  );
+  assert(
+    noPat.awards.length === 3 && noPat.totalCredit === 60,
+    'the three non-overlapping trips are awarded (60 credit), the collider is not'
+  );
+  assert(
+    (noPat.placement?.notes ?? []).some(n => n.includes('without overlapping')) &&
+      !(noPat.placement?.notes ?? []).some(n => n.includes('Pattern')),
+    'a group with no Set Condition Pattern is never described in Pattern terms'
+  );
+
+  // Same, when the group genuinely cannot be built: the caveat must name
+  // the real constraint rather than a Pattern that was never bid.
+  const tooThin = simulateBid(
+    {
+      groups: [
+        { type: 'pairings', preferences: [{ type: 'award' }] },
+        { type: 'pairings', preferences: [{ type: 'award' }] },
+      ],
+    } as any,
+    [mkTrip('9601', 3, 'SEP02', '10.00')],
+    { periodMonth: 9, periodYear: 2026, alv: 45, threshold: 60, windowMin: 60, windowMax: 70 }
+  );
+  assert(
+    tooThin.caveats.some(
+      c => c.includes('could not build a line from its awards') && !c.includes('Pattern')
+    ),
+    'cascade caveat names the real reason when the group has no Pattern'
+  );
+
   // (d) No-Pattern groups keep the exact pre-construction behavior:
   // hold desc then credit desc greedy.
   const noPattern = simulateBid(

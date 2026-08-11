@@ -72,7 +72,15 @@ export interface ConstructionResult {
   bestCredit: number;
 }
 
-const BRANCH_WIDTH = 3;
+/**
+ * Branches tried per decision. Measured on the real Feb 2026 package with
+ * a Fri/Sat/Sun-off bid: width 3 and 6 both stalled at a 4-trip, 55.4-credit
+ * partial and reported the group unbuildable, while width 12 found a legal
+ * 5-trip, 71.0-credit line. Results were identical at 12, 16, 24 and 32
+ * (~40ms throughout), so 12 is where the search stops missing lines rather
+ * than where it stops improving.
+ */
+const BRANCH_WIDTH = 12;
 const NODE_BUDGET = 8000;
 
 interface IndexedInstance {
@@ -99,6 +107,11 @@ export function constructPatternLine(input: {
   const minOn = Math.max(1, pattern.minOn);
   const maxOn = Math.max(minOn, pattern.maxOn);
   const gap = Math.max(0, pattern.gap);
+  // A permissive band (any length, no gap) is how a group with no Set
+  // Condition Pattern is expressed: the only real constraint is that
+  // awards not overlap. Messages must not invoke a Pattern that the
+  // pilot never asked for.
+  const shaped = minOn > 1 || maxOn < 31 || gap > 0;
 
   const candidates = [...input.candidates].sort(rank);
 
@@ -238,9 +251,9 @@ export function constructPatternLine(input: {
         }
         if (branches === 0 && credit < window.min) {
           recordDeadEnd(
-            `no unused trip can start a new stretch after day offset ${
-              Number.isFinite(lastEnd) ? lastEnd + gap : 0
-            } within the credit window`
+            shaped
+              ? 'no unused trip can start a new work stretch after the required days off without exceeding the credit window'
+              : 'no unused trip can be placed after the previous award without overlapping it or exceeding the credit window'
           );
         }
       }
@@ -320,7 +333,9 @@ export function constructPatternLine(input: {
   if (ok) {
     recordLegalPartial();
     notes.unshift(
-      `Constructed ${closedStretches.length} work stretch(es) of ${closedStretches.join(', ')} day(s) within the Pattern (${minOn}-${maxOn} on${gap > 0 ? `, ≥${gap} days off between` : ''}); ${credit.toFixed(2)} credit.`
+      shaped
+        ? `Constructed ${closedStretches.length} work stretch(es) of ${closedStretches.join(', ')} day(s) within the Pattern (${minOn}-${maxOn} on${gap > 0 ? `, ≥${gap} days off between` : ''}); ${credit.toFixed(2)} credit.`
+        : `All ${placed.length} award(s) place on the calendar without overlapping; ${credit.toFixed(2)} credit.`
     );
     return {
       feasible: true,
@@ -337,7 +352,10 @@ export function constructPatternLine(input: {
     .map(d => d.reason)
     .filter((r, i, arr) => arr.indexOf(r) === i);
   notes.unshift(
-    `Could not assemble work stretches of ${minOn}-${maxOn} days${gap > 0 ? ` (≥${gap} days off between)` : ''} reaching ${window.min.toFixed(1)} credit from the ${candidates.length} pairing(s) this group's preferences allow` +
+    (shaped
+      ? `Could not assemble work stretches of ${minOn}-${maxOn} days${gap > 0 ? ` (≥${gap} days off between)` : ''} reaching ${window.min.toFixed(1)} credit`
+      : `Could not reach ${window.min.toFixed(1)} credit with awards that fit the calendar without overlapping`) +
+      ` from the ${candidates.length} pairing(s) this group's preferences allow` +
       (bestCredit > 0
         ? `; best legal construction reached ${bestCredit.toFixed(2)}.`
         : '.') +
