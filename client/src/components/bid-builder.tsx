@@ -1805,8 +1805,13 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
       </div>
 
       {/* Results column — sticky on wide screens so simulation results stay
-          visible while editing a long draft on the left. */}
-      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          visible while editing a long draft on the left. The height cap and
+          overflow are what make sticky usable: without them the panel pins
+          its top and anything past the fold (later groups' outcomes, the
+          caveats) can never be scrolled to, because only the left column
+          moves. overscroll-contain stops the tab panel from lurching when
+          this pane reaches its end. */}
+      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => simulateMutation.mutate()}
