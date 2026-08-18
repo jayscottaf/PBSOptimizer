@@ -23,6 +23,7 @@ import type {
   SimulationResult,
 } from '../../shared/bidTypes';
 import { constructPatternLine } from './lineConstructor';
+import { parseMonthDayToken } from '../../shared/operatingDays';
 
 export interface SimulatorOptions {
   /** Average Line Value for the category. Defaults to 78:00. */
@@ -127,7 +128,9 @@ function enumerateInstances(
   end: { month: number; day: number } | null,
   pairingDays: number,
   periodMonth: number,
-  periodYear: number
+  periodYear: number,
+  operatingDows?: number[] | null,
+  exceptDates?: string[] | null
 ): { startDay: number; endDay: number; startDow: number }[] {
   if (!start) return [];
   const anchor = (t: { month: number; day: number }): number => {
@@ -140,16 +143,50 @@ function enumerateInstances(
   const s = anchor(start);
   const e = end ? anchor(end) : s;
   const last = Math.max(s, e);
-  const out: { startDay: number; endDay: number; startDow: number }[] = [];
-  // Ranges are at most a bid period plus carry; cap defensively.
-  for (let d = s; d <= last && out.length < 62; d++) {
-    out.push({
-      startDay: d,
-      endDay: d + Math.max(0, pairingDays - 1),
-      startDow: dowOfEpochDay(d),
-    });
+
+  // A trip does not operate every day of its effective range: the header
+  // names the weekdays it flies ("TU TH SA") and a separate clause lists
+  // dates it skips ("EXCEPT AUG 13 AUG 15"). Without both, a Tue/Thu/Sat
+  // trip looks schedulable on any of its ~19 range days, which makes Prefer
+  // Off falsely survive and lets the line constructor place trips on dates
+  // they never fly.
+  const allowed =
+    Array.isArray(operatingDows) && operatingDows.length > 0
+      ? new Set(operatingDows)
+      : null;
+  const skipped = new Set<number>();
+  for (const token of exceptDates ?? []) {
+    const md = parseMonthDayToken(token);
+    if (md) {
+      skipped.add(anchor(md));
+    }
   }
-  return out;
+
+  const build = (applyDowFilter: boolean) => {
+    const out: { startDay: number; endDay: number; startDow: number }[] = [];
+    // Ranges are at most a bid period plus carry; cap defensively.
+    for (let d = s; d <= last && out.length < 62; d++) {
+      const dow = dowOfEpochDay(d);
+      if (applyDowFilter && allowed && !allowed.has(dow)) {
+        continue;
+      }
+      if (skipped.has(d)) {
+        continue;
+      }
+      out.push({
+        startDay: d,
+        endDay: d + Math.max(0, pairingDays - 1),
+        startDow: dow,
+      });
+    }
+    return out;
+  };
+
+  const filtered = build(true);
+  // Guard against a bad year anchor silently deleting a pairing: if the
+  // weekday filter leaves nothing at all, the anchor and the printed
+  // weekdays disagree, so trust the range rather than drop the trip.
+  return filtered.length > 0 ? filtered : build(false);
 }
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -197,13 +234,17 @@ function parseEffectiveDates(text: unknown): {
   start: { month: number; day: number } | null;
   end: { month: number; day: number } | null;
 } {
+  // Packages print the range end as "AUG. 29" — month, PERIOD, space, day.
+  // Without tolerating that period the end token never matches, the range
+  // collapses to its start date, and every pairing looks like it operates
+  // exactly once.
   const tokens = String(text ?? '')
     .toUpperCase()
-    .match(/([A-Z]{3})\s*(\d{1,2})/g);
+    .match(/([A-Z]{3})\.?\s*(\d{1,2})/g);
   if (!tokens || tokens.length === 0) return { start: null, end: null };
   const parsed = tokens
     .map(token => {
-      const m = token.match(/([A-Z]{3})\s*(\d{1,2})/);
+      const m = token.match(/([A-Z]{3})\.?\s*(\d{1,2})/);
       if (!m || !(m[1] in MONTH_TOKENS)) return null;
       return { month: MONTH_TOKENS[m[1]], day: parseInt(m[2], 10) };
     })
@@ -277,7 +318,19 @@ function toSimPairing(
     effectiveEnd: end,
     instances:
       periodMonth !== undefined && periodYear !== undefined
-        ? enumerateInstances(start, end, days, periodMonth, periodYear)
+        ? enumerateInstances(
+            start,
+            end,
+            days,
+            periodMonth,
+            periodYear,
+            Array.isArray(p.operatingDows)
+              ? (p.operatingDows as number[])
+              : null,
+            Array.isArray(p.exceptDates)
+              ? (p.exceptDates as string[])
+              : null
+          )
         : [],
   };
 }

@@ -1587,7 +1587,11 @@ export default function Dashboard() {
               effectiveDates,
               year,
               pairingDays,
-              filters.preferredDaysOff
+              filters.preferredDaysOff,
+              {
+                operatingDows: (pairing as any).operatingDows,
+                exceptDates: (pairing as any).exceptDates,
+              }
             );
 
             if (hasConflict) {
@@ -1640,7 +1644,11 @@ export default function Dashboard() {
               effectiveDates,
               year,
               pairingDays,
-              debouncedFilters.preferredDaysOff || []
+              debouncedFilters.preferredDaysOff || [],
+              {
+                operatingDows: (pairing as any).operatingDows,
+                exceptDates: (pairing as any).exceptDates,
+              }
             );
             if (hasConflict) {
               return false;

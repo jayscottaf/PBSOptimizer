@@ -411,7 +411,11 @@ function PairingTableImpl({
       const possibleStartDates = calculateValidStartDates(
         effectiveDates,
         year,
-        pairingDays
+        pairingDays,
+        {
+          operatingDows: (pairing as any).operatingDows,
+          exceptDates: (pairing as any).exceptDates,
+        }
       );
 
       if (possibleStartDates.length === 0) {

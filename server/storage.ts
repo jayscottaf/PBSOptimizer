@@ -545,6 +545,8 @@ export class DatabaseStorage implements IStorage {
         sitEdpPay: pairings.sitEdpPay,
         carveouts: pairings.carveouts,
         checkInTime: pairings.checkInTime,
+        operatingDows: pairings.operatingDows,
+        exceptDates: pairings.exceptDates,
         deadheads: pairings.deadheads,
         layovers: pairings.layovers,
         flightSegments: pairings.flightSegments,
@@ -1151,6 +1153,10 @@ export class DatabaseStorage implements IStorage {
           sitEdpPay: pairings.sitEdpPay,
           carveouts: pairings.carveouts,
           checkInTime: pairings.checkInTime,
+          // The client's conflict detection and Add-to-Calendar need the real
+          // operating days, not just the date range.
+          operatingDows: pairings.operatingDows,
+          exceptDates: pairings.exceptDates,
           deadheads: pairings.deadheads,
           layovers: pairings.layovers,
           flightSegments: pairings.flightSegments,

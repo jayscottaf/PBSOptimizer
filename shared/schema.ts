@@ -62,6 +62,15 @@ export const pairings = pgTable(
     sitEdpPay: decimal('sit_edp_pay', { precision: 4, scale: 2 }),
     carveouts: text('carveouts'),
     checkInTime: text('check_in_time'), // Time format like "10.35"
+    /**
+     * Weekdays this trip may START on (0=Sun..6=Sat), resolved from the
+     * header's "TU TH SA" (only these) or "EXCPT FR SA SU" (all but these)
+     * clause. Null means the header named no weekdays, so the trip may
+     * start any day in its effective range.
+     */
+    operatingDows: jsonb('operating_dows'),
+    /** Dates the trip skips, as printed: ["AUG 13", "AUG 15", ...]. */
+    exceptDates: jsonb('except_dates'),
     deadheads: integer('deadheads').default(0),
     layovers: jsonb('layovers'), // Array of layover details
     flightSegments: jsonb('flight_segments').notNull(), // Array of flight segment details

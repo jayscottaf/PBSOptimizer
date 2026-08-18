@@ -135,14 +135,57 @@ export function parseEffectiveDates(
 /**
  * Calculate all valid start dates for a pairing based on its effective dates
  */
+/**
+ * Operating-day facts as stored on the pairing row. When present these are
+ * authoritative — the server resolved them from the package header, which
+ * carries a dialect this file's text parsing cannot express (`TU TH SA`
+ * means "only these weekdays", where the text path only understands
+ * exclusions). Falls back to text parsing when absent.
+ */
+export interface StoredOperatingDays {
+  operatingDows?: number[] | null;
+  exceptDates?: string[] | null;
+}
+
+const MONTH_TOKENS: Record<string, number> = {
+  JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+  JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+};
+
+/** "AUG 13" -> a Date in `year`; null when unparseable. */
+function storedExceptToDate(token: string, year: number): Date | null {
+  const m = String(token ?? '')
+    .toUpperCase()
+    .match(/([A-Z]{3})\.?\s*(\d{1,2})/);
+  if (!m || !(m[1] in MONTH_TOKENS)) {
+    return null;
+  }
+  return new Date(year, MONTH_TOKENS[m[1]], parseInt(m[2], 10));
+}
+
 export function calculateValidStartDates(
   effectiveDates: string,
   year: number,
-  pairingDays: number
+  pairingDays: number,
+  stored?: StoredOperatingDays
 ): Date[] {
   const parsed = parseEffectiveDates(effectiveDates, year);
   if (!parsed) {
     return [];
+  }
+
+  // Prefer the server-resolved allow-list when we have it.
+  const allowedDows =
+    Array.isArray(stored?.operatingDows) && stored!.operatingDows!.length > 0
+      ? new Set(stored!.operatingDows!)
+      : null;
+  if (allowedDows) {
+    for (const token of stored?.exceptDates ?? []) {
+      const d = storedExceptToDate(token, year);
+      if (d) {
+        parsed.excludedDates.push(d);
+      }
+    }
   }
 
   const validDates: Date[] = [];
@@ -158,8 +201,11 @@ export function calculateValidStartDates(
     while (current <= end) {
       const currentDay = current.getDay();
 
-      // Check if this day of week is excluded
-      if (!parsed.excludedDaysOfWeek.includes(currentDay)) {
+      // Allow-list wins when present; otherwise fall back to exclusions.
+      const dowOk = allowedDows
+        ? allowedDows.has(currentDay)
+        : !parsed.excludedDaysOfWeek.includes(currentDay);
+      if (dowOk) {
         // Check if this specific date is excluded
         const isDateExcluded = parsed.excludedDates.some(excludedDate => {
           return (
@@ -206,12 +252,14 @@ export function pairingConflictsWithDaysOff(
   effectiveDates: string,
   year: number,
   pairingDays: number,
-  preferredDaysOff: Date[]
+  preferredDaysOff: Date[],
+  stored?: StoredOperatingDays
 ): boolean {
   const validStartDates = calculateValidStartDates(
     effectiveDates,
     year,
-    pairingDays
+    pairingDays,
+    stored
   );
 
   const normalizeDate = (date: Date) => {

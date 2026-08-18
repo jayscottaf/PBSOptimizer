@@ -9,6 +9,10 @@ import type { InsertPairing } from '../shared/schema';
 import { samplePdfText } from './samplePdfText';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { extractBaseAndAircraft } from './lib/packageHeader';
+import {
+  parseEffectiveRangeText,
+  parseOperatingDays,
+} from '../shared/operatingDays';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -52,6 +56,10 @@ interface ParsedPairing {
   holdProbability: number;
   pairingDays: number;
   checkInTime?: string;
+  /** Weekdays the trip may start on (0=Sun..6=Sat); null = unrestricted. */
+  operatingDows?: number[] | null;
+  /** Dates the trip skips, as printed ("AUG 13"). */
+  exceptDates?: string[];
 }
 
 export class PDFParser {
@@ -483,7 +491,11 @@ export class PDFParser {
     }
 
     const pairingNumber = headerMatch[1];
-    const dayCode = headerMatch[2];
+    // The header's weekday clause ("TU TH SA" = only these, "EXCPT FR SA SU"
+    // = all but these) is what makes a trip's real operating dates a subset
+    // of its effective range. Previously only the first two-letter token was
+    // captured and it was never read.
+    const { operatingDows, exceptDates } = parseOperatingDays(block);
 
     const flightSegments: FlightSegment[] = [];
     const layovers: Layover[] = [];
@@ -506,19 +518,14 @@ export class PDFParser {
       checkInTime = headerCheckInMatch[1];
     }
 
-    // Extract effective dates from the block
+    // EFFECTIVE normally lives on the header line, which the old scan skipped
+    // (it started at i = 1), so most pairings fell through to the fallback
+    // below and were credited with the whole month. The shared scanner reads
+    // every line and keeps "MON. DD" end days intact.
+    effectiveDates = parseEffectiveRangeText(block);
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
-
-      if (line.includes('EFFECTIVE')) {
-        // Extract everything after EFFECTIVE, but stop before CHECK-IN or DAY blocks
-        const effectiveIndex = line.indexOf('EFFECTIVE');
-        let tail = line.substring(effectiveIndex + 'EFFECTIVE'.length).trim();
-        tail = tail.split(/CHECK-IN|DAY\s+[A-Z]/)[0].trim();
-        effectiveDates = tail;
-        console.log('Found EFFECTIVE line:', line);
-        console.log('Extracted effectiveDates:', effectiveDates);
-      }
 
       // Enhanced flight pattern detection to capture all flights within each day
       // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
@@ -989,6 +996,8 @@ export class PDFParser {
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
+      operatingDows,
+      exceptDates,
       route,
       creditHours: creditHours || '0.00',
       blockHours: blockHours || '0.00',
@@ -1252,6 +1261,8 @@ export class PDFParser {
           bidPackageId,
           pairingNumber: pairing.pairingNumber,
           effectiveDates: pairing.effectiveDates,
+          operatingDows: pairing.operatingDows ?? null,
+          exceptDates: pairing.exceptDates ?? [],
           route: pairing.route || 'TBD',
           creditHours: pairing.creditHours,
           blockHours: pairing.blockHours,

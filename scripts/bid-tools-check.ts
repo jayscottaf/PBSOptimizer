@@ -16,6 +16,10 @@ import {
 } from '../server/lib/empiricalHold';
 import { extractBaseAndAircraft } from '../server/lib/packageHeader';
 import { PDFParser } from '../server/pdfParser';
+import {
+  parseEffectiveRangeText,
+  parseOperatingDays,
+} from '../shared/operatingDays';
 import type { DraftBid } from '../shared/bidTypes';
 
 let failures = 0;
@@ -1359,6 +1363,141 @@ assert(
   assert(
     noPattern.awards.map(a => a.pairingNumber).join(',') === '9402,9403',
     'no-Pattern groups keep the hold-then-credit greedy order and stop rule'
+  );
+}
+
+// --- Real operating days (weekday clause + EXCEPT dates) ------------------
+// A pairing operates on a SUBSET of its effective range: the header names the
+// weekdays it flies and a separate clause lists dates it skips. Treating the
+// whole range as operable made Prefer Off falsely survive and let the line
+// constructor place trips on dates they never fly.
+{
+  const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // The real #A227 header: TU TH SA, Aug 11-29, minus four dates.
+  const a227 = [
+    '#A227  TU TH SA        EFFECTIVE AUG11-AUG. 29               CHECK-IN AT 20.59  POS - B',
+    '       EXCEPT AUG 13 AUG 15 AUG 20 AUG 22',
+  ].join('\n');
+  assert(
+    parseEffectiveRangeText(a227) === 'AUG11-AUG. 29',
+    'the "MON. DD" end day survives effective-range parsing'
+  );
+  const a227Days = parseOperatingDays(a227);
+  assert(
+    (a227Days.operatingDows ?? []).map(d => NAMES[d]).join(',') === 'Tue,Thu,Sat',
+    'positive weekday clause "TU TH SA" resolves to exactly those days'
+  );
+  assert(
+    a227Days.exceptDates.join('|') === 'AUG 13|AUG 15|AUG 20|AUG 22',
+    'EXCEPT dates are parsed off the continuation line'
+  );
+
+  // End to end. Aug 2026 starts on a Saturday, so Tue/Thu/Sat between the
+  // 11th and 29th are 11,13,15,18,20,22,25,27,29; the four EXCEPT dates
+  // leave exactly five real operating starts: 11, 18, 25, 27, 29.
+  const a227Pairing = {
+    pairingNumber: 'A227',
+    pairingDays: 2,
+    creditHours: '16.00',
+    blockHours: '16.00',
+    tafb: '40.00',
+    holdProbability: '95',
+    effectiveDates: 'AUG11-AUG. 29',
+    operatingDows: a227Days.operatingDows,
+    exceptDates: a227Days.exceptDates,
+    layovers: [{ city: 'AMS', duration: '20.00' }],
+    deadheads: 0,
+    route: 'JFK-AMS-JFK',
+    flightSegments: [
+      { departure: 'JFK', arrival: 'AMS', departureTime: '2229' },
+    ],
+    checkInTime: '20.59',
+  };
+  const runA227 = (prefs: any[]) =>
+    simulateBid(
+      { groups: [{ type: 'pairings', preferences: prefs }] } as any,
+      [a227Pairing],
+      {
+        periodMonth: 8,
+        periodYear: 2026,
+        alv: 45,
+        threshold: 10,
+        windowMin: 10,
+        windowMax: 60,
+      }
+    );
+
+  assert(
+    runA227([{ type: 'award' }]).awards.length === 1,
+    '#A227 is awarded when nothing conflicts'
+  );
+
+  // Prefer Off every day the trip really flies (each 2-day instance spans
+  // start..start+1) leaves it nowhere to go, so it must be excluded. This is
+  // the discriminating case: before operating days were honored, phantom
+  // starts on Aug 14/16/17/21/23/24 gave it an escape date and it survived.
+  const realDaysOff = [
+    '2026-08-11', '2026-08-12',
+    '2026-08-18', '2026-08-19',
+    '2026-08-25', '2026-08-26',
+    '2026-08-27', '2026-08-28',
+    '2026-08-29', '2026-08-30',
+  ];
+  assert(
+    runA227([
+      { type: 'preferOff', preferOffDates: realDaysOff },
+      { type: 'award' },
+    ]).awards.length === 0,
+    'Prefer Off covering every real operating date excludes the trip'
+  );
+
+  // Preferring off only its FIRST operating date must leave it awardable via
+  // a later one. This needs the range end ("AUG. 29" — month, period, space,
+  // day) to parse: without that the range collapses to its start date, the
+  // trip has exactly one instance, and blocking that date wrongly kills it.
+  assert(
+    runA227([
+      { type: 'preferOff', preferOffDates: ['2026-08-11', '2026-08-12'] },
+      { type: 'award' },
+    ]).awards.length === 1,
+    'a later operating date is still available when the first is blocked'
+  );
+
+  // Conversely, Prefer Off on the EXCEPT dates alone must not exclude it —
+  // the trip never operates on those days in the first place.
+  assert(
+    runA227([
+      {
+        type: 'preferOff',
+        preferOffDates: ['2026-08-13', '2026-08-15', '2026-08-20', '2026-08-22'],
+      },
+      { type: 'award' },
+    ]).awards.length === 1,
+    'Prefer Off on skipped dates does not affect a trip that never flies them'
+  );
+
+  // The negative dialect: "EXCPT FR SA SU" means all days BUT those.
+  const f7831 = [
+    '#7831 EXCPT FR SA SU EFFECTIVE FEB12-FEB. 26 CHECK-IN AT 5.15',
+    ' EXCEPT FEB 16',
+  ].join('\n');
+  const d7831 = parseOperatingDays(f7831);
+  assert(
+    (d7831.operatingDows ?? []).map(d => NAMES[d]).join(',') ===
+      'Mon,Tue,Wed,Thu',
+    'negative weekday clause "EXCPT FR SA SU" resolves to the complement'
+  );
+  assert(
+    d7831.exceptDates.join('|') === 'FEB 16',
+    'EXCPT weekdays and EXCEPT dates are told apart in the same pairing'
+  );
+
+  // No weekday clause -> unrestricted, so behavior is unchanged.
+  const plain = '#7652  EFFECTIVE JAN10 ONLY  CHECK-IN AT  5.00';
+  assert(
+    parseOperatingDays(plain).operatingDows === null,
+    'a header with no weekday clause stays unrestricted'
   );
 }
 

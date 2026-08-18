@@ -594,7 +594,11 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                 const possibleStartDates = calculateValidStartDates(
                   effectiveDates,
                   bidPackageYear,
-                  pairingDays
+                  pairingDays,
+                  {
+                    operatingDows: (pairing as any).operatingDows,
+                    exceptDates: (pairing as any).exceptDates,
+                  }
                 );
 
                 console.log(
