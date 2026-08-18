@@ -41,3 +41,16 @@ export const parseAircraftCode = (
   // Return as-is since there's no position suffix to strip
   return { baseType: normalized, position: null };
 };
+
+/**
+ * SQL mirror of parseAircraftCode's baseType, for WHERE clauses that must
+ * match a fleet across the spellings the sources use ("A220" in a bid
+ * package, "220-B" in a Reasons Report, "330" bare).
+ *
+ * Strips a trailing position suffix (A/B, hyphenated or not), then a single
+ * letter prefix in front of three digits. Kept in lockstep with
+ * parseAircraftCode by an assertion in scripts/bid-tools-check.ts — change
+ * one and the test will tell you to change the other.
+ */
+export const normalizedAircraftSqlExpr = (column: string): string =>
+  `regexp_replace(regexp_replace(upper(replace(${column}, ' ', '')), '-?([AB])$', ''), '^[A-Z]([0-9]{3})$', '\\1')`;

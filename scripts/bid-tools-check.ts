@@ -16,6 +16,7 @@ import {
 } from '../server/lib/empiricalHold';
 import { extractBaseAndAircraft } from '../server/lib/packageHeader';
 import { PDFParser } from '../server/pdfParser';
+import { parseAircraftCode } from '../server/lib/aircraft';
 import {
   parseEffectiveRangeText,
   parseOperatingDays,
@@ -1498,6 +1499,26 @@ assert(
   assert(
     parseOperatingDays(plain).operatingDows === null,
     'a header with no weekday clause stays unrestricted'
+  );
+}
+
+// --- Fleet category normalization ------------------------------------------
+// Award history is per category. The same fleet is spelled three ways across
+// sources ("A220" in a bid package, "220-B" in a Reasons Report, "330"
+// bare) and every cross-source comparison must normalize first. The SQL
+// mirror (normalizedAircraftSqlExpr) was verified row-for-row against these
+// same shapes on Postgres; if parseAircraftCode changes, re-verify both.
+{
+  const eq = (a: string, b: string) =>
+    parseAircraftCode(a).baseType === parseAircraftCode(b).baseType;
+  assert(eq('A220', '220-B'), 'package "A220" matches report "220-B"');
+  assert(eq('220', '220B'), 'bare "220" matches suffixed "220B"');
+  assert(eq('330', '330-B'), 'bare "330" matches suffixed "330-B"');
+  assert(!eq('A220', '330'), 'the 220 category never matches the 330');
+  assert(!eq('220-B', '330-B'), 'position suffixes do not blur fleets');
+  assert(
+    parseAircraftCode('220 B').baseType === '220',
+    'stray whitespace in the code is tolerated'
   );
 }
 

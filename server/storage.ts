@@ -30,6 +30,10 @@ import {
 import { db } from './db';
 import { percentileWithin } from './lib/empiricalHold';
 import {
+  parseAircraftCode,
+  normalizedAircraftSqlExpr,
+} from './lib/aircraft';
+import {
   eq,
   and,
   desc,
@@ -139,10 +143,14 @@ export interface IStorage {
     aircraft?: string;
     limit?: number;
   }): Promise<ReasonsReportPreference[]>;
-  getCategoryRosters(base: string): Promise<Map<string, number[]>>;
-  getAvailableMonths(base: string): Promise<string[]>;
+  getCategoryRosters(
+    base: string,
+    aircraft: string
+  ): Promise<Map<string, number[]>>;
+  getAvailableMonths(base: string, aircraft: string): Promise<string[]>;
   getTrendsSummary(
     base: string,
+    aircraft: string,
     month?: string
   ): Promise<{
     periods: Array<{
@@ -165,7 +173,10 @@ export interface IStorage {
       period: string;
     } | null;
   }>;
-  getCategoryCreditWindow(base: string): Promise<{
+  getCategoryCreditWindow(
+    base: string,
+    aircraft: string
+  ): Promise<{
     windowMin: number;
     windowMax: number;
     threshold: number;
@@ -173,6 +184,7 @@ export interface IStorage {
   } | null>;
   getStrategyStats(
     base: string,
+    aircraft: string,
     userPercentile: number
   ): Promise<{
     bandLow: number;
@@ -188,7 +200,11 @@ export interface IStorage {
       avgAwardDepth: number | null;
     }>;
   }>;
-  getBidPatterns(base: string, month?: string): Promise<{
+  getBidPatterns(
+    base: string,
+    aircraft: string,
+    month?: string
+  ): Promise<{
     typeMixByPeriod: Array<{
       period: string;
       award: number;
@@ -1235,12 +1251,28 @@ export class DatabaseStorage implements IStorage {
    * seniority number. Keyed "JUL-2026". This is what makes seniority numbers
    * comparable across years — percentile-within-period instead of raw number.
    */
-  async getCategoryRosters(base: string): Promise<Map<string, number[]>> {
+  /**
+   * Fleet predicate for category-scoped analytics. A bid package says
+   * "A220" while a Reasons Report says "220-B"; both must match the 220
+   * category and neither may match the 330. Uses the SQL mirror of
+   * parseAircraftCode so the comparison is on normalized base types.
+   */
+  private fleetMatches(column: string, aircraft: string) {
+    const target = parseAircraftCode(aircraft).baseType;
+    // Column expression is ours (raw); the compared value is parameterized.
+    return sql`AND ${sql.raw(normalizedAircraftSqlExpr(column))} = ${target}`;
+  }
+
+  async getCategoryRosters(
+    base: string,
+    aircraft: string
+  ): Promise<Map<string, number[]>> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
     const rows = await db.execute(sql`
       SELECT year, month,
              array_agg(DISTINCT pilot_seniority_number ORDER BY pilot_seniority_number) AS seniorities
       FROM reasons_report_preferences
-      WHERE base = ${base} AND pilot_seniority_number IS NOT NULL
+      WHERE base = ${base} AND pilot_seniority_number IS NOT NULL ${fleet}
       GROUP BY year, month
     `);
     const rosters = new Map<string, number[]>();
@@ -1258,6 +1290,7 @@ export class DatabaseStorage implements IStorage {
    */
   async getTrendsSummary(
     base: string,
+    aircraft: string,
     month?: string
   ): Promise<{
     periods: Array<{
@@ -1280,6 +1313,7 @@ export class DatabaseStorage implements IStorage {
       period: string;
     } | null;
   }> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
     const monthCode = month ? month.trim().slice(0, 3).toUpperCase() : null;
     const monthCond = monthCode
       ? sql`AND upper(left(trim(month), 3)) = ${monthCode}`
@@ -1292,7 +1326,7 @@ export class DatabaseStorage implements IStorage {
         sum(CASE WHEN outcome = 'Honored' THEN 1 ELSE 0 END) AS honored,
         sum(CASE WHEN outcome IN ('Awarded to senior bidder', 'Awarded to senior shadow bidder') THEN 1 ELSE 0 END) AS lost_to_senior
       FROM reasons_report_preferences
-      WHERE base = ${base} ${monthCond}
+      WHERE base = ${base} ${monthCond} ${fleet}
       GROUP BY year, month
     `);
 
@@ -1301,14 +1335,14 @@ export class DatabaseStorage implements IStorage {
         max(junior_holder_seniority) AS junior_most,
         count(*) AS awards
       FROM bid_history
-      WHERE base = ${base}
+      WHERE base = ${base} ${fleet}
         AND (award_type IS NULL OR award_type NOT ILIKE '%coverage%')
         ${monthCond}
       GROUP BY year, month, pairing_days
     `);
 
-    const rosters = await this.getCategoryRosters(base);
-    const window = await this.getCategoryCreditWindow(base);
+    const rosters = await this.getCategoryRosters(base, aircraft);
+    const window = await this.getCategoryCreditWindow(base, aircraft);
 
     const monthNum = (m: string) => {
       const idx = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
@@ -1328,7 +1362,14 @@ export class DatabaseStorage implements IStorage {
       }));
 
     const holdBoundaries = (boundaries.rows as any[])
-      .sort((a, b) => sortKey(a) - sortKey(b))
+      // Tie-break on trip length: sortKey only encodes year+month, so rows
+      // within a period previously fell back to DB row order, which shifts
+      // whenever the query plan changes. The chart normalizes order away,
+      // but the API response should not wobble between identical requests.
+      .sort(
+        (a, b) =>
+          sortKey(a) - sortKey(b) || Number(a.pairing_days) - Number(b.pairing_days)
+      )
       .map(r => {
         const key = `${String(r.month).trim().slice(0, 3).toUpperCase()}-${r.year}`;
         const roster = rosters.get(key);
@@ -1352,7 +1393,8 @@ export class DatabaseStorage implements IStorage {
    * Report data for this base — drives the Trends page's month dropdown so
    * it only offers months that actually have something to show.
    */
-  async getAvailableMonths(base: string): Promise<string[]> {
+  async getAvailableMonths(base: string, aircraft: string): Promise<string[]> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
     const monthOrder = sql`CASE upper(left(trim(month), 3))
       WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
       WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
@@ -1362,7 +1404,7 @@ export class DatabaseStorage implements IStorage {
       SELECT month FROM (
         SELECT DISTINCT upper(left(trim(month), 3)) AS month
         FROM reasons_report_preferences
-        WHERE base = ${base}
+        WHERE base = ${base} ${fleet}
       ) t
       ORDER BY ${monthOrder}
     `);
@@ -1375,16 +1417,21 @@ export class DatabaseStorage implements IStorage {
    * "Window 062:00-082:00, Threshold 082:00" banner). Real admin values —
    * the simulator otherwise has to guess ALV±10.
    */
-  async getCategoryCreditWindow(base: string): Promise<{
+  async getCategoryCreditWindow(
+    base: string,
+    aircraft: string
+  ): Promise<{
     windowMin: number;
     windowMax: number;
     threshold: number;
     period: string;
   } | null> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
+    const fleetR = this.fleetMatches('r.aircraft', aircraft);
     const rows = await db.execute(sql`
       WITH latest AS (
         SELECT year, month FROM reasons_report_preferences
-        WHERE base = ${base}
+        WHERE base = ${base} ${fleet}
         ORDER BY year DESC,
           array_position(
             ARRAY['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],
@@ -1396,7 +1443,7 @@ export class DatabaseStorage implements IStorage {
       FROM reasons_report_preferences r
       JOIN latest l ON r.year = l.year AND r.month = l.month,
       LATERAL jsonb_array_elements_text(r.report_banners) AS banner
-      WHERE r.base = ${base} AND banner LIKE 'Window %'
+      WHERE r.base = ${base} AND banner LIKE 'Window %' ${fleetR}
       GROUP BY banner, r.month, r.year
       ORDER BY n DESC LIMIT 1
     `);
@@ -1424,6 +1471,7 @@ export class DatabaseStorage implements IStorage {
    */
   async getStrategyStats(
     base: string,
+    aircraft: string,
     userPercentile: number
   ): Promise<{
     bandLow: number;
@@ -1439,6 +1487,8 @@ export class DatabaseStorage implements IStorage {
       avgAwardDepth: number | null;
     }>;
   }> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
+    const fleetR = this.fleetMatches('r.aircraft', aircraft);
     const lo = Math.max(0, (userPercentile - 10) / 100);
     const hi = Math.min(1, (userPercentile + 10) / 100);
     const rows = await db.execute(sql`
@@ -1448,7 +1498,7 @@ export class DatabaseStorage implements IStorage {
             PARTITION BY year, month ORDER BY pilot_seniority_number
           ) AS pct
         FROM reasons_report_preferences
-        WHERE base = ${base} AND pilot_seniority_number IS NOT NULL
+        WHERE base = ${base} AND pilot_seniority_number IS NOT NULL ${fleet}
       ),
       banded AS (
         SELECT r.*
@@ -1456,7 +1506,7 @@ export class DatabaseStorage implements IStorage {
         JOIN pilot_ranks p
           ON p.year = r.year AND p.month = r.month
           AND p.pilot_seniority_number = r.pilot_seniority_number
-        WHERE r.base = ${base} AND p.pct BETWEEN ${lo} AND ${hi}
+        WHERE r.base = ${base} AND p.pct BETWEEN ${lo} AND ${hi} ${fleetR}
       )
       SELECT
         CASE
@@ -1484,12 +1534,12 @@ export class DatabaseStorage implements IStorage {
     const flags = await db.execute(sql`
       SELECT count(DISTINCT (year, month)) AS n
       FROM reasons_report_preferences
-      WHERE base = ${base}
+      WHERE base = ${base} ${fleet}
         AND report_banners::text LIKE '%Affected By Denial Mode%'
     `);
     const periodsTotal = await db.execute(sql`
       SELECT count(DISTINCT (year, month)) AS n
-      FROM reasons_report_preferences WHERE base = ${base}
+      FROM reasons_report_preferences WHERE base = ${base} ${fleet}
     `);
     return {
       bandLow: Math.round(lo * 100),
@@ -1513,7 +1563,11 @@ export class DatabaseStorage implements IStorage {
    * imported period — not just outcomes. Answers "what do people ask for"
    * rather than "what did they get."
    */
-  async getBidPatterns(base: string, month?: string): Promise<{
+  async getBidPatterns(
+    base: string,
+    aircraft: string,
+    month?: string
+  ): Promise<{
     typeMixByPeriod: Array<{
       period: string;
       award: number;
@@ -1543,6 +1597,8 @@ export class DatabaseStorage implements IStorage {
     }>;
     daysOffPatterns: Array<{ days: number; count: number }>;
   }> {
+    const fleet = this.fleetMatches('aircraft', aircraft);
+    const fleetPkg = this.fleetMatches('bp.aircraft', aircraft);
     const monthNum = sql`CASE upper(left(trim(month), 3))
       WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
       WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6 WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8
@@ -1573,7 +1629,7 @@ export class DatabaseStorage implements IStorage {
           THEN array_length(regexp_split_to_array(preference_text, ','), 1)
           ELSE 0 END) AS prefer_off_days
       FROM reasons_report_preferences
-      WHERE base = ${base} ${monthCond}
+      WHERE base = ${base} ${monthCond} ${fleet}
       GROUP BY year, month
       ORDER BY year, ${monthNum}
     `);
@@ -1598,7 +1654,7 @@ export class DatabaseStorage implements IStorage {
             ', '
           )) AS city
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond}
+        WHERE base = ${base} ${monthCond} ${fleet}
           AND (preference_text ILIKE 'award%layover in%'
             OR preference_text ILIKE 'avoid%layover in%')
       ) t
@@ -1618,12 +1674,12 @@ export class DatabaseStorage implements IStorage {
       SELECT hour, sum(n) AS n FROM (
         SELECT (regexp_match(preference_text, 'Check-In Time > (\\d{2}):'))[1]::int AS hour, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in time >%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in time >%' ${fleet}
         GROUP BY 1
         UNION ALL
         SELECT (regexp_match(preference_text, 'Check-In Time < (\\d{2}):'))[1]::int AS hour, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in time <%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in time <%' ${fleet}
         GROUP BY 1
       ) t
       GROUP BY hour ORDER BY hour
@@ -1637,13 +1693,13 @@ export class DatabaseStorage implements IStorage {
         SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
           'award' AS kind, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in station%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'award%check-in station%' ${fleet}
         GROUP BY 1
         UNION ALL
         SELECT (regexp_match(preference_text, 'Check-In Station ([A-Z]{3})'))[1] AS station,
           'avoid' AS kind, count(*) AS n
         FROM reasons_report_preferences
-        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in station%'
+        WHERE base = ${base} ${monthCond} AND preference_text ILIKE 'avoid%check-in station%' ${fleet}
         GROUP BY 1
       ) t
       WHERE station IS NOT NULL
@@ -1654,7 +1710,7 @@ export class DatabaseStorage implements IStorage {
     const daysOff = await db.execute(sql`
       SELECT (regexp_match(preference_text, '(\\d+) Consecutive Days Off'))[1]::int AS days, count(*) AS n
       FROM reasons_report_preferences
-      WHERE base = ${base} ${monthCond} AND preference_text ILIKE '%consecutive days off%'
+      WHERE base = ${base} ${monthCond} AND preference_text ILIKE '%consecutive days off%' ${fleet}
       GROUP BY 1 ORDER BY 1
     `);
 
@@ -1675,7 +1731,7 @@ export class DatabaseStorage implements IStorage {
         COUNT(*)::int AS n
       FROM pairings p
       JOIN bid_packages bp ON bp.id = p.bid_package_id
-      WHERE bp.base = ${base} ${supplyMonthCond}
+      WHERE bp.base = ${base} ${supplyMonthCond} ${fleetPkg}
         AND p.flight_segments->0->>'departure' IS NOT NULL
       GROUP BY 1, 2, 3, 4
       ORDER BY bp.year DESC, mon_num DESC, n DESC

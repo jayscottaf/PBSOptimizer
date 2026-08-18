@@ -21,6 +21,10 @@
 import { db } from '../server/db';
 import { sql } from 'drizzle-orm';
 import { storage } from '../server/storage';
+import {
+  parseAircraftCode,
+  normalizedAircraftSqlExpr,
+} from '../server/lib/aircraft';
 import { learnProfile } from '../server/lib/profileLearner';
 import { optimizeBid, scorePairings } from '../server/lib/bidOptimizer';
 import { simulateBid, monthNameToNumber } from '../server/lib/bidSimulator';
@@ -34,6 +38,8 @@ const MONTH_NAME_TO_CODE: Record<string, string> = {
 async function main() {
   const employeeNumber = process.argv[2] || '050000600';
   const base = process.argv[3] || 'NYC';
+  // The backtest replays one pilot's history, which lives in one category.
+  const aircraft = process.argv[4] || '220-B';
   const coreEmpNo = employeeNumber.replace(/^0+/, '').replace(/00$/, '');
 
   const { rows: allRows } = await storage.getPilotPreferenceRows(employeeNumber);
@@ -44,11 +50,15 @@ async function main() {
 
   const packages = await db.execute(sql`
     SELECT id, month, year FROM bid_packages
-    WHERE base = ${base} AND status = 'completed' ORDER BY year, id
+    WHERE base = ${base} AND status = 'completed'
+      AND ${sql.raw(normalizedAircraftSqlExpr('aircraft'))} = ${parseAircraftCode(aircraft).baseType}
+    ORDER BY year, id
   `);
 
-  const trends = await storage.getTrendsSummary(base);
-  const window = await storage.getCategoryCreditWindow(base).catch(() => null);
+  const trends = await storage.getTrendsSummary(base, aircraft);
+  const window = await storage
+    .getCategoryCreditWindow(base, aircraft)
+    .catch(() => null);
 
   const results: any[] = [];
   for (const pkg of packages.rows as any[]) {

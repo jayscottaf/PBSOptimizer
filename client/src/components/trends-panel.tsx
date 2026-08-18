@@ -26,6 +26,7 @@ interface HoldBoundary {
 
 interface TrendsResponse {
   base: string;
+  aircraft?: string;
   month: string | null;
   availableMonths: string[];
   periods: TrendPeriod[];
@@ -533,31 +534,51 @@ const INSIGHT_STYLES: Record<
 
 export function TrendsPanel({
   seniorityPercentile,
+  base,
+  aircraft,
 }: {
   seniorityPercentile?: number | string | null;
+  /** Category of the selected bid package. History is per base+fleet. */
+  base?: string | null;
+  aircraft?: string | null;
 } = {}) {
   const [month, setMonth] = useState<string>('');
-  const monthQuery = month ? `?month=${month}` : '';
+  // Award history belongs to a category, not a base: NYC 220-B numbers must
+  // never stand in for NYC 330. Without a category we ask for nothing.
+  const hasCategory = Boolean(base && aircraft);
+  const categoryQuery = hasCategory
+    ? `?base=${encodeURIComponent(String(base))}&aircraft=${encodeURIComponent(String(aircraft))}${month ? `&month=${month}` : ''}`
+    : '';
 
   const { data, isLoading, isError } = useQuery<TrendsResponse>({
-    queryKey: ['/api/trends', month],
+    queryKey: ['/api/trends', base, aircraft, month],
     queryFn: async () => {
-      const res = await fetch(`/api/trends${monthQuery}`);
+      const res = await fetch(`/api/trends${categoryQuery}`);
       if (!res.ok) throw new Error('Failed to load trends');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
+    enabled: hasCategory,
   });
   const { data: patterns } = useQuery<BidPatternsResponse>({
-    queryKey: ['/api/bid-patterns', month],
+    queryKey: ['/api/bid-patterns', base, aircraft, month],
     queryFn: async () => {
-      const res = await fetch(`/api/bid-patterns${monthQuery}`);
+      const res = await fetch(`/api/bid-patterns${categoryQuery}`);
       if (!res.ok) throw new Error('Failed to load bid patterns');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
-    enabled: !isLoading && !isError && !!data && data.periods.length > 0,
+    enabled:
+      hasCategory && !isLoading && !isError && !!data && data.periods.length > 0,
   });
+
+  if (!hasCategory) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        Select a bid package to see its category&apos;s award history.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -567,10 +588,20 @@ export function TrendsPanel({
     );
   }
   if (isError || !data || data.periods.length === 0) {
+    // Name the category. Award history is per base+fleet, so "no history"
+    // for the 330 is a different statement from "no history at all" — and
+    // showing another fleet's numbers here would be worse than showing none.
     return (
-      <div className="p-6 text-sm text-muted-foreground">
-        No Reasons Report history imported yet — upload composite reports to
-        unlock category trends.
+      <div className="space-y-1 p-6 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">
+          No bid history imported for {base} {aircraft}
+        </p>
+        <p>
+          Hold estimates, contention and credit windows are built from
+          composite Reasons Reports for this exact category. Upload reports
+          for {base} {aircraft} to unlock them — history from another fleet
+          would not apply.
+        </p>
       </div>
     );
   }
@@ -608,7 +639,7 @@ export function TrendsPanel({
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
                 <TrendingUp className="h-5 w-5 text-blue-500" />
-                Category Trends — {data.base}
+                Category Trends — {data.base} {data.aircraft}
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 {month

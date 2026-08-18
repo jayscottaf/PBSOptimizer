@@ -141,8 +141,13 @@ export class SimpleAI {
           // entry computed from whichever arrived first).
           const percentile = Math.round(query.seniorityPercentile ?? 50);
           const stats = await memoizedAggregate(
-            `strategy:${bidPackage.base}:${percentile}`,
-            () => this.storage.getStrategyStats(bidPackage.base, percentile)
+            `strategy:${bidPackage.base}:${bidPackage.aircraft}:${percentile}`,
+            () =>
+              this.storage.getStrategyStats(
+                bidPackage.base,
+                bidPackage.aircraft,
+                percentile
+              )
           );
           historyContext = buildStrategyContext(stats);
         }
@@ -192,13 +197,16 @@ export class SimpleAI {
       // Tool-calling loop: the coach may call simulate_bid / export_bid to
       // ground its draft before answering. Bounded rounds prevent runaway.
       const realWindow = bidPackage?.base
-        ? await memoizedAggregate(`creditWindow:${bidPackage.base}`, () =>
-            this.storage
-              .getCategoryCreditWindow(bidPackage.base)
-              .catch(() => null)
+        ? await memoizedAggregate(
+            `creditWindow:${bidPackage.base}:${bidPackage.aircraft}`,
+            () =>
+              this.storage
+                .getCategoryCreditWindow(bidPackage.base, bidPackage.aircraft)
+                .catch(() => null)
           )
         : null;
       const base = bidPackage?.base;
+      const aircraft = bidPackage?.aircraft;
       const toolContext = {
         pairings,
         alv: bidPackage?.alvHours
@@ -212,23 +220,27 @@ export class SimpleAI {
           : undefined,
         periodMonth: monthNameToNumber(bidPackage?.month) ?? undefined,
         periodYear: bidPackage?.year ?? undefined,
-        fetchHistoricTrends: base
-          ? (month?: string) => this.fetchHistoricTrendsDigest(base, month)
-          : undefined,
-        optimizeDraft: base
-          ? (
+        fetchHistoricTrends:
+          base && aircraft
+            ? (month?: string) =>
+                this.fetchHistoricTrendsDigest(base, aircraft, month)
+            : undefined,
+        optimizeDraft:
+          base && aircraft
+            ? (
               overrides?: Record<string, unknown>,
               depth?: 'auto' | 'compact' | 'deep'
             ) =>
-              this.optimizeDraftDigest(
-                query.bidPackageId,
-                query.userId,
-                base,
-                pairings,
-                overrides,
-                depth
-              )
-          : undefined,
+                this.optimizeDraftDigest(
+                  query.bidPackageId,
+                  query.userId,
+                  base,
+                  aircraft,
+                  pairings,
+                  overrides,
+                  depth
+                )
+            : undefined,
       };
       const MAX_TOOL_ROUNDS = 4;
       let rawResponse = 'No response generated';
@@ -308,11 +320,12 @@ export class SimpleAI {
    */
   private async fetchHistoricTrendsDigest(
     base: string,
+    aircraft: string,
     month?: string
   ): Promise<object> {
     const [trends, patterns] = await Promise.all([
-      this.storage.getTrendsSummary(base, month),
-      this.storage.getBidPatterns(base, month),
+      this.storage.getTrendsSummary(base, aircraft, month),
+      this.storage.getBidPatterns(base, aircraft, month),
     ]);
 
     if (trends.periods.length === 0) {
@@ -379,6 +392,7 @@ export class SimpleAI {
     bidPackageId: number,
     userId: number | undefined,
     base: string,
+    aircraft: string,
     pairings: any[],
     overrides?: Record<string, unknown>,
     depth?: 'auto' | 'compact' | 'deep'
@@ -397,8 +411,10 @@ export class SimpleAI {
       ? await this.storage.getUser(userId).catch(() => undefined)
       : undefined;
     const [trends, window] = await Promise.all([
-      this.storage.getTrendsSummary(base).catch(() => null),
-      this.storage.getCategoryCreditWindow(base).catch(() => null),
+      this.storage.getTrendsSummary(base, aircraft).catch(() => null),
+      this.storage
+        .getCategoryCreditWindow(base, aircraft)
+        .catch(() => null),
     ]);
     const boundaryByDays = new Map<number, number>();
     for (const b of trends?.holdBoundaries ?? []) {

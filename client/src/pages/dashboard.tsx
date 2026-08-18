@@ -2143,7 +2143,11 @@ export default function Dashboard() {
 
             <TabsContent value="trends" className="flex-1 overflow-auto p-1">
               <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
-                <TrendsPanel seniorityPercentile={seniorityPercentile} />
+                <TrendsPanel
+                  seniorityPercentile={seniorityPercentile}
+                  base={latestBidPackage?.base}
+                  aircraft={latestBidPackage?.aircraft}
+                />
               </Suspense>
             </TabsContent>
           </Tabs>

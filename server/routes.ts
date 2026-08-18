@@ -138,7 +138,7 @@ async function recalculateHoldProbabilitiesOptimized(
     // Period rosters make seniority numbers comparable across years —
     // the empirical hold path needs them to convert awards to percentiles.
     const rosters = useHistoricalData
-      ? await storage.getCategoryRosters(bidPackage.base)
+      ? await storage.getCategoryRosters(bidPackage.base, bidPackage.aircraft)
       : new Map<string, number[]>();
     const frequencyMap =
       HoldProbabilityCalculator.buildPairingFrequencyMap(allPairings);
@@ -182,10 +182,22 @@ async function recalculateHoldProbabilitiesOptimized(
           });
       }
 
+      // A category with no imported award history gets the seniority
+      // heuristic — say so, loudly and first. The estimate is not backed by
+      // this fleet's outcomes, and the percentile it uses was entered for
+      // the pilot's own category, which may be a different fleet entirely.
+      const reasoning =
+        useHistoricalData && historicalData.length === 0
+          ? [
+              `No award history imported for ${bidPackage.base} ${bidPackage.aircraft} — this is a generic seniority-based estimate, not one backed by this fleet's outcomes. Your seniority percentile also describes your own category, not this one.`,
+              ...holdProbabilityResult.reasoning,
+            ]
+          : holdProbabilityResult.reasoning;
+
       updates.push({
         id: pairing.id,
         holdProbability: holdProbabilityResult.probability,
-        reasoning: holdProbabilityResult.reasoning,
+        reasoning,
       });
     }
 
@@ -1617,7 +1629,10 @@ export async function registerRoutes(app: Express) {
         (bidPackage.alvHours ? parseFloat(String(bidPackage.alvHours)) : undefined);
       // Real credit window/threshold from the latest imported Reasons Report
       // (explicit request values still win).
-      const realWindow = await storage.getCategoryCreditWindow(bidPackage.base);
+      const realWindow = await storage.getCategoryCreditWindow(
+        bidPackage.base,
+        bidPackage.aircraft
+      );
       const { monthNameToNumber } = await import('./lib/bidSimulator');
       const result = simulateBid(bid, packagePairings, {
         alv: packageAlv,
@@ -1756,8 +1771,12 @@ export async function registerRoutes(app: Express) {
       const seniorityPercentile = user?.seniorityPercentile ?? undefined;
 
       const [trends, realWindow] = await Promise.all([
-        storage.getTrendsSummary(bidPackage.base).catch(() => null),
-        storage.getCategoryCreditWindow(bidPackage.base).catch(() => null),
+        storage
+          .getTrendsSummary(bidPackage.base, bidPackage.aircraft)
+          .catch(() => null),
+        storage
+          .getCategoryCreditWindow(bidPackage.base, bidPackage.aircraft)
+          .catch(() => null),
       ]);
       // Latest-period boundary per trip length as the reachability signal.
       const boundaryByDays = new Map<number, number>();
@@ -1818,7 +1837,16 @@ export async function registerRoutes(app: Express) {
   // went (percentile of the junior-most holder).
   app.get('/api/trends', async (req, res) => {
     try {
-      const base = String(req.query.base || 'NYC');
+      // Category, not just base: NYC 220-B history must never answer for
+      // NYC 330. Both are required — a default would silently serve one
+      // fleet's numbers for another.
+      const base = String(req.query.base || '').trim();
+      const aircraft = String(req.query.aircraft || '').trim();
+      if (!base || !aircraft) {
+        return res
+          .status(400)
+          .json({ message: 'base and aircraft are required' });
+      }
       // Optional single-month filter (e.g. "AUG") — lets a pilot compare a
       // specific calendar month across years instead of the whole corpus.
       const monthFilter = req.query.month
@@ -1827,11 +1855,22 @@ export async function registerRoutes(app: Express) {
 
       const [{ periods, holdBoundaries, window }, availableMonths] =
         await Promise.all([
-          storage.getTrendsSummary(base, monthFilter ?? undefined),
-          storage.getAvailableMonths(base),
+          storage.getTrendsSummary(base, aircraft, monthFilter ?? undefined),
+          storage.getAvailableMonths(base, aircraft),
         ]);
 
-      res.json({ base, month: monthFilter, availableMonths, periods, holdBoundaries, window });
+      res.json({
+        base,
+        aircraft,
+        month: monthFilter,
+        // No imported Reasons Report for this category: the client shows an
+        // explicit empty state instead of another fleet's numbers.
+        hasHistory: periods.length > 0,
+        availableMonths,
+        periods,
+        holdBoundaries,
+        window,
+      });
     } catch (error) {
       console.error('Error building trends:', error);
       res.status(500).json({ message: 'Failed to build trends' });
@@ -1843,13 +1882,19 @@ export async function registerRoutes(app: Express) {
   // cities, check-in time and station preferences, days-off patterns.
   app.get('/api/bid-patterns', async (req, res) => {
     try {
-      const base = String(req.query.base || 'NYC');
+      const base = String(req.query.base || '').trim();
+      const aircraft = String(req.query.aircraft || '').trim();
+      if (!base || !aircraft) {
+        return res
+          .status(400)
+          .json({ message: 'base and aircraft are required' });
+      }
       const monthFilter = req.query.month
         ? String(req.query.month).trim().slice(0, 3).toUpperCase()
         : null;
       const [patterns, availableMonths] = await Promise.all([
-        storage.getBidPatterns(base, monthFilter ?? undefined),
-        storage.getAvailableMonths(base),
+        storage.getBidPatterns(base, aircraft, monthFilter ?? undefined),
+        storage.getAvailableMonths(base, aircraft),
       ]);
       res.json({ base, month: monthFilter, availableMonths, ...patterns });
     } catch (error) {
@@ -2178,16 +2223,27 @@ export async function registerRoutes(app: Express) {
       const currentLayoverPattern =
         layoverCities.length > 0 ? layoverCities.join('-') : 'none';
 
-      // Fingerprint matching (not base/aircraft) decides relevance, so no
-      // base filter here — but the loop below hard-filters on pairingDays
-      // and discards everything else, so push that into SQL. `pairing_days`
-      // is NOT NULL, making this exactly equivalent to the JS skip while
-      // avoiding transferring the whole ~11k-row history table on every
-      // pairing-detail view.
-      const historicalData = await db
-        .select()
-        .from(bidHistory)
-        .where(eq(bidHistory.pairingDays, pairingDays));
+      // Fingerprint matching decides which trips are comparable, but only
+      // WITHIN a fleet: a 330 pairing must never be explained by 220-B
+      // awards, whose seniority numbers come from a different category
+      // entirely. The pairing's own package supplies the category.
+      // pairingDays is also pushed into SQL (the loop below discards
+      // everything else, and pairing_days is NOT NULL) so a pairing-detail
+      // view doesn't transfer the whole ~11k-row history table.
+      const pairingPackage = await storage.getBidPackage(
+        currentPairing.bidPackageId
+      );
+      const fleetBase = pairingPackage
+        ? parseAircraftCode(pairingPackage.aircraft).baseType
+        : null;
+      const historicalData = (
+        await db
+          .select()
+          .from(bidHistory)
+          .where(eq(bidHistory.pairingDays, pairingDays))
+      ).filter(h =>
+        fleetBase ? parseAircraftCode(h.aircraft).baseType === fleetBase : true
+      );
 
       // Find similar matches using fingerprint comparison
       const matches: Array<{
