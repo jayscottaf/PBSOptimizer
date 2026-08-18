@@ -560,6 +560,35 @@ function creditWindow(
   }
 }
 
+/**
+ * How many times a pairing actually departs within a bid period, from its
+ * effective range narrowed by the weekday clause and EXCEPT dates. This is
+ * the multiplier that turns per-trip facts into per-month volumes — e.g.
+ * layover NIGHTS in a city = layovers per operation x this count. Exported
+ * so stats reuse the exact enumeration the simulator places trips with,
+ * rather than a second copy that could drift.
+ */
+export function countOperatingInstances(
+  rawPairing: any,
+  periodMonth: number,
+  periodYear: number
+): number {
+  const { start, end } = parseEffectiveDates(rawPairing.effectiveDates);
+  return enumerateInstances(
+    start,
+    end,
+    Number(rawPairing.pairingDays) || 1,
+    periodMonth,
+    periodYear,
+    Array.isArray(rawPairing.operatingDows)
+      ? (rawPairing.operatingDows as number[])
+      : null,
+    Array.isArray(rawPairing.exceptDates)
+      ? (rawPairing.exceptDates as string[])
+      : null
+  ).length;
+}
+
 export function simulateBid(
   bid: DraftBid,
   rawPairings: any[],

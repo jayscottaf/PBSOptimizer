@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { Pairing, BidPackage } from '@/lib/api';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart2 } from 'lucide-react';
 
 type AvgByDaysStats = Record<number, { credit: number; block: number; count?: number }>;
@@ -48,7 +48,11 @@ interface StatsPanelProps {
       average: number;
       poor: number;
     };
-    layoverCities?: Array<{ city: string; count: number }>;
+    layoverCities?: Array<{
+      city: string;
+      count: number;
+      nights?: number | null;
+    }>;
     checkInStations?: Array<{ station: string; count: number }>;
   } | null;
   onTripLengthFilter?: (days: number) => void;
@@ -273,13 +277,65 @@ export function StatsPanel({
     ? bidPackageStats.layoverCities
     : stats.layoverCities;
   const layoverTotal = bidPackageStats?.totalPairings || stats.totalPairings;
+  // Nights mode: overnights across the month from real operating dates
+  // (a five-Fridays trip counts 5x; a one-off counts once). Only offered
+  // when the backend could compute it — the client-side fallback stats
+  // have no operating-date data.
+  const nightsAvailable =
+    (bidPackageStats?.layoverCities ?? []).some(
+      c => typeof c.nights === 'number'
+    ) ?? false;
+  const [layoverMode, setLayoverMode] = useState<'trips' | 'nights'>('trips');
+  const showNights = layoverMode === 'nights' && nightsAvailable;
+  const totalNights = (bidPackageStats?.layoverCities ?? []).reduce(
+    (sum, c) => sum + (c.nights ?? 0),
+    0
+  );
+  const layoverRows = showNights
+    ? [...layoverStats].sort(
+        (a, b) =>
+          ((b as any).nights ?? 0) - ((a as any).nights ?? 0) ||
+          a.city.localeCompare(b.city)
+      )
+    : layoverStats;
 
   const layoverSection =
     layoverStats.length > 0 ? (
       <div className="mt-6 pt-4 border-t border-border">
-        <h4 className="text-sm font-medium text-foreground mb-3">
-          🏨 Layover Cities
-        </h4>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h4 className="text-sm font-medium text-foreground">
+            🏨 Layover Cities
+          </h4>
+          {nightsAvailable && (
+            <div
+              className="flex rounded-md border border-border p-0.5"
+              role="group"
+              aria-label="Layover count mode"
+            >
+              {(
+                [
+                  ['trips', 'Trips'],
+                  ['nights', 'Nights'],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={layoverMode === mode}
+                  data-testid={`layover-mode-${mode}`}
+                  onClick={() => setLayoverMode(mode)}
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    layoverMode === mode
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="space-y-1">
           <div className="grid grid-cols-3 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
             <div>City</div>
@@ -287,21 +343,23 @@ export function StatsPanel({
             <div className="text-right">%</div>
           </div>
           <div className="max-h-64 overflow-y-auto space-y-1">
-            {layoverStats.map(({ city, count }) => {
+            {layoverRows.map(row => {
+              const value = showNights
+                ? ((row as any).nights ?? 0)
+                : row.count;
+              const denom = showNights ? totalNights : layoverTotal;
               const pct =
-                layoverTotal > 0
-                  ? ((count / layoverTotal) * 100).toFixed(0)
-                  : '0';
+                denom > 0 ? ((value / denom) * 100).toFixed(0) : '0';
               return (
                 <div
-                  key={city}
+                  key={row.city}
                   className="grid grid-cols-3 gap-2 text-xs py-1"
                 >
                   <span className="text-secondary-foreground font-medium">
-                    {city}
+                    {row.city}
                   </span>
                   <span className="text-foreground font-medium text-right">
-                    {count}
+                    {value}
                   </span>
                   <span className="text-foreground font-medium text-right">
                     {pct}%
@@ -310,6 +368,11 @@ export function StatsPanel({
               );
             })}
           </div>
+          <p className="pt-1 text-[11px] text-muted-foreground">
+            {showNights
+              ? 'Overnights across the month, from each trip\u2019s real operating dates \u2014 % of all layover nights.'
+              : 'Trips that include a layover there \u2014 % of all pairings.'}
+          </p>
         </div>
       </div>
     ) : null;

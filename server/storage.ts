@@ -34,6 +34,10 @@ import {
   normalizedAircraftSqlExpr,
 } from './lib/aircraft';
 import {
+  countOperatingInstances,
+  monthNameToNumber,
+} from './lib/bidSimulator';
+import {
   eq,
   and,
   desc,
@@ -2037,8 +2041,14 @@ export class DatabaseStorage implements IStorage {
       average: number;
       poor: number;
     };
-    /** How many pairings overnight in each layover city, most common first. */
-    layoverCities: Array<{ city: string; count: number }>;
+    /**
+     * Per layover city, most common first:
+     * - count: pairings that include a layover there (one per trip).
+     * - nights: total overnights across the month = layovers per operation
+     *   x real operating instances (weekday clause and EXCEPT dates
+     *   honored). Null when the package's period anchor is unknown.
+     */
+    layoverCities: Array<{ city: string; count: number; nights: number | null }>;
     /**
      * Supply mix: how many pairings begin at each check-in station (the
      * first flight segment's departure airport), most common first. This is
@@ -2059,9 +2069,20 @@ export class DatabaseStorage implements IStorage {
         pairingDays: pairings.pairingDays,
         layovers: pairings.layovers,
         deadheads: pairings.deadheads,
+        effectiveDates: pairings.effectiveDates,
+        operatingDows: pairings.operatingDows,
+        exceptDates: pairings.exceptDates,
       })
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId));
+
+    // Period anchor for counting real operating instances (nights mode).
+    const [pkg] = await db
+      .select({ month: bidPackages.month, year: bidPackages.year })
+      .from(bidPackages)
+      .where(eq(bidPackages.id, bidPackageId));
+    const periodMonth = monthNameToNumber(pkg?.month) ?? null;
+    const periodYear = pkg?.year ?? null;
 
     if (allPairings.length === 0) {
       return {
@@ -2093,23 +2114,43 @@ export class DatabaseStorage implements IStorage {
       .filter(r => r.station)
       .map(r => ({ station: String(r.station), count: Number(r.n) }));
 
-    // Count how many pairings include a layover in each city. A pairing that
-    // overnights in the same city more than once still counts once, so the
-    // count is "pairings with a BOS layover", not "BOS overnights".
+    // Two views of the same jsonb, distinct on purpose:
+    // - count: pairings with a layover in the city (same-city repeats within
+    //   one trip still count once) — "how many trips can take me there".
+    // - nights: overnights across the month — layovers per operation x the
+    //   trip's real operating instances (weekday clause and EXCEPT dates
+    //   honored). A once-a-month trip and a five-Fridays trip differ 5x
+    //   here while contributing 1 each to count.
     const layoverCityCounts = new Map<string, number>();
+    const layoverCityNights = new Map<string, number>();
+    const nightsKnown = periodMonth !== null && periodYear !== null;
     for (const p of allPairings) {
       const layovers = Array.isArray(p.layovers) ? p.layovers : [];
+      const instances = nightsKnown
+        ? countOperatingInstances(p, periodMonth!, periodYear!)
+        : 0;
       const cities = new Set<string>();
       for (const l of layovers as Array<{ city?: string }>) {
         const city = String(l?.city || '').trim().toUpperCase();
-        if (city) cities.add(city);
+        if (!city) continue;
+        cities.add(city);
+        if (nightsKnown) {
+          layoverCityNights.set(
+            city,
+            (layoverCityNights.get(city) || 0) + instances
+          );
+        }
       }
       for (const city of cities) {
         layoverCityCounts.set(city, (layoverCityCounts.get(city) || 0) + 1);
       }
     }
     const layoverCities = [...layoverCityCounts.entries()]
-      .map(([city, count]) => ({ city, count }))
+      .map(([city, count]) => ({
+        city,
+        count,
+        nights: nightsKnown ? (layoverCityNights.get(city) ?? 0) : null,
+      }))
       .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
 
     // Calculate C/B ratios for all pairings
