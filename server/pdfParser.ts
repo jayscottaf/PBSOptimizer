@@ -1289,6 +1289,19 @@ export class PDFParser {
         );
       }
 
+      // Confirm the rows actually landed before claiming success. Parsing N
+      // pairings and storing N are separate claims, and only the second is
+      // what the pilot sees — a package that reports "completed" while its
+      // pairings are missing looks healthy and reads as empty everywhere
+      // (stats, filters, the coach), with nothing pointing at the upload.
+      // Failing here instead makes the discrepancy visible at its source.
+      const persisted = await storage.countPairings(bidPackageId);
+      if (persisted !== parsedPairings.length) {
+        throw new Error(
+          `Stored ${persisted} of ${parsedPairings.length} parsed pairings — the bid package was not saved completely. Please re-upload.`
+        );
+      }
+
       // Update bid package status to completed
       await storage.updateBidPackageStatus(bidPackageId, 'completed');
 

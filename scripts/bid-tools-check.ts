@@ -1502,6 +1502,33 @@ assert(
   );
 }
 
+// --- Upload integrity: parsed count must equal persisted count -------------
+// A package is only "completed" once its pairings are actually in the
+// database. Parsing N and storing N are different claims; the second is what
+// the pilot sees. A completed-but-empty package looks healthy and reads as
+// empty everywhere, with nothing pointing back at the upload.
+{
+  // Mirrors the guard in pdfParser: any shortfall must fail, exact match
+  // must pass. Kept as a pure predicate so the rule is testable without a
+  // PDF or a database round trip.
+  const uploadIsComplete = (parsed: number, persisted: number) =>
+    parsed > 0 && persisted === parsed;
+
+  assert(uploadIsComplete(236, 236), 'a fully persisted package completes');
+  assert(
+    !uploadIsComplete(236, 0),
+    'zero persisted rows fails even though parsing succeeded'
+  );
+  assert(
+    !uploadIsComplete(236, 235),
+    'a single dropped row fails rather than silently completing'
+  );
+  assert(
+    !uploadIsComplete(0, 0),
+    'a zero-pairing parse never completes'
+  );
+}
+
 // --- Fleet category normalization ------------------------------------------
 // Award history is per category. The same fleet is spelled three ways across
 // sources ("A220" in a bid package, "220-B" in a Reasons Report, "330"

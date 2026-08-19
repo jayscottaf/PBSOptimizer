@@ -109,6 +109,7 @@ export interface IStorage {
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
   createPairingsBatch(pairingsData: InsertPairing[]): Promise<Pairing[]>;
+  countPairings(bidPackageId: number): Promise<number>;
   getPairings(bidPackageId?: number): Promise<Pairing[]>;
   getPairingsForCoach(bidPackageId: number): Promise<CoachPairing[]>;
   getPairing(id: number): Promise<Pairing | undefined>;
@@ -526,6 +527,20 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     return await db.insert(pairings).values(pairingsData).returning();
+  }
+
+  /**
+   * How many pairings are actually persisted for a package. Used to confirm
+   * the inserts landed before a package is marked completed — parsing N
+   * pairings and storing N are different claims, and only the second one is
+   * what the pilot sees.
+   */
+  async countPairings(bidPackageId: number): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(pairings)
+      .where(eq(pairings.bidPackageId, bidPackageId));
+    return Number(row?.n ?? 0);
   }
 
   async getPairings(bidPackageId?: number): Promise<Pairing[]> {
