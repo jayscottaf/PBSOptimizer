@@ -2161,10 +2161,16 @@ export class DatabaseStorage implements IStorage {
     const creditHours = allPairings.map(p => parseDecimal(p.creditHours));
     const blockHours = allPairings.map(p => parseDecimal(p.blockHours));
 
-    // Calculate averages by pairing days (1-5 days) and count breakdown
+    // Averages and counts per trip length, up to the longest trip actually
+    // in the package. Narrowbody packages top out at 5 days, but widebody
+    // trips run 6-7+; capping at 5 both hid those rows and misfiled them.
+    const maxDays = allPairings.reduce(
+      (m, p: any) => Math.max(m, Number(p.pairingDays) || 1),
+      1
+    );
     const avgByDays: { [key: number]: { credit: number; block: number } } = {};
     const pairingTypeBreakdown: { [key: number]: number } = {};
-    for (let days = 1; days <= 5; days++) {
+    for (let days = 1; days <= maxDays; days++) {
       const dayPairings = allPairings.filter((p: any) => p.pairingDays === days);
       if (dayPairings.length > 0) {
         const dayCredit = dayPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0);

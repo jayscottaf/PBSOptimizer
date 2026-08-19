@@ -153,7 +153,11 @@ export function StatsPanel({
       });
     } else {
       // Fallback: calculate from current page pairings
-      for (let days = 1; days <= 5; days++) {
+      const maxDays = pairings.reduce(
+        (m, p: any) => Math.max(m, Number(p.pairingDays) || 1),
+        1
+      );
+      for (let days = 1; days <= maxDays; days++) {
         const dayPairings = pairings.filter((p: any) => p.pairingDays === days);
         if (dayPairings.length > 0) {
           const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
@@ -188,7 +192,7 @@ export function StatsPanel({
     const pairingTypeBreakdown = pairings.reduce(
       (acc, pairing) => {
         const days = pairing.pairingDays;
-        if (days !== undefined && days >= 1 && days <= 5) {
+        if (days !== undefined && days >= 1) {
           acc[days] = (acc[days] || 0) + 1;
         }
         return acc;
@@ -377,6 +381,19 @@ export function StatsPanel({
       </div>
     ) : null;
 
+  // Trip lengths present in this package (narrowbody tops out at 5 days,
+  // widebody trips run 6-7+). Drives both Trip Types tables so a 6-day row
+  // appears the moment a package contains one.
+  const tripDayList = useMemo(() => {
+    const keys = new Set<number>([
+      ...Object.keys(bidPackageStats?.pairingTypeBreakdown ?? {}).map(Number),
+      ...Object.keys(stats.pairingTypeBreakdown).map(Number),
+    ]);
+    const days = [...keys].filter(d => Number.isFinite(d) && d >= 1);
+    days.sort((a, b) => a - b);
+    return days.length > 0 ? days : [1, 2, 3, 4, 5];
+  }, [bidPackageStats?.pairingTypeBreakdown, stats.pairingTypeBreakdown]);
+
   // Check-in station mix — where this month's pairings actually start.
   // Percentages are of pairings with a parseable first segment (the same
   // denominator the backend groups over), not of every pairing, so the
@@ -504,7 +521,7 @@ export function StatsPanel({
                 <div className="text-right">Avg Block</div>
               </div>
               {/* Data rows */}
-              {[1, 2, 3, 4, 5].map(days => {
+              {tripDayList.map(days => {
                 // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
                 const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
                 const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;
@@ -684,7 +701,7 @@ export function StatsPanel({
                 <div className="text-right">Avg Block</div>
               </div>
               {/* Data rows */}
-              {[1, 2, 3, 4, 5].map(days => {
+              {tripDayList.map(days => {
                 // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
                 const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
                 const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;

@@ -325,18 +325,26 @@ function Histogram({
   );
 }
 
-const DAY_COLORS: Record<number, string> = {
-  1: '#60a5fa', // blue
-  2: '#34d399', // green
-  3: '#fbbf24', // amber
-  4: '#f87171', // red
-  5: '#c084fc', // purple
-};
+const DAY_COLOR_LIST = [
+  '#60a5fa', // blue
+  '#34d399', // green
+  '#fbbf24', // amber
+  '#f87171', // red
+  '#c084fc', // purple
+  '#22d3ee', // cyan (6-day — widebody)
+  '#fb923c', // orange (7-day)
+  '#a3e635', // lime
+  '#f472b6', // pink
+  '#94a3b8', // slate
+];
+/** Stable color per trip length; lengths past the list wrap. */
+const dayColor = (days: number) =>
+  DAY_COLOR_LIST[(Math.max(1, days) - 1) % DAY_COLOR_LIST.length];
 
 function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
   const periods = [...new Set(boundaries.map(b => b.period))];
   const dayLengths = [...new Set(boundaries.map(b => b.pairingDays))]
-    .filter(d => d >= 1 && d <= 5)
+    .filter(d => d >= 1)
     .sort();
   if (periods.length < 2) {
     return (
@@ -420,7 +428,7 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
               key={days}
               points={points}
               fill="none"
-              stroke={DAY_COLORS[days]}
+              stroke={dayColor(days)}
               strokeWidth={2}
               strokeLinejoin="round"
             />
@@ -435,7 +443,7 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
           >
             <span
               className="inline-block w-3 h-0.5 rounded"
-              style={{ backgroundColor: DAY_COLORS[days] }}
+              style={{ backgroundColor: dayColor(days) }}
             />
             {days}-day
           </span>
