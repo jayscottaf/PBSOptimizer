@@ -483,22 +483,27 @@ export async function registerRoutes(app: Express) {
       if (!bidPackage) {
         return res.status(404).json({ error: 'Bid package not found' });
       }
-      const pkgPairings = await storage.getPairings(bidPackageId);
-      if (pkgPairings.length > 0) {
+      // Only ids are needed to unlink history rows — full getPairings() rows
+      // (fullTextBlock and all) were fetched just to be mapped to p.id.
+      const pkgPairingIds = await db
+        .select({ id: pairings.id })
+        .from(pairings)
+        .where(eq(pairings.bidPackageId, bidPackageId));
+      if (pkgPairingIds.length > 0) {
         await db
           .update(bidHistory)
           .set({ linkedPairingId: null })
           .where(
             inArray(
               bidHistory.linkedPairingId,
-              pkgPairings.map(p => p.id)
+              pkgPairingIds.map(p => p.id)
             )
           );
       }
       await storage.deleteBidPackage(bidPackageId);
       res.json({
         deleted: bidPackageId,
-        pairings: pkgPairings.length,
+        pairings: pkgPairingIds.length,
         label: `${bidPackage.month} ${bidPackage.year} · ${bidPackage.base} ${bidPackage.aircraft}`,
       });
     } catch (error) {
@@ -530,53 +535,56 @@ export async function registerRoutes(app: Express) {
   // Get data health stats (bid package and history counts)
   app.get('/api/data-health', async (req, res) => {
     try {
-      const packages = await storage.getBidPackages();
-      const historyCount = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(bidHistory);
-      const linkedCount = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(bidHistory)
-        .where(sql`linked_pairing_id IS NOT NULL`);
-      const pairingCounts = await db
-        .select({
-          bidPackageId: pairings.bidPackageId,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(pairings)
-        .groupBy(pairings.bidPackageId);
+      // These aggregates are independent — run them concurrently instead of
+      // paying five sequential Neon round-trips.
+      const [packages, historyCount, linkedCount, pairingCounts] =
+        await Promise.all([
+          storage.getBidPackages(),
+          db.select({ count: sql<number>`count(*)::int` }).from(bidHistory),
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(bidHistory)
+            .where(sql`linked_pairing_id IS NOT NULL`),
+          db
+            .select({
+              bidPackageId: pairings.bidPackageId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(pairings)
+            .groupBy(pairings.bidPackageId),
+        ]);
       const pairingCountMap = new Map(
         pairingCounts.map(row => [row.bidPackageId, row.count])
       );
 
-      // Get all months from bidHistory (for later comparison with packages)
-      const historyMonths = await db
-        .select({
-          month: bidHistory.month,
-          year: bidHistory.year,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(bidHistory)
-        .groupBy(bidHistory.month, bidHistory.year)
-        .orderBy(sql`${bidHistory.year} DESC, ${bidHistory.month}`);
-
-      // Get reasons reports grouped by month/year/base/aircraft
-      const reasonsReports = await db
-        .select({
-          month: bidHistory.month,
-          year: bidHistory.year,
-          base: bidHistory.base,
-          aircraft: bidHistory.aircraft,
-          count: sql<number>`count(*)::int`,
-          linkedCount: sql<number>`count(linked_pairing_id)::int`,
-        })
-        .from(bidHistory)
-        .groupBy(
-          bidHistory.month,
-          bidHistory.year,
-          bidHistory.base,
-          bidHistory.aircraft
-        );
+      // All-months and reasons-report groupings are independent too.
+      const [historyMonths, reasonsReports] = await Promise.all([
+        db
+          .select({
+            month: bidHistory.month,
+            year: bidHistory.year,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(bidHistory)
+          .groupBy(bidHistory.month, bidHistory.year)
+          .orderBy(sql`${bidHistory.year} DESC, ${bidHistory.month}`),
+        db
+          .select({
+            month: bidHistory.month,
+            year: bidHistory.year,
+            base: bidHistory.base,
+            aircraft: bidHistory.aircraft,
+            count: sql<number>`count(*)::int`,
+            linkedCount: sql<number>`count(linked_pairing_id)::int`,
+          })
+          .from(bidHistory)
+          .groupBy(
+            bidHistory.month,
+            bidHistory.year,
+            bidHistory.base,
+            bidHistory.aircraft
+          ),
+      ]);
 
       // Create lookup map for reasons reports using normalized aircraft base type
       // Key format: MONTH-YEAR-BASE-AIRCRAFT_BASE_TYPE
@@ -1149,29 +1157,40 @@ export async function registerRoutes(app: Express) {
           `Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
         );
 
-        for (const award of awards) {
-          try {
-            // Check if this award already exists (duplicate detection)
-            const existingAward = await db
-              .select()
+        // Duplicate detection in one query instead of one SELECT per award:
+        // at 500-1500 awards the per-award round-trips (plus per-award
+        // INSERTs below) put 1000-3000 sequential Neon calls inside a single
+        // serverless invocation and regularly brushed the 60s cap.
+        const existingKeys = new Set(
+          (
+            await db
+              .select({
+                pairingNumber: bidHistory.pairingNumber,
+                juniorHolderSeniority: bidHistory.juniorHolderSeniority,
+              })
               .from(bidHistory)
               .where(
                 and(
-                  eq(bidHistory.pairingNumber, award.pairingNumber),
                   eq(bidHistory.month, metadata.month),
                   eq(bidHistory.year, metadata.year),
                   eq(bidHistory.base, metadata.base),
-                  eq(bidHistory.aircraft, metadata.aircraft),
-                  eq(bidHistory.juniorHolderSeniority, award.seniorityNumber)
+                  eq(bidHistory.aircraft, metadata.aircraft)
                 )
               )
-              .limit(1);
+          ).map(r => `${r.pairingNumber}|${r.juniorHolderSeniority}`)
+        );
 
-            // Skip if duplicate found
-            if (existingAward.length > 0) {
+        const rowsToInsert: (typeof bidHistory.$inferInsert)[] = [];
+        for (const award of awards) {
+          try {
+            // Skip if duplicate found (also dedupes within this upload,
+            // matching the old per-award select-then-insert behavior)
+            const key = `${award.pairingNumber}|${award.seniorityNumber}`;
+            if (existingKeys.has(key)) {
               skippedCount++;
               continue;
             }
+            existingKeys.add(key);
 
             // Create trip fingerprint
             const fingerprint =
@@ -1233,8 +1252,7 @@ export async function registerRoutes(app: Express) {
               unlinkedCount++;
             }
 
-            // Insert into database with new fields
-            await db.insert(bidHistory).values({
+            rowsToInsert.push({
               pairingNumber: award.pairingNumber,
               month: metadata.month,
               year: metadata.year,
@@ -1259,11 +1277,24 @@ export async function registerRoutes(app: Express) {
                 `${metadata.year}-${monthToNumber(metadata.month)}-01`
               ),
             });
-
-            storedCount++;
           } catch (error) {
             console.error(
-              `Error storing award for pairing ${award.pairingNumber}:`,
+              `Error preparing award for pairing ${award.pairingNumber}:`,
+              error
+            );
+          }
+        }
+
+        // Bulk insert in chunks (same pattern as createPairingsBatch).
+        const INSERT_CHUNK = 500;
+        for (let i = 0; i < rowsToInsert.length; i += INSERT_CHUNK) {
+          const chunk = rowsToInsert.slice(i, i + INSERT_CHUNK);
+          try {
+            await db.insert(bidHistory).values(chunk);
+            storedCount += chunk.length;
+          } catch (error) {
+            console.error(
+              `Error bulk-inserting awards ${i}-${i + chunk.length}:`,
               error
             );
           }
@@ -1553,8 +1584,11 @@ export async function registerRoutes(app: Express) {
 
       // If seniority provided, compute holdProbability per-request (no DB writes)
       if (seniorityPercentile) {
+        // Only pairingNumber is needed for the frequency map — a full select
+        // here re-shipped every fullTextBlock/flightSegments blob (~1MB per
+        // package) from the DB on the hottest endpoint.
         const allForPackage = await db
-          .select()
+          .select({ pairingNumber: pairings.pairingNumber })
           .from(pairings)
           .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
 
@@ -1992,8 +2026,9 @@ export async function registerRoutes(app: Express) {
         );
 
         if (needsRecalc) {
+          // Frequency map only reads pairingNumber; don't re-fetch full rows.
           const allForPackage = await db
-            .select()
+            .select({ pairingNumber: pairings.pairingNumber })
             .from(pairings)
             .where(eq(pairings.bidPackageId, bidPackageId));
 
@@ -2236,11 +2271,21 @@ export async function registerRoutes(app: Express) {
       const fleetBase = pairingPackage
         ? parseAircraftCode(pairingPackage.aircraft).baseType
         : null;
+      // Base is a hard category boundary just like fleet (ATL awards say
+      // nothing about NYC seniority), so push it into SQL too — it's also
+      // the leading column of bid_history_base_aircraft_idx. Aircraft stays
+      // a JS filter because it needs parseAircraftCode normalization
+      // ("A220" vs "220-B").
       const historicalData = (
         await db
           .select()
           .from(bidHistory)
-          .where(eq(bidHistory.pairingDays, pairingDays))
+          .where(
+            and(
+              eq(bidHistory.pairingDays, pairingDays),
+              ...(pairingPackage ? [eq(bidHistory.base, pairingPackage.base)] : [])
+            )
+          )
       ).filter(h =>
         fleetBase ? parseAircraftCode(h.aircraft).baseType === fleetBase : true
       );
