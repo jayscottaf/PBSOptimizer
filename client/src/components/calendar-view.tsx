@@ -387,7 +387,9 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   const checkCrewRestViolations = (
     events: CalendarEvent[]
   ): CalendarEvent[] => {
-    const sortedEvents = events.sort(
+    // Copy before sorting: `events` is the React Query cache array, and
+    // sorting it in place silently reorders cached data for every consumer.
+    const sortedEvents = [...events].sort(
       (a, b) =>
         new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );

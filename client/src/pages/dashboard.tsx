@@ -133,7 +133,6 @@ export default function Dashboard() {
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [hideConflicts, setHideConflicts] = useState(false);
   const [filterResetKey, setFilterResetKey] = useState(0);
-  const [conflictMap, setConflictMap] = useState<Map<number, ConflictInfo>>(new Map());
 
   const queryClient = useQueryClient();
 
@@ -1279,6 +1278,10 @@ export default function Dashboard() {
 
   // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
+    // Shadow with the debounced value: this memo re-filters and re-sorts the
+    // entire cached package, and keying it on the raw filters made it run on
+    // every keystroke — the main source of typing lag on mobile.
+    const filters = debouncedFilters;
     // When sorting is active OR preferredDaysOff filter is set, use unfiltered cache and apply filters client-side
     const hasPreferredDaysOff = filters.preferredDaysOff && filters.preferredDaysOff.length > 0;
     const useUnfiltered = (sortColumn || hasPreferredDaysOff) && unfilteredLocal && unfilteredLocal.length > 0;
@@ -1611,7 +1614,7 @@ export default function Dashboard() {
 
     console.log(`After filtering and sorting: ${sorted.length} pairings`);
     return sorted;
-  }, [fullLocal, unfilteredLocal, isFullCacheReady, filters, sortColumn, sortDirection, pairings, comparePairings]);
+  }, [fullLocal, unfilteredLocal, isFullCacheReady, debouncedFilters, sortColumn, sortDirection, pairings, comparePairings]);
 
   // Use sorted pairings if available, otherwise use regular pairings
   // BUT: if layoverLocations filter is active, bypass cache and use API response directly
@@ -1672,6 +1675,16 @@ export default function Dashboard() {
     return pairings;
   }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters, latestBidPackage]);
 
+  // Conflicts derived in a memo rather than an effect + state: the effect
+  // version ran after every commit that changed the list's array identity and
+  // its setState forced a second full render pass of the page.
+  const conflictMap = React.useMemo<Map<number, ConflictInfo>>(() => {
+    if (displayPairings && displayPairings.length > 0 && calendarEventsData.length > 0 && latestBidPackage) {
+      return detectConflicts(displayPairings, calendarEventsData, latestBidPackage.year);
+    }
+    return new Map();
+  }, [displayPairings, calendarEventsData, latestBidPackage]);
+
   // Filter out conflict pairings if hideConflicts is enabled
   const filteredDisplayPairings = React.useMemo(() => {
     if (!hideConflicts) {
@@ -1679,16 +1692,6 @@ export default function Dashboard() {
     }
     return displayPairings.filter(p => !conflictMap.has(p.id));
   }, [displayPairings, hideConflicts, conflictMap]);
-
-  // Calculate conflicts when pairings or calendar events change
-  React.useEffect(() => {
-    if (displayPairings && displayPairings.length > 0 && calendarEventsData.length > 0 && latestBidPackage) {
-      const conflicts = detectConflicts(displayPairings, calendarEventsData, latestBidPackage.year);
-      setConflictMap(conflicts);
-    } else {
-      setConflictMap(new Map());
-    }
-  }, [displayPairings, calendarEventsData, latestBidPackage]);
 
   const openAIAssistant = useCallback(() => {
     // On mobile: show full-screen AI view; on desktop: open the modal.
@@ -2366,6 +2369,8 @@ export default function Dashboard() {
                   <Input
                     value={linkPin}
                     onChange={e => setLinkPin(e.target.value)}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
                     placeholder="Sync PIN"
                     className="bg-card"
                   />
@@ -2417,6 +2422,9 @@ export default function Dashboard() {
                 data-testid="input-seniority-number"
                 value={seniorityNumber}
                 onChange={e => setSeniorityNumber(e.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
                 placeholder="Enter seniority number (e.g., 15600)"
                 className={!seniorityNumber ? 'border-red-300 focus:border-red-500' : ''}
                 required
@@ -2513,6 +2521,8 @@ export default function Dashboard() {
                   <Input
                     value={syncPinDraft}
                     onChange={e => setSyncPinDraft(e.target.value)}
+                    inputMode="numeric"
+                    autoComplete="off"
                     placeholder="Choose a PIN"
                   />
                   <Button
