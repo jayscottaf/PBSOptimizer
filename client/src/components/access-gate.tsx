@@ -42,12 +42,9 @@ export function AccessGate({ children }: { children: ReactNode }) {
         <p>Checking access…</p>
       ) : state === 'locked' ? (
         <>
-          <p>
-            Sign in with username <strong>pilot</strong> and your app access
-            password.
-          </p>
+          <p>Enter your app PIN to continue.</p>
           <a className="underline" href="/api/access">
-            Sign in
+            Unlock with PIN
           </a>
         </>
       ) : (

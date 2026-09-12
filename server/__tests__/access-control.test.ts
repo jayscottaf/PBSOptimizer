@@ -96,3 +96,69 @@ test('PINs are salted, verified, and never returned with a profile', async () =>
     hasSyncPin: true,
   });
 });
+
+test('four-digit access uses protected sessions and limits PIN attempts', async () => {
+  const env = {
+    NODE_ENV: 'production',
+    APP_ACCESS_PIN: '0123',
+    APP_ORIGIN: 'https://pbs.example',
+  };
+  let attempts = 0;
+  const saved = new Map<string, string>();
+  const app = express();
+  app.use(express.urlencoded({ extended: false }));
+  app.use(
+    accessControl(env, {
+      async attempt() {
+        return ++attempts <= 5;
+      },
+      async save(token, credential) {
+        saved.set(token, credential);
+      },
+      async valid(token, credential) {
+        return saved.get(token) === credential;
+      },
+    })
+  );
+  app.get('*', (_req, res) => res.send('Allowed'));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const login = (pin: string, origin = env.APP_ORIGIN) =>
+    fetch(url + '/api/access', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { origin },
+      body: new URLSearchParams({ pin }),
+    });
+  try {
+    const page = await fetch(url + '/api/access');
+    assert.equal(page.status, 401);
+    assert.match(await page.text(), /inputmode="numeric"/);
+    assert.equal(page.headers.get('www-authenticate'), null);
+    assert.equal((await login('0123', 'https://attacker.example')).status, 403);
+    assert.equal(attempts, 0);
+    assert.equal((await login('9999')).status, 401);
+    const response = await login('0123');
+    assert.equal(response.status, 303);
+    const cookie = response.headers.get('set-cookie')!;
+    assert.match(cookie, /HttpOnly; Secure; SameSite=Strict/);
+    assert.equal(saved.size, 1);
+    const headers = { cookie: cookie.split(';')[0] };
+    assert.equal((await fetch(url, { headers })).status, 200);
+    env.APP_ACCESS_PIN = '4567';
+    assert.equal((await fetch(url, { headers })).status, 401);
+    env.APP_ACCESS_PIN = '0123';
+    for (let i = 0; i < 3; i++) assert.equal((await login('9999')).status, 401);
+    const locked = await login('0123');
+    assert.equal(locked.status, 429);
+    assert.equal(locked.headers.get('retry-after'), '900');
+    assert.equal((await fetch(url, { headers })).status, 200);
+    saved.clear();
+    assert.equal((await fetch(url, { headers })).status, 401);
+    env.APP_ACCESS_PIN = '123';
+    assert.equal((await fetch(url)).status, 503);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});

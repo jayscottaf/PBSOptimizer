@@ -31,63 +31,137 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   return timingSafeEqual(actual, Buffer.from(encoded, 'hex'));
 }
 
-/** One deployment belongs to one pilot. Gate the document as well as all APIs
- * so the browser's native HTTP authentication prompt works before React loads.
+/** Gate the document and APIs for a single-pilot deployment. PIN sessions
+ * use a durable attempt budget; loopback development remains login-free.
  */
 export function accessControl(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  sessions?: {
+    attempt(): Promise<boolean>;
+    save(token: string, credential: string): Promise<void>;
+    valid(token: string, credential: string): Promise<boolean>;
+  }
 ): RequestHandler {
-  return (req, res, next) => {
-    const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(
-      req.socket.remoteAddress ?? ''
-    );
-    const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(
-      req.hostname
-    );
-    const localDevelopment =
-      env.NODE_ENV === 'development' && loopback && localHost;
-    res.set('Cache-Control', 'private, no-store');
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      const origin = req.get('origin');
-      const expected = env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
+  return async (req, res, next) => {
+    try {
+      const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(
+        req.socket.remoteAddress ?? ''
+      );
+      const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(
+        req.hostname
+      );
+      const localDevelopment =
+        env.NODE_ENV === 'development' && loopback && localHost;
+      res.set('Cache-Control', 'private, no-store');
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        const origin = req.get('origin');
+        const expected =
+          env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
+        if (
+          req.get('sec-fetch-site') === 'cross-site' ||
+          (origin && origin !== expected)
+        ) {
+          res
+            .status(403)
+            .json({ message: 'Cross-origin requests are not allowed' });
+          return;
+        }
+      }
+      if (localDevelopment) return next();
+      const pin = env.APP_ACCESS_PIN;
+      const password = env.APP_ACCESS_PASSWORD;
       if (
-        req.get('sec-fetch-site') === 'cross-site' ||
-        (origin && origin !== expected)
+        pin !== undefined
+          ? !/^\d{4}$/.test(pin)
+          : !password || password.length < 24
       ) {
         res
-          .status(403)
-          .json({ message: 'Cross-origin requests are not allowed' });
+          .status(503)
+          .json({ message: 'Application access is not configured' });
         return;
       }
-    }
-    if (localDevelopment) return next();
-    const password = env.APP_ACCESS_PASSWORD;
-    if (!password || password.length < 24) {
-      res.status(503).json({ message: 'Application access is not configured' });
-      return;
-    }
-    const authorization = req.get('authorization') ?? '';
-    const provided = /^Basic /i.test(authorization)
-      ? Buffer.from(authorization.slice(6), 'base64').toString('utf8')
-      : '';
-    if (!equalSecret(provided, `pilot:${password}`)) {
-      if (
-        req.path === '/api/access' ||
-        req.get('accept')?.includes('text/html')
-      ) {
-        res.set(
-          'WWW-Authenticate',
-          'Basic realm="PBS Optimizer", charset="UTF-8"'
-        );
+      if (pin !== undefined) {
+        const store =
+          sessions ?? (await import('./access-sessions')).accessSessions;
+        const credential = digest(pin).toString('hex');
+        const token = req
+          .get('cookie')
+          ?.split(';')
+          .map(part => part.trim())
+          .find(part => part.startsWith('__Host-pbs-access='))
+          ?.slice('__Host-pbs-access='.length);
+        if (
+          token &&
+          /^[a-f0-9]{64}$/.test(token) &&
+          (await store.valid(digest(token).toString('hex'), credential))
+        )
+          return next();
+        if (req.path === '/api/access' && req.method === 'POST') {
+          if (!(await store.attempt())) {
+            res
+              .set('Retry-After', '900')
+              .status(429)
+              .send('Too many attempts. Try again in 15 minutes.');
+            return;
+          }
+          if (
+            typeof req.body?.pin !== 'string' ||
+            !equalSecret(req.body.pin, pin)
+          ) {
+            res
+              .status(401)
+              .type('html')
+              .send(pinPage('Incorrect PIN. Try again.'));
+            return;
+          }
+          const session = randomBytes(32).toString('hex');
+          await store.save(digest(session).toString('hex'), credential);
+          res.set(
+            'Set-Cookie',
+            `__Host-pbs-access=${session}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=604800`
+          );
+          res.redirect(303, '/');
+          return;
+        }
+        if (
+          req.path === '/api/access' ||
+          req.get('accept')?.includes('text/html')
+        ) {
+          res.status(401).type('html').send(pinPage());
+        } else res.status(401).json({ message: 'Enter your app PIN' });
+        return;
       }
-      res.status(401).json({ message: 'Sign in to access PBS Optimizer' });
-      return;
+      // Existing deployments can retain their password until PIN rollout.
+      const authorization = req.get('authorization') ?? '';
+      const provided = /^Basic /i.test(authorization)
+        ? Buffer.from(authorization.slice(6), 'base64').toString('utf8')
+        : '';
+      if (!equalSecret(provided, `pilot:${password}`)) {
+        if (
+          req.path === '/api/access' ||
+          req.get('accept')?.includes('text/html')
+        )
+          res.set(
+            'WWW-Authenticate',
+            'Basic realm="PBS Optimizer", charset="UTF-8"'
+          );
+        res.status(401).json({ message: 'Sign in to access PBS Optimizer' });
+        return;
+      }
+      next();
+    } catch {
+      res
+        .status(503)
+        .json({ message: 'Access is temporarily unavailable. Please retry.' });
     }
-    next();
   };
 }
 
 export function publicUser<T extends { syncPin?: string | null }>(user: T) {
   const { syncPin, ...profile } = user;
   return { ...profile, hasSyncPin: Boolean(syncPin) };
+}
+
+function pinPage(message = 'Enter your four-digit app PIN.') {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PBS Optimizer</title></head><body style="font-family:system-ui;max-width:24rem;margin:15vh auto;padding:24px"><h1>PBS Optimizer</h1><p>${message}</p><form method="post" action="/api/access"><label for="pin">PIN</label><input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="current-password" required autofocus style="display:block;font-size:24px;margin:16px 0;padding:8px;width:8rem"><button type="submit" style="padding:10px 24px">Unlock</button></form></body></html>`;
 }
