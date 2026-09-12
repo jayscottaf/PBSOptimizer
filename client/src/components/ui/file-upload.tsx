@@ -76,7 +76,7 @@ export function FileUpload({ onUpload }: FileUploadProps) {
 
       toast({
         title: 'Upload successful',
-        description: 'Bid package uploaded and processing has begun.',
+        description: 'Bid package processed. Earlier versions and their saved work are preserved.',
       });
 
       // Wait a moment for processing to begin, then trigger refresh

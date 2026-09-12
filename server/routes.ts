@@ -740,11 +740,8 @@ export async function registerRoutes(app: Express) {
 
       const { name, month, year, base, aircraft } = req.body;
 
-      // Don't pre-check for duplicates here — month/year/base/aircraft from the
-      // client are placeholders until the parser extracts the real values from
-      // the PDF. Pre-checking would delete unrelated packages that happen to
-      // match the placeholder (e.g. "August 2025 NYC A220"). The post-parsing
-      // cleanup further down does the correct dedup using real metadata.
+      // Metadata is provisional until parsing. Uploading never deletes an
+      // existing package or the favorites, calendar, and chat attached to it.
       const bidPackageData = insertBidPackageSchema.parse({
         name,
         month,
@@ -864,130 +861,9 @@ export async function registerRoutes(app: Express) {
               `Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`
             );
 
-            // After linking, check if there's a duplicate package with the same normalized aircraft (baseType + position)
-            const allPackages = await storage.getBidPackages();
-            const { baseType: freshAircraftBase, position: freshPosition } =
-              parseAircraftCode(freshBidPackage.aircraft);
-            const freshMonth = normalizeMonth(freshBidPackage.month);
+            // Uploads create a new version. Keep earlier packages and all of
+            // their saved references; only explicit package deletion removes them.
 
-            const duplicates = allPackages.filter(pkg => {
-              if (pkg.id === freshBidPackage.id) return false;
-              const pkgMonth = normalizeMonth(pkg.month);
-              const { baseType: pkgAircraftBase, position: pkgPosition } =
-                parseAircraftCode(pkg.aircraft);
-              // Use normalized comparison: baseType + position to handle format differences
-              // e.g., "A220" vs "220", "220-A" vs "A220-A" should match if they're the same aircraft+position
-              return (
-                pkgMonth === freshMonth &&
-                pkg.year === freshBidPackage.year &&
-                pkg.base === freshBidPackage.base &&
-                pkgAircraftBase === freshAircraftBase &&
-                pkgPosition === freshPosition
-              );
-            });
-
-            if (duplicates.length > 0) {
-              console.log(
-                `Auto-linking: Found ${duplicates.length} duplicate packages to clean up`
-              );
-              for (const dup of duplicates) {
-                console.log(
-                  `Auto-linking: Deleting duplicate package ${dup.id} (${dup.month} ${dup.year} ${dup.aircraft})`
-                );
-                try {
-                  // CRITICAL: Must unlink bid_history records BEFORE deleting pairings/package
-                  // Foreign key constraint on linked_pairing_id will block deletion otherwise.
-                  // Ids only — the full rows carry jsonb + raw PDF text we
-                  // don't need just to unlink.
-                  const dupPairingIds = await db
-                    .select({ id: pairings.id })
-                    .from(pairings)
-                    .where(eq(pairings.bidPackageId, dup.id));
-                  if (dupPairingIds.length > 0) {
-                    console.log(
-                      `Auto-linking: Unlinking ${dupPairingIds.length} pairings from bid_history before deletion`
-                    );
-
-                    // One set-based UPDATE instead of one per pairing: this
-                    // runs inside the synchronous upload request, and 300-450
-                    // sequential Neon round trips here could push it past the
-                    // serverless function timeout.
-                    await db
-                      .update(bidHistory)
-                      .set({ linkedPairingId: null })
-                      .where(
-                        inArray(
-                          bidHistory.linkedPairingId,
-                          dupPairingIds.map(p => p.id)
-                        )
-                      );
-                    console.log(
-                      `Auto-linking: Successfully unlinked bid_history records`
-                    );
-                  }
-
-                  // Now safe to delete the package (will cascade delete pairings)
-                  await storage.deleteBidPackage(dup.id);
-                  console.log(
-                    `Auto-linking: Successfully deleted duplicate package ${dup.id}`
-                  );
-                } catch (deleteError) {
-                  console.error(
-                    `Auto-linking: Failed to delete duplicate package ${dup.id}:`,
-                    deleteError
-                  );
-                }
-              }
-
-              // Re-link bid_history records to the new package's pairings
-              console.log(
-                `Auto-linking: Re-linking bid_history records to new package ${freshBidPackage.id}`
-              );
-              const newPairingMap = new Map(
-                fetchedPairings.map(p => [p.pairingNumber, p])
-              );
-              const unlinkedAfterCleanup = await db
-                .select()
-                .from(bidHistory)
-                .where(sql`linked_pairing_id IS NULL`);
-
-              let relinkedCount = 0;
-              const relinkRecordIdsByPairingId = new Map<number, number[]>();
-              for (const record of unlinkedAfterCleanup) {
-                const { baseType: histAircraftBase, position: histPosition } =
-                  parseAircraftCode(record.aircraft);
-                const histMonthNorm = normalizeMonth(record.month);
-
-                // Must match month/year/base AND position to preserve Captain/FO segregation
-                if (
-                  histMonthNorm === freshMonth &&
-                  record.year === freshBidPackage.year &&
-                  record.base === freshBidPackage.base &&
-                  histAircraftBase === freshAircraftBase &&
-                  histPosition === freshPosition
-                ) {
-                  const matchingPairing = newPairingMap.get(
-                    record.pairingNumber
-                  );
-                  if (matchingPairing) {
-                    const ids =
-                      relinkRecordIdsByPairingId.get(matchingPairing.id) || [];
-                    ids.push(record.id);
-                    relinkRecordIdsByPairingId.set(matchingPairing.id, ids);
-                    relinkedCount++;
-                  }
-                }
-              }
-              for (const [pairingId, recordIds] of relinkRecordIdsByPairingId) {
-                await db
-                  .update(bidHistory)
-                  .set({ linkedPairingId: pairingId })
-                  .where(inArray(bidHistory.id, recordIds));
-              }
-              console.log(
-                `Auto-linking: Re-linked ${relinkedCount} bid_history records to new package (position: ${freshPosition || 'none'})`
-              );
-            }
           }
         } catch (linkError) {
           console.error(
@@ -1012,7 +888,7 @@ export async function registerRoutes(app: Express) {
       res.json({
         success: true,
         bidPackage,
-        message: 'Bid package uploaded and processed successfully.',
+        message: 'Bid package processed. Earlier versions and their saved work are preserved.',
       });
     } catch (error) {
       console.error('Error uploading bid package:', error);
