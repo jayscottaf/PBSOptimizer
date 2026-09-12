@@ -11,7 +11,7 @@ if (process.env.VERCEL) {
   neonConfig.fetchConnectionCache = true;
 } else {
   // In local development, use WebSocket
-  import('ws').then((ws) => {
+  import('ws').then(ws => {
     neonConfig.webSocketConstructor = ws.default;
   });
   neonConfig.pipelineTLS = false;
@@ -88,88 +88,85 @@ class DatabaseCircuitBreaker {
 
 const circuitBreaker = new DatabaseCircuitBreaker();
 
-// Enhanced pool configuration with connection management
+// Every replacement pool needs the same error handling as the initial one.
 const createPool = () => {
-  return new Pool({
+  const next = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 3, // Further reduced to prevent overload
-    min: 0, // Allow pool to completely drain
-    idleTimeoutMillis: 20000, // Faster cleanup of idle connections
-    connectionTimeoutMillis: 8000, // Faster timeout
-    maxUses: 5000, // More aggressive connection recycling
-    allowExitOnIdle: true, // Allow pool to exit when no connections
+    max: 3,
+    min: 0,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 8000,
+    maxUses: 5000,
+    allowExitOnIdle: true,
   });
-};
-
-let pool = createPool();
-export const db = drizzle({ client: pool, schema });
-
-// Connection recovery with exponential backoff
-export const reconnectDatabase = async (attempt = 1): Promise<typeof db> => {
-  const maxAttempts = 5;
-  const baseDelay = 1000;
-
-  try {
-    console.log(`Database reconnection attempt ${attempt}/${maxAttempts}...`);
-
-    // Close existing pool gracefully
-    try {
-      await pool.end();
-    } catch (endError) {
-      console.warn('Error ending existing pool:', endError);
-    }
-
-    // Wait before creating new pool
-    const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 10000);
-    await new Promise(resolve => setTimeout(resolve, delay));
-
-    // Create new pool
-    pool = createPool();
-    const newDb = drizzle({ client: pool, schema });
-
-    // Test the connection with a simple query
-    await pool.query('SELECT 1 as test');
-
-    console.log(`✅ Database reconnection successful on attempt ${attempt}`);
-    circuitBreaker.onSuccess();
-    return newDb;
-  } catch (error) {
-    console.error(`Database reconnection attempt ${attempt} failed:`, error);
+  next.on('error', err => {
+    if (next !== pool || shuttingDown) return;
+    console.error('Database pool error:', err);
     circuitBreaker.onFailure();
-
-    if (attempt < maxAttempts) {
-      return await reconnectDatabase(attempt + 1);
-    } else {
-      throw new Error(
-        `Database reconnection failed after ${maxAttempts} attempts: ${error}`
+    if (
+      /Connection terminated|WebSocket|ECONNREFUSED|connection closed/i.test(
+        err.message
+      )
+    ) {
+      void reconnectDatabase().catch(error =>
+        console.error('Automatic reconnection failed:', error)
       );
     }
-  }
+  });
+  return next;
 };
 
-// Enhanced error handling for pool
-pool.on('error', async err => {
-  console.error('Database pool error:', err);
-  circuitBreaker.onFailure();
+let shuttingDown = false;
+let pool = createPool();
+// ES module imports are live bindings. Existing storage closures now see the
+// replacement client when executeWithRetry invokes the operation again.
+export let db = drizzle({ client: pool, schema });
+let reconnectPromise: Promise<typeof db> | undefined;
 
-  // Auto-reconnect on specific errors
-  const shouldReconnect =
-    err.message.includes('Connection terminated') ||
-    err.message.includes('WebSocket') ||
-    err.message.includes('ECONNREFUSED') ||
-    err.message.includes('connection closed');
-
-  if (shouldReconnect) {
-    console.log('Triggering automatic reconnection due to pool error');
-    setTimeout(async () => {
+async function recoverDatabase(): Promise<typeof db> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    if (shuttingDown) throw new Error('Database is shutting down');
+    if (attempt > 1)
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.min(1000 * 2 ** (attempt - 2), 10000))
+      );
+    const replacement = createPool();
+    try {
+      await replacement.query('SELECT 1 as test');
+      if (shuttingDown) throw new Error('Database is shutting down');
+      const previous = pool;
+      const nextDb = drizzle({ client: replacement, schema });
+      pool = replacement;
+      db = nextDb;
+      // Publish a tested client before draining the old pool. Failed attempts
+      // never replace the current client or leak their candidate pools.
       try {
-        await reconnectDatabase();
-      } catch (reconnectError) {
-        console.error('Automatic reconnection failed:', reconnectError);
+        await previous.end();
+      } catch (error) {
+        console.warn('Error draining old pool:', error);
       }
-    }, 2000);
+      circuitBreaker.onSuccess();
+      return db;
+    } catch (error) {
+      lastError = error;
+      await replacement.end().catch(() => {});
+      circuitBreaker.onFailure();
+    }
   }
-});
+  throw new Error(
+    `Database reconnection failed after 5 attempts: ${lastError}`
+  );
+}
+
+export function reconnectDatabase(): Promise<typeof db> {
+  if (!reconnectPromise) {
+    reconnectPromise = recoverDatabase().finally(() => {
+      reconnectPromise = undefined;
+    });
+  }
+  return reconnectPromise;
+}
 
 // Database operation wrapper with circuit breaker
 export const executeWithRetry = async <T>(
@@ -260,7 +257,7 @@ export const getDatabaseHealth = async (): Promise<{
 const gracefulShutdown = async (signal: string) => {
   console.log(`${signal} received, shutting down database connections...`);
   try {
-    await pool.end();
+    await cleanup();
     console.log('Database connections closed successfully');
   } catch (error) {
     console.error('Error during database shutdown:', error);
@@ -295,6 +292,7 @@ const startKeepAlive = () => {
       }
     }
   }, 45000); // Every 45 seconds
+  keepAliveInterval.unref();
 };
 
 const stopKeepAlive = () => {
@@ -308,6 +306,8 @@ startKeepAlive();
 
 // Export cleanup function
 export const cleanup = async () => {
+  shuttingDown = true;
   stopKeepAlive();
+  await reconnectPromise?.catch(() => {});
   await pool.end();
 };
