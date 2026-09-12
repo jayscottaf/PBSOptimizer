@@ -29,7 +29,7 @@ body.offline {
    popper (Select/Dropdown/Popover/Tooltip anchor themselves at fixed
    top:0 and offset via transform), which silently hid every dropdown in
    the app. */
-div[class*="offline"][style*="background"] {
+div[class*='offline'][style*='background'] {
   display: none !important;
 }
 
@@ -51,7 +51,7 @@ div[class*="offline"][style*="background"] {
   --card-foreground: hsl(222, 30%, 12%);
   --border: hsl(214, 16%, 89%);
   --input: hsl(214, 16%, 89%);
-  --primary: hsl(203, 94%, 46%);
+  --primary: hsl(205, 88%, 36%);
   --primary-foreground: hsl(210, 40%, 99%);
   --secondary: hsl(214, 18%, 94%);
   --secondary-foreground: hsl(222, 25%, 18%);
@@ -87,12 +87,12 @@ div[class*="offline"][style*="background"] {
   --background: hsl(222, 28%, 6%);
   --foreground: hsl(210, 25%, 96%);
   --muted: hsl(220, 18%, 14%);
-  --muted-foreground: hsl(217, 12%, 64%);
+  --muted-foreground: hsl(217, 14%, 72%);
   --popover: hsl(222, 25%, 10%);
   --popover-foreground: hsl(210, 25%, 96%);
   --card: hsl(222, 25%, 9%);
   --card-foreground: hsl(210, 25%, 96%);
-  --border: hsl(220, 16%, 16%);
+  --border: hsl(220, 16%, 22%);
   --input: hsl(220, 16%, 18%);
   --primary: hsl(203, 94%, 56%);
   --primary-foreground: hsl(222, 47%, 8%);

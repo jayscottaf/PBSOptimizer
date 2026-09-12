@@ -1,6 +1,14 @@
 import { printedDurationMinutes } from '@shared/durations';
 import { filterPairings } from '@/lib/filter-pairings';
-import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  Suspense,
+  lazy,
+} from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,10 +84,7 @@ const TrendsPanel = lazy(() =>
   import('@/components/trends-panel').then(m => ({ default: m.TrendsPanel }))
 );
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  purgeUserCache,
-  getCacheInfo,
-} from '@/lib/offlineCache';
+import { purgeUserCache, getCacheInfo } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
 import { filterFieldMeta, formatBidPeriod } from '@shared/pbsFilterLabels';
 import { maxLayoverMinutes } from '@/lib/layover';
@@ -137,7 +142,10 @@ export default function Dashboard() {
   const uploadPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track processing bid package for persistent indicator
-  const [processingBidPackage, setProcessingBidPackage] = useState<{id: number; name: string} | null>(null);
+  const [processingBidPackage, setProcessingBidPackage] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   // Auto-expand the mobile Quick Stats card while a package is processing —
   // it was collapsed by default, so a pilot uploading on mobile could miss
@@ -151,7 +159,8 @@ export default function Dashboard() {
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (uploadPollTimeoutRef.current) clearTimeout(uploadPollTimeoutRef.current);
+      if (uploadPollTimeoutRef.current)
+        clearTimeout(uploadPollTimeoutRef.current);
     };
   }, []);
 
@@ -175,7 +184,10 @@ export default function Dashboard() {
 
           if (pkg.status === 'processing') {
             if (pkg.month && pkg.year) {
-              setProcessingBidPackage({ id: pkg.id, name: `${pkg.month} ${pkg.year}` });
+              setProcessingBidPackage({
+                id: pkg.id,
+                name: `${pkg.month} ${pkg.year}`,
+              });
             }
             if (attempt < maxAttempts) {
               uploadPollTimeoutRef.current = setTimeout(
@@ -186,7 +198,8 @@ export default function Dashboard() {
               setProcessingBidPackage(null);
               toast({
                 title: 'Processing timeout',
-                description: 'Processing is taking longer than expected. Please refresh the page.',
+                description:
+                  'Processing is taking longer than expected. Please refresh the page.',
                 variant: 'destructive',
               });
             }
@@ -194,7 +207,8 @@ export default function Dashboard() {
           }
 
           // Terminal state (completed or failed)
-          const actualName = pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
+          const actualName =
+            pkg.month && pkg.year ? `${pkg.month} ${pkg.year}` : 'Bid Package';
           setProcessingBidPackage(null);
 
           queryClient.invalidateQueries({ queryKey: ['bidPackages'] });
@@ -215,7 +229,10 @@ export default function Dashboard() {
           });
 
           toast({
-            title: pkg.status === 'completed' ? '✓ Processing Complete' : '✗ Processing Failed',
+            title:
+              pkg.status === 'completed'
+                ? '✓ Processing Complete'
+                : '✗ Processing Failed',
             description:
               pkg.status === 'completed'
                 ? `${actualName} is ready!`
@@ -288,24 +305,30 @@ export default function Dashboard() {
     aircraft: string;
     updatedAt?: string;
   };
-  const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(() => {
-    const savedId = localStorage.getItem('userId');
-    if (!savedId) return undefined;
-    const savedSeniorityNumber = localStorage.getItem('seniorityNumber');
-    if (!savedSeniorityNumber) return undefined;
-    const savedPercentile = localStorage.getItem('seniorityPercentile');
-    return {
-      id: parseInt(savedId),
-      name: localStorage.getItem('name') || undefined,
-      seniorityNumber: parseInt(savedSeniorityNumber),
-      seniorityPercentile: savedPercentile ? parseFloat(savedPercentile) : undefined,
-      base: localStorage.getItem('base') || '',
-      aircraft: localStorage.getItem('aircraft') || '',
-      updatedAt: localStorage.getItem('profileUpdatedAt') || undefined,
-    };
-  });
+  const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(
+    () => {
+      const savedId = localStorage.getItem('userId');
+      if (!savedId) return undefined;
+      const savedSeniorityNumber = localStorage.getItem('seniorityNumber');
+      if (!savedSeniorityNumber) return undefined;
+      const savedPercentile = localStorage.getItem('seniorityPercentile');
+      return {
+        id: parseInt(savedId),
+        name: localStorage.getItem('name') || undefined,
+        seniorityNumber: parseInt(savedSeniorityNumber),
+        seniorityPercentile: savedPercentile
+          ? parseFloat(savedPercentile)
+          : undefined,
+        base: localStorage.getItem('base') || '',
+        aircraft: localStorage.getItem('aircraft') || '',
+        updatedAt: localStorage.getItem('profileUpdatedAt') || undefined,
+      };
+    }
+  );
 
-  const [historyRevision, setHistoryRevision] = useState(() => localStorage.getItem('historyRevision') || '0');
+  const [historyRevision, setHistoryRevision] = useState(
+    () => localStorage.getItem('historyRevision') || '0'
+  );
   const probabilityCacheUser = `${currentUser?.id ?? 'guest'}:${seniorityPercentile || '50'}:${currentUser?.updatedAt || ''}:${historyRevision}`;
 
   // Track if this is the initial load to prevent overwriting saved values
@@ -326,33 +349,45 @@ export default function Dashboard() {
       localStorage.setItem('aircraft', aircraft);
       localStorage.setItem('position', position);
     }
-  }, [name, seniorityNumber, seniorityPercentile, base, aircraft, position, hasInitialized]);
+  }, [
+    name,
+    seniorityNumber,
+    seniorityPercentile,
+    base,
+    aircraft,
+    position,
+    hasInitialized,
+  ]);
 
   // Applies a profile returned by the server (from Save Profile or Link
   // Device) to both the form inputs and the synced currentUser snapshot.
-  const applyProfile = useCallback((user: any) => {
-    setCurrentUser({
-      id: user.id,
-      name: user.name || undefined,
-      seniorityNumber: user.seniorityNumber,
-      seniorityPercentile: user.seniorityPercentile ?? undefined,
-      base: user.base,
-      aircraft: user.aircraft,
-      updatedAt: user.updatedAt,
-    });
-    setName(user.name || '');
-    setSeniorityNumber(String(user.seniorityNumber));
-    setSeniorityPercentile(
-      user.seniorityPercentile !== null && user.seniorityPercentile !== undefined
-        ? String(user.seniorityPercentile)
-        : ''
-    );
-    setBase(user.base);
-    setAircraft(user.aircraft);
-    localStorage.setItem('userId', String(user.id));
-    localStorage.setItem('profileUpdatedAt', user.updatedAt || '');
-    queryClient.invalidateQueries();
-  }, [queryClient]);
+  const applyProfile = useCallback(
+    (user: any) => {
+      setCurrentUser({
+        id: user.id,
+        name: user.name || undefined,
+        seniorityNumber: user.seniorityNumber,
+        seniorityPercentile: user.seniorityPercentile ?? undefined,
+        base: user.base,
+        aircraft: user.aircraft,
+        updatedAt: user.updatedAt,
+      });
+      setName(user.name || '');
+      setSeniorityNumber(String(user.seniorityNumber));
+      setSeniorityPercentile(
+        user.seniorityPercentile !== null &&
+          user.seniorityPercentile !== undefined
+          ? String(user.seniorityPercentile)
+          : ''
+      );
+      setBase(user.base);
+      setAircraft(user.aircraft);
+      localStorage.setItem('userId', String(user.id));
+      localStorage.setItem('profileUpdatedAt', user.updatedAt || '');
+      queryClient.invalidateQueries();
+    },
+    [queryClient]
+  );
 
   // "Link this device" (sync PIN entry on a fresh device) state
   const [linkPin, setLinkPin] = useState('');
@@ -363,7 +398,9 @@ export default function Dashboard() {
   const [isSavingPin, setIsSavingPin] = useState(false);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
-  const [sortColumn, setSortColumn] = useState<string | null>('holdProbability');
+  const [sortColumn, setSortColumn] = useState<string | null>(
+    'holdProbability'
+  );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -384,28 +421,33 @@ export default function Dashboard() {
     checkProfile();
   }, [hasInitialized, seniorityNumber, base, aircraft]);
 
-
-  const { data: bidPackages = EMPTY_ARRAY, refetch: refetchBidPackages } = useQuery({
-    queryKey: ['bidPackages'],
-    queryFn: api.getBidPackages,
-    networkMode: 'always', // Invoke the IndexedDB fallback even when offline.
-    staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
-    gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  const { data: bidPackages = EMPTY_ARRAY, refetch: refetchBidPackages } =
+    useQuery({
+      queryKey: ['bidPackages'],
+      queryFn: api.getBidPackages,
+      networkMode: 'always', // Invoke the IndexedDB fallback even when offline.
+      staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
+      gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    });
 
   // Explicit pilot choice from the bid-package selector. Persisted so the
   // choice survives a reload instead of silently reverting to "newest."
-  const [selectedBidPackageId, setSelectedBidPackageId] = useState<number | null>(() => {
+  const [selectedBidPackageId, setSelectedBidPackageId] = useState<
+    number | null
+  >(() => {
     const saved = localStorage.getItem('selectedBidPackageId');
     return saved ? parseInt(saved) : null;
   });
 
   useEffect(() => {
     if (selectedBidPackageId !== null && selectedBidPackageId !== undefined) {
-      localStorage.setItem('selectedBidPackageId', String(selectedBidPackageId));
+      localStorage.setItem(
+        'selectedBidPackageId',
+        String(selectedBidPackageId)
+      );
     }
   }, [selectedBidPackageId]);
 
@@ -496,10 +538,24 @@ export default function Dashboard() {
     isError: isPairingsError,
     refetch: refetchPairings,
   } = useQuery({
-    queryKey: ['pairings', bidPackageId, probabilityCacheUser, latestBidPackage?.uploadedAt],
+    queryKey: [
+      'pairings',
+      bidPackageId,
+      probabilityCacheUser,
+      latestBidPackage?.uploadedAt,
+    ],
     networkMode: 'always', // Offline fallback lives inside the loader.
-    queryFn: () => api.loadPairingDataset(bidPackageId!, Number(seniorityPercentile || 50), probabilityCacheUser, String(latestBidPackage?.uploadedAt)),
-    enabled: hasInitialized && !!bidPackageId && latestBidPackage?.status === 'completed',
+    queryFn: () =>
+      api.loadPairingDataset(
+        bidPackageId!,
+        Number(seniorityPercentile || 50),
+        probabilityCacheUser,
+        String(latestBidPackage?.uploadedAt)
+      ),
+    enabled:
+      hasInitialized &&
+      !!bidPackageId &&
+      latestBidPackage?.status === 'completed',
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
@@ -536,12 +592,21 @@ export default function Dashboard() {
       ).length;
 
       // Calculate averages by pairing days (1-5 days)
-      const avgByDays: { [key: number]: { credit: number; block: number } } = {};
+      const avgByDays: { [key: number]: { credit: number; block: number } } =
+        {};
       for (let days = 1; days <= 5; days++) {
-        const dayPairings = fullLocal.filter((p: any) => p.pairingDays === days);
+        const dayPairings = fullLocal.filter(
+          (p: any) => p.pairingDays === days
+        );
         if (dayPairings.length > 0) {
-          const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
-          const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+          const dayCredit = dayPairings.reduce(
+            (sum, p) => sum + parseHours(p.creditHours),
+            0
+          );
+          const dayBlock = dayPairings.reduce(
+            (sum, p) => sum + parseHours(p.blockHours),
+            0
+          );
           avgByDays[days] = {
             credit: dayCredit / dayPairings.length,
             block: dayBlock / dayPairings.length,
@@ -585,28 +650,29 @@ export default function Dashboard() {
     gcTime: 10 * 60 * 1000,
   });
 
-
   // Query for user's favorites with enhanced caching
-  const { data: favorites = EMPTY_ARRAY, refetch: refetchFavorites } = useQuery({
-    queryKey: ['favorites', currentUser?.id],
-    queryFn: async () => {
-      if (!currentUser) {
-        return [];
-      }
-      try {
-        return await api.getFavorites(currentUser.id);
-      } catch (error) {
-        console.error('Error fetching favorites:', error);
-        return [];
-      }
-    },
-    enabled: !!currentUser,
-    staleTime: 10 * 60 * 1000, // Increased cache time to 10 minutes
-    gcTime: 20 * 60 * 1000, // Keep in memory for 20 minutes
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  const { data: favorites = EMPTY_ARRAY, refetch: refetchFavorites } = useQuery(
+    {
+      queryKey: ['favorites', currentUser?.id],
+      queryFn: async () => {
+        if (!currentUser) {
+          return [];
+        }
+        try {
+          return await api.getFavorites(currentUser.id);
+        } catch (error) {
+          console.error('Error fetching favorites:', error);
+          return [];
+        }
+      },
+      enabled: !!currentUser,
+      staleTime: 10 * 60 * 1000, // Increased cache time to 10 minutes
+      gcTime: 20 * 60 * 1000, // Keep in memory for 20 minutes
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    }
+  );
 
   const handleDeleteFavorite = useCallback(
     async (pairingId: number) => {
@@ -1025,17 +1091,39 @@ export default function Dashboard() {
   };
 
   const sortedPairings = React.useMemo(() => {
-    const filtered = filterPairings(pairings, debouncedFilters, latestBidPackage?.year || new Date().getFullYear());
-    return filtered.sort((a, b) => comparePairings(a, b, sortColumn, sortDirection));
-  }, [pairings, debouncedFilters, latestBidPackage?.year, sortColumn, sortDirection, comparePairings]);
+    const filtered = filterPairings(
+      pairings,
+      debouncedFilters,
+      latestBidPackage?.year || new Date().getFullYear()
+    );
+    return filtered.sort((a, b) =>
+      comparePairings(a, b, sortColumn, sortDirection)
+    );
+  }, [
+    pairings,
+    debouncedFilters,
+    latestBidPackage?.year,
+    sortColumn,
+    sortDirection,
+    comparePairings,
+  ]);
   const displayPairings = sortedPairings;
 
   // Conflicts derived in a memo rather than an effect + state: the effect
   // version ran after every commit that changed the list's array identity and
   // its setState forced a second full render pass of the page.
   const conflictMap = React.useMemo<Map<number, ConflictInfo>>(() => {
-    if (displayPairings && displayPairings.length > 0 && calendarEventsData.length > 0 && latestBidPackage) {
-      return detectConflicts(displayPairings, calendarEventsData, latestBidPackage.year);
+    if (
+      displayPairings &&
+      displayPairings.length > 0 &&
+      calendarEventsData.length > 0 &&
+      latestBidPackage
+    ) {
+      return detectConflicts(
+        displayPairings,
+        calendarEventsData,
+        latestBidPackage.year
+      );
     }
     return new Map();
   }, [displayPairings, calendarEventsData, latestBidPackage]);
@@ -1101,7 +1189,7 @@ export default function Dashboard() {
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              className="h-full flex flex-col"
+              className="h-full flex flex-col border-0 shadow-none"
             >
               {/* Navigation now lives in the sidebar + mobile bottom nav; the
                   TabsList is kept for screen readers / keyboard tab semantics. */}
@@ -1114,298 +1202,336 @@ export default function Dashboard() {
               </TabsList>
 
               <TabsContent value="dashboard" className="flex-1 overflow-auto">
-              <div className="space-y-4">
-                {/* Insight-first Home: KPIs and the optimizer's picks come
+                <div className="space-y-4">
+                  {/* Insight-first Home: KPIs and the optimizer's picks come
                     before the full table (insight → detail reading order). */}
-                {bidPackageId && (
-                  <>
-                    <KpiStrip
-                      pairings={displayPairings || []}
-                      bidPackage={latestBidPackage}
-                      seniorityPercentile={seniorityPercentile}
-                    />
-                    <TopPicks
-                      bidPackageId={bidPackageId}
-                      userId={currentUser?.id}
-                      pairings={pairings || []}
-                      onPairingClick={handlePairingClick}
-                      onOpenBidBuilder={() => setActiveTab('bidBuilder')}
-                    />
-                    <Card>
-                      <CardHeader className="py-3">
-                        <CardTitle className="flex items-center justify-between text-base font-medium">
-                          <div className="flex items-center gap-2">
-                            <BarChart2 className="h-4 w-4" />
-                            Detailed stats
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowQuickStats(!showQuickStats)}
-                          >
-                            {showQuickStats ? 'Hide' : 'Show'}
-                          </Button>
-                        </CardTitle>
-                      </CardHeader>
-                      {showQuickStats && (
-                        <CardContent>
-                          <StatsPanel
-                            pairings={displayPairings || []}
-                            bidPackage={latestBidPackage}
-                            statistics={effectiveStatistics}
-                            bidPackageStats={bidPackageStats}
-                            onTripLengthFilter={handleTripLengthFilter}
-                          />
-                        </CardContent>
-                      )}
-                    </Card>
-                  </>
-                )}
-
-                {/* All pairings: filters + table */}
-                <div className="flex flex-col bg-card">
-                  <div className="w-full bg-card border-b p-4">
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-secondary-foreground">
-                        Filters
-                      </h3>
-                      <SmartFilterSystem
-                        key={filterResetKey}
-                        pairings={pairings || []}
-                        onFiltersChange={handleFiltersChange}
-                        activeFilters={activeFilters}
-                        onClearFilters={clearAllFilters}
+                  {bidPackageId && (
+                    <>
+                      <KpiStrip
+                        pairings={displayPairings || []}
                         bidPackage={latestBidPackage}
-                        bidPackageId={bidPackageId}
+                        seniorityPercentile={seniorityPercentile}
                       />
-                    </div>
-                  </div>
+                      <TopPicks
+                        bidPackageId={bidPackageId}
+                        userId={currentUser?.id}
+                        pairings={pairings || []}
+                        onPairingClick={handlePairingClick}
+                        onOpenBidBuilder={() => setActiveTab('bidBuilder')}
+                      />
+                      <details
+                        className="rounded-xl border bg-card"
+                        onToggle={event =>
+                          setShowQuickStats(event.currentTarget.open)
+                        }
+                      >
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-primary">
+                          Package statistics{' '}
+                          <span className="ml-2 font-normal text-muted-foreground">
+                            Credit, trip lengths and layovers
+                          </span>
+                        </summary>
+                        {showQuickStats && (
+                          <div className="p-4 pt-0">
+                            <StatsPanel
+                              pairings={displayPairings || []}
+                              bidPackage={latestBidPackage}
+                              statistics={effectiveStatistics}
+                              bidPackageStats={bidPackageStats}
+                              onTripLengthFilter={handleTripLengthFilter}
+                            />
+                          </div>
+                        )}
+                      </details>
+                    </>
+                  )}
 
-                  {/* Pairing Results Section — fixed viewport-height panel so
+                  {/* Browse pairings: filters + table */}
+                  <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
+                    <div className="w-full bg-card border-b p-3 sm:p-4">
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-semibold text-secondary-foreground">
+                          Filters
+                        </h3>
+                        <SmartFilterSystem
+                          key={filterResetKey}
+                          pairings={pairings || []}
+                          onFiltersChange={handleFiltersChange}
+                          activeFilters={activeFilters}
+                          onClearFilters={clearAllFilters}
+                          bidPackage={latestBidPackage}
+                          bidPackageId={bidPackageId}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Pairing Results Section — fixed viewport-height panel so
                       the table keeps its own scroll while the page scrolls
                       the insight sections above it. */}
-                  <div className="h-[75vh] min-h-[420px] p-4 lg:p-0">
-                    <Card className="h-full flex flex-col">
-                      <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                          <CardTitle className="text-lg font-medium flex items-center gap-2">
-                            <Search className="h-5 w-5 text-muted-foreground" />
-                            All pairings
-                          </CardTitle>
-                          {bidPackages.length > 1 ? (
-                            <Select
-                              value={latestBidPackage ? String(latestBidPackage.id) : undefined}
-                              onValueChange={value => setSelectedBidPackageId(parseInt(value))}
-                            >
-                              <SelectTrigger
-                                className="h-8 w-auto min-w-[180px] text-sm"
-                                data-testid="select-bid-package"
+                    <div className="h-[75vh] min-h-[420px]">
+                      <Card className="h-full flex flex-col border-0 shadow-none">
+                        <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                            <CardTitle className="text-lg font-medium flex items-center gap-2">
+                              <Search className="h-5 w-5 text-muted-foreground" />
+                              Browse pairings
+                            </CardTitle>
+                            {bidPackages.length > 1 ? (
+                              <Select
+                                value={
+                                  latestBidPackage
+                                    ? String(latestBidPackage.id)
+                                    : undefined
+                                }
+                                onValueChange={value =>
+                                  setSelectedBidPackageId(parseInt(value))
+                                }
                               >
-                                <SelectValue placeholder="Select bid package" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(bidPackages as any[])
-                                  .slice()
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(b.uploadedAt).getTime() -
-                                      new Date(a.uploadedAt).getTime()
-                                  )
-                                  .map(pkg => (
-                                    <SelectItem key={pkg.id} value={String(pkg.id)}>
-                                      {pkg.month} {pkg.year} · {pkg.base} {pkg.aircraft}
-                                      {pkg.status !== 'completed' ? ` (${pkg.status})` : ''}
-                                      {/* Period runs into the prior month for
+                                <SelectTrigger
+                                  className="h-8 w-auto min-w-[180px] text-sm"
+                                  data-testid="select-bid-package"
+                                >
+                                  <SelectValue placeholder="Select bid package" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(bidPackages as any[])
+                                    .slice()
+                                    .sort(
+                                      (a, b) =>
+                                        new Date(b.uploadedAt).getTime() -
+                                        new Date(a.uploadedAt).getTime()
+                                    )
+                                    .map(pkg => (
+                                      <SelectItem
+                                        key={pkg.id}
+                                        value={String(pkg.id)}
+                                      >
+                                        {pkg.month} {pkg.year} · {pkg.base}{' '}
+                                        {pkg.aircraft}
+                                        {pkg.status !== 'completed'
+                                          ? ` (${pkg.status})`
+                                          : ''}
+                                        {/* Period runs into the prior month for
                                           some packages (Sep = Aug 31–Sep 30) */}
-                                      {formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)
-                                        ? ` · ${formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)}`
-                                        : ''}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
+                                        {formatBidPeriod(
+                                          pkg.bidPeriodStart,
+                                          pkg.bidPeriodEnd
+                                        )
+                                          ? ` · ${formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)}`
+                                          : ''}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                {latestBidPackage
+                                  ? `${latestBidPackage.month} ${latestBidPackage.year}`
+                                  : ''}
+                              </span>
+                            )}
                             <span className="text-sm text-muted-foreground">
-                              {latestBidPackage
-                                ? `${latestBidPackage.month} ${latestBidPackage.year}`
+                              {filteredDisplayPairings.length}{' '}
+                              {filteredDisplayPairings.length === 1
+                                ? 'pairing'
+                                : 'pairings'}
+                              {hideConflicts && conflictMap.size > 0
+                                ? ` (${conflictMap.size} hidden)`
                                 : ''}
                             </span>
-                          )}
-                          <span className="text-sm text-muted-foreground">
-                            {filteredDisplayPairings.length} pairings
-                            {hideConflicts && conflictMap.size > 0 ? ` (${conflictMap.size} hidden)` : ''}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            className="text-xs px-2 py-1 rounded border text-muted-foreground"
-                            disabled={!bidPackageId || isPrefetching}
-                            onClick={() => refetchPairings()}
-                          >
-                            {isPrefetching ? 'Loading pairings…' : isFullCacheReady ? 'Available offline: Yes' : 'Save for offline use'}
-                          </button>
-                          {isUpdatingSeniority && (
-                            <span className="flex items-center text-orange-600 text-sm">
-                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                              Updating...
-                            </span>
-                          )}
-                          <Button
-                            variant="link"
-                            className="h-auto p-0 text-blue-600 hover:text-blue-700 font-medium"
-                          >
-                            Export CSV
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="flex-1 overflow-auto p-0">
-                        {isUpdatingSeniority && (
-                          <div className="absolute inset-0 bg-card bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                            <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
-                              <RefreshCw className="h-6 w-6 animate-spin" />
-                              <span className="text-lg font-medium">
-                                Updating hold probabilities...
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              className="text-xs px-2 py-1 rounded border text-muted-foreground"
+                              disabled={!bidPackageId || isPrefetching}
+                              onClick={() => refetchPairings()}
+                            >
+                              {isPrefetching
+                                ? 'Loading pairings…'
+                                : isFullCacheReady
+                                  ? 'Available offline: Yes'
+                                  : 'Save for offline use'}
+                            </button>
+                            {isUpdatingSeniority && (
+                              <span className="flex items-center text-orange-600 text-sm">
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                Updating...
                               </span>
-                            </div>
+                            )}
+                            <Button
+                              variant="link"
+                              className="h-auto p-0 text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              Export CSV
+                            </Button>
                           </div>
-                        )}
-                        {conflictMap.size > 0 && (
-                          <div className="space-y-3 p-4">
-                            <div className="flex items-center gap-2">
-                              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={hideConflicts}
-                                  onChange={(e) => setHideConflicts(e.target.checked)}
-                                  className="rounded border border-input"
-                                />
-                                <span className="text-secondary-foreground">
-                                  Hide conflicts ({conflictMap.size})
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-auto p-0">
+                          {isUpdatingSeniority && (
+                            <div className="absolute inset-0 bg-card bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                              <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
+                                <RefreshCw className="h-6 w-6 animate-spin" />
+                                <span className="text-lg font-medium">
+                                  Updating hold probabilities...
                                 </span>
-                              </label>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                          {conflictMap.size > 0 && (
+                            <div className="space-y-3 p-4">
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={hideConflicts}
+                                    onChange={e =>
+                                      setHideConflicts(e.target.checked)
+                                    }
+                                    className="rounded border border-input"
+                                  />
+                                  <span className="text-secondary-foreground">
+                                    Hide conflicts ({conflictMap.size})
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                          <PairingTable
+                            pairings={filteredDisplayPairings || EMPTY_ARRAY}
+                            onSort={handleSort}
+                            sortColumn={sortColumn || ''}
+                            sortDirection={sortDirection}
+                            onPairingClick={handlePairingClick}
+                            conflicts={conflictMap}
+                            showHeader={false}
+                            isLoading={isLoadingPairings}
+                            isError={isPairingsError}
+                            onRetry={handleRetryPairings}
+                            hasActiveFilters={
+                              activeFilters.length > 0 || hideConflicts
+                            }
+                            favoritePairingIds={favoritePairingIds}
+                            onToggleFavorite={handleToggleFavorite}
+                          />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Favorites Tab */}
+              <TabsContent value="favorites" className="flex-1 overflow-hidden">
+                <div className="space-y-6 h-full">
+                  <Card className="h-full flex flex-col border-0 shadow-none">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-lg font-medium flex items-center gap-2">
+                        <Star className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
+                        Your Favorites
+                      </CardTitle>
+                      <span className="text-sm text-muted-foreground">
+                        {favorites.length} favorite pairings
+                      </span>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-auto p-0">
+                      {favorites.length > 0 ? (
                         <PairingTable
-                          pairings={filteredDisplayPairings || EMPTY_ARRAY}
+                          pairings={sortedFavorites}
                           onSort={handleSort}
                           sortColumn={sortColumn || ''}
                           sortDirection={sortDirection}
                           onPairingClick={handlePairingClick}
+                          showDeleteButton={true}
+                          onDeleteFavorite={handleDeleteFavorite}
+                          showAddToCalendar={true}
+                          currentUser={currentUser}
+                          bidPackageYear={latestBidPackage?.year}
                           conflicts={conflictMap}
-                          showHeader={false}
-                          isLoading={isLoadingPairings}
-                          isError={isPairingsError}
-                          onRetry={handleRetryPairings}
-                          hasActiveFilters={activeFilters.length > 0 || hideConflicts}
                           favoritePairingIds={favoritePairingIds}
                           onToggleFavorite={handleToggleFavorite}
                         />
-                      </CardContent>
-                    </Card>
-                  </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <Star className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                          <h3 className="mt-4 text-lg font-medium text-foreground">
+                            No Favorites Yet
+                          </h3>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Click the star icon on any pairing to add it to your
+                            favorites.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* Favorites Tab */}
-            <TabsContent value="favorites" className="flex-1 overflow-hidden">
-              <div className="space-y-6 h-full">
-                <Card className="h-full flex flex-col">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <Star className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
-                      Your Favorites
-                    </CardTitle>
-                    <span className="text-sm text-muted-foreground">
-                      {favorites.length} favorite pairings
-                    </span>
-                  </CardHeader>
-                  <CardContent className="flex-1 overflow-auto p-0">
-                    {favorites.length > 0 ? (
-                      <PairingTable
-                        pairings={sortedFavorites}
-                        onSort={handleSort}
-                        sortColumn={sortColumn || ''}
-                        sortDirection={sortDirection}
-                        onPairingClick={handlePairingClick}
-                        showDeleteButton={true}
-                        onDeleteFavorite={handleDeleteFavorite}
-                        showAddToCalendar={true}
-                        currentUser={currentUser}
-                        bidPackageYear={latestBidPackage?.year}
-                        conflicts={conflictMap}
-                        favoritePairingIds={favoritePairingIds}
-                        onToggleFavorite={handleToggleFavorite}
-                      />
-                    ) : (
+              {/* Calendar Tab */}
+              <TabsContent value="calendar" className="flex-1 overflow-auto">
+                {currentUser ? (
+                  <Suspense
+                    fallback={
                       <div className="text-center py-8">
-                        <Star className="mx-auto h-16 w-16 text-muted-foreground/50" />
-                        <h3 className="mt-4 text-lg font-medium text-foreground">
-                          No Favorites Yet
-                        </h3>
+                        <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
                         <p className="mt-2 text-sm text-muted-foreground">
-                          Click the star icon on any pairing to add it to your
-                          favorites.
+                          Loading calendar…
                         </p>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
+                    }
+                  >
+                    <CalendarView
+                      userId={currentUser.id}
+                      bidPackageId={bidPackageId}
+                    />
+                  </Suspense>
+                ) : (
+                  <div className="text-center py-8">
+                    <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-medium text-foreground">
+                      Calendar Loading
+                    </h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Setting up your calendar view...
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
 
-            {/* Calendar Tab */}
-            <TabsContent value="calendar" className="flex-1 overflow-auto">
-              {currentUser ? (
+              <TabsContent
+                value="bidBuilder"
+                className="flex-1 overflow-auto p-1"
+              >
                 <Suspense
                   fallback={
-                    <div className="text-center py-8">
-                      <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
-                      <p className="mt-2 text-sm text-muted-foreground">Loading calendar…</p>
+                    <div className="text-sm text-muted-foreground">
+                      Loading…
                     </div>
                   }
                 >
-                  <CalendarView
-                    userId={currentUser.id}
+                  <BidBuilder
                     bidPackageId={bidPackageId}
+                    userId={currentUser?.id}
                   />
                 </Suspense>
-              ) : (
-                <div className="text-center py-8">
-                  <Calendar className="mx-auto h-16 w-16 text-muted-foreground/50" />
-                  <h3 className="mt-4 text-lg font-medium text-foreground">
-                    Calendar Loading
-                  </h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Setting up your calendar view...
-                  </p>
-                </div>
-              )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent
-              value="bidBuilder"
-              className="flex-1 overflow-auto p-1"
-            >
-              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
-                <BidBuilder
-                  bidPackageId={bidPackageId}
-                  userId={currentUser?.id}
-                />
-              </Suspense>
-            </TabsContent>
-
-            <TabsContent value="trends" className="flex-1 overflow-auto p-1">
-              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
-                <TrendsPanel
-                  seniorityPercentile={seniorityPercentile}
-                  base={latestBidPackage?.base}
-                  aircraft={latestBidPackage?.aircraft}
-                />
-              </Suspense>
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="trends" className="flex-1 overflow-auto p-1">
+                <Suspense
+                  fallback={
+                    <div className="text-sm text-muted-foreground">
+                      Loading…
+                    </div>
+                  }
+                >
+                  <TrendsPanel
+                    seniorityPercentile={seniorityPercentile}
+                    base={latestBidPackage?.base}
+                    aircraft={latestBidPackage?.aircraft}
+                  />
+                </Suspense>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </SidebarInset>
@@ -1435,24 +1561,33 @@ export default function Dashboard() {
           <Tabs defaultValue="upload" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="upload">Upload</TabsTrigger>
-              <TabsTrigger value="dataOverview" data-testid="tab-data-overview">Data Overview</TabsTrigger>
+              <TabsTrigger value="dataOverview" data-testid="tab-data-overview">
+                Data Overview
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="upload" className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 {/* Bid Package Upload */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-secondary-foreground">Bid Package</h3>
+                  <h3 className="text-sm font-medium text-secondary-foreground">
+                    Bid Package
+                  </h3>
                   <FileUpload
                     onUpload={(file, result) => {
-                        setShowUploadModal(false);
-                        refetchBidPackages();
-                        queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                      setShowUploadModal(false);
+                      refetchBidPackages();
+                      queryClient.invalidateQueries({
+                        queryKey: ['data-health'],
+                      });
 
-                        const uploadedBidPackageId = result?.bidPackage?.id;
-                        if (uploadedBidPackageId) {
-                          setProcessingBidPackage({ id: uploadedBidPackageId, name: 'bid package' });
-                          pollBidPackageStatus(uploadedBidPackageId);
-                        }
+                      const uploadedBidPackageId = result?.bidPackage?.id;
+                      if (uploadedBidPackageId) {
+                        setProcessingBidPackage({
+                          id: uploadedBidPackageId,
+                          name: 'bid package',
+                        });
+                        pollBidPackageStatus(uploadedBidPackageId);
+                      }
                     }}
                   />
                   <div className="text-xs text-muted-foreground flex items-center">
@@ -1463,8 +1598,16 @@ export default function Dashboard() {
 
                 {/* Reasons Report Upload */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-secondary-foreground">Reasons Report</h3>
-                  <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+                  <h3 className="text-sm font-medium text-secondary-foreground">
+                    Reasons Report
+                  </h3>
+                  <Suspense
+                    fallback={
+                      <div className="text-sm text-muted-foreground">
+                        Loading…
+                      </div>
+                    }
+                  >
                     <ReasonsReportUpload
                       onUploadSuccess={() => {
                         const revision = String(Date.now());
@@ -1473,7 +1616,8 @@ export default function Dashboard() {
                         queryClient.invalidateQueries();
                         toast({
                           title: 'Historical data updated',
-                          description: 'Hold probabilities will now use this data for predictions.',
+                          description:
+                            'Hold probabilities will now use this data for predictions.',
                         });
                       }}
                     />
@@ -1482,7 +1626,11 @@ export default function Dashboard() {
               </div>
             </TabsContent>
             <TabsContent value="dataOverview" className="space-y-4">
-              <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
+              <Suspense
+                fallback={
+                  <div className="text-sm text-muted-foreground">Loading…</div>
+                }
+              >
                 <DataManagementPanel />
               </Suspense>
             </TabsContent>
@@ -1512,7 +1660,10 @@ export default function Dashboard() {
                   </div>
                 }
               >
-                <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} />
+                <PairingChat
+                  bidPackageId={bidPackageId}
+                  userId={currentUser?.id}
+                />
               </Suspense>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -1532,7 +1683,7 @@ export default function Dashboard() {
       {/* Mobile AI Assistant Full Screen - Only on Mobile */}
       {showMobileAI && (
         <div className="fixed inset-0 z-50 bg-background lg:hidden">
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col border-0 shadow-none">
             {/* Minimal header with just close button */}
             <div className="flex-shrink-0 flex items-center justify-between p-3 border-b bg-card">
               <h1 className="text-base font-medium">AI Assistant</h1>
@@ -1557,7 +1708,11 @@ export default function Dashboard() {
                     </div>
                   }
                 >
-                  <PairingChat bidPackageId={bidPackageId} userId={currentUser?.id} compact={true} />
+                  <PairingChat
+                    bidPackageId={bidPackageId}
+                    userId={currentUser?.id}
+                    compact={true}
+                  />
                 </Suspense>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground p-4">
@@ -1575,12 +1730,13 @@ export default function Dashboard() {
       {/* Profile Modal (moved inside the Profile tab content for better UX) */}
       <Dialog
         open={showProfileModal}
-        onOpenChange={(open) => {
+        onOpenChange={open => {
           // Prevent closing if required fields are empty
           if (!open && (!seniorityNumber || !base || !aircraft || !position)) {
             toast({
               title: 'Profile Required',
-              description: 'Please complete your profile before continuing. All fields marked with * are required.',
+              description:
+                'Please complete your profile before continuing. All fields marked with * are required.',
               variant: 'destructive',
             });
             return;
@@ -1603,359 +1759,381 @@ export default function Dashboard() {
               </div>
             </>
           ) : (
-          <>
-          <DialogHeader>
-            <DialogTitle>Complete Your Profile</DialogTitle>
-            <DialogDescription>
-              Please fill in your pilot information to continue. All fields marked with * are required.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 overflow-y-auto pr-2 flex-1">
-            {!currentUser && (
-              <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-3 space-y-2">
-                <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
-                  Already set up on another device?
-                </div>
-                <p className="text-xs text-blue-800 dark:text-blue-300">
-                  Enter your sync PIN to load your existing profile, favorites, calendar, and AI chat history instead of starting fresh.
-                </p>
-                <div className="flex gap-2">
+            <>
+              <DialogHeader>
+                <DialogTitle>Complete Your Profile</DialogTitle>
+                <DialogDescription>
+                  Please fill in your pilot information to continue. All fields
+                  marked with * are required.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 overflow-y-auto pr-2 flex-1">
+                {!currentUser && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-3 space-y-2">
+                    <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                      Already set up on another device?
+                    </div>
+                    <p className="text-xs text-blue-800 dark:text-blue-300">
+                      Enter your sync PIN to load your existing profile,
+                      favorites, calendar, and AI chat history instead of
+                      starting fresh.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={linkPin}
+                        onChange={e => setLinkPin(e.target.value)}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="Sync PIN"
+                        className="bg-card"
+                      />
+                      <Button
+                        variant="secondary"
+                        disabled={!linkPin || isLinkingDevice}
+                        onClick={async () => {
+                          setIsLinkingDevice(true);
+                          try {
+                            const user = await api.linkDevice(linkPin);
+                            applyProfile(user);
+                            setLinkPin('');
+                            toast({
+                              title: 'Device Linked',
+                              description:
+                                'Your profile has been loaded onto this device.',
+                            });
+                            setShowProfileModal(false);
+                          } catch (error: any) {
+                            toast({
+                              title: 'Link Failed',
+                              description:
+                                error?.message ||
+                                'That PIN did not match any profile.',
+                              variant: 'destructive',
+                            });
+                          } finally {
+                            setIsLinkingDevice(false);
+                          }
+                        }}
+                      >
+                        Link Device
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Name
+                  </label>
                   <Input
-                    value={linkPin}
-                    onChange={e => setLinkPin(e.target.value)}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="Sync PIN"
-                    className="bg-card"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Your name (optional)"
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Seniority Number <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    data-testid="input-seniority-number"
+                    value={seniorityNumber}
+                    onChange={e => setSeniorityNumber(e.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="off"
+                    placeholder="Enter seniority number (e.g., 15600)"
+                    className={
+                      !seniorityNumber
+                        ? 'border-red-300 focus:border-red-500'
+                        : ''
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Category Seniority %
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={seniorityPercentile}
+                    onChange={e => setSeniorityPercentile(e.target.value)}
+                    placeholder="e.g., 47.6 (optional)"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Lower % = more senior
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Base <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="profile-base"
+                    data-testid="select-base"
+                    value={base}
+                    onChange={e => setBase(e.target.value)}
+                    className={`flex h-10 w-full rounded-md border ${!base ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                    required
+                  >
+                    <option value="">Select your base</option>
+                    <option value="NYC">NYC - New York</option>
+                    <option value="ATL">ATL - Atlanta</option>
+                    <option value="DFW">DFW - Dallas</option>
+                    <option value="LAX">LAX - Los Angeles</option>
+                    <option value="MSP">MSP - Minneapolis</option>
+                    <option value="SEA">SEA - Seattle</option>
+                    <option value="DTW">DTW - Detroit</option>
+                    <option value="SLC">SLC - Salt Lake City</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Aircraft <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="profile-aircraft"
+                    data-testid="select-aircraft"
+                    value={aircraft}
+                    onChange={e => setAircraft(e.target.value)}
+                    className={`flex h-10 w-full rounded-md border ${!aircraft ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                    required
+                  >
+                    <option value="">Select your aircraft</option>
+                    <option value="A220">A220</option>
+                    <option value="A320">A320</option>
+                    <option value="A321">A321</option>
+                    <option value="A330">A330</option>
+                    <option value="A350">A350</option>
+                    <option value="B737">B737</option>
+                    <option value="B757">B757</option>
+                    <option value="B767">B767</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                    Position <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="profile-position"
+                    data-testid="select-position"
+                    value={position}
+                    onChange={e => setPosition(e.target.value)}
+                    className={`flex h-10 w-full rounded-md border ${!position ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                    required
+                  >
+                    <option value="">Select your position</option>
+                    <option value="A">A - Position A</option>
+                    <option value="B">B - Position B</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Position A or B (matches ALV table)
+                  </p>
+                </div>
+                {currentUser && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="text-sm font-medium text-secondary-foreground mb-1">
+                      Sync PIN
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      After signing in to the app, use a 4–12 digit PIN to load
+                      this profile and saved work on another device.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        maxLength={12}
+                        value={syncPinDraft}
+                        onChange={e => setSyncPinDraft(e.target.value)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="Choose a PIN"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!syncPinDraft || isSavingPin}
+                        onClick={async () => {
+                          setIsSavingPin(true);
+                          try {
+                            await api.setSyncPin(currentUser.id, syncPinDraft);
+                            toast({
+                              title: 'Sync PIN Saved',
+                              description:
+                                'Use this PIN to link your other devices.',
+                            });
+                            setSyncPinDraft('');
+                          } catch (error: any) {
+                            toast({
+                              title: 'Error',
+                              description:
+                                error?.message || 'Failed to save sync PIN.',
+                              variant: 'destructive',
+                            });
+                          } finally {
+                            setIsSavingPin(false);
+                          }
+                        }}
+                      >
+                        Save PIN
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div className="border-t pt-4 mt-4">
+                  <div className="text-sm font-medium text-secondary-foreground mb-3">
+                    Appearance
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                    <Button
+                      variant={theme === 'light' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setTheme('light')}
+                      className="flex-1"
+                    >
+                      <Sun className="h-4 w-4 mr-2" />
+                      Light
+                    </Button>
+                    <Button
+                      variant={theme === 'dark' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setTheme('dark')}
+                      className="flex-1"
+                    >
+                      <Moon className="h-4 w-4 mr-2" />
+                      Dark
+                    </Button>
+                    <Button
+                      variant={theme === 'system' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setTheme('system')}
+                      className="flex-1"
+                    >
+                      <Monitor className="h-4 w-4 mr-2" />
+                      System
+                    </Button>
+                  </div>
+                </div>
+                <div className="border-t pt-4 mt-4">
+                  <div className="text-sm font-medium text-secondary-foreground mb-2">
+                    Cache Management
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          // Delete the entire IndexedDB database
+                          await api.clearLocalCache();
+                          // Clear React Query cache as well
+                          queryClient.clear();
+                          toast({
+                            title: 'Success',
+                            description:
+                              'Cache cleared successfully. Reloading...',
+                          });
+                          // Reload to get fresh data with new schema
+                          setTimeout(() => window.location.reload(), 500);
+                        } catch (error) {
+                          toast({
+                            title: 'Error',
+                            description: 'Failed to clear cache',
+                            variant: 'destructive',
+                          });
+                        }
+                      }}
+                    >
+                      Clear My Cache
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Clear localStorage
+                        localStorage.clear();
+                        // Reload page to reset state
+                        window.location.reload();
+                      }}
+                    >
+                      Reset App Data
+                    </Button>
+                    {import.meta.env.DEV && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const info = await getCacheInfo();
+                            console.log('📊 Cache Diagnostics:', info);
+                            alert(
+                              `Cache Info:\n• Schema: ${info.schemaVersion}\n• Total: ${info.totalEntries} entries\n• Users: ${Object.keys(info.userCacheStats).join(', ')}\n• Updated: ${info.lastUpdated?.toLocaleString() || 'Never'}`
+                            );
+                          } catch (error) {
+                            console.error('Cache diagnostics failed:', error);
+                            alert('Failed to get cache info - check console');
+                          }
+                        }}
+                      >
+                        Cache Info
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end pt-4">
                   <Button
-                    variant="secondary"
-                    disabled={!linkPin || isLinkingDevice}
+                    data-testid="button-save-profile"
                     onClick={async () => {
-                      setIsLinkingDevice(true);
-                      try {
-                        const user = await api.linkDevice(linkPin);
-                        applyProfile(user);
-                        setLinkPin('');
+                      // Validate required fields
+                      if (!seniorityNumber || !base || !aircraft || !position) {
                         toast({
-                          title: 'Device Linked',
-                          description: 'Your profile has been loaded onto this device.',
+                          title: 'Missing Required Fields',
+                          description:
+                            'Please fill in Seniority Number, Base, Aircraft, and Position',
+                          variant: 'destructive',
                         });
+                        return;
+                      }
+
+                      try {
+                        // Create or update the one canonical user in the database
+                        const savedUser = await api.createOrUpdateUser({
+                          name: name || undefined,
+                          seniorityNumber: parseInt(seniorityNumber),
+                          seniorityPercentile: seniorityPercentile
+                            ? Math.round(parseFloat(seniorityPercentile))
+                            : undefined,
+                          base,
+                          aircraft,
+                        });
+                        applyProfile(savedUser);
+
+                        toast({
+                          title: 'Profile Saved',
+                          description:
+                            'Your profile has been saved successfully!',
+                        });
+
                         setShowProfileModal(false);
                       } catch (error: any) {
                         toast({
-                          title: 'Link Failed',
-                          description: error?.message || 'That PIN did not match any profile.',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setIsLinkingDevice(false);
-                      }
-                    }}
-                  >
-                    Link Device
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Name
-              </label>
-              <Input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your name (optional)"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Seniority Number <span className="text-red-500">*</span>
-              </label>
-              <Input
-                data-testid="input-seniority-number"
-                value={seniorityNumber}
-                onChange={e => setSeniorityNumber(e.target.value)}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="off"
-                placeholder="Enter seniority number (e.g., 15600)"
-                className={!seniorityNumber ? 'border-red-300 focus:border-red-500' : ''}
-                required
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Category Seniority %
-              </label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                value={seniorityPercentile}
-                onChange={e => setSeniorityPercentile(e.target.value)}
-                placeholder="e.g., 47.6 (optional)"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Lower % = more senior</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Base <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="profile-base"
-                data-testid="select-base"
-                value={base}
-                onChange={e => setBase(e.target.value)}
-                className={`flex h-10 w-full rounded-md border ${!base ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
-                required
-              >
-                <option value="">Select your base</option>
-                <option value="NYC">NYC - New York</option>
-                <option value="ATL">ATL - Atlanta</option>
-                <option value="DFW">DFW - Dallas</option>
-                <option value="LAX">LAX - Los Angeles</option>
-                <option value="MSP">MSP - Minneapolis</option>
-                <option value="SEA">SEA - Seattle</option>
-                <option value="DTW">DTW - Detroit</option>
-                <option value="SLC">SLC - Salt Lake City</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Aircraft <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="profile-aircraft"
-                data-testid="select-aircraft"
-                value={aircraft}
-                onChange={e => setAircraft(e.target.value)}
-                className={`flex h-10 w-full rounded-md border ${!aircraft ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
-                required
-              >
-                <option value="">Select your aircraft</option>
-                <option value="A220">A220</option>
-                <option value="A320">A320</option>
-                <option value="A321">A321</option>
-                <option value="A330">A330</option>
-                <option value="A350">A350</option>
-                <option value="B737">B737</option>
-                <option value="B757">B757</option>
-                <option value="B767">B767</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                Position <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="profile-position"
-                data-testid="select-position"
-                value={position}
-                onChange={e => setPosition(e.target.value)}
-                className={`flex h-10 w-full rounded-md border ${!position ? 'border-red-300' : 'border-input'} bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
-                required
-              >
-                <option value="">Select your position</option>
-                <option value="A">A - Position A</option>
-                <option value="B">B - Position B</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">Position A or B (matches ALV table)</p>
-            </div>
-            {currentUser && (
-              <div className="border-t pt-4 mt-4">
-                <div className="text-sm font-medium text-secondary-foreground mb-1">
-                  Sync PIN
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">
-                  After signing in to the app, use a 4–12 digit PIN to load this profile and saved work on another device.
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    type="password"
-                    maxLength={12}
-                    value={syncPinDraft}
-                    onChange={e => setSyncPinDraft(e.target.value)}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="Choose a PIN"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!syncPinDraft || isSavingPin}
-                    onClick={async () => {
-                      setIsSavingPin(true);
-                      try {
-                        await api.setSyncPin(currentUser.id, syncPinDraft);
-                        toast({
-                          title: 'Sync PIN Saved',
-                          description: 'Use this PIN to link your other devices.',
-                        });
-                        setSyncPinDraft('');
-                      } catch (error: any) {
-                        toast({
                           title: 'Error',
-                          description: error?.message || 'Failed to save sync PIN.',
+                          description:
+                            error?.message ||
+                            'Failed to save profile. Please try again.',
                           variant: 'destructive',
                         });
-                      } finally {
-                        setIsSavingPin(false);
                       }
                     }}
                   >
-                    Save PIN
+                    Save Profile
                   </Button>
                 </div>
               </div>
-            )}
-            <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-secondary-foreground mb-3">
-                Appearance
-              </div>
-              <div className="flex gap-2 mb-4">
-                <Button
-                  variant={theme === 'light' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setTheme('light')}
-                  className="flex-1"
-                >
-                  <Sun className="h-4 w-4 mr-2" />
-                  Light
-                </Button>
-                <Button
-                  variant={theme === 'dark' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setTheme('dark')}
-                  className="flex-1"
-                >
-                  <Moon className="h-4 w-4 mr-2" />
-                  Dark
-                </Button>
-                <Button
-                  variant={theme === 'system' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setTheme('system')}
-                  className="flex-1"
-                >
-                  <Monitor className="h-4 w-4 mr-2" />
-                  System
-                </Button>
-              </div>
-            </div>
-            <div className="border-t pt-4 mt-4">
-              <div className="text-sm font-medium text-secondary-foreground mb-2">
-                Cache Management
-              </div>
-              <div className="flex gap-2 mb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      // Delete the entire IndexedDB database
-                      await api.clearLocalCache();
-                      // Clear React Query cache as well
-                      queryClient.clear();
-                      toast({
-                        title: 'Success',
-                        description: 'Cache cleared successfully. Reloading...',
-                      });
-                      // Reload to get fresh data with new schema
-                      setTimeout(() => window.location.reload(), 500);
-                    } catch (error) {
-                      toast({
-                        title: 'Error',
-                        description: 'Failed to clear cache',
-                        variant: 'destructive',
-                      });
-                    }
-                  }}
-                >
-                  Clear My Cache
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // Clear localStorage
-                    localStorage.clear();
-                    // Reload page to reset state
-                    window.location.reload();
-                  }}
-                >
-                  Reset App Data
-                </Button>
-                {import.meta.env.DEV && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        const info = await getCacheInfo();
-                        console.log('📊 Cache Diagnostics:', info);
-                        alert(
-                          `Cache Info:\n• Schema: ${info.schemaVersion}\n• Total: ${info.totalEntries} entries\n• Users: ${Object.keys(info.userCacheStats).join(', ')}\n• Updated: ${info.lastUpdated?.toLocaleString() || 'Never'}`
-                        );
-                      } catch (error) {
-                        console.error('Cache diagnostics failed:', error);
-                        alert('Failed to get cache info - check console');
-                      }
-                    }}
-                  >
-                    Cache Info
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-end pt-4">
-              <Button
-                data-testid="button-save-profile"
-                onClick={async () => {
-                  // Validate required fields
-                  if (!seniorityNumber || !base || !aircraft || !position) {
-                    toast({
-                      title: 'Missing Required Fields',
-                      description: 'Please fill in Seniority Number, Base, Aircraft, and Position',
-                      variant: 'destructive',
-                    });
-                    return;
-                  }
-
-                  try {
-                    // Create or update the one canonical user in the database
-                    const savedUser = await api.createOrUpdateUser({
-                      name: name || undefined,
-                      seniorityNumber: parseInt(seniorityNumber),
-                      seniorityPercentile: seniorityPercentile
-                        ? Math.round(parseFloat(seniorityPercentile))
-                        : undefined,
-                      base,
-                      aircraft,
-                    });
-                    applyProfile(savedUser);
-
-                    toast({
-                      title: 'Profile Saved',
-                      description: 'Your profile has been saved successfully!',
-                    });
-
-                    setShowProfileModal(false);
-                  } catch (error: any) {
-                    toast({
-                      title: 'Error',
-                      description: error?.message || 'Failed to save profile. Please try again.',
-                      variant: 'destructive',
-                    });
-                  }
-                }}
-              >
-                Save Profile
-              </Button>
-            </div>
-          </div>
-          </>
+            </>
           )}
         </DialogContent>
       </Dialog>

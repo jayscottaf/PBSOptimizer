@@ -24,14 +24,18 @@ interface KpiCardProps {
 function KpiCard({ icon: Icon, value, label, context }: KpiCardProps) {
   return (
     <Card>
-      <CardContent className="flex items-start gap-3 p-4">
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+      <CardContent className="flex items-start gap-3 p-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <div className="text-display tabular-nums leading-tight">{value}</div>
+          <div className="text-xl font-semibold tabular-nums leading-tight">
+            {value}
+          </div>
           <div className="text-sm font-medium">{label}</div>
-          <div className="text-caption truncate">{context}</div>
+          <div className="text-xs leading-relaxed text-muted-foreground">
+            {context}
+          </div>
         </div>
       </CardContent>
     </Card>
