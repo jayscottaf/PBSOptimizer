@@ -33,3 +33,9 @@ The repository-wide formatting check had 71 pre-existing failing files in the au
 Replaced the hosted login flow with a PIN-only form when `APP_ACCESS_PIN` is configured. Local development remains login-free. Random seven-day session cookies are backed by hashed tokens in PostgreSQL, and a shared five-attempt/15-minute budget survives serverless restarts. Existing password deployments remain compatible until rollout. Added migration 004 and its setup script; no hosted settings or database tables were changed.
 
 Validation: six access, session, and ownership tests passed, including temporary-table database tests for shared budgets and expiry. Type-check, lint, client build, server bundle, and local API smoke checks passed. Hosted setup instructions are in `docs/access-setup.md`.
+
+### First-visit PIN creation
+
+Hosted first use now asks the pilot to choose and confirm a PIN, stores its salted hash, and signs in automatically. Access tables initialize automatically under a database advisory lock. Atomic insertion prevents concurrent setup requests from overwriting the PIN. Existing configured credentials and login-free loopback development remain supported. Vercel origin checks use HTTPS without requiring an origin setting.
+
+Validation: five access/session tests passed, including first-use setup, concurrent setup, later login, and database persistence. Type-check, lint, client build, and local smoke checks passed.

@@ -162,3 +162,69 @@ test('four-digit access uses protected sessions and limits PIN attempts', async 
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });
+
+test('first visit creates a PIN once and subsequent visits verify it', async () => {
+  let stored: string | undefined;
+  const tokens = new Map<string, string>();
+  const app = express();
+  app.use(express.urlencoded({ extended: false }));
+  app.use(
+    accessControl(
+      { NODE_ENV: 'production' },
+      {
+        async getPin() {
+          return stored;
+        },
+        async createPin(hash) {
+          if (stored) return false;
+          stored = hash;
+          return true;
+        },
+        async attempt() {
+          return true;
+        },
+        async save(token, credential) {
+          tokens.set(token, credential);
+        },
+        async valid(token, credential) {
+          return tokens.get(token) === credential;
+        },
+      }
+    )
+  );
+  app.get('*', (_req, res) => res.send('Allowed'));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const submit = (pin: string, confirmPin?: string) =>
+    fetch(url + '/api/access', {
+      method: 'POST',
+      redirect: 'manual',
+      body: new URLSearchParams({ pin, ...(confirmPin ? { confirmPin } : {}) }),
+    });
+  try {
+    assert.match(await (await fetch(url + '/api/access')).text(), /Create PIN/);
+    assert.equal((await submit('0123', '4567')).status, 400);
+    assert.equal(stored, undefined);
+    const responses = await Promise.all([
+      submit('0123', '0123'),
+      submit('0123', '0123'),
+    ]);
+    assert.deepEqual(responses.map(r => r.status).sort(), [303, 409]);
+    assert.match(stored!, /^scrypt:/);
+    assert.equal(await verifyPin('0123', stored!), true);
+    const cookie = responses
+      .find(r => r.status === 303)!
+      .headers.get('set-cookie')!
+      .split(';')[0];
+    assert.equal((await fetch(url, { headers: { cookie } })).status, 200);
+    assert.doesNotMatch(
+      await (await fetch(url + '/api/access')).text(),
+      /Create PIN/
+    );
+    assert.equal((await submit('9999', '9999')).status, 401);
+    assert.equal((await submit('0123')).status, 303);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});

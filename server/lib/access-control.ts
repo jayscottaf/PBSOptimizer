@@ -37,6 +37,8 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
 export function accessControl(
   env: NodeJS.ProcessEnv = process.env,
   sessions?: {
+    getPin?(): Promise<string | undefined>;
+    createPin?(hash: string): Promise<boolean>;
     attempt(): Promise<boolean>;
     save(token: string, credential: string): Promise<void>;
     valid(token: string, credential: string): Promise<boolean>;
@@ -56,7 +58,8 @@ export function accessControl(
       if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         const origin = req.get('origin');
         const expected =
-          env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
+          env.APP_ORIGIN ||
+          `${env.VERCEL ? 'https' : req.protocol}://${req.get('host')}`;
         if (
           req.get('sec-fetch-site') === 'cross-site' ||
           (origin && origin !== expected)
@@ -73,17 +76,19 @@ export function accessControl(
       if (
         pin !== undefined
           ? !/^\d{4}$/.test(pin)
-          : !password || password.length < 24
+          : password !== undefined && password.length < 24
       ) {
         res
           .status(503)
           .json({ message: 'Application access is not configured' });
         return;
       }
-      if (pin !== undefined) {
+      if (pin !== undefined || password === undefined) {
         const store =
           sessions ?? (await import('./access-sessions')).accessSessions;
-        const credential = digest(pin).toString('hex');
+        let stored = pin === undefined ? await store.getPin?.() : undefined;
+        const setup = pin === undefined && !stored;
+        let credential = digest(pin ?? stored ?? '').toString('hex');
         const token = req
           .get('cookie')
           ?.split(';')
@@ -91,6 +96,7 @@ export function accessControl(
           .find(part => part.startsWith('__Host-pbs-access='))
           ?.slice('__Host-pbs-access='.length);
         if (
+          !setup &&
           token &&
           /^[a-f0-9]{64}$/.test(token) &&
           (await store.valid(digest(token).toString('hex'), credential))
@@ -104,9 +110,39 @@ export function accessControl(
               .send('Too many attempts. Try again in 15 minutes.');
             return;
           }
-          if (
-            typeof req.body?.pin !== 'string' ||
-            !equalSecret(req.body.pin, pin)
+          const submitted = req.body?.pin;
+          if (setup) {
+            if (
+              typeof submitted !== 'string' ||
+              !/^\d{4}$/.test(submitted) ||
+              submitted !== req.body?.confirmPin
+            ) {
+              res
+                .status(400)
+                .type('html')
+                .send(
+                  pinPage('Enter four matching digits in both fields.', true)
+                );
+              return;
+            }
+            stored = await hashPin(submitted);
+            if (!(await store.createPin?.(stored))) {
+              res
+                .status(409)
+                .type('html')
+                .send(
+                  pinPage(
+                    'A PIN has already been created. Sign in with that PIN.'
+                  )
+                );
+              return;
+            }
+            credential = digest(stored).toString('hex');
+          } else if (
+            typeof submitted !== 'string' ||
+            !(pin !== undefined
+              ? equalSecret(submitted, pin)
+              : await verifyPin(submitted, stored!))
           ) {
             res
               .status(401)
@@ -127,7 +163,7 @@ export function accessControl(
           req.path === '/api/access' ||
           req.get('accept')?.includes('text/html')
         ) {
-          res.status(401).type('html').send(pinPage());
+          res.status(401).type('html').send(pinPage(undefined, setup));
         } else res.status(401).json({ message: 'Enter your app PIN' });
         return;
       }
@@ -162,6 +198,9 @@ export function publicUser<T extends { syncPin?: string | null }>(user: T) {
   return { ...profile, hasSyncPin: Boolean(syncPin) };
 }
 
-function pinPage(message = 'Enter your four-digit app PIN.') {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PBS Optimizer</title></head><body style="font-family:system-ui;max-width:24rem;margin:15vh auto;padding:24px"><h1>PBS Optimizer</h1><p>${message}</p><form method="post" action="/api/access"><label for="pin">PIN</label><input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="current-password" required autofocus style="display:block;font-size:24px;margin:16px 0;padding:8px;width:8rem"><button type="submit" style="padding:10px 24px">Unlock</button></form></body></html>`;
+function pinPage(message?: string, setup = false) {
+  message ??= setup
+    ? 'Choose a four-digit PIN to get started.'
+    : 'Enter your four-digit app PIN.';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PBS Optimizer</title></head><body style="font-family:system-ui;max-width:24rem;margin:15vh auto;padding:24px"><h1>PBS Optimizer</h1><p>${message}</p><form method="post" action="/api/access"><label for="pin">PIN</label><input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="${setup ? 'new-password' : 'current-password'}" required autofocus style="display:block;font-size:24px;margin:16px 0;padding:8px;width:8rem">${setup ? '<label for="confirmPin">Confirm PIN</label><input id="confirmPin" name="confirmPin" type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autocomplete="new-password" required style="display:block;font-size:24px;margin:16px 0;padding:8px;width:8rem">' : ''}<button type="submit" style="padding:10px 24px">${setup ? 'Create PIN' : 'Unlock'}</button></form></body></html>`;
 }

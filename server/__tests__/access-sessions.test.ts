@@ -8,6 +8,10 @@ import { createAccessSessions } from '../lib/access-sessions';
 after(cleanup);
 test('database shares attempt budgets and expires sessions', async () => {
   await db.transaction(async tx => {
+    await tx.execute(sql`SET LOCAL search_path TO pg_temp, public`);
+    await tx.execute(
+      sql`CREATE TEMP TABLE app_access_config (id integer PRIMARY KEY, pin_hash text NOT NULL) ON COMMIT DROP`
+    );
     await tx.execute(
       sql`CREATE TEMP TABLE app_access_attempts (id integer PRIMARY KEY, attempts bigint, window_start timestamptz) ON COMMIT DROP`
     );
@@ -16,6 +20,10 @@ test('database shares attempt budgets and expires sessions', async () => {
     );
     const first = createAccessSessions(tx);
     const second = createAccessSessions(tx);
+    assert.equal(await first.getPin(), undefined);
+    assert.equal(await first.createPin('salted-test-hash'), true);
+    assert.equal(await second.createPin('other-hash'), false);
+    assert.equal(await second.getPin(), 'salted-test-hash');
     const results = await Promise.all(
       Array.from({ length: 8 }, (_, i) => (i % 2 ? first : second).attempt())
     );
