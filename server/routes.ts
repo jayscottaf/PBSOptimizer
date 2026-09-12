@@ -1584,6 +1584,23 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Explicit complete-dataset contract: pagination is not used by this endpoint.
+  app.get('/api/bid-packages/:id/dataset', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const percentile = req.query.seniorityPercentile === undefined ? undefined : Number(req.query.seniorityPercentile);
+      if (!Number.isInteger(id) || id < 1 || (percentile !== undefined && (!Number.isFinite(percentile) || percentile < 0 || percentile > 100))) return res.status(400).json({ message: 'Invalid dataset request' });
+      const pkg = await storage.getBidPackage(id);
+      if (!pkg) return res.status(404).json({ message: 'Bid package not found' });
+      if (pkg.status !== 'completed') return res.status(409).json({ message: 'Bid package is not complete' });
+      const result = await storage.getAllPairingsForBidPackage({ bidPackageId: id, seniorityPercentile: percentile, compact: true });
+      res.json({ ...result, pairings: result.pairings.map(({ fullTextBlock, ...pairing }) => pairing), schema: 1, complete: true, total: result.pairings.length });
+    } catch (error) {
+      console.error('Dataset load failed:', error);
+      res.status(500).json({ message: 'Failed to load pairing dataset' });
+    }
+  });
+
   // Pairing search endpoint
   app.post('/api/pairings/search', async (req, res) => {
     try {

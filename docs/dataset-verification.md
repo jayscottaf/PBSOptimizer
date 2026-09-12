@@ -1,0 +1,13 @@
+**Complete dataset and offline verification — September 12, 2026**
+
+The dashboard loads one complete dataset per package/profile revision. Filters and sorting no longer participate in the network query key. The new `/api/bid-packages/:id/dataset` endpoint explicitly returns `schema`, `complete`, `total`, and compact pairings. A cache entry is valid when its version and reported total match its rows, including zero rows. Partial responses and legacy array caches are rejected. Authorization failures never silently fall back to saved data.
+
+Raw PDF text is fetched through the existing pairing detail endpoint. The list retains segments, layovers, operating weekdays, and exception dates for local filters and calendar logic. Search on the list uses pairing numbers, routes, and effective dates; full PDF text remains in the detail view. The existing server search endpoint remains available for its broader text-search contract.
+
+Measured against live package 61 at the same 50th-percentile override: 236 rows, complete=true, no raw-text property; the old search response was 494,582 bytes versus 277,174 bytes for the dataset (44% smaller). These are uncompressed JSON body sizes. No application records were changed by this measurement.
+
+Browser verification used the real production build with a synthetic API on localhost:5058. The initial 236-row package made one dataset request. Hold filtering reduced it to 118; combining a rotation search produced an empty result; clearing filters and sorting made no additional dataset requests. Switching to a three-row package loaded it once. A failed dataset request fell back to its saved rows. Opening a pairing fetched and displayed its raw detail text on demand. A fresh navigation with simulated offline navigator state and failing API connections also recovered the saved package and dataset.
+
+The fixture can be reproduced with `npm run build`, followed by `npx tsx scripts/browser-review-fixture.ts`. It binds only to loopback, uses synthetic records, and refuses application mutations. `/fixture/requests` exposes request counts; `/?offline=1` simulates offline API access. It never imports the database client.
+
+Automated regression coverage includes small/empty datasets, incomplete response rejection, duplicate request coalescing, late results under distinct profile/package keys, combined local filters, date conflicts, cache transaction completion, user-cache purge including full datasets, and connection closure. React Query runs these cache-aware loaders even when offline. IndexedDB connections close after their transactions, and clearing cache contents avoids blocked database deletion.

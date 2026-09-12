@@ -1,4 +1,5 @@
 import { printedDurationMinutes } from '@shared/durations';
+import { filterPairings } from '@/lib/filter-pairings';
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,18 +77,13 @@ const TrendsPanel = lazy(() =>
 );
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  cacheKeyForPairings,
-  hasFullPairingsCache,
-  loadFullPairingsCache,
   purgeUserCache,
   getCacheInfo,
 } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
 import { filterFieldMeta, formatBidPeriod } from '@shared/pbsFilterLabels';
-import * as pbs from '@/lib/pbsDerivations';
 import { maxLayoverMinutes } from '@/lib/layover';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
-import { pairingConflictsWithDaysOff } from '@/lib/pairingDates';
 import {
   Dialog,
   DialogContent,
@@ -392,6 +388,7 @@ export default function Dashboard() {
   const { data: bidPackages = EMPTY_ARRAY, refetch: refetchBidPackages } = useQuery({
     queryKey: ['bidPackages'],
     queryFn: api.getBidPackages,
+    networkMode: 'always', // Invoke the IndexedDB fallback even when offline.
     staleTime: 15 * 60 * 1000, // Increased cache time to 15 minutes
     gcTime: 30 * 60 * 1000, // Keep in memory for 30 minutes
     refetchOnMount: false,
@@ -490,282 +487,32 @@ export default function Dashboard() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Optimized useQuery with enhanced caching and deduplication
+  // One complete dataset per package/profile. Filters and sorting are local;
+  // query-key isolation prevents an older request replacing a newer selection.
   const {
     data: pairingsResponse,
     isLoading: isLoadingPairings,
+    isFetching: isPrefetching,
     isError: isPairingsError,
     refetch: refetchPairings,
   } = useQuery({
-    queryKey: [
-      'pairings',
-      bidPackageId,
-      debouncedFilters,
-      seniorityPercentile,
-      sortColumn,
-      sortDirection,
-      currentUser?.seniorityNumber,
-      currentUser?.id,
-    ],
-    queryFn: () =>
-      api.searchPairings(
-        {
-          bidPackageId: bidPackageId,
-          seniorityPercentage: seniorityPercentile
-            ? parseFloat(seniorityPercentile)
-            : undefined,
-          sortBy: sortColumn || 'pairingNumber',
-          sortOrder: sortDirection || 'asc',
-          ...debouncedFilters,
-        },
-        probabilityCacheUser
-      ),
-    enabled: !!bidPackageId && latestBidPackage?.status === 'completed',
-    staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in memory for 10 minutes
+    queryKey: ['pairings', bidPackageId, probabilityCacheUser, latestBidPackage?.uploadedAt],
+    networkMode: 'always', // Offline fallback lives inside the loader.
+    queryFn: () => api.loadPairingDataset(bidPackageId!, Number(seniorityPercentile || 50), probabilityCacheUser, String(latestBidPackage?.uploadedAt)),
+    enabled: hasInitialized && !!bidPackageId && latestBidPackage?.status === 'completed',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnReconnect: false, // Prevent refetch on reconnect
-    // Add optimistic updates for better perceived performance
-    placeholderData: previousData => previousData,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
-
-  // State for offline cache status
-  const [isFullCacheReady, setIsFullCacheReady] = useState(false);
-  const [isPrefetching, setIsPrefetching] = useState(false);
-  const [showInitialStatus, setShowInitialStatus] = useState(true);
-
-  // Auto-prefetch full dataset for current bid package and filters
-  React.useEffect(() => {
-    let cancelled = false;
-    setFullLocal(null);
-    setUnfilteredLocal(null);
-    const run = async () => {
-      if (!bidPackageId || latestBidPackage?.status !== 'completed') {
-        if (!cancelled) setIsFullCacheReady(false);
-        if (!cancelled) setFullLocal(null);
-        if (!cancelled) setUnfilteredLocal(null);
-        return;
-      }
-
-      // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
-      console.log('Dashboard: debouncedFilters =', debouncedFilters);
-      const userId = probabilityCacheUser;
-
-      // Generate TWO cache keys: filtered and unfiltered
-      const cacheKey = cacheKeyForPairings(
-        bidPackageId,
-        { ...debouncedFilters, seniorityPercentage: Number(seniorityPercentile || 50) },
-        userId
-      );
-      const unfilteredCacheKey = cacheKeyForPairings(
-        bidPackageId,
-        { seniorityPercentage: Number(seniorityPercentile || 50) }, // Same personalized dataset
-        userId
-      );
-      console.log(
-        'Dashboard: Generated cache keys - filtered:',
-        cacheKey,
-        'unfiltered:',
-        unfilteredCacheKey,
-        'for user:',
-        userId
-      );
-
-      // Check if both caches exist
-      const hasFull = await hasFullPairingsCache(cacheKey);
-      const hasUnfiltered = await hasFullPairingsCache(unfilteredCacheKey);
-      console.log(
-        'Dashboard: Cache check - filtered:',
-        hasFull,
-        'unfiltered:',
-        hasUnfiltered
-      );
-      if (!cancelled) setIsFullCacheReady(hasFull);
-
-      // Load filtered cache if it exists
-      let full: any[] | null = null;
-      let needsFilteredRefetch = false;
-      const MINIMUM_EXPECTED_PAIRINGS = 400; // Reasonable minimum for a full bid package
-
-      if (hasFull) {
-        // Load existing filtered cache
-        console.log('Dashboard: Loading existing filtered cache');
-        full = (await loadFullPairingsCache<any[]>(cacheKey)) ?? null;
-        console.log('Dashboard: Loaded filtered cache, length:', full?.length || 0);
-
-        // Check if any filters are active (excluding bidPackageId which is always present)
-        const hasActiveFilters = Object.keys(debouncedFilters).some(
-          key => key !== 'bidPackageId' && debouncedFilters[key] !== undefined && debouncedFilters[key] !== ''
-        );
-
-        // Validate filtered cache - it should have at least 400 pairings for a full bid package
-        // Only validate size when NO filters are active (to detect incomplete uploads)
-        // When filters are active, smaller result sets are expected and valid
-        const filteredLength = full?.length || 0;
-        if (!hasActiveFilters && filteredLength > 0 && filteredLength < MINIMUM_EXPECTED_PAIRINGS) {
-          console.warn(
-            `Dashboard: Filtered cache too small (${filteredLength} < ${MINIMUM_EXPECTED_PAIRINGS}), likely incomplete. Will re-fetch.`
-          );
-          needsFilteredRefetch = true;
-          full = null; // Don't use the stale cache
-          // DON'T call setFullLocal - keep the UI empty to avoid showing partial data
-        } else {
-          if (!cancelled) setFullLocal(full || null);
-          // Hide status indicator after 3 seconds when cache already exists
-          setTimeout(() => setShowInitialStatus(false), 3000);
-        }
-      } else {
-        needsFilteredRefetch = true;
-      }
-
-      // Also load unfiltered cache for sorting
-      let needsUnfilteredRefetch = false;
-      // Set when the unfiltered pass has fully satisfied the filtered cache
-      // too (same key, data fetched and applied) — see the guard below.
-      let unfilteredSatisfiedFilteredCache = false;
-      if (hasUnfiltered) {
-        console.log('Dashboard: Loading unfiltered cache for sorting');
-        const unfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
-        console.log('Dashboard: Loaded unfiltered cache, length:', unfiltered?.length || 0);
-
-        // Validate unfiltered cache - it should have at least as many items as filtered cache
-        // and should have a reasonable minimum (e.g., > 400 for full bid packages)
-        const filteredLength = full?.length || 0;
-        const unfilteredLength = unfiltered?.length || 0;
-
-        if (unfilteredLength === 0 ||
-            (unfilteredLength > 0 && unfilteredLength < filteredLength) ||
-            unfilteredLength < MINIMUM_EXPECTED_PAIRINGS) {
-          console.warn(
-            `Dashboard: Invalid unfiltered cache detected (length: ${unfilteredLength}, filtered: ${filteredLength}, min expected: ${MINIMUM_EXPECTED_PAIRINGS}). Will re-fetch.`
-          );
-          needsUnfilteredRefetch = true;
-          // DON'T call setUnfilteredLocal - avoid showing partial data
-        } else {
-          if (!cancelled) setUnfilteredLocal(unfiltered || null);
-        }
-      } else {
-        needsUnfilteredRefetch = true;
-      }
-
-      // Fetch unfiltered cache if it doesn't exist or is invalid
-      if (needsUnfilteredRefetch && navigator.onLine && bidPackageId) {
-        try {
-          console.log('Dashboard: Prefetching unfiltered cache (all pairings, no filters)');
-          await api.prefetchAllPairings(
-            { bidPackageId, seniorityPercentage: Number(seniorityPercentile || 50) } as any,
-            userId,
-            { force: true } // Force refetch to bypass stale cache
-          );
-          const newUnfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
-          console.log('Dashboard: Re-fetched unfiltered cache, length:', newUnfiltered?.length || 0);
-          if (!cancelled) setUnfilteredLocal(newUnfiltered || null);
-
-          // If filtered and unfiltered cache keys are the same (no active filters),
-          // update filtered cache too
-          if (cacheKey === unfilteredCacheKey && newUnfiltered) {
-            console.log('Dashboard: Updating filtered cache with new unfiltered data');
-            if (!cancelled) setFullLocal(newUnfiltered);
-            if (!cancelled) setIsFullCacheReady(true);
-            unfilteredSatisfiedFilteredCache = true;
-          }
-        } catch (error) {
-          console.error('Unfiltered cache prefetch failed:', error);
-        }
-      }
-
-      // When no filters are active the filtered and unfiltered cache keys
-      // are identical, so the unfiltered prefetch above already fetched and
-      // applied exactly this dataset. `needsFilteredRefetch` was decided
-      // before that ran, so trusting it here re-fetched the whole package a
-      // second time (with force:true, so it couldn't even short-circuit) —
-      // ~10 paginated requests on a cold load instead of ~5. Skip only when
-      // the unfiltered pass actually succeeded and applied; if it failed,
-      // fall through so this stays a retry path.
-      if (
-        !unfilteredSatisfiedFilteredCache &&
-        (needsFilteredRefetch || !hasFull) &&
-        navigator.onLine
-      ) {
-        // Prefetch full dataset (either missing or invalid/incomplete)
-        try {
-          if (!cancelled) setIsPrefetching(true);
-          console.log('Dashboard: Prefetching filtered cache', needsFilteredRefetch ? '(forced due to incomplete cache)' : '(cache missing)');
-          await api.prefetchAllPairings(
-            {
-              bidPackageId,
-              seniorityPercentage: Number(seniorityPercentile || 50),
-              ...debouncedFilters,
-            } as any,
-            userId,
-            { force: true } // Force refetch to bypass any stale cache
-          );
-
-          // Re-check and load after prefetch
-          const newHasFull = await hasFullPairingsCache(cacheKey);
-          if (!cancelled) setIsFullCacheReady(newHasFull);
-
-          if (newHasFull) {
-            const full = await loadFullPairingsCache<any[]>(cacheKey);
-            console.log('Dashboard: Loaded fresh filtered cache after prefetch, length:', full?.length || 0);
-            if (!cancelled) setFullLocal(full || null);
-
-            // Hide status indicator after 3 seconds when cache is ready
-            setTimeout(() => setShowInitialStatus(false), 3000);
-          }
-        } catch (error) {
-          console.error('Prefetch failed:', error);
-          if (!cancelled) setIsFullCacheReady(false);
-        } finally {
-          if (!cancelled) setIsPrefetching(false);
-        }
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [
-    bidPackageId,
-    JSON.stringify(debouncedFilters),
-    currentUser?.seniorityNumber,
-    currentUser?.id,
-    probabilityCacheUser,
-    latestBidPackage?.status,
-  ]);
-
-  // When the bid package transitions to completed, invalidate and refetch pairings
-  React.useEffect(() => {
-    if (latestBidPackage?.id && latestBidPackage.status === 'completed') {
-      queryClient.invalidateQueries({
-        queryKey: ['pairings', latestBidPackage.id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['initial-pairings', latestBidPackage.id],
-      });
-      refetchPairings();
-    }
-  }, [latestBidPackage?.status, latestBidPackage?.id]);
-
-  // SSE handles progress; keep a light refresh on completion only
-  React.useEffect(() => {
-    if (latestBidPackage?.status === 'completed') {
-      refetchBidPackages();
-      refetchPairings();
-    }
-  }, [latestBidPackage?.status]);
-
-  // Extract pairings from the response, with fallback to preloaded data
-  // Store full local cache data
-  const [fullLocal, setFullLocal] = useState<any[] | null>(null);
-  // Store unfiltered cache for sorting
-  const [unfilteredLocal, setUnfilteredLocal] = useState<any[] | null>(null);
-
-  // Use pairings from response
-  const pairings = pairingsResponse?.pairings || [];
+  const isFullCacheReady = pairingsResponse?.cached ?? false;
+  const pairings = pairingsResponse?.pairings ?? EMPTY_ARRAY;
+  const fullLocal = pairings;
 
   // Calculate full dataset statistics when using offline cache
   const effectiveStatistics = React.useMemo(() => {
-    if (isFullCacheReady && fullLocal && fullLocal.length > 0) {
+    if (pairingsResponse) {
       // Helper function to parse hours safely
       const parseHours = (hours: any): number => {
         if (typeof hours === 'number') {
@@ -810,15 +557,8 @@ export default function Dashboard() {
       };
     }
 
-    // Fall back to server statistics when not using full cache
-    // Remove ratioBreakdown from server stats to let StatsPanel calculate with percentiles
-    const serverStats = pairingsResponse?.statistics as any;
-    if (serverStats) {
-      const { ratioBreakdown, ...rest } = serverStats;
-      return rest;
-    }
-    return serverStats;
-  }, [isFullCacheReady, fullLocal, pairingsResponse?.statistics]);
+    return undefined;
+  }, [fullLocal, pairingsResponse]);
 
   // Debug logs removed after verification
 
@@ -1284,398 +1024,11 @@ export default function Dashboard() {
     ]);
   };
 
-  // Client-side sorting from full cache when available
   const sortedPairings = React.useMemo(() => {
-    // Shadow with the debounced value: this memo re-filters and re-sorts the
-    // entire cached package, and keying it on the raw filters made it run on
-    // every keystroke — the main source of typing lag on mobile.
-    const filters = debouncedFilters;
-    // When sorting is active OR preferredDaysOff filter is set, use unfiltered cache and apply filters client-side
-    const hasPreferredDaysOff = filters.preferredDaysOff && filters.preferredDaysOff.length > 0;
-    const useUnfiltered = (sortColumn || hasPreferredDaysOff) && unfilteredLocal && unfilteredLocal.length > 0;
-
-    if (!useUnfiltered && (!isFullCacheReady || !fullLocal || fullLocal.length === 0)) {
-      return pairings;
-    }
-
-    const sourceData = useUnfiltered ? unfilteredLocal : fullLocal;
-    if (!sourceData) {
-      return pairings;
-    }
-    console.log(`Sorting ${sourceData.length} pairings from ${useUnfiltered ? 'unfiltered' : 'filtered'} cache`);
-
-    // Apply filters client-side when using unfiltered cache OR when preferredDaysOff is set
-    let filtered = [...sourceData];
-    if ((useUnfiltered || hasPreferredDaysOff) && filters && Object.keys(filters).length > 0) {
-      console.log('Applying filters client-side:', filters);
-      filtered = filtered.filter(pairing => {
-        // Credit hours filter
-        if (filters.creditMin !== undefined) {
-          const credit = parseFloat(pairing.creditHours?.toString() || '0');
-          if (credit < filters.creditMin) {
-            return false;
-          }
-        }
-        if (filters.creditMax !== undefined) {
-          const credit = parseFloat(pairing.creditHours?.toString() || '0');
-          if (credit > filters.creditMax) {
-            return false;
-          }
-        }
-
-        // Block hours filter
-        if (filters.blockMin !== undefined) {
-          const block = parseFloat(pairing.blockHours?.toString() || '0');
-          if (block < filters.blockMin) {
-            return false;
-          }
-        }
-        if (filters.blockMax !== undefined) {
-          const block = parseFloat(pairing.blockHours?.toString() || '0');
-          if (block > filters.blockMax) {
-            return false;
-          }
-        }
-
-        // Hold probability filter
-        if (filters.holdProbabilityMin !== undefined) {
-          const hold = parseFloat(pairing.holdProbability?.toString() || '0');
-          if (hold < filters.holdProbabilityMin) {
-            return false;
-          }
-        }
-
-        // Pairing days filter
-        if (filters.pairingDays !== undefined) {
-          if (pairing.pairingDays !== filters.pairingDays) {
-            return false;
-          }
-        }
-        if (filters.pairingDaysMin !== undefined) {
-          if ((pairing.pairingDays || 0) < filters.pairingDaysMin) {
-            return false;
-          }
-        }
-        if (filters.pairingDaysMax !== undefined) {
-          if ((pairing.pairingDays || 0) > filters.pairingDaysMax) {
-            return false;
-          }
-        }
-
-        // TAFB filter
-        if (filters.tafbMin !== undefined || filters.tafbMax !== undefined) {
-          const tafbHours = printedDurationMinutes(pairing.tafb) / 60;
-          if (!Number.isFinite(tafbHours)) return false;
-
-          if (filters.tafbMin !== undefined && tafbHours < filters.tafbMin) {
-            return false;
-          }
-          if (filters.tafbMax !== undefined && tafbHours > filters.tafbMax) {
-            return false;
-          }
-        }
-
-        // Efficiency filter (C/B ratio)
-        if (filters.efficiency !== undefined) {
-          const credit = parseFloat(pairing.creditHours?.toString() || '0');
-          const block = parseFloat(pairing.blockHours?.toString() || '0');
-          const efficiency = block > 0 ? credit / block : 0;
-          if (efficiency < filters.efficiency) {
-            return false;
-          }
-        }
-
-        // ---- PBS-native filters (must mirror server/storage.ts SQL) ----
-        if (filters.deadheadsMin !== undefined) {
-          if ((pairing.deadheads || 0) < filters.deadheadsMin) {
-            return false;
-          }
-        }
-        if (filters.deadheadsMax !== undefined) {
-          if ((pairing.deadheads || 0) > filters.deadheadsMax) {
-            return false;
-          }
-        }
-        if (filters.layoverCountMin !== undefined) {
-          if (pbs.layoverCount(pairing) < filters.layoverCountMin) {
-            return false;
-          }
-        }
-        if (filters.layoverCountMax !== undefined) {
-          if (pbs.layoverCount(pairing) > filters.layoverCountMax) {
-            return false;
-          }
-        }
-        if (filters.totalLayoverHoursMin !== undefined) {
-          if (pbs.totalLayoverHours(pairing) < filters.totalLayoverHoursMin) {
-            return false;
-          }
-        }
-        if (filters.totalLayoverHoursMax !== undefined) {
-          if (pbs.totalLayoverHours(pairing) > filters.totalLayoverHoursMax) {
-            return false;
-          }
-        }
-        if (
-          filters.averageDailyCreditMin !== undefined ||
-          filters.averageDailyCreditMax !== undefined
-        ) {
-          const credit = parseFloat(pairing.creditHours?.toString() || '0');
-          const days = pairing.pairingDays || 0;
-          const avg = days > 0 ? credit / days : 0;
-          if (
-            filters.averageDailyCreditMin !== undefined &&
-            avg < filters.averageDailyCreditMin
-          ) {
-            return false;
-          }
-          if (
-            filters.averageDailyCreditMax !== undefined &&
-            avg > filters.averageDailyCreditMax
-          ) {
-            return false;
-          }
-        }
-        if (
-          filters.averageDailyBlockMin !== undefined ||
-          filters.averageDailyBlockMax !== undefined
-        ) {
-          const block = parseFloat(pairing.blockHours?.toString() || '0');
-          const days = pairing.pairingDays || 0;
-          const avg = days > 0 ? block / days : 0;
-          if (
-            filters.averageDailyBlockMin !== undefined &&
-            avg < filters.averageDailyBlockMin
-          ) {
-            return false;
-          }
-          if (
-            filters.averageDailyBlockMax !== undefined &&
-            avg > filters.averageDailyBlockMax
-          ) {
-            return false;
-          }
-        }
-        if (
-          filters.checkInHourMin !== undefined ||
-          filters.checkInHourMax !== undefined
-        ) {
-          const hour = pbs.checkInHour(pairing);
-          if (hour === null) {
-            return false;
-          }
-          if (
-            filters.checkInHourMin !== undefined &&
-            hour < filters.checkInHourMin
-          ) {
-            return false;
-          }
-          if (
-            filters.checkInHourMax !== undefined &&
-            hour > filters.checkInHourMax
-          ) {
-            return false;
-          }
-        }
-        if (filters.checkInStations && filters.checkInStations.length > 0) {
-          const station = pbs.checkInStation(pairing);
-          const wanted = filters.checkInStations.map(s => s.toUpperCase());
-          if (!station || !wanted.includes(station)) {
-            return false;
-          }
-        }
-        if (
-          filters.excludeCheckInStations &&
-          filters.excludeCheckInStations.length > 0
-        ) {
-          const station = pbs.checkInStation(pairing);
-          const banned = filters.excludeCheckInStations.map(s =>
-            s.toUpperCase()
-          );
-          // No parseable station → keep (mirrors the SQL's IS NULL branch)
-          if (station && banned.includes(station)) {
-            return false;
-          }
-        }
-        if (filters.hasRedeye !== undefined) {
-          if (pbs.hasRedeye(pairing) !== filters.hasRedeye) {
-            return false;
-          }
-        }
-        if (
-          filters.excludeLayoverCities &&
-          filters.excludeLayoverCities.length > 0
-        ) {
-          const cities = pbs.layoverCities(pairing);
-          const banned = filters.excludeLayoverCities.map(c => c.toUpperCase());
-          if (cities.some(c => banned.includes(c))) {
-            return false;
-          }
-        }
-        // Layovers In (include list) — mirrors the server's EXISTS clause;
-        // previously missing from this client-side path entirely.
-        if (filters.layoverLocations && filters.layoverLocations.length > 0) {
-          const cities = pbs.layoverCities(pairing);
-          const wanted = filters.layoverLocations.map(c => c.toUpperCase());
-          if (!cities.some(c => wanted.includes(c))) {
-            return false;
-          }
-        }
-
-        // Search filter
-        if (filters.search) {
-          const searchLower = filters.search.toLowerCase();
-          const pairingNum = pairing.pairingNumber?.toString().toLowerCase() || '';
-          const route = pairing.route?.toString().toLowerCase() || '';
-          if (!pairingNum.includes(searchLower) && !route.includes(searchLower)) {
-            return false;
-          }
-        }
-
-        // Rotation number filter
-        if (filters.rotationNumber) {
-          const rotationLower = filters.rotationNumber.toLowerCase();
-          const pairingNum = pairing.pairingNumber?.toString().toLowerCase() || '';
-          if (!pairingNum.includes(rotationLower)) {
-            return false;
-          }
-        }
-
-        // Preferred Days Off filter - exclude pairings with flights on these dates
-        if (filters.preferredDaysOff && filters.preferredDaysOff.length > 0) {
-          const year = latestBidPackage?.year || new Date().getFullYear();
-
-          // Try to extract better effectiveDates from fullTextBlock if available
-          let effectiveDates = pairing.effectiveDates || '';
-          let pairingDays = pairing.pairingDays || 1;
-
-          // If fullTextBlock exists, try to extract the full EFFECTIVE date range
-          if (pairing.fullTextBlock) {
-            // Multi-pass parsing to capture all exception types
-            let dateRange = '';
-            let dayOfWeekExceptions = '';
-            let specificDateExceptions = '';
-
-            // Extract the base date range
-            const effectiveMatch = pairing.fullTextBlock.match(/EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i);
-            if (effectiveMatch) {
-              dateRange = effectiveMatch[1].trim();
-            }
-
-            // Extract day-of-week exceptions (can appear as "EXCPT MO SA SU" before EFFECTIVE)
-            const dayOfWeekMatch = pairing.fullTextBlock.match(/(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i);
-            if (dayOfWeekMatch) {
-              dayOfWeekExceptions = dayOfWeekMatch[1].trim();
-            }
-
-            // Extract specific date exceptions (can appear anywhere in fullTextBlock as "EXCEPT OCT 16 OCT 21")
-            // Look for EXCEPT followed by month-day patterns
-            const specificDateMatch = pairing.fullTextBlock.match(/EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i);
-            if (specificDateMatch) {
-              specificDateExceptions = specificDateMatch[1].trim();
-            }
-
-            // Combine all parts
-            if (dateRange) {
-              effectiveDates = dateRange;
-              if (dayOfWeekExceptions || specificDateExceptions) {
-                const allExceptions = [dayOfWeekExceptions, specificDateExceptions]
-                  .filter(Boolean)
-                  .join(' ');
-                effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
-              }
-            }
-          }
-
-          if (effectiveDates && pairingDays) {
-            const hasConflict = pairingConflictsWithDaysOff(
-              effectiveDates,
-              year,
-              pairingDays,
-              filters.preferredDaysOff,
-              {
-                operatingDows: (pairing as any).operatingDows,
-                exceptDates: (pairing as any).exceptDates,
-              }
-            );
-
-            if (hasConflict) {
-              return false;
-            }
-          }
-        }
-
-        return true;
-      });
-    }
-
-    const sorted = filtered;
-
-    // Apply sorting only - filters are already applied when the cache was created
-    sorted.sort((a, b) => comparePairings(a, b, sortColumn, sortDirection));
-
-    console.log(`After filtering and sorting: ${sorted.length} pairings`);
-    return sorted;
-  }, [fullLocal, unfilteredLocal, isFullCacheReady, debouncedFilters, sortColumn, sortDirection, pairings, comparePairings]);
-
-  // Use sorted pairings if available, otherwise use regular pairings
-  // BUT: if layoverLocations filter is active, bypass cache and use API response directly
-  const displayPairings = React.useMemo(() => {
-    const hasLayoverFilter = debouncedFilters.layoverLocations && 
-                             Array.isArray(debouncedFilters.layoverLocations) && 
-                             debouncedFilters.layoverLocations.length > 0;
-    
-    // Always use API response if layover filter is active (bypass cache)
-    if (hasLayoverFilter) {
-      // Apply Days Off filter client-side when using API response directly
-      let result = [...pairings];
-      
-      if (debouncedFilters.preferredDaysOff && debouncedFilters.preferredDaysOff.length > 0 && latestBidPackage) {
-        const year = latestBidPackage.year || new Date().getFullYear();
-        result = result.filter(pairing => {
-          let effectiveDates = pairing.effectiveDates || '';
-          let pairingDays = pairing.pairingDays || 1;
-          
-          // Try to extract better effectiveDates from fullTextBlock if available
-          if (pairing.fullTextBlock) {
-            const effectiveMatch = pairing.fullTextBlock.match(/EFFECTIVE\s+([A-Z]{3}\s*\d{1,2}\s*[-–]\s*[A-Z]{3}\s*\d{1,2})/i);
-            if (effectiveMatch) {
-              effectiveDates = effectiveMatch[1].trim();
-            }
-          }
-          
-          if (effectiveDates && pairingDays) {
-            const hasConflict = pairingConflictsWithDaysOff(
-              effectiveDates,
-              year,
-              pairingDays,
-              debouncedFilters.preferredDaysOff || [],
-              {
-                operatingDows: (pairing as any).operatingDows,
-                exceptDates: (pairing as any).exceptDates,
-              }
-            );
-            if (hasConflict) {
-              return false;
-            }
-          }
-          return true;
-        });
-      }
-      
-      return result;
-    }
-    
-    // Otherwise use cached data if available. Trust sortedPairings even when
-    // it's empty — an empty result can legitimately mean "filters (e.g.
-    // Preferred Days Off) excluded everything," and falling back to the raw
-    // unfiltered `pairings` in that case would show pairings the pilot asked
-    // to exclude.
-    if (isFullCacheReady) {
-      return sortedPairings;
-    }
-    return pairings;
-  }, [isFullCacheReady, sortedPairings, pairings, debouncedFilters, latestBidPackage]);
+    const filtered = filterPairings(pairings, debouncedFilters, latestBidPackage?.year || new Date().getFullYear());
+    return filtered.sort((a, b) => comparePairings(a, b, sortColumn, sortDirection));
+  }, [pairings, debouncedFilters, latestBidPackage?.year, sortColumn, sortDirection, comparePairings]);
+  const displayPairings = sortedPairings;
 
   // Conflicts derived in a memo rather than an effect + state: the effect
   // version ran after every commit that changed the list's array identity and
@@ -1884,116 +1237,13 @@ export default function Dashboard() {
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Only show cache status when it's actually useful */}
-                          {(isPrefetching ||
-                            !isFullCacheReady ||
-                            showInitialStatus) && (
-                            <>
-                              {isPrefetching ? (
-                                <span className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-700 flex items-center">
-                                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />{' '}
-                                  Preparing offline cache...
-                                </span>
-                              ) : isFullCacheReady ? (
-                                <span className="text-xs px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700">
-                                  Available offline: Yes
-                                </span>
-                              ) : (
-                                <span
-                                  className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border border-border cursor-pointer"
-                                  onClick={async () => {
-                                    console.log('Manual prefetch triggered');
-                                    setShowInitialStatus(true); // Show status during manual prefetch
-                                    console.log(
-                                      'Clearing old cache entries first...'
-                                    );
-                                    // Clear old cache entries
-                                    try {
-                                      const request = indexedDB.open(
-                                        'pbs-cache',
-                                        1
-                                      );
-                                      const db = await new Promise<IDBDatabase>(
-                                        (resolve, reject) => {
-                                          request.onsuccess = () =>
-                                            resolve(request.result);
-                                          request.onerror = () =>
-                                            reject(request.error);
-                                        }
-                                      );
-                                      const tx = db.transaction(
-                                        ['pairings'],
-                                        'readwrite'
-                                      );
-                                      const store = tx.objectStore('pairings');
-                                      await new Promise<void>(
-                                        (resolve, reject) => {
-                                          const clearReq = store.clear();
-                                          clearReq.onsuccess = () => resolve();
-                                          clearReq.onerror = () =>
-                                            reject(clearReq.error);
-                                        }
-                                      );
-                                      console.log('Cache cleared');
-                                    } catch (e) {
-                                      console.log('Failed to clear cache:', e);
-                                    }
-
-                                    setIsPrefetching(true);
-                                    try {
-                                      const userId =
-                                        currentUser?.seniorityNumber ||
-                                        currentUser?.id;
-                                      await api.prefetchAllPairings(
-                                        {
-                                          bidPackageId,
-                                          ...debouncedFilters,
-                                        } as any,
-                                        userId
-                                      );
-
-                                      const key = cacheKeyForPairings(
-                                        bidPackageId,
-                                        debouncedFilters,
-                                        userId
-                                      );
-                                      const exists =
-                                        await hasFullPairingsCache(key);
-                                      console.log(
-                                        'Manual prefetch - final check:',
-                                        exists
-                                      );
-
-                                      if (exists) {
-                                        const data =
-                                          await loadFullPairingsCache(key);
-                                        console.log(
-                                          'Manual prefetch - data length:',
-                                          data?.length
-                                        );
-                                        setIsFullCacheReady(true);
-                                        setFullLocal(data || null);
-                                        // Hide after manual prefetch completes
-                                        setTimeout(
-                                          () => setShowInitialStatus(false),
-                                          3000
-                                        );
-                                      }
-                                    } catch (error) {
-                                      console.error(
-                                        'Manual prefetch failed:',
-                                        error
-                                      );
-                                    } finally {
-                                      setIsPrefetching(false);
-                                    }
-                                  }}
-                                >
-                                  Available offline: No (click to cache)
-                                </span>
-                              )}
-                            </>
-                          )}
+                          <button
+                            className="text-xs px-2 py-1 rounded border text-muted-foreground"
+                            disabled={!bidPackageId || isPrefetching}
+                            onClick={() => refetchPairings()}
+                          >
+                            {isPrefetching ? 'Loading pairings…' : isFullCacheReady ? 'Available offline: Yes' : 'Save for offline use'}
+                          </button>
                           {isUpdatingSeniority && (
                             <span className="flex items-center text-orange-600 text-sm">
                               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />

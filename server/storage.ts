@@ -769,6 +769,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPairingsForBidPackage(filters: {
     bidPackageId: number;
+    compact?: boolean;
     seniorityPercentile?: number;
     seniorityPercentage?: number;
     search?: string;
@@ -1143,7 +1144,7 @@ export class DatabaseStorage implements IStorage {
           holdProbability: pairings.holdProbability,
           holdProbabilityReasoning: pairings.holdProbabilityReasoning,
           pairingDays: pairings.pairingDays,
-          fullTextBlock: pairings.fullTextBlock,
+          fullTextBlock: filters.compact ? sql<string>`''` : pairings.fullTextBlock,
         })
         .from(pairings)
         .where(and(...conditions))

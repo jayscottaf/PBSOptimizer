@@ -270,24 +270,7 @@ export function pairingConflictsWithDaysOff(
 
   const daysOffTimestamps = preferredDaysOff.map(normalizeDate);
 
-  // Debug logging - log first 3 pairings checked + any that contain "OCT14" or "OCT29"
-  if (!window.__rangePairingLogCount) {
-    window.__rangePairingLogCount = 0;
-  }
-  const isDebugWorthy = window.__rangePairingLogCount < 3 ||
-                        effectiveDates.includes('OCT14') ||
-                        effectiveDates.includes('OCT29');
 
-  if (isDebugWorthy && window.__rangePairingLogCount < 10) {
-    console.log(`Pairing Check #${window.__rangePairingLogCount + 1} (${effectiveDates}):`, {
-      effectiveDates,
-      pairingDays,
-      validStartDatesCount: validStartDates.length,
-      validStartDates: validStartDates.slice(0, 5).map(d => d.toDateString()),
-      preferredDaysOff: preferredDaysOff.map(d => d.toDateString())
-    });
-    window.__rangePairingLogCount++;
-  }
 
   // Check if ANY valid start date would result in the pairing covering a day off
   for (const startDate of validStartDates) {

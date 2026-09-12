@@ -1,6 +1,8 @@
+import { createDatasetLoader } from './pairing-dataset';
 import { apiRequest } from './queryClient';
 import {
   cacheKeyForPairings,
+  clearAllCache as clearOfflineCache,
   savePairingsCache,
   loadPairingsCache,
   saveFullPairingsCache,
@@ -51,7 +53,10 @@ export interface Pairing {
   deadheads: number;
   layovers: any;
   flightSegments: any;
-  fullTextBlock: string;
+  fullTextBlock?: string;
+  checkInTime?: string;
+  operatingDows?: number[] | null;
+  exceptDates?: string[] | null;
   holdProbability: number;
   holdProbabilityReasoning?: string[]; // Added reasoning array
   pairingDays?: number;
@@ -135,11 +140,23 @@ export async function getApiErrorMessage(
   }
 }
 
+const loadDataset = createDatasetLoader<Pairing>({ read: loadPairingsCache, write: savePairingsCache });
+
 export const api = {
   // Bid packages
   getBidPackages: async (): Promise<BidPackage[]> => {
-    const response = await apiRequest('GET', '/api/bid-packages');
-    return response.json();
+    try {
+      const response = await apiRequest('GET', '/api/bid-packages');
+      const data = await response.json();
+      await savePairingsCache('bid-packages:v1', data).catch(() => {});
+      return data;
+    } catch (error) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const cached = await loadPairingsCache<BidPackage[]>('bid-packages:v1').catch(() => undefined);
+        if (cached) return cached;
+      }
+      throw error;
+    }
   },
 
   // Bid builder: simulate a structured draft bid against a bid package
@@ -190,91 +207,13 @@ export const api = {
     return response.json();
   },
 
-  // Prefetch entire dataset for current filters and cache for offline/global sorting
-  prefetchAllPairings: async (
-    filters: SearchFilters & { bidPackageId: number },
-    userId?: string | number,
-    options?: { force?: boolean }
-  ) => {
-    console.log('Starting prefetch for filters:', filters, 'userId:', userId, 'options:', options);
-
-    // Use cache key WITHOUT sortBy/sortOrder to enable global sorting on one dataset
-    const { sortBy, sortOrder, page, limit: _, ...filtersForCache } = filters;
-    const key = cacheKeyForPairings(
-      filters.bidPackageId,
-      filtersForCache,
-      userId
-    );
-
-    console.log('Prefetch cache key:', key);
-
-    // Check if already cached (unless force is true)
-    if (!options?.force) {
-      const existing = await loadFullPairingsCache(key);
-      if (existing && existing.length > 0) {
-        console.log('Full cache already exists, skipping prefetch');
-        return { total: existing.length, cached: true };
-      }
-    } else {
-      console.log('Force prefetch requested, bypassing cache check');
-    }
-
-    // First page to determine total
-    const first = await fetch('/api/pairings/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...filters,
-        page: 1,
-        limit: 100,
-        sortBy: 'pairingNumber',
-        sortOrder: 'asc',
-      }),
+  loadPairingDataset: async (bidPackageId: number, seniorityPercentile: number, profileRevision: string, packageRevision: string) => {
+    const key = `${cacheKeyForPairings(bidPackageId, { seniorityPercentile, packageRevision }, profileRevision)}:dataset:v1`;
+    return loadDataset(key, async () => {
+      const response = await fetch(`/api/bid-packages/${bidPackageId}/dataset?seniorityPercentile=${seniorityPercentile}`, { credentials: 'include' });
+      if (!response.ok) throw Object.assign(new Error('Failed to load pairing dataset'), { status: response.status });
+      return response.json();
     });
-    if (!first.ok) {
-      throw new Error('Prefetch failed');
-    }
-    const firstData = await first.json();
-    const total =
-      firstData?.pagination?.total ||
-      (Array.isArray(firstData) ? firstData.length : 0);
-    const limit = firstData?.pagination?.limit || 100;
-    let rows: Pairing[] =
-      firstData?.pairings || (Array.isArray(firstData) ? firstData : []);
-
-    console.log(
-      `Prefetch: Page 1 fetched, total=${total}, limit=${limit}, found=${rows.length}`
-    );
-
-    const totalPages = Math.ceil(total / limit);
-    for (let page = 2; page <= totalPages; page++) {
-      const res = await fetch('/api/pairings/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...filters,
-          page,
-          limit,
-          sortBy: 'pairingNumber',
-          sortOrder: 'asc',
-        }),
-      });
-      if (!res.ok) {
-        console.warn(`Prefetch: Failed to fetch page ${page}`);
-        break;
-      }
-      const data = await res.json();
-      const part: Pairing[] = data?.pairings || [];
-      rows = rows.concat(part);
-      console.log(
-        `Prefetch: Page ${page}/${totalPages} fetched, total rows=${rows.length}`
-      );
-    }
-
-    console.log(`Prefetch: Caching ${rows.length} total rows with key: ${key}`);
-    await saveFullPairingsCache(key, rows);
-    console.log('Prefetch: Cache save completed');
-    return { total: rows.length, cached: true };
   },
 
   uploadBidPackage: async (
@@ -597,18 +536,6 @@ export const api = {
 
   // Cache management
   async clearLocalCache(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Delete both old and new cache databases
-      const deleteOld = indexedDB.deleteDatabase('pbs-cache');
-      const deleteNew = indexedDB.deleteDatabase('pbs-cache-v2');
-
-      Promise.all([
-        new Promise(r => { deleteOld.onsuccess = () => r(true); deleteOld.onerror = () => r(false); }),
-        new Promise(r => { deleteNew.onsuccess = () => r(true); deleteNew.onerror = () => r(false); })
-      ]).then(() => {
-        console.log('Cache deleted successfully');
-        resolve();
-      }).catch(reject);
-    });
+    await clearOfflineCache();
   },
 };
