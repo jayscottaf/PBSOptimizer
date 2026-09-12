@@ -77,6 +77,7 @@ export function ReasonsReportUpload({
 
       // Build description with skipped and linking info
       let description = `Processed ${result.stats.stored} new awards from ${result.stats.month} ${result.stats.year} (${result.stats.base} ${result.stats.aircraft})`;
+      if (result.stats.refreshed > 0) description += `. ${result.stats.refreshed} existing credits corrected.`;
       if (result.stats.skipped > 0) {
         description += `. ${result.stats.skipped} duplicates skipped.`;
       }

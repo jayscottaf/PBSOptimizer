@@ -18,6 +18,7 @@ const award = (pairingNumber: string) => ({
   juniorHolderSeniority: 100,
   pairingDays: 3,
   creditHours: '18.50',
+  tripFingerprint: { layoverPattern: 'BOS' },
   awardedAt: new Date('2026-08-01T00:00:00Z'),
   checkInDate: '08/01 Sat 09:00',
 });
@@ -145,6 +146,7 @@ test('imports roll back earlier batches and preference deletion; counts describe
     );
     assert.deepEqual(result, {
       storedCount: 1,
+      refreshedCount: 0,
       skippedCount: 0,
       linkedCount: 0,
       unlinkedCount: 1,
@@ -179,6 +181,39 @@ test('imports roll back earlier batches and preference deletion; counts describe
     );
     assert.equal(rerun.storedCount, 0);
     assert.equal((await tx.select().from(bidHistory)).length, 2);
+    const correction = await persistReasonsImport(
+      {
+        metadata,
+        awards: [
+          { ...award('1001'), creditHours: '18.75', totalCredit: '18.75' },
+        ],
+        preferences: [],
+      },
+      tx
+    );
+    assert.equal(correction.refreshedCount, 1);
+    assert.equal(correction.storedCount, 0);
+    const corrected = (await tx.select().from(bidHistory)).find(
+      row => row.checkInDate === '08/01 Sat 09:00'
+    )!;
+    assert.equal(corrected.creditHours, '18.75');
+    assert.equal((corrected.tripFingerprint as any).creditHours, 18.75);
+    assert.equal((corrected.tripFingerprint as any).layoverPattern, 'BOS');
+    await assert.rejects(
+      persistReasonsImport(
+        {
+          metadata,
+          awards: [{ ...award('1001'), creditHours: '19.00' }],
+          preferences: [preference('reject')],
+        },
+        tx
+      )
+    );
+    assert.equal(
+      (await tx.select().from(bidHistory)).find(row => row.id === corrected.id)!
+        .creditHours,
+      '18.75'
+    );
     const reportKey = JSON.stringify([
       metadata.base,
       metadata.aircraft,

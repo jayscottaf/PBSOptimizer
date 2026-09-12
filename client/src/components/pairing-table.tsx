@@ -1,3 +1,4 @@
+import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -925,12 +926,12 @@ function PairingTableImpl({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
-                      {pairing.creditHours}
+                      {formatDuration(decimalHoursToMinutes(pairing.creditHours))}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="font-mono text-xs sm:text-sm text-muted-foreground">
-                      {pairing.blockHours}
+                      {formatDuration(decimalHoursToMinutes(pairing.blockHours))}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">

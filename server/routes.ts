@@ -1,3 +1,4 @@
+import { printedDurationHours } from '../shared/durations';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
 import { storage } from './storage';
@@ -1060,12 +1061,8 @@ export async function registerRoutes(app: Express) {
               ReasonsReportParser.createTripFingerprint(award);
 
             // Parse credit hours as decimal
-            const creditHours = parseFloat(
-              award.monthCredit.replace(':', '.').replace(/[^\d.]/g, '')
-            );
-            const totalCredit = parseFloat(
-              award.totalCredit.replace(':', '.').replace(/[^\d.]/g, '')
-            );
+            const creditHours = printedDurationHours(award.monthCredit);
+            const totalCredit = printedDurationHours(award.totalCredit);
 
             if (!Number.isFinite(creditHours) || !Number.isFinite(totalCredit)) {
               throw new Error(`Invalid credit for pairing ${award.pairingNumber}`);
@@ -1146,7 +1143,7 @@ export async function registerRoutes(app: Express) {
           }
         }
 
-        const { storedCount, skippedCount, linkedCount, unlinkedCount, preferencesParsed } = await persistReasonsImport({
+        const { storedCount, refreshedCount, skippedCount, linkedCount, unlinkedCount, preferencesParsed } = await persistReasonsImport({
           metadata,
           awards: rowsToInsert,
           preferences: pane.preferences.map(pref => ({
@@ -1168,13 +1165,11 @@ export async function registerRoutes(app: Express) {
 
         res.json({
           success: true,
-          message:
-            skippedCount > 0
-              ? `Reasons report processed: ${storedCount} new awards stored, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package`
-              : `Reasons report processed: ${storedCount} awards stored, ${linkedCount} linked to bid package`,
+          message: `Reasons report processed: ${storedCount} new awards stored, ${refreshedCount} credits corrected, ${skippedCount} duplicates skipped, ${linkedCount} linked to bid package`,
           stats: {
             totalParsed: awards.length,
             stored: storedCount,
+            refreshed: refreshedCount,
             skipped: skippedCount,
             preferencesParsed,
             linked: linkedCount,

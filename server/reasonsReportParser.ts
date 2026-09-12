@@ -1,3 +1,4 @@
+import { printedDurationHours } from '../shared/durations';
 import * as cheerio from 'cheerio';
 import * as fs from 'fs/promises';
 
@@ -389,9 +390,7 @@ export class ReasonsReportParser {
     const checkInDayOfWeek = namedDay !== -1 ? namedDay : checkInDay % 7;
 
     // Parse credit hours - format is "21:20" meaning 21 hours 20 minutes
-    const creditHours = parseFloat(
-      award.monthCredit.replace(':', '.')
-    );
+    const creditHours = printedDurationHours(award.monthCredit);
 
     // Calculate efficiency (credit per day)
     const efficiency = creditHours / award.pairingDays;

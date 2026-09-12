@@ -1,3 +1,4 @@
+import { printedDurationMinutes } from '@shared/durations';
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1085,16 +1086,8 @@ export default function Dashboard() {
             (parseFloat(b.blockHours?.toString() || '0') || 1);
           break;
         case 'tafb': {
-          const parseTimeTafb = (tafb: string) => {
-            if (!tafb) return 0;
-            if (tafb.includes(':')) {
-              const [hours, minutes] = tafb.split(':').map(Number);
-              return hours * 60 + minutes;
-            }
-            return parseFloat(tafb) * 60;
-          };
-          aVal = parseTimeTafb(a.tafb?.toString() || '0');
-          bVal = parseTimeTafb(b.tafb?.toString() || '0');
+          aVal = printedDurationMinutes(a.tafb) || 0;
+          bVal = printedDurationMinutes(b.tafb) || 0;
           break;
         }
         case 'maxLayover':
@@ -1371,14 +1364,8 @@ export default function Dashboard() {
 
         // TAFB filter
         if (filters.tafbMin !== undefined || filters.tafbMax !== undefined) {
-          const tafbStr = pairing.tafb?.toString() || '0';
-          let tafbHours = 0;
-          if (tafbStr.includes(':')) {
-            const [hours, minutes] = tafbStr.split(':').map(Number);
-            tafbHours = hours + (minutes || 0) / 60;
-          } else {
-            tafbHours = parseFloat(tafbStr);
-          }
+          const tafbHours = printedDurationMinutes(pairing.tafb) / 60;
+          if (!Number.isFinite(tafbHours)) return false;
 
           if (filters.tafbMin !== undefined && tafbHours < filters.tafbMin) {
             return false;

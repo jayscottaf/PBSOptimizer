@@ -1,3 +1,4 @@
+import { printedDurationHours, printedDurationMinutes, formatDuration } from '../shared/durations';
 import fs from 'fs';
 import path from 'path';
 // Import the internal module directly. pdf-parse's index.js has a debug block
@@ -849,14 +850,14 @@ export class PDFParser {
         const creditM = parseInt(totalCreditMatch[2]);
         const blockH = parseInt(totalCreditMatch[3]);
         const blockM = parseInt(totalCreditMatch[4]);
-        creditHours = (creditH + creditM / 60).toFixed(2);
-        blockHours = (blockH + blockM / 60).toFixed(2);
+        creditHours = printedDurationHours(`${creditH}:${String(creditM).padStart(2, '0')}`).toFixed(2);
+        blockHours = printedDurationHours(`${blockH}:${String(blockM).padStart(2, '0')}`).toFixed(2);
       }
 
       // Look for TAFB - it's just the hours value, not converted to days
       const tafbMatch = line.match(/TAFB\s+(\d{1,3}\.\d{2})/);
       if (tafbMatch) {
-        tafb = tafbMatch[1]; // Keep as raw hours (e.g., "100.53")
+        tafb = formatDuration(printedDurationMinutes(tafbMatch[1]));
       }
 
       // Look for TOTAL PAY line with time format (e.g., "12:43TL")

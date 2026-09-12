@@ -1,3 +1,4 @@
+import { printedDurationMinutesSql } from './lib/duration-sql';
 import { hashPin, verifyPin } from './lib/access-control';
 import {
   users,
@@ -727,32 +728,10 @@ export class DatabaseStorage implements IStorage {
       // TAFB filter: compare as minutes (handles 'HH:MM' format)
       // TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
       if (filters.tafbMin !== undefined) {
-        const minMins = filters.tafbMin * 60;
-        conditions.push(sql`
-                (
-                        CASE
-                                WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                                        (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-                                WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                                        floor((${pairings.tafb}::numeric) * 60)
-                                ELSE 0
-                        END
-                ) >= ${minMins}
-        `);
+        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`);
       }
       if (filters.tafbMax !== undefined) {
-        const maxMins = filters.tafbMax * 60;
-        conditions.push(sql`
-                (
-                        CASE
-                                WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                                        (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-                                WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                                        floor((${pairings.tafb}::numeric) * 60)
-                                ELSE 0
-                        END
-                ) <= ${maxMins}
-        `);
+        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`);
       }
 
       if (conditions.length > 0) {
@@ -909,33 +888,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (filters.tafbMin !== undefined) {
-        const minMins = filters.tafbMin * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) >= ${minMins}
-        `);
+        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`);
       }
-
       if (filters.tafbMax !== undefined) {
-        const maxMins = filters.tafbMax * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) <= ${maxMins}
-        `);
+        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`);
       }
 
       // Computed SQL expressions
@@ -1130,18 +1086,7 @@ export class DatabaseStorage implements IStorage {
         route: pairings.route,
       };
 
-      const tafbMinutesExpr = sql`
-        (
-          CASE
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-              (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+\\.[0-9]{1,2}$' THEN
-              (split_part(${pairings.tafb}::text, '.', 1)::int * 60 + split_part(${pairings.tafb}::text, '.', 2)::int)
-            WHEN ${pairings.tafb}::text ~ '^[0-9]+$' THEN
-              (${pairings.tafb}::int * 60)
-            ELSE 0
-          END
-        )`;
+      const tafbMinutesExpr = printedDurationMinutesSql(sql`${pairings.tafb}`);
 
       // Longest single layover in the pairing, in minutes. Layover durations
       // are "HH.MM" strings inside the jsonb layovers array; guard against

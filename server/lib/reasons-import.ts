@@ -31,6 +31,9 @@ export async function persistReasonsImport(
     );
     const existing = await tx
       .select({
+        id: bidHistory.id,
+        creditHours: bidHistory.creditHours,
+        totalCredit: bidHistory.totalCredit,
         pairingNumber: bidHistory.pairingNumber,
         juniorHolderSeniority: bidHistory.juniorHolderSeniority,
         juniorHolderEmployeeNumber: bidHistory.juniorHolderEmployeeNumber,
@@ -46,16 +49,53 @@ export async function persistReasonsImport(
         )
       );
     const keys = new Set(existing.map(awardIdentity));
+    const previous = new Map(existing.map(row => [awardIdentity(row), row]));
+    const corrections = new Map<number, typeof bidHistory.$inferInsert>();
     const awards = input.awards.filter(row => {
       if (!row.checkInDate?.trim())
         throw new Error('Award check-in date is required');
       const key = awardIdentity(row);
-      if (keys.has(key)) return false;
+      if (keys.has(key)) {
+        const old = previous.get(key);
+        if (
+          old &&
+          (Math.round(Number(old.creditHours) * 100) !==
+            Math.round(Number(row.creditHours) * 100) ||
+            Math.round(Number(old.totalCredit ?? 0) * 100) !==
+              Math.round(Number(row.totalCredit ?? 0) * 100))
+        ) {
+          corrections.set(old.id, row);
+        }
+        return false;
+      }
       keys.add(key);
       return true;
     });
     let storedCount = 0;
     let linkedCount = 0;
+    let refreshedCount = 0;
+    // Authoritative re-imports can repair old credit without deleting awards,
+    // links, or non-credit fingerprint fields. Batch the updates atomically.
+    const updates = [...corrections.entries()];
+    for (let i = 0; i < updates.length; i += 500) {
+      const values = updates.slice(i, i + 500).map(([id, row]) => {
+        const credit = Number(row.creditHours);
+        const fingerprint = JSON.stringify({
+          creditHours: credit,
+          creditBucket: Math.floor(credit / 2) * 2,
+          efficiencyBucket: Math.floor((credit / row.pairingDays) * 2) / 2,
+        });
+        return sql`(${id}::integer, ${row.creditHours}::numeric, ${row.totalCredit ?? null}::numeric, ${fingerprint}::jsonb)`;
+      });
+      const changed = await tx.execute(sql`UPDATE ${bidHistory} AS b SET
+        credit_hours = c.credit, total_credit = c.total,
+        trip_fingerprint = COALESCE(b.trip_fingerprint, '{}'::jsonb) || c.fingerprint
+        FROM (VALUES ${sql.join(values, sql`, `)}) AS c(id, credit, total, fingerprint)
+        WHERE b.id = c.id RETURNING b.id`);
+      if (changed.rows.length !== values.length)
+        throw new Error('Award correction count mismatch');
+      refreshedCount += changed.rows.length;
+    }
     for (let i = 0; i < awards.length; i += 500) {
       const chunk = awards.slice(i, i + 500);
       const stored = await tx
@@ -92,7 +132,8 @@ export async function persistReasonsImport(
     }
     return {
       storedCount,
-      skippedCount: input.awards.length - awards.length,
+      refreshedCount,
+      skippedCount: input.awards.length - awards.length - refreshedCount,
       linkedCount,
       unlinkedCount: storedCount - linkedCount,
       preferencesParsed,
