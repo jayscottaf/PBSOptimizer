@@ -30,6 +30,7 @@ import {
 import { db } from './db';
 import { personalizeHoldProbabilities, pairingStatistics, type HoldPairing } from './lib/hold-probabilities';
 import { percentileWithin } from './lib/empiricalHold';
+import { pilotRosterCtes } from './lib/pilot-roster';
 import {
   parseAircraftCode,
   normalizedAircraftSqlExpr,
@@ -1507,14 +1508,7 @@ export class DatabaseStorage implements IStorage {
     const lo = Math.max(0, (userPercentile - 10) / 100);
     const hi = Math.min(1, (userPercentile + 10) / 100);
     const rows = await db.execute(sql`
-      WITH pilot_ranks AS (
-        SELECT DISTINCT year, month, pilot_seniority_number,
-          percent_rank() OVER (
-            PARTITION BY year, month ORDER BY pilot_seniority_number
-          ) AS pct
-        FROM reasons_report_preferences
-        WHERE base = ${base} AND pilot_seniority_number IS NOT NULL ${fleet}
-      ),
+      WITH ${pilotRosterCtes(sql`reasons_report_preferences`, sql`AND base = ${base} ${fleet}`)},
       banded AS (
         SELECT r.*
         FROM reasons_report_preferences r
