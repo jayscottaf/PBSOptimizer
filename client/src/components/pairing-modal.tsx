@@ -1,3 +1,4 @@
+import { pairingText, downloadText } from '@/lib/pairing-export';
 import { TripTimeline } from '@/components/trip-timeline';
 import { formatLayoverMinutes, layoverDurationToMinutes } from '@/lib/layover';
 import {
@@ -594,8 +595,18 @@ export function PairingModal({
         </div>
 
         <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 sticky -bottom-6 bg-background py-4 border-t border-border">
-          <Button variant="outline" size="sm" className="w-full sm:w-auto">
-            Export Details
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={() =>
+              downloadText(
+                `pairing-${pairing.pairingNumber}.txt`,
+                pairingText(pairing)
+              )
+            }
+          >
+            Export details
           </Button>
           <Button
             variant="outline"

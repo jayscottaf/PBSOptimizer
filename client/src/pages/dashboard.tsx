@@ -1,3 +1,4 @@
+import { pairingsCsv, downloadText } from '@/lib/pairing-export';
 import { printedDurationMinutes } from '@shared/durations';
 import { filterPairings } from '@/lib/filter-pairings';
 import React, {
@@ -1369,7 +1370,15 @@ export default function Dashboard() {
                             )}
                             <Button
                               variant="link"
-                              className="h-auto p-0 text-blue-600 hover:text-blue-700 font-medium"
+                              className="min-h-9 text-primary font-medium"
+                              disabled={!filteredDisplayPairings.length}
+                              onClick={() =>
+                                downloadText(
+                                  `pairings-${bidPackageId ?? 'export'}.csv`,
+                                  pairingsCsv(filteredDisplayPairings),
+                                  'text/csv'
+                                )
+                              }
                             >
                               Export CSV
                             </Button>
