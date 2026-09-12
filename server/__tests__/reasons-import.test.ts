@@ -154,5 +154,44 @@ test('imports roll back earlier batches and preference deletion; counts describe
       (await tx.select().from(reasonsReportPreferences))[0].preferenceText,
       'new'
     );
+    const secondDate = { ...award('1001'), checkInDate: '08/07 Fri 09:00' };
+    const repeated = await persistReasonsImport(
+      {
+        metadata,
+        awards: [award('1001'), secondDate, secondDate],
+        preferences: [],
+      },
+      tx
+    );
+    assert.equal(
+      repeated.storedCount,
+      1,
+      'a second operating date is a distinct award'
+    );
+    assert.equal(
+      repeated.skippedCount,
+      2,
+      'existing and within-report repeats stay idempotent'
+    );
+    const rerun = await persistReasonsImport(
+      { metadata, awards: [award('1001'), secondDate], preferences: [] },
+      tx
+    );
+    assert.equal(rerun.storedCount, 0);
+    assert.equal((await tx.select().from(bidHistory)).length, 2);
+    const reportKey = JSON.stringify([
+      metadata.base,
+      metadata.aircraft,
+      metadata.year,
+      metadata.month,
+    ]);
+    const competing = await db.execute(
+      sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${reportKey}, 0)) AS acquired`
+    );
+    assert.equal(
+      competing.rows[0].acquired,
+      false,
+      'another database session cannot race this report import'
+    );
   });
 });

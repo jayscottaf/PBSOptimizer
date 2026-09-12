@@ -1,4 +1,5 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { awardIdentity } from './award-identity';
 import { db } from '../db';
 import {
   bidHistory,
@@ -17,10 +18,23 @@ export async function persistReasonsImport(
 ) {
   return database.transaction(async tx => {
     const { metadata } = input;
+    // Serialize the report's read/dedupe/write across server instances.
+    // An in-process mutex would not protect concurrent serverless uploads.
+    const reportKey = JSON.stringify([
+      metadata.base,
+      metadata.aircraft,
+      metadata.year,
+      metadata.month,
+    ]);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${reportKey}, 0))`
+    );
     const existing = await tx
       .select({
         pairingNumber: bidHistory.pairingNumber,
         juniorHolderSeniority: bidHistory.juniorHolderSeniority,
+        juniorHolderEmployeeNumber: bidHistory.juniorHolderEmployeeNumber,
+        checkInDate: bidHistory.checkInDate,
       })
       .from(bidHistory)
       .where(
@@ -31,11 +45,11 @@ export async function persistReasonsImport(
           eq(bidHistory.aircraft, metadata.aircraft)
         )
       );
-    const keys = new Set(
-      existing.map(r => `${r.pairingNumber}|${r.juniorHolderSeniority}`)
-    );
+    const keys = new Set(existing.map(awardIdentity));
     const awards = input.awards.filter(row => {
-      const key = `${row.pairingNumber}|${row.juniorHolderSeniority}`;
+      if (!row.checkInDate?.trim())
+        throw new Error('Award check-in date is required');
+      const key = awardIdentity(row);
       if (keys.has(key)) return false;
       keys.add(key);
       return true;
