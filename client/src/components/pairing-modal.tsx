@@ -1,3 +1,5 @@
+import { TripTimeline } from '@/components/trip-timeline';
+import { formatLayoverMinutes, layoverDurationToMinutes } from '@/lib/layover';
 import {
   decimalHoursToMinutes,
   formatDuration,
@@ -57,7 +59,12 @@ export function PairingModal({
     setExpandedMatches(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const { data: pairing, isLoading } = useQuery({
+  const {
+    data: pairing,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['/api/pairings', pairingId],
     queryFn: () => api.getPairing(pairingId),
     staleTime: 0, // Always fetch fresh data
@@ -180,6 +187,21 @@ export function PairingModal({
     },
   });
 
+  if (isError)
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pairing unavailable</DialogTitle>
+            <DialogDescription>
+              We could not load this trip. Check your connection and try again.
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={() => void refetch()}>Retry</Button>
+        </DialogContent>
+      </Dialog>
+    );
+
   if (isLoading || !pairing) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
@@ -191,7 +213,9 @@ export function PairingModal({
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500">Loading pairing details...</div>
+            <div className="text-muted-foreground" role="status">
+              Loading pairing details...
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -202,174 +226,142 @@ export function PairingModal({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="max-w-4xl max-h-[90svh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl">
-            Pairing Details - {pairing.pairingNumber}
+            Pairing {pairing.pairingNumber}
           </DialogTitle>
           <DialogDescription className="text-sm">
-            Detailed view of pairing {pairing.pairingNumber} with flight
-            segments, layovers, and bid history.
+            {pairing.route} · {pairing.pairingDays}{' '}
+            {pairing.pairingDays === 1 ? 'day' : 'days'} · Times shown as
+            hours:minutes.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 sm:space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Pairing Overview */}
-            <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-foreground text-sm sm:text-base">
-                Overview
-              </h4>
-              <Card>
-                <CardContent className="p-3 sm:p-4 bg-muted font-mono text-xs sm:text-sm space-y-1 text-foreground">
-                  <div>
-                    <span className="text-muted-foreground">Pairing:</span>{' '}
-                    {pairing.pairingNumber}
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              [
+                'Credit',
+                formatDuration(decimalHoursToMinutes(pairing.creditHours), ':'),
+              ],
+              [
+                'Block',
+                formatDuration(decimalHoursToMinutes(pairing.blockHours), ':'),
+              ],
+              [
+                'Time away',
+                formatDuration(printedDurationMinutes(pairing.tafb), ':'),
+              ],
+              [
+                'Estimated hold',
+                pairing.holdProbability === null ||
+                pairing.holdProbability === undefined
+                  ? '—'
+                  : `${pairing.holdProbability}%`,
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border bg-muted/40 p-3">
+                <dt className="text-sm text-muted-foreground">{label}</dt>
+                <dd className="mt-1 text-xl font-semibold tabular-nums">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="text-sm">
+            <span className="text-muted-foreground">Operating dates:</span>{' '}
+            {pairing.effectiveDates || 'See original report'}
+          </p>
+          {(pairing.holdProbabilityReasoning?.length ?? 0) > 0 && (
+            <details className="rounded-lg border px-3 py-2 text-sm">
+              <summary className="cursor-pointer font-medium">
+                About this hold estimate
+              </summary>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                {pairing.holdProbabilityReasoning?.map(
+                  (reason: string, index: number) => (
+                    <li key={index}>{reason}</li>
+                  )
+                )}
+              </ul>
+            </details>
+          )}
+          <div className="grid gap-6 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <section aria-label="Flight itinerary">
+              <h3 className="mb-4 text-base font-semibold">Your trip</h3>
+              <TripTimeline segments={flightSegments} />
+            </section>
+            <section aria-label="Layovers" className="space-y-3">
+              <h3 className="text-base font-semibold">Layovers & trip notes</h3>
+              {Array.isArray(pairing.layovers) && pairing.layovers.length ? (
+                pairing.layovers.map((layover: any, index: number) => (
+                  <div
+                    key={index}
+                    className="rounded-lg border bg-accent/30 p-3"
+                  >
+                    <p className="font-semibold">
+                      {layover.city || layover.airport || 'Layover'}
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {formatLayoverMinutes(
+                        layoverDurationToMinutes(layover.duration)
+                      )}
+                    </p>
+                    {layover.hotel && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {layover.hotel}
+                      </p>
+                    )}
                   </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No layover details listed.
+                </p>
+              )}
+              <dl className="space-y-2 text-sm">
+                {pairing.payHours && (
                   <div>
-                    <span className="text-muted-foreground">Effective:</span>{' '}
-                    {pairing.effectiveDates}
-                  </div>
-                  {pairing.payHours && (
-                    <div>
-                      <span className="text-muted-foreground">Total Pay:</span>{' '}
+                    <dt className="text-muted-foreground">Total pay</dt>
+                    <dd>
                       {formatDuration(
                         printedDurationMinutes(pairing.payHours),
                         ':'
                       )}
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-muted-foreground">Credit:</span>{' '}
-                    {formatDuration(
-                      decimalHoursToMinutes(pairing.creditHours),
-                      ':'
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Block:</span>{' '}
-                    {formatDuration(
-                      decimalHoursToMinutes(pairing.blockHours),
-                      ':'
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">TAFB:</span>{' '}
-                    {formatDuration(printedDurationMinutes(pairing.tafb), ':')}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Days:</span>{' '}
-                    {pairing.pairingDays || 'N/A'}
-                  </div>
-                  {pairing.fdp && (
-                    <div>
-                      <span className="text-muted-foreground">FDP:</span>{' '}
-                      {formatDuration(printedDurationMinutes(pairing.fdp), ':')}
-                    </div>
-                  )}
-                  {pairing.deadheads > 0 && (
-                    <div>
-                      <span className="text-muted-foreground">Deadheads:</span>{' '}
-                      {pairing.deadheads}
-                    </div>
-                  )}
-                  {pairing.holdProbability !== undefined && (
-                    <div>
-                      <span className="text-muted-foreground">
-                        Estimated hold:
-                      </span>{' '}
-                      <span
-                        className={
-                          pairing.holdProbability >= 70
-                            ? 'text-green-600 font-medium'
-                            : pairing.holdProbability >= 50
-                              ? 'text-yellow-600 font-medium'
-                              : 'text-red-600 font-medium'
-                        }
-                      >
-                        {pairing.holdProbability}%
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Flight Segments */}
-            <div className="space-y-2 sm:space-y-4">
-              <h4 className="font-semibold text-foreground text-sm sm:text-base">
-                Flight Segments
-              </h4>
-              <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
-                {flightSegments.length > 0 ? (
-                  (() => {
-                    // Group flights by day letter (A, B, C, etc.)
-                    const groupedByDay = flightSegments.reduce(
-                      (acc: any, segment: any) => {
-                        const dayLetter = segment.date || 'A';
-                        if (!acc[dayLetter]) {
-                          acc[dayLetter] = [];
-                        }
-                        acc[dayLetter].push(segment);
-                        return acc;
-                      },
-                      {}
-                    );
-
-                    const dayOrder = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-                    const sortedDays = dayOrder.filter(
-                      day => groupedByDay[day]
-                    );
-
-                    return sortedDays.map(dayLetter => (
-                      <Card key={dayLetter}>
-                        <CardContent className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 font-mono text-xs sm:text-sm">
-                          <div className="font-medium text-blue-900 dark:text-blue-300 mb-2 text-xs sm:text-sm">
-                            Day {dayLetter.charCodeAt(0) - 64} - {dayLetter}
-                          </div>
-                          {groupedByDay[dayLetter].map(
-                            (segment: any, segIndex: number) => (
-                              <div
-                                key={segIndex}
-                                className="text-blue-800 dark:text-blue-200 mb-1 text-xs sm:text-sm break-all sm:break-normal"
-                              >
-                                {segment.flightNumber} {segment.departure}{' '}
-                                {segment.departureTime} {segment.arrival}{' '}
-                                {segment.arrivalTime} ({segment.blockTime})
-                                {segment.isDeadhead && (
-                                  <span className="text-orange-600 ml-2">
-                                    [DH]
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          )}
-                        </CardContent>
-                      </Card>
-                    ));
-                  })()
-                ) : (
-                  <div className="text-muted-foreground text-sm">
-                    No flight segment details available
+                    </dd>
                   </div>
                 )}
-              </div>
-            </div>
+                {pairing.fdp && (
+                  <div>
+                    <dt className="text-muted-foreground">
+                      Flight duty period
+                    </dt>
+                    <dd>
+                      {formatDuration(printedDurationMinutes(pairing.fdp), ':')}
+                    </dd>
+                  </div>
+                )}
+                {pairing.deadheads > 0 && (
+                  <div>
+                    <dt className="text-muted-foreground">Deadhead segments</dt>
+                    <dd>{pairing.deadheads}</dd>
+                  </div>
+                )}
+              </dl>
+            </section>
           </div>
-
-          {/* Full Text Block */}
-          <div className="space-y-2 sm:space-y-4">
-            <h4 className="font-semibold text-foreground text-sm sm:text-base">
-              Full Pairing Text
-            </h4>
-            <Card>
-              <CardContent className="p-2 sm:p-4">
-                <pre className="text-xs font-mono whitespace-pre-wrap bg-muted dark:text-gray-100 p-2 sm:p-4 rounded border overflow-x-auto max-h-32 sm:max-h-none overflow-y-auto sm:overflow-y-visible">
-                  {pairing.fullTextBlock || 'No full text block available'}
-                </pre>
-              </CardContent>
-            </Card>
-          </div>
+          <details className="rounded-xl border bg-muted/20">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+              Original pairing report{' '}
+              <span className="ml-2 font-normal text-muted-foreground">
+                Source text
+              </span>
+            </summary>
+            <pre className="mx-3 mb-3 max-h-80 overflow-auto rounded-lg bg-muted p-3 text-xs leading-relaxed">
+              {pairing.fullTextBlock || 'No source text available'}
+            </pre>
+          </details>
 
           {/* Historical Awards - Fingerprint Matching */}
           <div className="space-y-2 sm:space-y-4">
@@ -523,7 +515,7 @@ export function PairingModal({
                             </div>
 
                             {/* Match breakdown */}
-                            <div className="grid grid-cols-6 gap-1 text-xs">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-xs">
                               <div className="text-center">
                                 <div
                                   className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
@@ -601,7 +593,7 @@ export function PairingModal({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
+        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 sticky -bottom-6 bg-background py-4 border-t border-border">
           <Button variant="outline" size="sm" className="w-full sm:w-auto">
             Export Details
           </Button>
