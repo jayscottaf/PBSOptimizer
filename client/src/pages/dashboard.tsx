@@ -1162,6 +1162,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <AppSidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -1174,6 +1180,8 @@ export default function Dashboard() {
       />
 
       <SidebarInset
+        id="main-content"
+        tabIndex={-1}
         className={`h-svh min-w-0 overflow-hidden ${processingBidPackage ? 'pt-12' : ''}`}
       >
         <AppHeader
@@ -1185,7 +1193,7 @@ export default function Dashboard() {
         />
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          <div className="h-full p-3 pb-20 sm:p-6 lg:pb-6">
+          <div className="h-full p-3 pb-20 sm:p-6 md:pb-6">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
@@ -1193,7 +1201,7 @@ export default function Dashboard() {
             >
               {/* Navigation now lives in the sidebar + mobile bottom nav; the
                   TabsList is kept for screen readers / keyboard tab semantics. */}
-              <TabsList className="sr-only">
+              <TabsList className="sr-only focus-within:not-sr-only">
                 <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                 <TabsTrigger value="favorites">Favorites</TabsTrigger>
                 <TabsTrigger value="calendar">Calendar</TabsTrigger>
@@ -1227,7 +1235,7 @@ export default function Dashboard() {
                       >
                         <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-primary">
                           Package statistics{' '}
-                          <span className="ml-2 font-normal text-muted-foreground">
+                          <span className="ml-2 hidden sm:inline font-normal text-muted-foreground">
                             Credit, trip lengths and layovers
                           </span>
                         </summary>
@@ -1289,6 +1297,7 @@ export default function Dashboard() {
                               >
                                 <SelectTrigger
                                   className="h-8 w-auto min-w-[180px] text-sm"
+                                  aria-label="Bid package"
                                   data-testid="select-bid-package"
                                 >
                                   <SelectValue placeholder="Select bid package" />

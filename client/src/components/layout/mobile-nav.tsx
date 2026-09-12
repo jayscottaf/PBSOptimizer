@@ -10,7 +10,7 @@ export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <div className="grid grid-cols-5">
         {NAV_ITEMS.map(item => {
@@ -22,7 +22,7 @@ export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
               onClick={() => onTabChange(item.value)}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors',
+                'flex flex-col items-center gap-1 min-h-14 py-2 text-xs font-medium transition-colors',
                 active
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground'

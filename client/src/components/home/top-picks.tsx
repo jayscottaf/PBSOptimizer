@@ -44,7 +44,7 @@ export function TopPicks({
     <details className="group/recommendations rounded-xl border bg-card">
       <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-primary">
         Recommended trips{' '}
-        <span className="ml-2 font-normal text-muted-foreground">
+        <span className="ml-2 hidden sm:inline font-normal text-muted-foreground">
           Explore your best matches
         </span>
       </summary>

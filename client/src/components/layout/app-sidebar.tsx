@@ -117,6 +117,7 @@ export function AppSidebar({
                   <SidebarMenuButton
                     tooltip={item.label}
                     isActive={activeTab === item.value}
+                    aria-current={activeTab === item.value ? 'page' : undefined}
                     onClick={() => onTabChange(item.value)}
                   >
                     <item.icon className="h-4 w-4" />

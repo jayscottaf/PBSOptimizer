@@ -1,3 +1,4 @@
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   decimalHoursToMinutes,
   formatDuration,
@@ -335,6 +336,7 @@ function PairingTableImpl({
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   // Column headers are sortable via plain onClick <th>s with no keyboard
   // access or aria-sort — this spreads onto each one to fix both without
@@ -668,460 +670,629 @@ function PairingTableImpl({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
-          <thead className="bg-muted">
-            <tr>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-muted/70"
-                title="Rotation number in the bid package"
-                {...sortHeaderProps('pairingNumber')}
+      {isMobile ? (
+        <section aria-label="Pairing results" className="space-y-3 p-3">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="mobile-pairing-sort"
+              className="text-sm font-medium"
+            >
+              Sort
+            </label>
+            <select
+              id="mobile-pairing-sort"
+              className="min-h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm"
+              value={sortColumn}
+              onChange={event => onSort(event.target.value, sortDirection)}
+            >
+              {[
+                ['holdProbability', 'Estimated hold'],
+                ['creditHours', 'Credit'],
+                ['pairingNumber', 'Pairing number'],
+                ['pairingDays', 'Trip length'],
+                ['tafb', 'Time away'],
+                ['maxLayover', 'Longest layover'],
+                ['blockHours', 'Block'],
+                ['creditBlockRatio', 'Credit/block ratio'],
+              ].map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              aria-label={
+                sortDirection === 'asc' ? 'Sort descending' : 'Sort ascending'
+              }
+              onClick={() =>
+                onSort(sortColumn, sortDirection === 'asc' ? 'desc' : 'asc')
+              }
+            >
+              {sortDirection === 'asc' ? '↑' : '↓'}
+            </Button>
+          </div>
+          {isLoading ? (
+            <p role="status" className="py-6 text-sm text-muted-foreground">
+              Loading pairings…
+            </p>
+          ) : isError ? (
+            <div role="alert">
+              <p>Could not load pairings.</p>
+              {onRetry && <Button onClick={onRetry}>Retry</Button>}
+            </div>
+          ) : safePairings.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">
+              {hasActiveFilters
+                ? 'No trips match. Clear a filter to broaden your search.'
+                : 'No pairings yet. Upload a package to get started.'}
+            </p>
+          ) : (
+            safePairings.map((pairing, index) => (
+              <article
+                key={pairing.id}
+                className="rounded-xl border bg-card p-4"
               >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Pairing #</span>
-                  {sortColumn === 'pairingNumber' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-muted/70"
-                title="Estimated chance this pairing is still available at your seniority"
-                {...sortHeaderProps('holdProbability')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Hold %</span>
-                  {sortColumn === 'holdProbability' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[200px] sm:min-w-[280px] lg:min-w-[350px]">
-                Route
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Pay credit, HH:MM (15:45 = 15h 45m)"
-                {...sortHeaderProps('creditHours')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Credit</span>
-                  {sortColumn === 'creditHours' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Scheduled flying time, HH:MM"
-                {...sortHeaderProps('blockHours')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Block</span>
-                  {sortColumn === 'blockHours' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Time Away From Base: check-in to release, HH:MM"
-                {...sortHeaderProps('tafb')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">TAFB</span>
-                  {sortColumn === 'tafb' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-muted/70"
-                title="Longest layover in this pairing"
-                {...sortHeaderProps('maxLayover')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Layover</span>
-                  {sortColumn === 'maxLayover' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-muted/70"
-                title="Trip length in days"
-                {...sortHeaderProps('pairingDays')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">Days</span>
-                  {sortColumn === 'pairingDays' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-muted/70"
-                title="Credit \u00f7 block \u2014 higher = more pay per hour flown"
-                {...sortHeaderProps('creditBlockRatio')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="truncate">C/B Ratio</span>
-                  {sortColumn === 'creditBlockRatio' && (
-                    <span className="text-blue-600 flex-shrink-0">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-              {(showDeleteButton || showAddToCalendar) && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px]">
-                  Actions
-                </th>
-              )}
-              {showDeleteButton && (
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
-                  Remove
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="bg-card divide-y divide-border">
-            {isLoading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`skeleton-${i}`}>
-                  <td colSpan={showDeleteButton ? 10 : 9} className="px-4 py-3">
-                    <div className="h-4 bg-muted rounded animate-pulse" />
-                  </td>
-                </tr>
-              ))
-            ) : isError ? (
-              <tr>
-                <td
-                  colSpan={showDeleteButton ? 10 : 9}
-                  className="px-6 py-8 text-center"
-                >
-                  <p className="text-red-600 dark:text-red-400 font-medium">
-                    Couldn't load pairings.
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Check your connection and try again.
-                  </p>
-                  {onRetry && (
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePairingClick(pairing)}
+                    className="min-h-11 text-base font-semibold text-primary"
+                    aria-label={`View pairing ${pairing.pairingNumber}`}
+                  >
+                    #{pairing.pairingNumber} →
+                  </button>
+                  {onToggleFavorite && (
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={onRetry}
+                      variant="ghost"
+                      className="h-11 w-11"
+                      aria-label={`${favoritePairingIds?.has(pairing.id) ? 'Remove' : 'Add'} ${pairing.pairingNumber} ${favoritePairingIds?.has(pairing.id) ? 'from' : 'to'} favorites`}
+                      aria-pressed={
+                        favoritePairingIds?.has(pairing.id) ?? false
+                      }
+                      onClick={() => onToggleFavorite(pairing)}
                     >
-                      Retry
+                      <Star
+                        className={`h-5 w-5 ${favoritePairingIds?.has(pairing.id) ? 'fill-warning text-warning' : ''}`}
+                      />
                     </Button>
                   )}
-                </td>
-              </tr>
-            ) : safePairings.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={showDeleteButton ? 10 : 9}
-                  className="px-6 py-8 text-center text-muted-foreground"
-                >
-                  {hasActiveFilters
-                    ? 'No pairings match your filters. Try clearing some to see more results.'
-                    : 'No pairings found. Upload a bid package to get started.'}
-                </td>
-              </tr>
-            ) : (
-              safePairings.map((pairing, index) => (
-                <tr
-                  key={`${pairing.id}-${index}`}
-                  className="hover:bg-muted cursor-pointer"
-                  onClick={() => handlePairingClick(pairing)}
-                >
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono font-medium text-foreground text-xs sm:text-sm">
-                        {pairing.pairingNumber}
-                      </span>
-                      {onToggleFavorite ? (
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            onToggleFavorite(pairing);
-                          }}
-                          title={
-                            favoritePairingIds?.has(pairing.id)
-                              ? 'Remove from favorites'
-                              : 'Add to favorites'
-                          }
-                          aria-label={
-                            favoritePairingIds?.has(pairing.id)
-                              ? `Remove ${pairing.pairingNumber} from favorites`
-                              : `Add ${pairing.pairingNumber} to favorites`
-                          }
-                          aria-pressed={favoritePairingIds?.has(pairing.id)}
-                          className="inline-flex items-center justify-center rounded p-0.5 transition-colors hover:bg-muted"
-                        >
-                          <Star
-                            className={`h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 transition-colors ${
-                              favoritePairingIds?.has(pairing.id)
-                                ? 'fill-yellow-400 text-yellow-400'
-                                : 'text-muted-foreground/50 hover:text-yellow-400'
-                            }`}
-                          />
-                        </button>
-                      ) : (
-                        pairing.holdProbability >= 80 && (
-                          <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                        )
-                      )}
-                      {conflicts.has(pairing.id) && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              onClick={e => e.stopPropagation()}
-                              type="button"
-                              className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
-                              aria-label="Conflicts with calendar"
-                            >
-                              <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent
-                            onClick={e => e.stopPropagation()}
-                            className="w-auto bg-popover text-popover-foreground border-border text-xs px-3 py-2"
-                          >
-                            {(() => {
-                              const conflictData = conflicts.get(pairing.id);
-                              if (
-                                !conflictData?.conflicts ||
-                                conflictData.conflicts.length === 0
-                              ) {
-                                return 'Conflicts with calendar';
-                              }
-                              const first = conflictData.conflicts[0];
-                              return `${first.calendarPairingNumber || 'Pairing'} (${first.calendarStartDate})`;
-                            })()}
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    {(() => {
-                      const band = getHoldProbabilityBand(
-                        pairing.holdProbability
-                      );
-                      return (
-                        <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
-                          <div className="flex-1 bg-muted rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
-                            <div
-                              className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
-                              style={{ width: `${pairing.holdProbability}%` }}
-                            />
-                          </div>
-                          <span
-                            className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
-                          >
-                            {pairing.holdProbability}%
-                          </span>
-                          {(() => {
-                            const hasReasoning =
-                              pairing.holdProbabilityReasoning &&
-                              pairing.holdProbabilityReasoning.length > 0;
-                            return hasReasoning ? (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={e => e.stopPropagation()}
-                                    className="flex-shrink-0 p-0.5 hover:bg-muted/70 rounded inline-flex items-center cursor-pointer"
-                                    aria-label="Why this hold probability"
-                                  >
-                                    <Info className="w-3 h-3 text-blue-500" />
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  onClick={e => e.stopPropagation()}
-                                  className="w-80 bg-popover text-popover-foreground border-border p-3"
-                                >
-                                  <div className="space-y-2">
-                                    <div className="font-semibold text-sm border-b border-border pb-2">
-                                      Estimated hold: {pairing.holdProbability}%
-                                    </div>
-                                    {pairing.holdProbabilityReasoning?.map(
-                                      (reason, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="text-xs leading-relaxed"
-                                        >
-                                          {reason}
-                                        </div>
-                                      )
-                                    )}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            ) : null;
-                          })()}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4">
-                    <div className="text-xs sm:text-sm" title={pairing.route}>
-                      {rowDisplay[index]?.route}
-                    </div>
-                    <div
-                      className="text-xs text-muted-foreground"
-                      title={rowDisplay[index]?.effective}
-                    >
-                      {rowDisplay[index]?.effective}
-                    </div>
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
-                      {formatDuration(
+                </div>
+                <p className="mt-1 break-words text-sm font-medium">
+                  {pairing.route}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {rowDisplay[index]?.effective}
+                </p>
+                <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  {[
+                    [
+                      'Credit',
+                      formatDuration(
                         decimalHoursToMinutes(pairing.creditHours),
                         ':'
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="font-mono text-xs sm:text-sm text-muted-foreground">
-                      {formatDuration(
+                      ),
+                    ],
+                    ['Days', String(pairing.pairingDays)],
+                    ['Est. hold', `${pairing.holdProbability}%`],
+                    [
+                      'Block',
+                      formatDuration(
                         decimalHoursToMinutes(pairing.blockHours),
                         ':'
-                      )}
-                    </span>
+                      ),
+                    ],
+                    [
+                      'Time away',
+                      formatDuration(printedDurationMinutes(pairing.tafb), ':'),
+                    ],
+                    ['Layover', rowDisplay[index]?.layover],
+                  ].map(([label, value]) => (
+                    <div key={label as string}>
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd className="mt-1 font-medium tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {conflicts.has(pairing.id) && (
+                  <p className="mt-3 text-sm text-warning">
+                    Conflicts with your calendar
+                  </p>
+                )}
+                {(showAddToCalendar || showDeleteButton) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {showAddToCalendar && currentUser && (
+                      <Button
+                        variant="outline"
+                        disabled={addToCalendarMutation.isPending}
+                        onClick={() => handleAddToCalendar(pairing)}
+                      >
+                        Add to calendar
+                      </Button>
+                    )}
+                    {showDeleteButton && onDeleteFavorite && (
+                      <Button
+                        variant="outline"
+                        onClick={() => onDeleteFavorite(pairing.id)}
+                      >
+                        Remove favorite
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))
+          )}
+        </section>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
+            <thead className="bg-muted">
+              <tr>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-muted/70"
+                  title="Rotation number in the bid package"
+                  {...sortHeaderProps('pairingNumber')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Pairing #</span>
+                    {sortColumn === 'pairingNumber' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-muted/70"
+                  title="Estimated chance this pairing is still available at your seniority"
+                  {...sortHeaderProps('holdProbability')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Hold %</span>
+                    {sortColumn === 'holdProbability' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[200px] sm:min-w-[280px] lg:min-w-[350px]">
+                  Route
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
+                  title="Pay credit, HH:MM (15:45 = 15h 45m)"
+                  {...sortHeaderProps('creditHours')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Credit</span>
+                    {sortColumn === 'creditHours' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
+                  title="Scheduled flying time, HH:MM"
+                  {...sortHeaderProps('blockHours')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Block</span>
+                    {sortColumn === 'blockHours' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
+                  title="Time Away From Base: check-in to release, HH:MM"
+                  {...sortHeaderProps('tafb')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">TAFB</span>
+                    {sortColumn === 'tafb' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[80px] cursor-pointer hover:bg-muted/70"
+                  title="Longest layover in this pairing"
+                  {...sortHeaderProps('maxLayover')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Layover</span>
+                    {sortColumn === 'maxLayover' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[40px] sm:min-w-[50px] cursor-pointer hover:bg-muted/70"
+                  title="Trip length in days"
+                  {...sortHeaderProps('pairingDays')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">Days</span>
+                    {sortColumn === 'pairingDays' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-muted/70"
+                  title="Credit \u00f7 block \u2014 higher = more pay per hour flown"
+                  {...sortHeaderProps('creditBlockRatio')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span className="truncate">C/B Ratio</span>
+                    {sortColumn === 'creditBlockRatio' && (
+                      <span className="text-blue-600 flex-shrink-0">
+                        {sortDirection === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                {(showDeleteButton || showAddToCalendar) && (
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px]">
+                    Actions
+                  </th>
+                )}
+                {showDeleteButton && (
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
+                    Remove
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {isLoading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={`skeleton-${i}`}>
+                    <td
+                      colSpan={showDeleteButton ? 10 : 9}
+                      className="px-4 py-3"
+                    >
+                      <div className="h-4 bg-muted rounded animate-pulse" />
+                    </td>
+                  </tr>
+                ))
+              ) : isError ? (
+                <tr>
+                  <td
+                    colSpan={showDeleteButton ? 10 : 9}
+                    className="px-6 py-8 text-center"
+                  >
+                    <p className="text-red-600 dark:text-red-400 font-medium">
+                      Couldn't load pairings.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Check your connection and try again.
+                    </p>
+                    {onRetry && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={onRetry}
+                      >
+                        Retry
+                      </Button>
+                    )}
                   </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-muted-foreground">
-                      {formatDuration(
-                        printedDurationMinutes(pairing.tafb),
-                        ':'
-                      )}
-                    </span>
+                </tr>
+              ) : safePairings.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={showDeleteButton ? 10 : 9}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
+                    {hasActiveFilters
+                      ? 'No pairings match your filters. Try clearing some to see more results.'
+                      : 'No pairings found. Upload a bid package to get started.'}
                   </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-muted-foreground">
-                      {rowDisplay[index]?.layover}
-                    </span>
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    <span className="text-xs sm:text-sm font-medium text-foreground">
-                      {pairing.pairingDays}
-                    </span>
-                  </td>
-                  <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
-                    {(() => {
-                      const ratio =
-                        parseFloat(pairing.creditHours.toString()) /
-                        parseFloat(pairing.blockHours.toString());
-                      let colorClass = '';
-                      let bgClass = '';
-
-                      // Band on the ratio itself (matches the fixed cutoffs used
-                      // for the "Credit/Block Ratio Quality" stats elsewhere).
-                      if (ratio >= 1.3) {
-                        colorClass = 'text-green-700 dark:text-green-400';
-                        bgClass = 'bg-green-100 dark:bg-green-950';
-                      } else if (ratio >= 1.2) {
-                        colorClass = 'text-yellow-700 dark:text-yellow-400';
-                        bgClass = 'bg-yellow-100 dark:bg-yellow-950';
-                      } else if (ratio >= 1.1) {
-                        colorClass = 'text-orange-700 dark:text-orange-400';
-                        bgClass = 'bg-orange-100 dark:bg-orange-950';
-                      } else {
-                        colorClass = 'text-red-700 dark:text-red-400';
-                        bgClass = 'bg-red-100 dark:bg-red-950';
-                      }
-
-                      return (
-                        <span
-                          className={`font-mono text-xs sm:text-sm font-medium px-2 py-1 rounded ${colorClass} ${bgClass}`}
+                </tr>
+              ) : (
+                safePairings.map((pairing, index) => (
+                  <tr
+                    key={`${pairing.id}-${index}`}
+                    className="hover:bg-muted cursor-pointer"
+                    onClick={() => handlePairingClick(pairing)}
+                  >
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`View pairing ${pairing.pairingNumber}`}
+                          className="font-mono text-sm font-semibold text-primary hover:underline"
+                          onClick={event => {
+                            event.stopPropagation();
+                            handlePairingClick(pairing);
+                          }}
                         >
-                          {ratio.toFixed(2)}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  {(showDeleteButton || showAddToCalendar) && (
-                    <td className="py-2 px-4 text-center border-b">
-                      <div className="flex items-center justify-center gap-1">
-                        {showAddToCalendar && currentUser && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          {pairing.pairingNumber}
+                        </button>
+                        {onToggleFavorite ? (
+                          <button
+                            type="button"
                             onClick={e => {
                               e.stopPropagation();
-                              handleAddToCalendar(pairing);
+                              onToggleFavorite(pairing);
                             }}
-                            disabled={addToCalendarMutation.isPending}
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                            title="Add to Calendar"
-                            aria-label="Add to Calendar"
+                            title={
+                              favoritePairingIds?.has(pairing.id)
+                                ? 'Remove from favorites'
+                                : 'Add to favorites'
+                            }
+                            aria-label={
+                              favoritePairingIds?.has(pairing.id)
+                                ? `Remove ${pairing.pairingNumber} from favorites`
+                                : `Add ${pairing.pairingNumber} to favorites`
+                            }
+                            aria-pressed={favoritePairingIds?.has(pairing.id)}
+                            className="inline-flex items-center justify-center rounded p-0.5 transition-colors hover:bg-muted"
                           >
-                            <Calendar className="h-4 w-4" />
-                          </Button>
+                            <Star
+                              className={`h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 transition-colors ${
+                                favoritePairingIds?.has(pairing.id)
+                                  ? 'fill-yellow-400 text-yellow-400'
+                                  : 'text-muted-foreground/50 hover:text-yellow-400'
+                              }`}
+                            />
+                          </button>
+                        ) : (
+                          pairing.holdProbability >= 80 && (
+                            <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                          )
                         )}
-                        {showDeleteButton &&
-                          onDeleteFavorite &&
-                          !showAddToCalendar && (
+                        {conflicts.has(pairing.id) && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                onClick={e => e.stopPropagation()}
+                                type="button"
+                                className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
+                                aria-label="Conflicts with calendar"
+                              >
+                                <AlertTriangle className="text-orange-500 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              onClick={e => e.stopPropagation()}
+                              className="w-auto bg-popover text-popover-foreground border-border text-xs px-3 py-2"
+                            >
+                              {(() => {
+                                const conflictData = conflicts.get(pairing.id);
+                                if (
+                                  !conflictData?.conflicts ||
+                                  conflictData.conflicts.length === 0
+                                ) {
+                                  return 'Conflicts with calendar';
+                                }
+                                const first = conflictData.conflicts[0];
+                                return `${first.calendarPairingNumber || 'Pairing'} (${first.calendarStartDate})`;
+                              })()}
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      {(() => {
+                        const band = getHoldProbabilityBand(
+                          pairing.holdProbability
+                        );
+                        return (
+                          <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
+                            <div className="flex-1 bg-muted rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
+                              <div
+                                className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
+                                style={{ width: `${pairing.holdProbability}%` }}
+                              />
+                            </div>
+                            <span
+                              className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
+                            >
+                              {pairing.holdProbability}%
+                            </span>
+                            {(() => {
+                              const hasReasoning =
+                                pairing.holdProbabilityReasoning &&
+                                pairing.holdProbabilityReasoning.length > 0;
+                              return hasReasoning ? (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={e => e.stopPropagation()}
+                                      className="flex-shrink-0 p-0.5 hover:bg-muted/70 rounded inline-flex items-center cursor-pointer"
+                                      aria-label="Why this hold probability"
+                                    >
+                                      <Info className="w-3 h-3 text-blue-500" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    onClick={e => e.stopPropagation()}
+                                    className="w-80 bg-popover text-popover-foreground border-border p-3"
+                                  >
+                                    <div className="space-y-2">
+                                      <div className="font-semibold text-sm border-b border-border pb-2">
+                                        Estimated hold:{' '}
+                                        {pairing.holdProbability}%
+                                      </div>
+                                      {pairing.holdProbabilityReasoning?.map(
+                                        (reason, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="text-xs leading-relaxed"
+                                          >
+                                            {reason}
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              ) : null;
+                            })()}
+                          </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4">
+                      <div className="text-xs sm:text-sm" title={pairing.route}>
+                        {rowDisplay[index]?.route}
+                      </div>
+                      <div
+                        className="text-xs text-muted-foreground"
+                        title={rowDisplay[index]?.effective}
+                      >
+                        {rowDisplay[index]?.effective}
+                      </div>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
+                        {formatDuration(
+                          decimalHoursToMinutes(pairing.creditHours),
+                          ':'
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <span className="font-mono text-xs sm:text-sm text-muted-foreground">
+                        {formatDuration(
+                          decimalHoursToMinutes(pairing.blockHours),
+                          ':'
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <span className="text-xs sm:text-sm text-muted-foreground">
+                        {formatDuration(
+                          printedDurationMinutes(pairing.tafb),
+                          ':'
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <span className="text-xs sm:text-sm text-muted-foreground">
+                        {rowDisplay[index]?.layover}
+                      </span>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      <span className="text-xs sm:text-sm font-medium text-foreground">
+                        {pairing.pairingDays}
+                      </span>
+                    </td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
+                      {(() => {
+                        const ratio =
+                          parseFloat(pairing.creditHours.toString()) /
+                          parseFloat(pairing.blockHours.toString());
+                        let colorClass = '';
+                        let bgClass = '';
+
+                        // Band on the ratio itself (matches the fixed cutoffs used
+                        // for the "Credit/Block Ratio Quality" stats elsewhere).
+                        if (ratio >= 1.3) {
+                          colorClass = 'text-green-700 dark:text-green-400';
+                          bgClass = 'bg-green-100 dark:bg-green-950';
+                        } else if (ratio >= 1.2) {
+                          colorClass = 'text-yellow-700 dark:text-yellow-400';
+                          bgClass = 'bg-yellow-100 dark:bg-yellow-950';
+                        } else if (ratio >= 1.1) {
+                          colorClass = 'text-orange-700 dark:text-orange-400';
+                          bgClass = 'bg-orange-100 dark:bg-orange-950';
+                        } else {
+                          colorClass = 'text-red-700 dark:text-red-400';
+                          bgClass = 'bg-red-100 dark:bg-red-950';
+                        }
+
+                        return (
+                          <span
+                            className={`font-mono text-xs sm:text-sm font-medium px-2 py-1 rounded ${colorClass} ${bgClass}`}
+                          >
+                            {ratio.toFixed(2)}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    {(showDeleteButton || showAddToCalendar) && (
+                      <td className="py-2 px-4 text-center border-b">
+                        <div className="flex items-center justify-center gap-1">
+                          {showAddToCalendar && currentUser && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={e => {
                                 e.stopPropagation();
-                                onDeleteFavorite(pairing.id);
+                                handleAddToCalendar(pairing);
                               }}
-                              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
-                              title="Remove from favorites"
-                              aria-label="Remove from favorites"
+                              disabled={addToCalendarMutation.isPending}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                              title="Add to Calendar"
+                              aria-label="Add to Calendar"
                             >
-                              <X className="h-4 w-4" />
+                              <Calendar className="h-4 w-4" />
                             </Button>
                           )}
-                      </div>
-                    </td>
-                  )}
-                  {showDeleteButton && (
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (onDeleteFavorite) {
-                            onDeleteFavorite(pairing.id);
-                          }
-                        }}
-                        aria-label="Remove from favorites"
-                      >
-                        <X className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                          {showDeleteButton &&
+                            onDeleteFavorite &&
+                            !showAddToCalendar && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  onDeleteFavorite(pairing.id);
+                                }}
+                                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                title="Remove from favorites"
+                                aria-label="Remove from favorites"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                        </div>
+                      </td>
+                    )}
+                    {showDeleteButton && (
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (onDeleteFavorite) {
+                              onDeleteFavorite(pairing.id);
+                            }
+                          }}
+                          aria-label="Remove from favorites"
+                        >
+                          <X className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Pagination */}
       {safePairings.length > 0 && pagination && (

@@ -42,7 +42,8 @@ export function AppHeader({
           variant="outline"
           size="sm"
           onClick={onOpenAI}
-          className="gap-1.5"
+          className="gap-1.5 min-h-11 min-w-11 sm:min-h-9"
+          aria-label="AI Assistant"
           data-testid="header-ai-assistant"
         >
           <Bot className="h-4 w-4" />
@@ -52,7 +53,8 @@ export function AppHeader({
           variant="default"
           size="sm"
           onClick={onUpload}
-          className="gap-1.5"
+          className="gap-1.5 min-h-11 min-w-11 sm:min-h-9"
+          aria-label="Upload package"
           data-testid="header-upload"
         >
           <CloudUpload className="h-4 w-4" />

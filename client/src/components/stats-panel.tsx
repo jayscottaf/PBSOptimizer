@@ -1,10 +1,14 @@
+import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { Pairing, BidPackage } from '@/lib/api';
 import React, { useMemo, useState } from 'react';
 import { BarChart2 } from 'lucide-react';
 
-type AvgByDaysStats = Record<number, { credit: number; block: number; count?: number }>;
+type AvgByDaysStats = Record<
+  number,
+  { credit: number; block: number; count?: number }
+>;
 
 type RatioBreakdown = {
   excellent: number;
@@ -139,7 +143,9 @@ export function StatsPanel({
       pairings.length > 0 ? totalBlock / pairings.length : 0;
 
     // Calculate averages by pairing days (1-5 days) from current page OR use backend stats
-    const avgByDays: { [key: number]: { credit: number; block: number; count: number } } = {};
+    const avgByDays: {
+      [key: number]: { credit: number; block: number; count: number };
+    } = {};
 
     if (statistics?.avgByDays) {
       // Use backend-provided stats (covers ALL pairings)
@@ -160,8 +166,14 @@ export function StatsPanel({
       for (let days = 1; days <= maxDays; days++) {
         const dayPairings = pairings.filter((p: any) => p.pairingDays === days);
         if (dayPairings.length > 0) {
-          const dayCredit = dayPairings.reduce((sum, p) => sum + parseHours(p.creditHours), 0);
-          const dayBlock = dayPairings.reduce((sum, p) => sum + parseHours(p.blockHours), 0);
+          const dayCredit = dayPairings.reduce(
+            (sum, p) => sum + parseHours(p.creditHours),
+            0
+          );
+          const dayBlock = dayPairings.reduce(
+            (sum, p) => sum + parseHours(p.blockHours),
+            0
+          );
           avgByDays[days] = {
             credit: dayCredit / dayPairings.length,
             block: dayBlock / dayPairings.length,
@@ -173,18 +185,28 @@ export function StatsPanel({
     // Calculate credit-to-block ratio breakdown
     // Use backend global ratio breakdown when available so the sidebar card reflects all pairings, not just current page
     // Use percentile-based categorization if bidPackageStats are available (consistent with calendar view)
-    const hasStats = !!bidPackageStats && (bidPackageStats.totalPairings || 0) > 0;
-    const minRatio = hasStats ? bidPackageStats.creditBlockRatios.min : undefined;
-    const maxRatio = hasStats ? bidPackageStats.creditBlockRatios.max : undefined;
+    const hasStats =
+      !!bidPackageStats && (bidPackageStats.totalPairings || 0) > 0;
+    const minRatio = hasStats
+      ? bidPackageStats.creditBlockRatios.min
+      : undefined;
+    const maxRatio = hasStats
+      ? bidPackageStats.creditBlockRatios.max
+      : undefined;
 
     // Calculate percentile thresholds for display
     let percentileThresholds = null;
-    if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
+    if (
+      hasStats &&
+      minRatio !== undefined &&
+      maxRatio !== undefined &&
+      maxRatio > minRatio
+    ) {
       const range = maxRatio - minRatio;
       percentileThresholds = {
-        excellent: minRatio + (range * 0.75), // 75th percentile
-        good: minRatio + (range * 0.50),      // 50th percentile
-        average: minRatio + (range * 0.25),   // 25th percentile
+        excellent: minRatio + range * 0.75, // 75th percentile
+        good: minRatio + range * 0.5, // 50th percentile
+        average: minRatio + range * 0.25, // 25th percentile
       };
     }
 
@@ -231,13 +253,18 @@ export function StatsPanel({
           const ratio = block > 0 ? credit / block : 0;
 
           // Use percentile-based categorization if we have bid package stats
-          if (hasStats && minRatio !== undefined && maxRatio !== undefined && maxRatio > minRatio) {
+          if (
+            hasStats &&
+            minRatio !== undefined &&
+            maxRatio !== undefined &&
+            maxRatio > minRatio
+          ) {
             const range = maxRatio - minRatio;
             const percentile = (ratio - minRatio) / range;
 
             if (percentile >= 0.75) {
               acc.excellent++;
-            } else if (percentile >= 0.50) {
+            } else if (percentile >= 0.5) {
               acc.good++;
             } else if (percentile >= 0.25) {
               acc.average++;
@@ -348,12 +375,9 @@ export function StatsPanel({
           </div>
           <div className="max-h-64 overflow-y-auto space-y-1">
             {layoverRows.map(row => {
-              const value = showNights
-                ? ((row as any).nights ?? 0)
-                : row.count;
+              const value = showNights ? ((row as any).nights ?? 0) : row.count;
               const denom = showNights ? totalNights : layoverTotal;
-              const pct =
-                denom > 0 ? ((value / denom) * 100).toFixed(0) : '0';
+              const pct = denom > 0 ? ((value / denom) * 100).toFixed(0) : '0';
               return (
                 <div
                   key={row.city}
@@ -493,7 +517,7 @@ export function StatsPanel({
               {stats.likelyToHold}
             </div>
             <div className="text-xs lg:text-sm text-muted-foreground">
-              Likely to Hold (≥70%)
+              Estimated hold ≥70%
             </div>
           </div>
           <div className="text-center">
@@ -523,10 +547,18 @@ export function StatsPanel({
               {/* Data rows */}
               {tripDayList.map(days => {
                 // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
-                const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
-                const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;
-                const percentage = totalForPercentage > 0 ? (count / totalForPercentage * 100).toFixed(0) : 0;
-                const avgData = bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
+                const count =
+                  bidPackageStats?.pairingTypeBreakdown?.[days] ??
+                  stats.pairingTypeBreakdown[days] ??
+                  0;
+                const totalForPercentage =
+                  bidPackageStats?.totalPairings ?? stats.totalPairings;
+                const percentage =
+                  totalForPercentage > 0
+                    ? ((count / totalForPercentage) * 100).toFixed(0)
+                    : 0;
+                const avgData =
+                  bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
                   <div
@@ -534,13 +566,27 @@ export function StatsPanel({
                     className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
                     onClick={() => onTripLengthFilter?.(days)}
                   >
-                    <span className="text-secondary-foreground font-medium">{days}-day</span>
-                    <span className="text-foreground font-medium text-right">{percentage}%</span>
-                    <span className="text-foreground font-medium text-right">
-                      {avgData ? avgData.credit.toFixed(1) : '-'}
+                    <span className="text-secondary-foreground font-medium">
+                      {days}-day
                     </span>
                     <span className="text-foreground font-medium text-right">
-                      {avgData ? avgData.block.toFixed(1) : '-'}
+                      {percentage}%
+                    </span>
+                    <span className="text-foreground font-medium text-right">
+                      {avgData
+                        ? formatDuration(
+                            decimalHoursToMinutes(avgData.credit),
+                            ':'
+                          )
+                        : '-'}
+                    </span>
+                    <span className="text-foreground font-medium text-right">
+                      {avgData
+                        ? formatDuration(
+                            decimalHoursToMinutes(avgData.block),
+                            ':'
+                          )
+                        : '-'}
                     </span>
                   </div>
                 );
@@ -561,14 +607,22 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
+                    Excellent
+                    {stats.percentileThresholds
+                      ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})`
+                      : ' (≥75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
-                  {bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent} (
+                  {bidPackageStats?.ratioBreakdown?.excellent ??
+                    stats.ratioBreakdown.excellent}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent) /
-                      (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.excellent ??
+                      stats.ratioBreakdown.excellent) /
+                      (bidPackageStats?.totalPairings ||
+                        displayTotalPairings ||
+                        1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -578,13 +632,22 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
+                    Good
+                    {stats.percentileThresholds
+                      ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})`
+                      : ' (50-75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
-                  {bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good} (
+                  {bidPackageStats?.ratioBreakdown?.good ??
+                    stats.ratioBreakdown.good}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good) / (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.good ??
+                      stats.ratioBreakdown.good) /
+                      (bidPackageStats?.totalPairings ||
+                        displayTotalPairings ||
+                        1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -594,14 +657,22 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
+                    Average
+                    {stats.percentileThresholds
+                      ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})`
+                      : ' (25-50%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
-                  {bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average} (
+                  {bidPackageStats?.ratioBreakdown?.average ??
+                    stats.ratioBreakdown.average}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average) /
-                      (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.average ??
+                      stats.ratioBreakdown.average) /
+                      (bidPackageStats?.totalPairings ||
+                        displayTotalPairings ||
+                        1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -611,13 +682,22 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
+                    Poor
+                    {stats.percentileThresholds
+                      ? ` (<${stats.percentileThresholds.average.toFixed(2)})`
+                      : ' (<25%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
-                  {bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor} (
+                  {bidPackageStats?.ratioBreakdown?.poor ??
+                    stats.ratioBreakdown.poor}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor) / (bidPackageStats?.totalPairings || displayTotalPairings || 1)) *
+                    ((bidPackageStats?.ratioBreakdown?.poor ??
+                      stats.ratioBreakdown.poor) /
+                      (bidPackageStats?.totalPairings ||
+                        displayTotalPairings ||
+                        1)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -673,7 +753,7 @@ export function StatsPanel({
               {stats.likelyToHold}
             </div>
             <div className="text-xs lg:text-sm text-muted-foreground">
-              Likely to Hold (≥70%)
+              Estimated hold ≥70%
             </div>
           </div>
           <div className="text-center">
@@ -703,10 +783,18 @@ export function StatsPanel({
               {/* Data rows */}
               {tripDayList.map(days => {
                 // Use global stats from bidPackageStats when available (always shows all pairings regardless of filters)
-                const count = bidPackageStats?.pairingTypeBreakdown?.[days] ?? stats.pairingTypeBreakdown[days] ?? 0;
-                const totalForPercentage = bidPackageStats?.totalPairings ?? stats.totalPairings;
-                const percentage = totalForPercentage > 0 ? (count / totalForPercentage * 100).toFixed(0) : 0;
-                const avgData = bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
+                const count =
+                  bidPackageStats?.pairingTypeBreakdown?.[days] ??
+                  stats.pairingTypeBreakdown[days] ??
+                  0;
+                const totalForPercentage =
+                  bidPackageStats?.totalPairings ?? stats.totalPairings;
+                const percentage =
+                  totalForPercentage > 0
+                    ? ((count / totalForPercentage) * 100).toFixed(0)
+                    : 0;
+                const avgData =
+                  bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
                   <div
@@ -714,13 +802,27 @@ export function StatsPanel({
                     className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
                     onClick={() => onTripLengthFilter?.(days)}
                   >
-                    <span className="text-secondary-foreground font-medium">{days}-day</span>
-                    <span className="text-foreground font-medium text-right">{percentage}%</span>
-                    <span className="text-foreground font-medium text-right">
-                      {avgData ? avgData.credit.toFixed(1) : '-'}
+                    <span className="text-secondary-foreground font-medium">
+                      {days}-day
                     </span>
                     <span className="text-foreground font-medium text-right">
-                      {avgData ? avgData.block.toFixed(1) : '-'}
+                      {percentage}%
+                    </span>
+                    <span className="text-foreground font-medium text-right">
+                      {avgData
+                        ? formatDuration(
+                            decimalHoursToMinutes(avgData.credit),
+                            ':'
+                          )
+                        : '-'}
+                    </span>
+                    <span className="text-foreground font-medium text-right">
+                      {avgData
+                        ? formatDuration(
+                            decimalHoursToMinutes(avgData.block),
+                            ':'
+                          )
+                        : '-'}
                     </span>
                   </div>
                 );
@@ -741,13 +843,20 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Excellent{stats.percentileThresholds ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})` : ' (≥75%)'}
+                    Excellent
+                    {stats.percentileThresholds
+                      ? ` (≥${stats.percentileThresholds.excellent.toFixed(2)})`
+                      : ' (≥75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-green-700">
-                  {bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent} (
+                  {bidPackageStats?.ratioBreakdown?.excellent ??
+                    stats.ratioBreakdown.excellent}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.excellent ?? stats.ratioBreakdown.excellent) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
+                    ((bidPackageStats?.ratioBreakdown?.excellent ??
+                      stats.ratioBreakdown.excellent) /
+                      (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -757,13 +866,20 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Good{stats.percentileThresholds ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})` : ' (50-75%)'}
+                    Good
+                    {stats.percentileThresholds
+                      ? ` (${stats.percentileThresholds.good.toFixed(2)}-${(stats.percentileThresholds.excellent - 0.01).toFixed(2)})`
+                      : ' (50-75%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-yellow-700">
-                  {bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good} (
+                  {bidPackageStats?.ratioBreakdown?.good ??
+                    stats.ratioBreakdown.good}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.good ?? stats.ratioBreakdown.good) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
+                    ((bidPackageStats?.ratioBreakdown?.good ??
+                      stats.ratioBreakdown.good) /
+                      (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -773,13 +889,20 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-orange-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Average{stats.percentileThresholds ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})` : ' (25-50%)'}
+                    Average
+                    {stats.percentileThresholds
+                      ? ` (${stats.percentileThresholds.average.toFixed(2)}-${(stats.percentileThresholds.good - 0.01).toFixed(2)})`
+                      : ' (25-50%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-orange-700">
-                  {bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average} (
+                  {bidPackageStats?.ratioBreakdown?.average ??
+                    stats.ratioBreakdown.average}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.average ?? stats.ratioBreakdown.average) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
+                    ((bidPackageStats?.ratioBreakdown?.average ??
+                      stats.ratioBreakdown.average) /
+                      (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)
@@ -789,13 +912,20 @@ export function StatsPanel({
                 <div className="flex items-center">
                   <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
                   <span className="text-xs text-muted-foreground">
-                    Poor{stats.percentileThresholds ? ` (<${stats.percentileThresholds.average.toFixed(2)})` : ' (<25%)'}
+                    Poor
+                    {stats.percentileThresholds
+                      ? ` (<${stats.percentileThresholds.average.toFixed(2)})`
+                      : ' (<25%)'}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-red-700">
-                  {bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor} (
+                  {bidPackageStats?.ratioBreakdown?.poor ??
+                    stats.ratioBreakdown.poor}{' '}
+                  (
                   {(
-                    ((bidPackageStats?.ratioBreakdown?.poor ?? stats.ratioBreakdown.poor) / (bidPackageStats?.totalPairings || stats.totalPairings)) *
+                    ((bidPackageStats?.ratioBreakdown?.poor ??
+                      stats.ratioBreakdown.poor) /
+                      (bidPackageStats?.totalPairings || stats.totalPairings)) *
                     100
                   ).toFixed(0)}
                   %)

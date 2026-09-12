@@ -25,15 +25,15 @@ function KpiCard({ icon: Icon, value, label, context }: KpiCardProps) {
   return (
     <Card>
       <CardContent className="flex items-start gap-3 p-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+        <div className="mt-0.5 hidden sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
           <div className="text-xl font-semibold tabular-nums leading-tight">
             {value}
           </div>
-          <div className="text-sm font-medium">{label}</div>
-          <div className="text-xs leading-relaxed text-muted-foreground">
+          <div className="text-xs sm:text-sm font-medium">{label}</div>
+          <div className="hidden sm:block text-xs leading-relaxed text-muted-foreground">
             {context}
           </div>
         </div>
@@ -80,7 +80,7 @@ export function KpiStrip({
         <KpiCard
           icon={ShieldCheck}
           value={String(hold)}
-          label={<Term term="hold probability">Estimated 70%+ hold</Term>}
+          label={<Term term="hold probability">Est. 70%+ hold</Term>}
           context={
             seniorityPercentile !== null && seniorityPercentile !== undefined
               ? `${pct(hold, total)} of results · seniority ${seniorityPercentile}%`
