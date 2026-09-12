@@ -159,46 +159,26 @@ export function cacheKeyForPairings(
   filters?: Record<string, any>,
   userId?: string | number
 ): string {
-  const userPrefix = userId ? `user:${userId}:` : '';
+  const userPrefix = userId !== undefined ? `user:${userId}:` : '';
+  const prefix = `${userPrefix}pairings:v2:${bidPackageId ?? 'default'}`;
+  // These records contain complete result sets. Ordering/pagination is local.
+  const { sortBy, sortOrder, page, limit, bidPackageId: _, ...rest } = filters ?? {};
+  const cleaned = Object.fromEntries(Object.entries(rest).filter(([, value]) =>
+    value !== undefined && value !== null && value !== ''
+  ));
+  if (Object.keys(cleaned).length === 0) return `${prefix}:all`;
 
-  if (!bidPackageId) {
-    return `${userPrefix}pairings:default`;
-  }
-  if (!filters) {
-    return `${userPrefix}pairings:${bidPackageId}:all`;
-  }
-  // Omit pagination, sort fields, and bidPackageId since it's already in the key prefix
-  const {
-    sortBy,
-    sortOrder,
-    page,
-    limit,
-    bidPackageId: _,
-    ...rest
-  } = filters as any;
-  const cleaned: Record<string, any> = {};
-  Object.keys(rest).forEach(k => {
-    const v = (rest as any)[k];
-    if (v !== undefined && v !== null && v !== '') {
-      cleaned[k] = v;
-    }
-  });
-
-  // If no actual filters remain, use simple key
-  if (Object.keys(cleaned).length === 0) {
-    return `${userPrefix}pairings:${bidPackageId}:all`;
-  }
-
-  const sorted = Object.keys(cleaned)
-    .sort()
-    .reduce(
-      (acc, k) => {
-        (acc as any)[k] = (cleaned as any)[k];
-        return acc;
-      },
-      {} as Record<string, any>
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value instanceof Date) return value.toISOString();
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, canonical(item)])
     );
-  return `${userPrefix}pairings:${bidPackageId}:${btoa(unescape(encodeURIComponent(JSON.stringify(sorted))).slice(0, 64))}`;
+    return value;
+  };
+  // IndexedDB accepts full strings. No truncation, lossy encoding, or hashing
+  // is needed; v2 also makes all previously collision-prone keys unreadable.
+  return `${prefix}:${JSON.stringify(canonical(cleaned))}`;
 }
 
 export async function savePairingsCache(key: string, data: any): Promise<void> {
