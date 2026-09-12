@@ -100,28 +100,10 @@ export class SimpleAI {
     try {
       console.log('[SimpleAI] Processing query:', query.message);
 
-      // Pairings + their rendered prompt block, memoized per package (see
-      // pairingContextCache). Turns 2..N of a session skip both the DB read
-      // and the string build entirely.
-      let cached = pairingContextCache.get(query.bidPackageId);
-      if (!cached || Date.now() - cached.fetchedAt > PAIRING_CACHE_TTL_MS) {
-        const loaded = await this.storage.getPairingsForCoach(
-          query.bidPackageId
-        );
-        cached = {
-          pairings: loaded,
-          pairingsContext: this.buildPairingsContext(loaded),
-          fetchedAt: Date.now(),
-        };
-        pairingContextCache.set(query.bidPackageId, cached);
-        console.log(`[SimpleAI] Loaded ${loaded.length} pairings (fetched)`);
-      } else {
-        console.log(
-          `[SimpleAI] Loaded ${cached.pairings.length} pairings (cached)`
-        );
-      }
-      const pairings = cached.pairings;
-      const pairingsContext = cached.pairingsContext;
+      // Read personalized odds with the current profile and imported history.
+      // Rebuilding deterministic text preserves prompt-cache eligibility.
+      const pairings = await this.storage.getPairingsForCoach(query.bidPackageId);
+      const pairingsContext = this.buildPairingsContext(pairings);
 
       // Get bid package info for context
       const bidPackage = await this.storage.getBidPackage(query.bidPackageId);

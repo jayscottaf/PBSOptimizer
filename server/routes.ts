@@ -1452,181 +1452,14 @@ export async function registerRoutes(app: Express) {
   // Get pairings with optional filtering
   app.get('/api/pairings', async (req, res) => {
     try {
-      // Add cache control headers to prevent browser caching
-      res.set({
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-        Expires: '0',
-      });
-
-      const {
-        bidPackageId,
-        search,
-        creditMin,
-        creditMax,
-        blockMin,
-        blockMax,
-        tafb,
-        tafbMin,
-        tafbMax,
-        holdProbabilityMin,
-        pairingDays,
-        pairingDaysMin,
-        pairingDaysMax,
-        efficiency,
-        seniorityPercentile,
-      } = req.query;
-
-      console.log('GET /api/pairings query params:', {
-        creditMin,
-        creditMax,
-        blockMin,
-        blockMax,
-        search,
-        bidPackageId,
-      });
-      console.log('All query params:', req.query);
-
-      if (!bidPackageId) {
-        return res.status(400).json({ error: 'bidPackageId is required' });
+      if (!req.query.bidPackageId) return res.status(400).json({ error: 'bidPackageId is required' });
+      const filters: Record<string, any> = { ...req.query };
+      for (const key of ['bidPackageId', 'creditMin', 'creditMax', 'blockMin', 'blockMax', 'tafbMin', 'tafbMax', 'holdProbabilityMin', 'pairingDays', 'pairingDaysMin', 'pairingDaysMax', 'efficiency', 'seniorityPercentile']) {
+        if (filters[key] !== undefined) filters[key] = Number(filters[key]);
       }
-
-      // Do not mutate DB on seniority changes; compute per-request below
-
-      // Build all conditions first, then apply with and()
-      const conditions: (SQL<unknown> | undefined)[] = [
-        eq(pairings.bidPackageId, parseInt(bidPackageId as string)),
-      ];
-
-      if (search) {
-        conditions.push(
-          or(
-            like(pairings.route, `%${search}%`),
-            like(pairings.pairingNumber, `%${search}%`),
-            like(pairings.effectiveDates, `%${search}%`),
-            like(pairings.fullTextBlock, `%${search}%`)
-          )
-        );
-      }
-      if (creditMin) {
-        conditions.push(gte(pairings.creditHours, creditMin as string));
-      }
-      if (creditMax) {
-        conditions.push(lte(pairings.creditHours, creditMax as string));
-      }
-      if (blockMin) {
-        conditions.push(gte(pairings.blockHours, blockMin as string));
-      }
-      if (blockMax) {
-        conditions.push(lte(pairings.blockHours, blockMax as string));
-      }
-      if (tafb) {
-        conditions.push(eq(pairings.tafb, tafb as string));
-      }
-      // TAFB min/max compare as minutes, not raw text (handles 'HH:MM' and decimal formats)
-      if (tafbMin) {
-        const minMins = parseFloat(tafbMin as string) * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) >= ${minMins}
-        `);
-      }
-      if (tafbMax) {
-        const maxMins = parseFloat(tafbMax as string) * 60;
-        conditions.push(sql`
-          (
-            CASE
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+:[0-9]{1,2}$' THEN
-                (split_part(${pairings.tafb}::text, ':', 1)::int * 60 + split_part(${pairings.tafb}::text, ':', 2)::int)
-              WHEN ${pairings.tafb}::text ~ '^[0-9]+(\\.[0-9]+)?$' THEN
-                floor((${pairings.tafb}::numeric) * 60)
-              ELSE 0
-            END
-          ) <= ${maxMins}
-        `);
-      }
-      if (holdProbabilityMin) {
-        conditions.push(
-          gte(
-            pairings.holdProbability,
-            parseFloat(holdProbabilityMin as string)
-          )
-        );
-      }
-      if (pairingDays) {
-        conditions.push(
-          eq(pairings.pairingDays, parseInt(pairingDays as string))
-        );
-      }
-      if (pairingDaysMin) {
-        conditions.push(
-          gte(pairings.pairingDays, parseInt(pairingDaysMin as string))
-        );
-      }
-      if (pairingDaysMax) {
-        conditions.push(
-          lte(pairings.pairingDays, parseInt(pairingDaysMax as string))
-        );
-      }
-
-      const query = db
-        .select()
-        .from(pairings)
-        .where(and(...conditions));
-      const pairingsResult = await query.execute();
-
-      // If seniority provided, compute holdProbability per-request (no DB writes)
-      if (seniorityPercentile) {
-        // Only pairingNumber is needed for the frequency map — a full select
-        // here re-shipped every fullTextBlock/flightSegments blob (~1MB per
-        // package) from the DB on the hottest endpoint.
-        const allForPackage = await db
-          .select({ pairingNumber: pairings.pairingNumber })
-          .from(pairings)
-          .where(eq(pairings.bidPackageId, parseInt(bidPackageId as string)));
-
-        // Get bid package month for seasonal adjustments
-        const [bidPkg] = await db
-          .select({ month: bidPackages.month })
-          .from(bidPackages)
-          .where(eq(bidPackages.id, parseInt(bidPackageId as string)))
-          .limit(1);
-        const bidMonth = bidPkg?.month;
-
-        const seniorityValue = parseFloat(seniorityPercentile as string);
-        const frequencyMap =
-          HoldProbabilityCalculator.buildPairingFrequencyMap(allForPackage);
-        for (const p of pairingsResult) {
-          // Extract layover cities for location-based adjustments
-          const layoverCities =
-            (p.layovers as any[])
-              ?.map((l: any) => l.city)
-              .filter((c: string) => c) || [];
-
-          const desirability =
-            HoldProbabilityCalculator.calculateDesirabilityScore(p, bidMonth);
-          const freq = frequencyMap.get(p.pairingNumber) || 0;
-          const hp = HoldProbabilityCalculator.calculateHoldProbability({
-            seniorityPercentile: seniorityValue,
-            desirabilityScore: desirability,
-            pairingFrequency: freq,
-            includesDeadheads: p.deadheads || 0,
-            bidMonth,
-            layoverCities,
-          });
-          // Only update holdProbability, preserve all other stored values including pairingDays
-          (p as any).holdProbability = hp.probability;
-        }
-      }
-
-      res.json(pairingsResult);
+      res.set('Cache-Control', 'no-store');
+      const result = await storage.getAllPairingsForBidPackage(filters as any);
+      res.json(result.pairings);
     } catch (error) {
       console.error('Error fetching pairings:', error);
       res.status(500).json({ message: 'Failed to fetch pairings' });
@@ -2003,6 +1836,11 @@ export async function registerRoutes(app: Express) {
         });
       }
 
+      const percentile = filters.seniorityPercentile ?? filters.seniorityPercentage;
+      if (percentile !== undefined && (typeof percentile !== 'number' || !Number.isFinite(percentile) || percentile < 0 || percentile > 100)) {
+        return res.status(400).json({ message: 'Seniority percentile must be between 0 and 100' });
+      }
+
       const result = await storage.getAllPairingsForBidPackage({
         bidPackageId,
         sortBy,
@@ -2010,52 +1848,6 @@ export async function registerRoutes(app: Express) {
         layoverLocations,
         ...filters,
       });
-
-      // If seniority provided and pairings don't have stored probabilities, compute holdProbability per-response
-      const seniorityValueRaw =
-        (filters as any)?.seniorityPercentile ||
-        (filters as any)?.seniorityPercentage;
-      if (seniorityValueRaw) {
-        const seniorityValue = parseFloat(seniorityValueRaw);
-
-        // Check if we need to recalculate (only if pairings don't have stored probabilities)
-        const needsRecalc = result.pairings.some(
-          p =>
-            (p as any).holdProbability === null ||
-            (p as any).holdProbability === undefined
-        );
-
-        if (needsRecalc) {
-          // Frequency map only reads pairingNumber; don't re-fetch full rows.
-          const allForPackage = await db
-            .select({ pairingNumber: pairings.pairingNumber })
-            .from(pairings)
-            .where(eq(pairings.bidPackageId, bidPackageId));
-
-          const frequencyMap =
-            HoldProbabilityCalculator.buildPairingFrequencyMap(allForPackage);
-          for (const p of result.pairings) {
-            // Skip if this pairing already has a calculated probability
-            if (
-              (p as any).holdProbability !== null &&
-              (p as any).holdProbability !== undefined
-            ) {
-              continue;
-            }
-
-            const desirability =
-              HoldProbabilityCalculator.calculateDesirabilityScore(p as any);
-            const freq = frequencyMap.get((p as any).pairingNumber) || 0;
-            const hp = HoldProbabilityCalculator.calculateHoldProbability({
-              seniorityPercentile: seniorityValue,
-              desirabilityScore: desirability,
-              pairingFrequency: freq,
-              includesDeadheads: (p as any).deadheads || 0,
-            });
-            (p as any).holdProbability = hp.probability;
-          }
-        }
-      }
 
       // Only log in debug mode to reduce noise
       if (process.env.LOG_LEVEL === 'debug') {

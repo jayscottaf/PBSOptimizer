@@ -28,6 +28,7 @@ import {
   type UserBidProfile,
 } from '../shared/schema';
 import { db } from './db';
+import { personalizeHoldProbabilities, pairingStatistics, type HoldPairing } from './lib/hold-probabilities';
 import { percentileWithin } from './lib/empiricalHold';
 import {
   parseAircraftCode,
@@ -543,18 +544,36 @@ export class DatabaseStorage implements IStorage {
     return Number(row?.n ?? 0);
   }
 
-  async getPairings(bidPackageId?: number): Promise<Pairing[]> {
-    if (bidPackageId) {
-      return await db
-        .select()
-        .from(pairings)
-        .where(eq(pairings.bidPackageId, bidPackageId))
-        .orderBy(asc(pairings.pairingNumber));
+  async personalizePairings<T extends HoldPairing>(rows: T[], percentile?: number): Promise<T[]> {
+    if (rows.length === 0) return rows;
+    const user = await this.getPrimaryUser();
+    const results: T[] = [];
+    for (const id of new Set(rows.map(p => p.bidPackageId))) {
+      const bidPackage = await this.getBidPackage(id);
+      if (!bidPackage) throw new Error('Bid package not found');
+      const [history, rosters, numbers] = await Promise.all([
+        user ? db.select().from(bidHistory).where(and(
+          eq(bidHistory.base, bidPackage.base),
+          sql`${sql.raw(normalizedAircraftSqlExpr('aircraft'))} = ${parseAircraftCode(bidPackage.aircraft).baseType}`
+        )) : Promise.resolve([]),
+        user ? this.getCategoryRosters(bidPackage.base, bidPackage.aircraft) : Promise.resolve(new Map<string, number[]>()),
+        db.select({ pairingNumber: pairings.pairingNumber }).from(pairings).where(eq(pairings.bidPackageId, id)),
+      ]);
+      const frequencies = new Map<string, number>();
+      for (const p of numbers) frequencies.set(p.pairingNumber, (frequencies.get(p.pairingNumber) ?? 0) + 1);
+      results.push(...personalizeHoldProbabilities(rows.filter(p => p.bidPackageId === id), {
+        user, percentile, bidPackage, history, rosters, frequencies,
+      }));
     }
-    return await db
-      .select()
-      .from(pairings)
+    const byId = new Map(results.map(p => [p.id, p]));
+    return rows.map(p => byId.get(p.id)!);
+  }
+
+  async getPairings(bidPackageId?: number): Promise<Pairing[]> {
+    const rows = await db.select().from(pairings)
+      .where(bidPackageId ? eq(pairings.bidPackageId, bidPackageId) : undefined)
       .orderBy(asc(pairings.pairingNumber));
+    return this.personalizePairings(rows);
   }
 
   /**
@@ -565,7 +584,7 @@ export class DatabaseStorage implements IStorage {
    * per-message.
    */
   async getPairingsForCoach(bidPackageId: number): Promise<CoachPairing[]> {
-    return await db
+    const rows = await db
       .select({
         id: pairings.id,
         bidPackageId: pairings.bidPackageId,
@@ -591,6 +610,7 @@ export class DatabaseStorage implements IStorage {
       .from(pairings)
       .where(eq(pairings.bidPackageId, bidPackageId))
       .orderBy(asc(pairings.pairingNumber));
+    return this.personalizePairings(rows);
   }
 
   async getPairing(id: number): Promise<Pairing | undefined> {
@@ -598,7 +618,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pairings)
       .where(eq(pairings.id, id));
-    return pairing || undefined;
+    return pairing ? (await this.personalizePairings([pairing]))[0] : undefined;
   }
 
   async getPairingByNumber(
@@ -615,7 +635,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pairings)
       .where(and(...whereConditions));
-    return pairing || undefined;
+    return pairing ? (await this.personalizePairings([pairing]))[0] : undefined;
   }
 
   async searchPairings(filters: {
@@ -684,11 +704,6 @@ export class DatabaseStorage implements IStorage {
         );
       }
 
-      if (filters.holdProbabilityMin !== undefined) {
-        conditions.push(
-          gte(pairings.holdProbability, filters.holdProbabilityMin)
-        );
-      }
 
       if (filters.pairingDays !== undefined) {
         conditions.push(eq(pairings.pairingDays, filters.pairingDays));
@@ -755,7 +770,8 @@ export class DatabaseStorage implements IStorage {
           });
         }
 
-        return results;
+        results = await this.personalizePairings(results);
+        return results.filter(p => filters.holdProbabilityMin === undefined || (p.holdProbability ?? 0) >= filters.holdProbabilityMin);
       }
 
       return await db
@@ -772,6 +788,8 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPairingsForBidPackage(filters: {
     bidPackageId: number;
+    seniorityPercentile?: number;
+    seniorityPercentage?: number;
     search?: string;
     rotationNumber?: string;
     creditMin?: number;
@@ -875,11 +893,6 @@ export class DatabaseStorage implements IStorage {
         );
       }
 
-      if (filters.holdProbabilityMin !== undefined) {
-        conditions.push(
-          gte(pairings.holdProbability, filters.holdProbabilityMin)
-        );
-      }
 
       if (filters.pairingDays !== undefined) {
         conditions.push(eq(pairings.pairingDays, filters.pairingDays));
@@ -1102,21 +1115,6 @@ export class DatabaseStorage implements IStorage {
         );
       }
 
-      // Calculate statistics for the filtered dataset
-      const statsQuery = db
-        .select({
-          likelyToHold: sql<number>`cast(sum(case when ${pairings.holdProbability} IS NOT NULL AND ${pairings.holdProbability} >= 70 then 1 else 0 end) as integer)`,
-          highCredit: sql<number>`cast(sum(case when ${pairings.creditHours} IS NOT NULL AND cast(${pairings.creditHours} as numeric) >= 18 then 1 else 0 end) as integer)`,
-          excellent: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.3 then 1 else 0 end) as integer)`,
-          good: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.2 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.3 then 1 else 0 end) as integer)`,
-          average: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) >= 1.1 and (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.2 then 1 else 0 end) as integer)`,
-          poor: sql<number>`cast(sum(case when (cast(${pairings.creditHours} as numeric) / nullif(cast(${pairings.blockHours} as numeric),0)) < 1.1 then 1 else 0 end) as integer)`,
-        })
-        .from(pairings)
-        .where(and(...conditions));
-
-      const [stats] = await statsQuery.execute();
-
       // Build sort configuration
       const sortColumn = filters.sortBy || 'pairingNumber';
       const sortDirection = filters.sortOrder === 'desc' ? desc : asc;
@@ -1205,19 +1203,17 @@ export class DatabaseStorage implements IStorage {
         .orderBy(sortDirection(sortColumnField))
         .execute();
 
-      return {
-        pairings: pairingsResult as Pairing[],
-        statistics: {
-          likelyToHold: stats.likelyToHold,
-          highCredit: stats.highCredit,
-          ratioBreakdown: {
-            excellent: stats.excellent,
-            good: stats.good,
-            average: stats.average,
-            poor: stats.poor,
-          },
-        },
-      };
+      let personalized = await this.personalizePairings(
+        pairingsResult as Pairing[], filters.seniorityPercentile ?? filters.seniorityPercentage
+      );
+      if (filters.holdProbabilityMin !== undefined) {
+        personalized = personalized.filter(p => (p.holdProbability ?? 0) >= filters.holdProbabilityMin!);
+      }
+      if (sortColumn === 'holdProbability') {
+        const direction = filters.sortOrder === 'desc' ? -1 : 1;
+        personalized.sort((a, b) => direction * ((a.holdProbability ?? 0) - (b.holdProbability ?? 0)) || a.pairingNumber.localeCompare(b.pairingNumber));
+      }
+      return { pairings: personalized, statistics: pairingStatistics(personalized) };
     } catch (error) {
       console.error('Error in getAllPairingsForBidPackage:', error);
       // Rethrow instead of returning an empty result — this is the primary
@@ -1875,7 +1871,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(pairings, eq(userFavorites.pairingId, pairings.id))
       .where(eq(userFavorites.userId, userId));
 
-    return result.map(r => r.pairing);
+    return this.personalizePairings(result.map(r => r.pairing));
   }
 
   // Chat history methods

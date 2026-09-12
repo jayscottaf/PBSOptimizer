@@ -289,6 +289,7 @@ export default function Dashboard() {
     seniorityPercentile?: number;
     base: string;
     aircraft: string;
+    updatedAt?: string;
   };
   const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(() => {
     const savedId = localStorage.getItem('userId');
@@ -303,8 +304,12 @@ export default function Dashboard() {
       seniorityPercentile: savedPercentile ? parseFloat(savedPercentile) : undefined,
       base: localStorage.getItem('base') || '',
       aircraft: localStorage.getItem('aircraft') || '',
+      updatedAt: localStorage.getItem('profileUpdatedAt') || undefined,
     };
   });
+
+  const [historyRevision, setHistoryRevision] = useState(() => localStorage.getItem('historyRevision') || '0');
+  const probabilityCacheUser = `${currentUser?.id ?? 'guest'}:${seniorityPercentile || '50'}:${currentUser?.updatedAt || ''}:${historyRevision}`;
 
   // Track if this is the initial load to prevent overwriting saved values
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -336,6 +341,7 @@ export default function Dashboard() {
       seniorityPercentile: user.seniorityPercentile ?? undefined,
       base: user.base,
       aircraft: user.aircraft,
+      updatedAt: user.updatedAt,
     });
     setName(user.name || '');
     setSeniorityNumber(String(user.seniorityNumber));
@@ -347,7 +353,9 @@ export default function Dashboard() {
     setBase(user.base);
     setAircraft(user.aircraft);
     localStorage.setItem('userId', String(user.id));
-  }, []);
+    localStorage.setItem('profileUpdatedAt', user.updatedAt || '');
+    queryClient.invalidateQueries();
+  }, [queryClient]);
 
   // "Link this device" (sync PIN entry on a fresh device) state
   const [linkPin, setLinkPin] = useState('');
@@ -509,7 +517,7 @@ export default function Dashboard() {
           sortOrder: sortDirection || 'asc',
           ...debouncedFilters,
         },
-        currentUser?.seniorityNumber || currentUser?.id
+        probabilityCacheUser
       ),
     enabled: !!bidPackageId && latestBidPackage?.status === 'completed',
     staleTime: 5 * 60 * 1000, // Increased cache time to 5 minutes
@@ -528,26 +536,30 @@ export default function Dashboard() {
 
   // Auto-prefetch full dataset for current bid package and filters
   React.useEffect(() => {
+    let cancelled = false;
+    setFullLocal(null);
+    setUnfilteredLocal(null);
     const run = async () => {
       if (!bidPackageId || latestBidPackage?.status !== 'completed') {
-        setIsFullCacheReady(false);
-        setFullLocal(null);
+        if (!cancelled) setIsFullCacheReady(false);
+        if (!cancelled) setFullLocal(null);
+        if (!cancelled) setUnfilteredLocal(null);
         return;
       }
 
       // Use cache key WITHOUT sortBy/sortOrder to enable global sorting
       console.log('Dashboard: debouncedFilters =', debouncedFilters);
-      const userId = currentUser?.seniorityNumber || currentUser?.id;
+      const userId = probabilityCacheUser;
 
       // Generate TWO cache keys: filtered and unfiltered
       const cacheKey = cacheKeyForPairings(
         bidPackageId,
-        debouncedFilters,
+        { ...debouncedFilters, seniorityPercentage: Number(seniorityPercentile || 50) },
         userId
       );
       const unfilteredCacheKey = cacheKeyForPairings(
         bidPackageId,
-        undefined, // No filters for unfiltered cache
+        { seniorityPercentage: Number(seniorityPercentile || 50) }, // Same personalized dataset
         userId
       );
       console.log(
@@ -568,7 +580,7 @@ export default function Dashboard() {
         'unfiltered:',
         hasUnfiltered
       );
-      setIsFullCacheReady(hasFull);
+      if (!cancelled) setIsFullCacheReady(hasFull);
 
       // Load filtered cache if it exists
       let full: any[] | null = null;
@@ -598,7 +610,7 @@ export default function Dashboard() {
           full = null; // Don't use the stale cache
           // DON'T call setFullLocal - keep the UI empty to avoid showing partial data
         } else {
-          setFullLocal(full || null);
+          if (!cancelled) setFullLocal(full || null);
           // Hide status indicator after 3 seconds when cache already exists
           setTimeout(() => setShowInitialStatus(false), 3000);
         }
@@ -630,7 +642,7 @@ export default function Dashboard() {
           needsUnfilteredRefetch = true;
           // DON'T call setUnfilteredLocal - avoid showing partial data
         } else {
-          setUnfilteredLocal(unfiltered || null);
+          if (!cancelled) setUnfilteredLocal(unfiltered || null);
         }
       } else {
         needsUnfilteredRefetch = true;
@@ -641,20 +653,20 @@ export default function Dashboard() {
         try {
           console.log('Dashboard: Prefetching unfiltered cache (all pairings, no filters)');
           await api.prefetchAllPairings(
-            { bidPackageId } as any,
+            { bidPackageId, seniorityPercentage: Number(seniorityPercentile || 50) } as any,
             userId,
             { force: true } // Force refetch to bypass stale cache
           );
           const newUnfiltered = await loadFullPairingsCache<any[]>(unfilteredCacheKey);
           console.log('Dashboard: Re-fetched unfiltered cache, length:', newUnfiltered?.length || 0);
-          setUnfilteredLocal(newUnfiltered || null);
+          if (!cancelled) setUnfilteredLocal(newUnfiltered || null);
 
           // If filtered and unfiltered cache keys are the same (no active filters),
           // update filtered cache too
           if (cacheKey === unfilteredCacheKey && newUnfiltered) {
             console.log('Dashboard: Updating filtered cache with new unfiltered data');
-            setFullLocal(newUnfiltered);
-            setIsFullCacheReady(true);
+            if (!cancelled) setFullLocal(newUnfiltered);
+            if (!cancelled) setIsFullCacheReady(true);
             unfilteredSatisfiedFilteredCache = true;
           }
         } catch (error) {
@@ -677,11 +689,12 @@ export default function Dashboard() {
       ) {
         // Prefetch full dataset (either missing or invalid/incomplete)
         try {
-          setIsPrefetching(true);
+          if (!cancelled) setIsPrefetching(true);
           console.log('Dashboard: Prefetching filtered cache', needsFilteredRefetch ? '(forced due to incomplete cache)' : '(cache missing)');
           await api.prefetchAllPairings(
             {
               bidPackageId,
+              seniorityPercentage: Number(seniorityPercentile || 50),
               ...debouncedFilters,
             } as any,
             userId,
@@ -690,30 +703,32 @@ export default function Dashboard() {
 
           // Re-check and load after prefetch
           const newHasFull = await hasFullPairingsCache(cacheKey);
-          setIsFullCacheReady(newHasFull);
+          if (!cancelled) setIsFullCacheReady(newHasFull);
 
           if (newHasFull) {
             const full = await loadFullPairingsCache<any[]>(cacheKey);
             console.log('Dashboard: Loaded fresh filtered cache after prefetch, length:', full?.length || 0);
-            setFullLocal(full || null);
+            if (!cancelled) setFullLocal(full || null);
 
             // Hide status indicator after 3 seconds when cache is ready
             setTimeout(() => setShowInitialStatus(false), 3000);
           }
         } catch (error) {
           console.error('Prefetch failed:', error);
-          setIsFullCacheReady(false);
+          if (!cancelled) setIsFullCacheReady(false);
         } finally {
-          setIsPrefetching(false);
+          if (!cancelled) setIsPrefetching(false);
         }
       }
     };
     run();
+    return () => { cancelled = true; };
   }, [
     bidPackageId,
     JSON.stringify(debouncedFilters),
     currentUser?.seniorityNumber,
     currentUser?.id,
+    probabilityCacheUser,
     latestBidPackage?.status,
   ]);
 
@@ -2215,8 +2230,10 @@ export default function Dashboard() {
                   <Suspense fallback={<div className="text-sm text-muted-foreground">Loading…</div>}>
                     <ReasonsReportUpload
                       onUploadSuccess={() => {
-                        queryClient.invalidateQueries({ queryKey: ['reasons-reports'] });
-                        queryClient.invalidateQueries({ queryKey: ['data-health'] });
+                        const revision = String(Date.now());
+                        localStorage.setItem('historyRevision', revision);
+                        setHistoryRevision(revision);
+                        queryClient.invalidateQueries();
                         toast({
                           title: 'Historical data updated',
                           description: 'Hold probabilities will now use this data for predictions.',
