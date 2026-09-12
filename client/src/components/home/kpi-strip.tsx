@@ -29,9 +29,7 @@ function KpiCard({ icon: Icon, value, label, context }: KpiCardProps) {
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <div className="text-display tabular-nums leading-tight">
-            {value}
-          </div>
+          <div className="text-display tabular-nums leading-tight">{value}</div>
           <div className="text-sm font-medium">{label}</div>
           <div className="text-caption truncate">{context}</div>
         </div>
@@ -50,41 +48,54 @@ export function KpiStrip({
   const hold = countLikelyToHold(pairings);
   const highCredit = countHighCredit(pairings);
   const longLayovers = countLongLayover(pairings);
+  const withoutHistory = pairings.some(p =>
+    p.holdProbabilityReasoning?.some((reason: string) =>
+      reason.includes('No award history imported')
+    )
+  );
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <KpiCard
-        icon={Package}
-        value={String(total)}
-        label={<Term term="pairing">Pairings</Term>}
-        context={
-          bidPackage
-            ? `${bidPackage.month} ${bidPackage.year} · ${bidPackage.base} ${bidPackage.aircraft}`
-            : 'No package selected'
-        }
-      />
-      <KpiCard
-        icon={ShieldCheck}
-        value={String(hold)}
-        label={<Term term="hold probability">Likely to hold</Term>}
-        context={
-          seniorityPercentile !== null && seniorityPercentile !== undefined
-            ? `${pct(hold, total)} of package at your seniority (${seniorityPercentile}%)`
-            : 'Set your seniority to personalize'
-        }
-      />
-      <KpiCard
-        icon={TrendingUp}
-        value={String(highCredit)}
-        label={<Term term="credit">High credit</Term>}
-        context={`${pct(highCredit, total)} pay 18h+ credit`}
-      />
-      <KpiCard
-        icon={MoonStar}
-        value={String(longLayovers)}
-        label={<Term term="layover">Long layovers</Term>}
-        context={`${pct(longLayovers, total)} include a 20h+ overnight`}
-      />
-    </div>
+    <section aria-label="Package summary" className="space-y-2">
+      {withoutHistory && (
+        <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-sm">
+          Hold estimates use seniority only. Add Reasons Reports for{' '}
+          {bidPackage?.base} {bidPackage?.aircraft} to include award history.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard
+          icon={Package}
+          value={String(total)}
+          label={<Term term="pairing">Pairings</Term>}
+          context={
+            bidPackage
+              ? `${bidPackage.month} ${bidPackage.year} · ${bidPackage.base} ${bidPackage.aircraft}`
+              : 'No package selected'
+          }
+        />
+        <KpiCard
+          icon={ShieldCheck}
+          value={String(hold)}
+          label={<Term term="hold probability">Estimated 70%+ hold</Term>}
+          context={
+            seniorityPercentile !== null && seniorityPercentile !== undefined
+              ? `${pct(hold, total)} of results · seniority ${seniorityPercentile}%`
+              : 'Set your seniority to personalize'
+          }
+        />
+        <KpiCard
+          icon={TrendingUp}
+          value={String(highCredit)}
+          label={<Term term="credit">High credit</Term>}
+          context={`${pct(highCredit, total)} pay 18h+ credit`}
+        />
+        <KpiCard
+          icon={MoonStar}
+          value={String(longLayovers)}
+          label={<Term term="layover">Long layovers</Term>}
+          context={`${pct(longLayovers, total)} include a 20h+ overnight`}
+        />
+      </div>
+    </section>
   );
 }

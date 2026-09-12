@@ -1,3 +1,8 @@
+import {
+  decimalHoursToMinutes,
+  formatDuration,
+  printedDurationMinutes,
+} from '@shared/durations';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -16,7 +21,10 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { calculateValidStartDates } from '@/lib/pairingDates';
-import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCalculator';
+import {
+  calculateDutyStartTime,
+  calculateDutyEndTime,
+} from '@shared/dutyTimeCalculator';
 interface PairingModalProps {
   pairingId: number;
   onClose: () => void;
@@ -27,7 +35,11 @@ interface PairingModalProps {
   };
 }
 
-export function PairingModal({ pairingId, onClose, currentUser }: PairingModalProps) {
+export function PairingModal({
+  pairingId,
+  onClose,
+  currentUser,
+}: PairingModalProps) {
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isAddedToCalendar, setIsAddedToCalendar] = useState(false);
@@ -36,9 +48,11 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
   const [selectedDates, setSelectedDates] = useState<Record<number, boolean>>(
     {}
   );
-  const [expandedMatches, setExpandedMatches] = useState<Record<number, boolean>>({});
+  const [expandedMatches, setExpandedMatches] = useState<
+    Record<number, boolean>
+  >({});
   const queryClient = useQueryClient();
-  
+
   const toggleMatchExpanded = (index: number) => {
     setExpandedMatches(prev => ({ ...prev, [index]: !prev[index] }));
   };
@@ -219,20 +233,29 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                   {pairing.payHours && (
                     <div>
                       <span className="text-muted-foreground">Total Pay:</span>{' '}
-                      {pairing.payHours}
+                      {formatDuration(
+                        printedDurationMinutes(pairing.payHours),
+                        ':'
+                      )}
                     </div>
                   )}
                   <div>
                     <span className="text-muted-foreground">Credit:</span>{' '}
-                    {pairing.creditHours}
+                    {formatDuration(
+                      decimalHoursToMinutes(pairing.creditHours),
+                      ':'
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Block:</span>{' '}
-                    {pairing.blockHours}
+                    {formatDuration(
+                      decimalHoursToMinutes(pairing.blockHours),
+                      ':'
+                    )}
                   </div>
                   <div>
-                    <span className="text-muted-foreground">TAFB:</span> {pairing.tafb}{' '}
-                    hours
+                    <span className="text-muted-foreground">TAFB:</span>{' '}
+                    {formatDuration(printedDurationMinutes(pairing.tafb), ':')}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Days:</span>{' '}
@@ -240,7 +263,8 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                   </div>
                   {pairing.fdp && (
                     <div>
-                      <span className="text-muted-foreground">FDP:</span> {pairing.fdp}
+                      <span className="text-muted-foreground">FDP:</span>{' '}
+                      {formatDuration(printedDurationMinutes(pairing.fdp), ':')}
                     </div>
                   )}
                   {pairing.deadheads > 0 && (
@@ -251,12 +275,18 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                   )}
                   {pairing.holdProbability !== undefined && (
                     <div>
-                      <span className="text-muted-foreground">Hold Probability:</span>{' '}
-                      <span className={
-                        pairing.holdProbability >= 70 ? 'text-green-600 font-medium' :
-                        pairing.holdProbability >= 50 ? 'text-yellow-600 font-medium' :
-                        'text-red-600 font-medium'
-                      }>
+                      <span className="text-muted-foreground">
+                        Estimated hold:
+                      </span>{' '}
+                      <span
+                        className={
+                          pairing.holdProbability >= 70
+                            ? 'text-green-600 font-medium'
+                            : pairing.holdProbability >= 50
+                              ? 'text-yellow-600 font-medium'
+                              : 'text-red-600 font-medium'
+                        }
+                      >
                         {pairing.holdProbability}%
                       </span>
                     </div>
@@ -291,11 +321,11 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                       day => groupedByDay[day]
                     );
 
-                    return sortedDays.map((dayLetter, dayIndex) => (
+                    return sortedDays.map(dayLetter => (
                       <Card key={dayLetter}>
                         <CardContent className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 font-mono text-xs sm:text-sm">
                           <div className="font-medium text-blue-900 dark:text-blue-300 mb-2 text-xs sm:text-sm">
-                            Day {dayIndex + 1} - {dayLetter}
+                            Day {dayLetter.charCodeAt(0) - 64} - {dayLetter}
                           </div>
                           {groupedByDay[dayLetter].map(
                             (segment: any, segIndex: number) => (
@@ -353,159 +383,212 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                     {/* Current pairing reference */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                       <div className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">
-                        Current Pairing #{similarHistoryData.currentPairing?.pairingNumber}
+                        Current Pairing #
+                        {similarHistoryData.currentPairing?.pairingNumber}
                       </div>
                       <div className="text-xs text-blue-800 dark:text-blue-300 font-mono">
-                        Layovers: {similarHistoryData.currentPairing?.layovers || 'None'} | 
-                        Days: {similarHistoryData.currentPairing?.days} | 
-                        Credit: {similarHistoryData.currentPairing?.credit}
+                        Layovers:{' '}
+                        {similarHistoryData.currentPairing?.layovers || 'None'}{' '}
+                        | Days: {similarHistoryData.currentPairing?.days} |
+                        Credit:{' '}
+                        {formatDuration(
+                          decimalHoursToMinutes(
+                            similarHistoryData.currentPairing?.credit
+                          ),
+                          ':'
+                        )}
                       </div>
                     </div>
-                    
+
                     {/* Similar matches */}
                     <div className="space-y-3">
-                      {similarHistoryData.similarMatches.map((match: any, index: number) => (
-                        <div 
-                          key={index}
-                          className={`rounded-lg p-3 border ${
-                            match.isExactPairing ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' :
-                            match.confidence === 'exact' ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
-                            match.confidence === 'high' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700' :
-                            'bg-muted border-gray-300 dark:border-gray-600'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <span className="font-medium text-sm">
-                                #{match.pairingNumber} - {match.month} {match.year}
-                              </span>
-                              {match.isExactPairing && (
-                                <Badge 
-                                  variant="outline" 
-                                  className="ml-2 text-xs bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100"
+                      {similarHistoryData.similarMatches.map(
+                        (match: any, index: number) => (
+                          <div
+                            key={index}
+                            className={`rounded-lg p-3 border ${
+                              match.isExactPairing
+                                ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
+                                : match.confidence === 'exact'
+                                  ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                                  : match.confidence === 'high'
+                                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+                                    : 'bg-muted border-gray-300 dark:border-gray-600'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <span className="font-medium text-sm">
+                                  #{match.pairingNumber} - {match.month}{' '}
+                                  {match.year}
+                                </span>
+                                {match.isExactPairing && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-2 text-xs bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100"
+                                  >
+                                    This Pairing
+                                  </Badge>
+                                )}
+                                <Badge
+                                  variant="outline"
+                                  className={`ml-2 text-xs ${
+                                    match.confidence === 'exact'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                      : match.confidence === 'high'
+                                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
+                                  }`}
                                 >
-                                  This Pairing
+                                  {match.similarity}% {match.confidence}
                                 </Badge>
+                                {match.awardCount > 1 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
+                                  >
+                                    {match.awardCount}x awarded
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Individual awards list - each date with seniority */}
+                            <div className="mb-2 space-y-1">
+                              {(() => {
+                                const awards = match.awards || [];
+                                const isExpanded = expandedMatches[index];
+                                const maxVisible = 3;
+                                const displayAwards = isExpanded
+                                  ? awards
+                                  : awards.slice(0, maxVisible);
+                                const hasMore = awards.length > maxVisible;
+
+                                return (
+                                  <>
+                                    {displayAwards.map(
+                                      (award: any, awardIndex: number) => (
+                                        <div
+                                          key={awardIndex}
+                                          data-testid={`row-award-${match.pairingNumber}-${awardIndex}`}
+                                          className="flex items-center text-sm font-mono bg-gray-100 dark:bg-gray-700/50 rounded px-2 py-1"
+                                        >
+                                          <span className="text-gray-600 dark:text-gray-300 w-24">
+                                            {award.date} {award.dayOfWeek}
+                                          </span>
+                                          <span className="text-muted-foreground mx-2">
+                                            —
+                                          </span>
+                                          <span className="font-semibold text-foreground">
+                                            Seniority #{award.seniority}
+                                          </span>
+                                        </div>
+                                      )
+                                    )}
+                                    {hasMore && (
+                                      <button
+                                        onClick={() =>
+                                          toggleMatchExpanded(index)
+                                        }
+                                        data-testid={`button-toggle-awards-${match.pairingNumber}-${index}`}
+                                        className="flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
+                                      >
+                                        {isExpanded ? (
+                                          <>
+                                            <ChevronUp className="w-3 h-3 mr-1" />
+                                            Show less
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ChevronDown className="w-3 h-3 mr-1" />
+                                            Show {awards.length - maxVisible}{' '}
+                                            more
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Historical pairing details */}
+                            <div className="text-xs text-muted-foreground font-mono mb-2">
+                              Layovers: {match.historicalLayovers || 'None'} |
+                              Days: {match.historicalDays} | Credit:{' '}
+                              {formatDuration(
+                                decimalHoursToMinutes(match.historicalCredit),
+                                ':'
                               )}
-                              <Badge 
-                                variant="outline" 
-                                className={`ml-2 text-xs ${
-                                  match.confidence === 'exact' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                                  match.confidence === 'high' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
-                                }`}
-                              >
-                                {match.similarity}% {match.confidence}
-                              </Badge>
-                              {match.awardCount > 1 && (
-                                <Badge 
-                                  variant="outline" 
-                                  className="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100"
+                            </div>
+
+                            {/* Match breakdown */}
+                            <div className="grid grid-cols-6 gap-1 text-xs">
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
                                 >
-                                  {match.awardCount}x awarded
-                                </Badge>
-                              )}
+                                  {Math.round(match.breakdown.layoverMatch)}%
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Layovers
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${match.breakdown.daysMatch >= 80 ? 'text-green-600' : match.breakdown.daysMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                                >
+                                  {Math.round(match.breakdown.daysMatch)}%
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Days
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${(match.breakdown.seasonMatch ?? 0) >= 80 ? 'text-green-600' : (match.breakdown.seasonMatch ?? 0) >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                                >
+                                  {Math.round(match.breakdown.seasonMatch ?? 0)}
+                                  %
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Season
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${match.breakdown.creditMatch >= 80 ? 'text-green-600' : match.breakdown.creditMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                                >
+                                  {Math.round(match.breakdown.creditMatch)}%
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Credit
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${match.breakdown.timeMatch >= 80 ? 'text-green-600' : match.breakdown.timeMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                                >
+                                  {Math.round(match.breakdown.timeMatch)}%
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Times
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div
+                                  className={`font-semibold ${match.breakdown.efficiencyMatch >= 80 ? 'text-green-600' : match.breakdown.efficiencyMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                                >
+                                  {Math.round(match.breakdown.efficiencyMatch)}%
+                                </div>
+                                <div className="text-muted-foreground">
+                                  Efficiency
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          
-                          {/* Individual awards list - each date with seniority */}
-                          <div className="mb-2 space-y-1">
-                            {(() => {
-                              const awards = match.awards || [];
-                              const isExpanded = expandedMatches[index];
-                              const maxVisible = 3;
-                              const displayAwards = isExpanded ? awards : awards.slice(0, maxVisible);
-                              const hasMore = awards.length > maxVisible;
-                              
-                              return (
-                                <>
-                                  {displayAwards.map((award: any, awardIndex: number) => (
-                                    <div 
-                                      key={awardIndex}
-                                      data-testid={`row-award-${match.pairingNumber}-${awardIndex}`}
-                                      className="flex items-center text-sm font-mono bg-gray-100 dark:bg-gray-700/50 rounded px-2 py-1"
-                                    >
-                                      <span className="text-gray-600 dark:text-gray-300 w-24">
-                                        {award.date} {award.dayOfWeek}
-                                      </span>
-                                      <span className="text-muted-foreground mx-2">—</span>
-                                      <span className="font-semibold text-foreground">
-                                        Seniority #{award.seniority}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {hasMore && (
-                                    <button
-                                      onClick={() => toggleMatchExpanded(index)}
-                                      data-testid={`button-toggle-awards-${match.pairingNumber}-${index}`}
-                                      className="flex items-center text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
-                                    >
-                                      {isExpanded ? (
-                                        <>
-                                          <ChevronUp className="w-3 h-3 mr-1" />
-                                          Show less
-                                        </>
-                                      ) : (
-                                        <>
-                                          <ChevronDown className="w-3 h-3 mr-1" />
-                                          Show {awards.length - maxVisible} more
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                          
-                          {/* Historical pairing details */}
-                          <div className="text-xs text-muted-foreground font-mono mb-2">
-                            Layovers: {match.historicalLayovers || 'None'} | 
-                            Days: {match.historicalDays} | 
-                            Credit: {parseFloat(match.historicalCredit).toFixed(2)}
-                          </div>
-                          
-                          {/* Match breakdown */}
-                          <div className="grid grid-cols-6 gap-1 text-xs">
-                            <div className="text-center">
-                              <div className={`font-semibold ${match.breakdown.layoverMatch >= 80 ? 'text-green-600' : match.breakdown.layoverMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.layoverMatch)}%
-                              </div>
-                              <div className="text-muted-foreground">Layovers</div>
-                            </div>
-                            <div className="text-center">
-                              <div className={`font-semibold ${match.breakdown.daysMatch >= 80 ? 'text-green-600' : match.breakdown.daysMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.daysMatch)}%
-                              </div>
-                              <div className="text-muted-foreground">Days</div>
-                            </div>
-                            <div className="text-center">
-                              <div className={`font-semibold ${(match.breakdown.seasonMatch ?? 0) >= 80 ? 'text-green-600' : (match.breakdown.seasonMatch ?? 0) >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.seasonMatch ?? 0)}%
-                              </div>
-                              <div className="text-muted-foreground">Season</div>
-                            </div>
-                            <div className="text-center">
-                              <div className={`font-semibold ${match.breakdown.creditMatch >= 80 ? 'text-green-600' : match.breakdown.creditMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.creditMatch)}%
-                              </div>
-                              <div className="text-muted-foreground">Credit</div>
-                            </div>
-                            <div className="text-center">
-                              <div className={`font-semibold ${match.breakdown.timeMatch >= 80 ? 'text-green-600' : match.breakdown.timeMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.timeMatch)}%
-                              </div>
-                              <div className="text-muted-foreground">Times</div>
-                            </div>
-                            <div className="text-center">
-                              <div className={`font-semibold ${match.breakdown.efficiencyMatch >= 80 ? 'text-green-600' : match.breakdown.efficiencyMatch >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {Math.round(match.breakdown.efficiencyMatch)}%
-                              </div>
-                              <div className="text-muted-foreground">Efficiency</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -542,7 +625,8 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                 if (!currentUser) {
                   toast({
                     title: 'Profile Required',
-                    description: 'Please complete your profile before adding pairings to your calendar.',
+                    description:
+                      'Please complete your profile before adding pairings to your calendar.',
                     variant: 'destructive',
                   });
                   return;
@@ -559,19 +643,25 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                   let specificDateExceptions = '';
 
                   // Extract the base date range
-                  const effectiveMatch = pairing.fullTextBlock.match(/EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i);
+                  const effectiveMatch = pairing.fullTextBlock.match(
+                    /EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i
+                  );
                   if (effectiveMatch) {
                     dateRange = effectiveMatch[1].trim();
                   }
 
                   // Extract day-of-week exceptions (can appear as "EXCPT MO SA SU" before EFFECTIVE)
-                  const dayOfWeekMatch = pairing.fullTextBlock.match(/(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i);
+                  const dayOfWeekMatch = pairing.fullTextBlock.match(
+                    /(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i
+                  );
                   if (dayOfWeekMatch) {
                     dayOfWeekExceptions = dayOfWeekMatch[1].trim();
                   }
 
                   // Extract specific date exceptions (can appear anywhere in fullTextBlock as "EXCEPT OCT 16 OCT 21")
-                  const specificDateMatch = pairing.fullTextBlock.match(/EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i);
+                  const specificDateMatch = pairing.fullTextBlock.match(
+                    /EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i
+                  );
                   if (specificDateMatch) {
                     specificDateExceptions = specificDateMatch[1].trim();
                   }
@@ -580,7 +670,10 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                   if (dateRange) {
                     effectiveDates = dateRange;
                     if (dayOfWeekExceptions || specificDateExceptions) {
-                      const allExceptions = [dayOfWeekExceptions, specificDateExceptions]
+                      const allExceptions = [
+                        dayOfWeekExceptions,
+                        specificDateExceptions,
+                      ]
                         .filter(Boolean)
                         .join(' ');
                       effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
@@ -631,12 +724,20 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                 // Single date - calculate actual duty times
                 const baseDate = possibleStartDates[0];
                 const segments = pairing.flightSegments || [];
-                const startDate = segments.length > 0
-                  ? calculateDutyStartTime(baseDate, segments[0])
-                  : baseDate;
-                const endDate = segments.length > 0
-                  ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
-                  : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+                const startDate =
+                  segments.length > 0
+                    ? calculateDutyStartTime(baseDate, segments[0])
+                    : baseDate;
+                const endDate =
+                  segments.length > 0
+                    ? calculateDutyEndTime(
+                        baseDate,
+                        segments[segments.length - 1]
+                      )
+                    : new Date(
+                        baseDate.getTime() +
+                          (pairingDays - 1) * 24 * 60 * 60 * 1000
+                      );
 
                 addToCalendarMutation.mutate({
                   userId: currentUser.id,
@@ -679,7 +780,8 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
               if (!currentUser) {
                 toast({
                   title: 'Profile Required',
-                  description: 'Please complete your profile before adding favorites.',
+                  description:
+                    'Please complete your profile before adding favorites.',
                   variant: 'destructive',
                 });
                 return;
@@ -762,7 +864,8 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                       if (!currentUser) {
                         toast({
                           title: 'Profile Required',
-                          description: 'Please complete your profile before adding pairings to your calendar.',
+                          description:
+                            'Please complete your profile before adding pairings to your calendar.',
                           variant: 'destructive',
                         });
                         return;
@@ -781,12 +884,20 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                       for (const baseDate of starts) {
                         const pairingDays = pairing.pairingDays || 1;
                         const segments = pairing.flightSegments || [];
-                        const dutyStart = segments.length > 0
-                          ? calculateDutyStartTime(baseDate, segments[0])
-                          : baseDate;
-                        const dutyEnd = segments.length > 0
-                          ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
-                          : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+                        const dutyStart =
+                          segments.length > 0
+                            ? calculateDutyStartTime(baseDate, segments[0])
+                            : baseDate;
+                        const dutyEnd =
+                          segments.length > 0
+                            ? calculateDutyEndTime(
+                                baseDate,
+                                segments[segments.length - 1]
+                              )
+                            : new Date(
+                                baseDate.getTime() +
+                                  (pairingDays - 1) * 24 * 60 * 60 * 1000
+                              );
 
                         await api.addToCalendar(
                           currentUser.id,
@@ -800,9 +911,13 @@ export function PairingModal({ pairingId, onClose, currentUser }: PairingModalPr
                         description: `Added ${starts.length} date${starts.length > 1 ? 's' : ''} to calendar.`,
                       });
                       queryClient.invalidateQueries({ queryKey: ['calendar'] });
-                      queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
+                      queryClient.invalidateQueries({
+                        queryKey: ['calendarEvents'],
+                      });
                       queryClient.refetchQueries({ queryKey: ['calendar'] });
-                      queryClient.refetchQueries({ queryKey: ['calendarEvents'] });
+                      queryClient.refetchQueries({
+                        queryKey: ['calendarEvents'],
+                      });
                       setIsAddedToCalendar(true);
                     } catch (err) {
                       toast({

@@ -1,3 +1,4 @@
+import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
 import { Sparkles, ArrowRight, ClipboardList } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -93,13 +94,17 @@ export function TopPicks({
                         className={`rounded px-1.5 py-0.5 text-xs font-medium tabular-nums ${holdBadgeClass(pick.holdProbability)}`}
                       >
                         {pick.holdProbability !== null
-                          ? `${pick.holdProbability}%`
+                          ? `${pick.holdProbability}% est.`
                           : '—'}
                       </span>
                     </div>
                     <div className="text-caption mt-1 tabular-nums">
-                      {pick.pairingDays}-day · {pick.creditHours.toFixed(2)}{' '}
-                      cr
+                      {pick.pairingDays}-day ·{' '}
+                      {formatDuration(
+                        decimalHoursToMinutes(pick.creditHours),
+                        ':'
+                      )}{' '}
+                      credit
                     </div>
                     <div className="text-caption mt-1 line-clamp-2">
                       {pick.reasons.slice(0, 2).join(' · ') || 'Strong fit'}
@@ -113,8 +118,8 @@ export function TopPicks({
             </div>
             {data?.profileSource === 'neutral' && (
               <p className="text-caption mt-3">
-                Ranked with a neutral profile. Learn your profile in Bid
-                Builder (from your bid history) for personal picks.
+                Ranked with a neutral profile. Learn your profile in Bid Builder
+                (from your bid history) for personal picks.
               </p>
             )}
           </>

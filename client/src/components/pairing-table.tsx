@@ -1,4 +1,8 @@
-import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
+import {
+  decimalHoursToMinutes,
+  formatDuration,
+  printedDurationMinutes,
+} from '@shared/durations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,8 +12,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Eye, Bookmark, Star, X, Calendar, Info, AlertTriangle } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Eye,
+  Bookmark,
+  Star,
+  X,
+  Calendar,
+  Info,
+  AlertTriangle,
+} from 'lucide-react';
 import type { Pairing } from '@/lib/api';
 import { memo, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
@@ -18,7 +34,10 @@ import { toast } from '@/hooks/use-toast';
 import type { ConflictInfo } from '@/lib/conflictDetection';
 import { calculateValidStartDates } from '@/lib/pairingDates';
 import { maxLayoverMinutes, formatLayoverMinutes } from '@/lib/layover';
-import { calculateDutyStartTime, calculateDutyEndTime } from '@shared/dutyTimeCalculator';
+import {
+  calculateDutyStartTime,
+  calculateDutyEndTime,
+} from '@shared/dutyTimeCalculator';
 
 interface PairingTableProps {
   pairings: Pairing[];
@@ -57,7 +76,11 @@ interface PairingTableProps {
 // incidental parent re-render.
 // Format route with day-by-day grouping, layover highlighting, and DH markers
 function formatRouteDisplay(pairing: Pairing) {
-  if (!pairing.flightSegments || !Array.isArray(pairing.flightSegments) || pairing.flightSegments.length === 0) {
+  if (
+    !pairing.flightSegments ||
+    !Array.isArray(pairing.flightSegments) ||
+    pairing.flightSegments.length === 0
+  ) {
     return <span className="text-foreground">{pairing.route || ''}</span>;
   }
 
@@ -92,30 +115,41 @@ function formatRouteDisplay(pairing: Pairing) {
   const lastDayWithFlights = sortedDays[sortedDays.length - 1];
 
   // Build route for each day
-  const dayRoutes: { day: string; segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] }[] = [];
-  
+  const dayRoutes: {
+    day: string;
+    segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[];
+  }[] = [];
+
   sortedDays.forEach((day, dayIdx) => {
     const dayFlights = flightsByDay.get(day)!;
-    const segments: { airport: string; isDeadhead: boolean; isLayover: boolean }[] = [];
-    
+    const segments: {
+      airport: string;
+      isDeadhead: boolean;
+      isLayover: boolean;
+    }[] = [];
+
     dayFlights.forEach((seg: any, segIdx: number) => {
       const departure = (seg.departure || '').toUpperCase();
       const arrival = (seg.arrival || '').toUpperCase();
       const segmentKey = `${departure}-${arrival}`;
       const isDeadhead = deadheadSegments.has(segmentKey);
-      
+
       // Add departure if it's the first segment of the day
       if (segIdx === 0) {
-        segments.push({ airport: departure, isDeadhead: false, isLayover: false });
+        segments.push({
+          airport: departure,
+          isDeadhead: false,
+          isLayover: false,
+        });
       }
-      
+
       // Add arrival - mark as layover if it's the last segment of the day (except last day)
       const isLastSegmentOfDay = segIdx === dayFlights.length - 1;
       const isLayover = isLastSegmentOfDay && day !== lastDayWithFlights;
-      
+
       segments.push({ airport: arrival, isDeadhead, isLayover });
     });
-    
+
     dayRoutes.push({ day, segments });
   });
 
@@ -123,22 +157,26 @@ function formatRouteDisplay(pairing: Pairing) {
     <div className="flex flex-wrap items-center gap-1">
       {dayRoutes.map((dayRoute, dayIdx) => (
         <div key={dayRoute.day} className="flex items-center gap-1">
-          {dayIdx > 0 && (
-            <span className="text-muted-foreground mx-1">|</span>
-          )}
+          {dayIdx > 0 && <span className="text-muted-foreground mx-1">|</span>}
           <span className="text-xs font-medium text-muted-foreground mr-1">
             {dayRoute.day}:
           </span>
           {dayRoute.segments.map((seg, segIdx) => (
             <div key={`${seg.airport}-${segIdx}`} className="flex items-center">
-              {segIdx > 0 && <span className="text-muted-foreground dark:text-muted-foreground">-</span>}
+              {segIdx > 0 && (
+                <span className="text-muted-foreground dark:text-muted-foreground">
+                  -
+                </span>
+              )}
               <span
                 className={`${
                   seg.isDeadhead ? 'text-muted-foreground italic' : ''
                 } ${
                   seg.isLayover
                     ? 'font-bold text-teal-600 dark:text-teal-400'
-                    : seg.isDeadhead ? '' : 'text-foreground'
+                    : seg.isDeadhead
+                      ? ''
+                      : 'text-foreground'
                 }`}
               >
                 {seg.isDeadhead ? `(DH)${seg.airport}` : seg.airport}
@@ -302,7 +340,10 @@ function PairingTableImpl({
   // access or aria-sort — this spreads onto each one to fix both without
   // duplicating the toggle-direction logic seven times.
   const handleSortClick = (column: string) => {
-    onSort(column, sortColumn === column && sortDirection === 'desc' ? 'asc' : 'desc');
+    onSort(
+      column,
+      sortColumn === column && sortDirection === 'desc' ? 'asc' : 'desc'
+    );
   };
   const sortHeaderProps = (column: string) => ({
     onClick: () => handleSortClick(column),
@@ -430,12 +471,16 @@ function PairingTableImpl({
 
       const baseDate = possibleStartDates[0];
       const segments = pairing.flightSegments || [];
-      const startDate = segments.length > 0
-        ? calculateDutyStartTime(baseDate, segments[0])
-        : baseDate;
-      const endDate = segments.length > 0
-        ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
-        : new Date(baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000);
+      const startDate =
+        segments.length > 0
+          ? calculateDutyStartTime(baseDate, segments[0])
+          : baseDate;
+      const endDate =
+        segments.length > 0
+          ? calculateDutyEndTime(baseDate, segments[segments.length - 1])
+          : new Date(
+              baseDate.getTime() + (pairingDays - 1) * 24 * 60 * 60 * 1000
+            );
 
       if (possibleStartDates.length > 1) {
         toast({
@@ -472,13 +517,25 @@ function PairingTableImpl({
   // signal is consistent across the cell.
   const getHoldProbabilityBand = (probability: number) => {
     if (probability >= 80) {
-      return { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-100' };
+      return {
+        bar: 'bg-green-500',
+        text: 'text-green-700',
+        bg: 'bg-green-100',
+      };
     }
     if (probability >= 50) {
-      return { bar: 'bg-yellow-500', text: 'text-yellow-700', bg: 'bg-yellow-100' };
+      return {
+        bar: 'bg-yellow-500',
+        text: 'text-yellow-700',
+        bg: 'bg-yellow-100',
+      };
     }
     if (probability >= 30) {
-      return { bar: 'bg-orange-500', text: 'text-orange-700', bg: 'bg-orange-100' };
+      return {
+        bar: 'bg-orange-500',
+        text: 'text-orange-700',
+        bg: 'bg-orange-100',
+      };
     }
     return { bar: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-100' };
   };
@@ -517,16 +574,16 @@ function PairingTableImpl({
         <p className="mb-2 font-medium">Reading this table</p>
         <dl className="space-y-1.5 text-xs">
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 font-medium">HH.MM</dt>
+            <dt className="w-20 shrink-0 font-medium">HH:MM</dt>
             <dd className="text-muted-foreground">
-              Times are hours.minutes — 15.45 = 15h 45m
+              Times are hours.minutes — 15:45 = 15h 45m
             </dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 font-medium">Hold %</dt>
             <dd className="text-muted-foreground">
-              Estimated chance the pairing is still available at your
-              seniority when PBS reaches it
+              Estimated chance the pairing is still available at your seniority
+              when PBS reaches it
             </dd>
           </div>
           <div className="flex gap-2">
@@ -541,9 +598,7 @@ function PairingTableImpl({
                 Teal city
               </span>
             </dt>
-            <dd className="text-muted-foreground">
-              Overnight layover station
-            </dd>
+            <dd className="text-muted-foreground">Overnight layover station</dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 font-medium italic">(DH)</dt>
@@ -585,10 +640,14 @@ function PairingTableImpl({
   );
 
   return (
-    <Card className={!showHeader ? 'border-0 rounded-none shadow-none' : undefined}>
+    <Card
+      className={!showHeader ? 'border-0 rounded-none shadow-none' : undefined}
+    >
       {showHeader && (
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">Pairing Results</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            Pairing Results
+          </h3>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-muted-foreground">
               Showing {safePairings.length} pairings
@@ -646,7 +705,7 @@ function PairingTableImpl({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Pay credit, HH.MM (15.45 = 15h 45m)"
+                title="Pay credit, HH:MM (15:45 = 15h 45m)"
                 {...sortHeaderProps('creditHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -660,7 +719,7 @@ function PairingTableImpl({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Scheduled flying time, HH.MM"
+                title="Scheduled flying time, HH:MM"
                 {...sortHeaderProps('blockHours')}
               >
                 <div className="flex items-center space-x-1">
@@ -674,7 +733,7 @@ function PairingTableImpl({
               </th>
               <th
                 className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[50px] sm:min-w-[60px] cursor-pointer hover:bg-muted/70"
-                title="Time Away From Base: check-in to release, HH.MM"
+                title="Time Away From Base: check-in to release, HH:MM"
                 {...sortHeaderProps('tafb')}
               >
                 <div className="flex items-center space-x-1">
@@ -833,7 +892,7 @@ function PairingTableImpl({
                         <Popover>
                           <PopoverTrigger asChild>
                             <button
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={e => e.stopPropagation()}
                               type="button"
                               className="inline-flex items-center justify-center p-0.5 hover:bg-orange-100 dark:hover:bg-orange-950 rounded cursor-help"
                               aria-label="Conflicts with calendar"
@@ -847,7 +906,10 @@ function PairingTableImpl({
                           >
                             {(() => {
                               const conflictData = conflicts.get(pairing.id);
-                              if (!conflictData?.conflicts || conflictData.conflicts.length === 0) {
+                              if (
+                                !conflictData?.conflicts ||
+                                conflictData.conflicts.length === 0
+                              ) {
                                 return 'Conflicts with calendar';
                               }
                               const first = conflictData.conflicts[0];
@@ -860,61 +922,67 @@ function PairingTableImpl({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     {(() => {
-                      const band = getHoldProbabilityBand(pairing.holdProbability);
+                      const band = getHoldProbabilityBand(
+                        pairing.holdProbability
+                      );
                       return (
-                    <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
-                      <div className="flex-1 bg-muted rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
-                        <div
-                          className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
-                          style={{ width: `${pairing.holdProbability}%` }}
-                        />
-                      </div>
-                      <span
-                        className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
-                      >
-                        {pairing.holdProbability}%
-                      </span>
-                      {(() => {
-                        const hasReasoning = pairing.holdProbabilityReasoning && pairing.holdProbabilityReasoning.length > 0;
-                        return hasReasoning ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex-shrink-0 p-0.5 hover:bg-muted/70 rounded inline-flex items-center cursor-pointer"
-                                aria-label="Why this hold probability"
-                              >
-                                <Info className="w-3 h-3 text-blue-500" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              onClick={e => e.stopPropagation()}
-                              className="w-80 bg-popover text-popover-foreground border-border p-3"
-                            >
-                              <div className="space-y-2">
-                                <div className="font-semibold text-sm border-b border-border pb-2">
-                                  Hold Probability: {pairing.holdProbability}%
-                                </div>
-                                {pairing.holdProbabilityReasoning?.map((reason, idx) => (
-                                  <div key={idx} className="text-xs leading-relaxed">
-                                    {reason}
+                        <div className="flex items-center space-x-1 sm:space-x-2 min-w-[70px] sm:min-w-[100px]">
+                          <div className="flex-1 bg-muted rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
+                            <div
+                              className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
+                              style={{ width: `${pairing.holdProbability}%` }}
+                            />
+                          </div>
+                          <span
+                            className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
+                          >
+                            {pairing.holdProbability}%
+                          </span>
+                          {(() => {
+                            const hasReasoning =
+                              pairing.holdProbabilityReasoning &&
+                              pairing.holdProbabilityReasoning.length > 0;
+                            return hasReasoning ? (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={e => e.stopPropagation()}
+                                    className="flex-shrink-0 p-0.5 hover:bg-muted/70 rounded inline-flex items-center cursor-pointer"
+                                    aria-label="Why this hold probability"
+                                  >
+                                    <Info className="w-3 h-3 text-blue-500" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  onClick={e => e.stopPropagation()}
+                                  className="w-80 bg-popover text-popover-foreground border-border p-3"
+                                >
+                                  <div className="space-y-2">
+                                    <div className="font-semibold text-sm border-b border-border pb-2">
+                                      Estimated hold: {pairing.holdProbability}%
+                                    </div>
+                                    {pairing.holdProbabilityReasoning?.map(
+                                      (reason, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="text-xs leading-relaxed"
+                                        >
+                                          {reason}
+                                        </div>
+                                      )
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : null;
-                      })()}
-                    </div>
+                                </PopoverContent>
+                              </Popover>
+                            ) : null;
+                          })()}
+                        </div>
                       );
                     })()}
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4">
-                    <div
-                      className="text-xs sm:text-sm"
-                      title={pairing.route}
-                    >
+                    <div className="text-xs sm:text-sm" title={pairing.route}>
                       {rowDisplay[index]?.route}
                     </div>
                     <div
@@ -926,17 +994,26 @@ function PairingTableImpl({
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
-                      {formatDuration(decimalHoursToMinutes(pairing.creditHours))}
+                      {formatDuration(
+                        decimalHoursToMinutes(pairing.creditHours),
+                        ':'
+                      )}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="font-mono text-xs sm:text-sm text-muted-foreground">
-                      {formatDuration(decimalHoursToMinutes(pairing.blockHours))}
+                      {formatDuration(
+                        decimalHoursToMinutes(pairing.blockHours),
+                        ':'
+                      )}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                     <span className="text-xs sm:text-sm text-muted-foreground">
-                      {pairing.tafb}
+                      {formatDuration(
+                        printedDurationMinutes(pairing.tafb),
+                        ':'
+                      )}
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
