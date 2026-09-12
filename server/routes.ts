@@ -34,6 +34,7 @@ import { buildHoldProbabilityBulkUpdate } from './holdProbabilityUpdate';
 import { openaiAssistant } from './openaiAssistant';
 import { ReasonsReportParser } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
+import { persistReasonsImport } from './lib/reasons-import';
 import multer from 'multer';
 import { z } from 'zod';
 import {
@@ -848,8 +849,7 @@ export async function registerRoutes(app: Express) {
                   const ids = recordIdsByPairingId.get(matchingPairing.id) || [];
                   ids.push(record.id);
                   recordIdsByPairingId.set(matchingPairing.id, ids);
-                  linkedCount++;
-                }
+                    }
               }
             }
 
@@ -1148,50 +1148,14 @@ export async function registerRoutes(app: Express) {
           return uniqueDests.length > 0 ? uniqueDests.join('-') : null;
         };
 
-        // Store awards in bidHistory table
-        let storedCount = 0;
-        let skippedCount = 0;
-        let linkedCount = 0;
-        let unlinkedCount = 0;
-        console.log(
-          `Processing ${awards.length} awards for ${metadata.base} ${metadata.aircraft} ${metadata.month} ${metadata.year}`
-        );
-
-        // Duplicate detection in one query instead of one SELECT per award:
-        // at 500-1500 awards the per-award round-trips (plus per-award
-        // INSERTs below) put 1000-3000 sequential Neon calls inside a single
-        // serverless invocation and regularly brushed the 60s cap.
-        const existingKeys = new Set(
-          (
-            await db
-              .select({
-                pairingNumber: bidHistory.pairingNumber,
-                juniorHolderSeniority: bidHistory.juniorHolderSeniority,
-              })
-              .from(bidHistory)
-              .where(
-                and(
-                  eq(bidHistory.month, metadata.month),
-                  eq(bidHistory.year, metadata.year),
-                  eq(bidHistory.base, metadata.base),
-                  eq(bidHistory.aircraft, metadata.aircraft)
-                )
-              )
-          ).map(r => `${r.pairingNumber}|${r.juniorHolderSeniority}`)
-        );
-
+        // Prepare the whole report before starting its atomic database write.
+        const pane = ReasonsReportParser.parseReasonsPane(htmlContent);
+        if (awards.length === 0 && pane.preferences.length === 0) {
+          return sendApiError(res, 400, 'No awards or preference outcomes were found in this report.', 'REASONS_PROCESSING_FAILED');
+        }
         const rowsToInsert: (typeof bidHistory.$inferInsert)[] = [];
         for (const award of awards) {
           try {
-            // Skip if duplicate found (also dedupes within this upload,
-            // matching the old per-award select-then-insert behavior)
-            const key = `${award.pairingNumber}|${award.seniorityNumber}`;
-            if (existingKeys.has(key)) {
-              skippedCount++;
-              continue;
-            }
-            existingKeys.add(key);
-
             // Create trip fingerprint
             const fingerprint =
               ReasonsReportParser.createTripFingerprint(award);
@@ -1204,6 +1168,10 @@ export async function registerRoutes(app: Express) {
               award.totalCredit.replace(':', '.').replace(/[^\d.]/g, '')
             );
 
+            if (!Number.isFinite(creditHours) || !Number.isFinite(totalCredit)) {
+              throw new Error(`Invalid credit for pairing ${award.pairingNumber}`);
+            }
+
             // Look up matching pairing from bid package
             const matchingPairing = pairingMap.get(award.pairingNumber);
             let linkedPairingId: number | null = null;
@@ -1213,7 +1181,6 @@ export async function registerRoutes(app: Express) {
 
             if (matchingPairing) {
               linkedPairingId = matchingPairing.id;
-              linkedCount++;
 
               // Extract layovers from pairing
               const layovers =
@@ -1248,8 +1215,6 @@ export async function registerRoutes(app: Express) {
                   .sort();
                 fingerprint.layoverPattern = layoverCitiesFromPackage;
               }
-            } else {
-              unlinkedCount++;
             }
 
             rowsToInsert.push({
@@ -1278,92 +1243,28 @@ export async function registerRoutes(app: Express) {
               ),
             });
           } catch (error) {
-            console.error(
-              `Error preparing award for pairing ${award.pairingNumber}:`,
-              error
-            );
+            throw new Error(`Unable to prepare award ${award.pairingNumber}`, { cause: error });
           }
         }
 
-        // Bulk insert in chunks (same pattern as createPairingsBatch).
-        const INSERT_CHUNK = 500;
-        for (let i = 0; i < rowsToInsert.length; i += INSERT_CHUNK) {
-          const chunk = rowsToInsert.slice(i, i + INSERT_CHUNK);
-          try {
-            await db.insert(bidHistory).values(chunk);
-            storedCount += chunk.length;
-          } catch (error) {
-            console.error(
-              `Error bulk-inserting awards ${i}-${i + chunk.length}:`,
-              error
-            );
-          }
-        }
-
-        // No need to clean up - file is in memory and will be garbage collected
-
-        console.log(
-          `Upload complete: ${storedCount} stored, ${skippedCount} skipped, ${linkedCount} linked to bid package, ${unlinkedCount} unlinked`
-        );
-
-        // Parse the Reasons pane (per-preference outcomes) when present.
-        // Replace any previously stored outcomes for the same report month
-        // so re-uploads do not duplicate rows.
-        let preferencesParsed = 0;
+        const { storedCount, skippedCount, linkedCount, unlinkedCount, preferencesParsed } = await persistReasonsImport({
+          metadata,
+          awards: rowsToInsert,
+          preferences: pane.preferences.map(pref => ({
+            month: metadata.month, year: metadata.year, base: metadata.base, aircraft: metadata.aircraft,
+            pilotSeniorityNumber: pref.pilotSeniorityNumber, pilotEmployeeNumber: pref.pilotEmployeeNumber,
+            preferenceNumber: pref.preferenceNumber, preferenceText: pref.preferenceText,
+            outcome: pref.outcome, outcomeDetail: pref.outcomeDetail,
+            awardedPairingNumbers: pref.awardedPairingNumbers,
+            reportBanners: pref.windowInfo ? [...pane.banners, pref.windowInfo] : pane.banners,
+          })),
+        });
+        // Invalidation happens only after the complete transaction commits.
         try {
-          const pane = ReasonsReportParser.parseReasonsPane(htmlContent);
-          if (pane.preferences.length > 0) {
-            await db
-              .delete(reasonsReportPreferences)
-              .where(
-                and(
-                  eq(reasonsReportPreferences.month, metadata.month),
-                  eq(reasonsReportPreferences.year, metadata.year),
-                  eq(reasonsReportPreferences.base, metadata.base),
-                  eq(reasonsReportPreferences.aircraft, metadata.aircraft)
-                )
-              );
-            preferencesParsed = await storage.createReasonsReportPreferences(
-              pane.preferences.map(pref => ({
-                month: metadata.month,
-                year: metadata.year,
-                base: metadata.base,
-                aircraft: metadata.aircraft,
-                pilotSeniorityNumber: pref.pilotSeniorityNumber,
-                pilotEmployeeNumber: pref.pilotEmployeeNumber,
-                preferenceNumber: pref.preferenceNumber,
-                preferenceText: pref.preferenceText,
-                outcome: pref.outcome,
-                outcomeDetail: pref.outcomeDetail,
-                awardedPairingNumbers: pref.awardedPairingNumbers,
-                // Per-pilot credit-window line rides along with any global
-                // banners — real threshold data the simulator otherwise
-                // has to guess.
-                reportBanners: pref.windowInfo
-                  ? [...pane.banners, pref.windowInfo]
-                  : pane.banners,
-              }))
-            );
-            console.log(
-              `Reasons pane: ${preferencesParsed} preference outcomes stored (banners: ${pane.banners.join(', ') || 'none'})`
-            );
-            // The coach memoizes Reasons-derived aggregates (strategy stats,
-            // credit window) — a new import changes both.
-            try {
-              const { invalidateReasonsAggregateCache } = await import(
-                './ai/simpleAI'
-              );
-              invalidateReasonsAggregateCache();
-            } catch {
-              // Best-effort; a stale aggregate expires on its own TTL.
-            }
-          } else {
-            console.log(
-              'Reasons pane: no per-preference outcomes recognized in this report format'
-            );
-          }
+          const { invalidateReasonsAggregateCache } = await import('./ai/simpleAI');
+          invalidateReasonsAggregateCache();
         } catch (error) {
-          console.error('Reasons pane parsing failed (non-fatal):', error);
+          console.warn('Could not invalidate coach cache after import:', error);
         }
 
         res.json({
