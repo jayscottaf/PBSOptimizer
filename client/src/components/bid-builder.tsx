@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type BidExportResult } from '@/lib/api';
@@ -10,12 +20,7 @@ import type {
   SimulationResult,
 } from '@shared/bidTypes';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -265,9 +270,7 @@ function summarizeFilter(filter?: PairingFilter): string {
     );
   }
   if (filter.creditMin !== undefined || filter.creditMax !== undefined) {
-    parts.push(
-      `credit ${filter.creditMin ?? 0}-${filter.creditMax ?? '∞'}`
-    );
+    parts.push(`credit ${filter.creditMin ?? 0}-${filter.creditMax ?? '∞'}`);
   }
   if (filter.blockMin !== undefined || filter.blockMax !== undefined) {
     parts.push(`block ${filter.blockMin ?? 0}-${filter.blockMax ?? '∞'}`);
@@ -297,7 +300,9 @@ function summarizeFilter(filter?: PairingFilter): string {
     );
   }
   if (filter.deadheadsMin !== undefined) {
-    parts.push(filter.deadheadsMin === 1 ? 'has DH' : `≥${filter.deadheadsMin} DH`);
+    parts.push(
+      filter.deadheadsMin === 1 ? 'has DH' : `≥${filter.deadheadsMin} DH`
+    );
   }
   if (filter.deadheadsMax !== undefined) {
     parts.push(`≤${filter.deadheadsMax} DH`);
@@ -348,7 +353,12 @@ function summarizePreference(pref: BidPreference): string {
       );
     }
     case 'setConditionCredit': {
-      const labels = { min: 'Minimum', max: 'Maximum', mid: 'Mid', normal: 'Normal' };
+      const labels = {
+        min: 'Minimum',
+        max: 'Maximum',
+        mid: 'Mid',
+        normal: 'Normal',
+      };
       return `Set Condition: ${labels[pref.creditWindow ?? 'normal']} Credit`;
     }
     case 'setConditionPattern':
@@ -475,8 +485,10 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
       filter.totalLayoverHoursMin = num(form.totalLayoverHoursMin);
     if (num(form.totalLayoverHoursMax) !== undefined)
       filter.totalLayoverHoursMax = num(form.totalLayoverHoursMax);
-    if (num(form.creditMin) !== undefined) filter.creditMin = num(form.creditMin);
-    if (num(form.creditMax) !== undefined) filter.creditMax = num(form.creditMax);
+    if (num(form.creditMin) !== undefined)
+      filter.creditMin = num(form.creditMin);
+    if (num(form.creditMax) !== undefined)
+      filter.creditMax = num(form.creditMax);
     if (num(form.blockMin) !== undefined) filter.blockMin = num(form.blockMin);
     if (num(form.blockMax) !== undefined) filter.blockMax = num(form.blockMax);
     if (num(form.averageDailyCreditMin) !== undefined)
@@ -578,6 +590,8 @@ interface BidBuilderProps {
 export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   const { toast } = useToast();
   const [bid, setBid] = useState<DraftBid>(loadDraft);
+  const [draftSaved, setDraftSaved] = useState(true);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [addingToGroup, setAddingToGroup] = useState<number | null>(null);
   const [form, setForm] = useState<PreferenceFormState>({ ...EMPTY_FORM });
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
@@ -634,8 +648,9 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   useEffect(() => {
     try {
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(bid));
+      setDraftSaved(true);
     } catch {
-      // storage full/unavailable - draft just won't persist
+      setDraftSaved(false);
     }
   }, [bid]);
 
@@ -798,6 +813,32 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
 
   return (
     <div className="space-y-4">
+      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear this draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes all bid groups and preferences from this device. Your
+              uploaded packages and favorites stay saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep draft</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setBid(cloneBid(EMPTY_BID));
+                setSimulation(null);
+                setExported(null);
+                setOptimizerRationale([]);
+                setAddingToGroup(null);
+              }}
+            >
+              Clear draft
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* How it works strip */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm">
         <span className="flex items-center gap-2">
@@ -820,476 +861,369 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
         </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-      {/* Builder column */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Draft Bid</h2>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => optimizeMutation.mutate()}
-              disabled={optimizeMutation.isPending}
-              title="Generate a draft from your preference profile, hold history, and this month's pairings"
-            >
-              <Sparkles className="h-4 w-4 mr-1" />
-              {optimizeMutation.isPending ? 'Optimizing…' : 'Auto-draft'}
-            </Button>
-            <Select
-              value={optimizeDepth}
-              onValueChange={value =>
-                setOptimizeDepth(value as 'auto' | 'compact' | 'deep')
-              }
-            >
-              <SelectTrigger
-                className="h-9 w-[7.5rem] text-sm"
-                title="Cascade depth: Auto matches your completion odds; Deep builds the long relaxation ladder a junior pilot needs"
-                data-testid="select-optimize-depth"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Depth: Auto</SelectItem>
-                <SelectItem value="compact">Depth: Compact</SelectItem>
-                <SelectItem value="deep">Depth: Deep</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTemplatesClick}
-              title="Start from a strategy template"
-            >
-              <Sparkles className="h-4 w-4 mr-1" /> Templates
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                updateBid(draft => {
-                  draft.groups.splice(
-                    draft.groups.length - 1,
-                    0,
-                    { type: 'pairings', preferences: [] }
-                  );
-                })
-              }
-            >
-              <Plus className="h-4 w-4 mr-1" /> Group
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBid(cloneBid(EMPTY_BID));
-                setSimulation(null);
-                setExported(null);
-                setOptimizerRationale([]);
-              }}
-            >
-              Clear draft
-            </Button>
-          </div>
-        </div>
-
-        {userId && bidProfile && (
-          <Card className="border-dashed">
-            <CardHeader className="py-3">
-              <CardTitle className="flex items-center justify-between text-sm font-medium">
-                <span>Preference profile</span>
-                <Badge variant="outline">
-                  {bidProfile.source === 'none'
-                    ? 'not set'
-                    : `${bidProfile.source}${bidProfile.learnedFromPeriods ? ` · ${bidProfile.learnedFromPeriods} periods` : ''}`}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {bidProfile.source !== 'none' && bidProfile.weights && (
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  <Badge variant="secondary">
-                    {bidProfile.weights.creditLeaning <= -0.33
-                      ? 'Quality-of-life bidder'
-                      : bidProfile.weights.creditLeaning >= 0.33
-                        ? 'Credit maximizer'
-                        : 'Balanced credit/QoL'}
-                  </Badge>
-                  {(bidProfile.weights.checkInStationAvoids ?? []).map(
-                    (s: string) => (
-                      <Badge key={s} variant="secondary">
-                        avoids {s} check-in
-                      </Badge>
-                    )
-                  )}
-                  {bidProfile.weights.avoidsCarryOut && (
-                    <Badge variant="secondary">avoids carry-out</Badge>
-                  )}
-                  {bidProfile.weights.avoidsRedeyes && (
-                    <Badge variant="secondary">avoids redeyes</Badge>
-                  )}
-                  {(bidProfile.weights.preferOffDOWs ?? []).length > 0 && (
-                    <Badge variant="secondary">
-                      off {(bidProfile.weights.preferOffDOWs as string[])
-                        .map(d => d.slice(0, 3))
-                        .join('/')}
-                    </Badge>
-                  )}
-                  {bidProfile.weights.preferredPattern && (
-                    <Badge variant="secondary">
-                      pattern {bidProfile.weights.preferredPattern.daysOnMin}-
-                      {bidProfile.weights.preferredPattern.daysOnMax} on /{' '}
-                      {bidProfile.weights.preferredPattern.daysOffMin}+ off
-                    </Badge>
-                  )}
-                  {(bidProfile.weights.preferredTripLengths ?? []).length >
-                    0 && (
-                    <Badge variant="secondary">
-                      trips{' '}
-                      {(bidProfile.weights.preferredTripLengths as number[]).join(
-                        '>'
-                      )}
-                      d
-                    </Badge>
-                  )}
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">
-                    Employee number (learn from your own bid history)
-                  </Label>
-                  <Input
-                    placeholder="e.g. 050000600"
-                    value={learnEmployeeNumber}
-                    onChange={e => setLearnEmployeeNumber(e.target.value)}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={
-                    !learnEmployeeNumber.trim() ||
-                    learnProfileMutation.isPending
-                  }
-                  onClick={() => learnProfileMutation.mutate()}
-                >
-                  {learnProfileMutation.isPending
-                    ? 'Learning…'
-                    : bidProfile.source === 'none'
-                      ? 'Learn profile'
-                      : 'Re-learn'}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Your profile is learned only from your own Reasons history
-                and drives Auto-draft. Nothing is preset.
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        {/* Builder column */}
+        <div className="min-w-0 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Your bid</h2>
+              <p className="text-sm text-muted-foreground" role="status">
+                {draftSaved
+                  ? 'Saved on this device'
+                  : 'Not saved — browser storage is unavailable'}
               </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {optimizerRationale.length > 0 && (
-          <Card className="border-dashed">
-            <CardHeader className="py-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                <Sparkles className="h-4 w-4" /> Why this draft
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
-                {optimizerRationale.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
-
-        {templatesVisible && (
-          <Card ref={templatesCardRef} className="border-dashed">
-            <CardHeader className="py-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                Start from a strategy
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 sm:grid-cols-3">
-              {BID_TEMPLATES.map(template => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => applyTemplate(template)}
-                  className="rounded-lg border p-3 text-left transition-colors hover:border-primary hover:bg-accent"
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => optimizeMutation.mutate()}
+                disabled={optimizeMutation.isPending}
+                title="Generate a draft from your preference profile, hold history, and this month's pairings"
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                {optimizeMutation.isPending ? 'Optimizing…' : 'Auto-draft'}
+              </Button>
+              <Select
+                value={optimizeDepth}
+                onValueChange={value =>
+                  setOptimizeDepth(value as 'auto' | 'compact' | 'deep')
+                }
+              >
+                <SelectTrigger
+                  className="h-9 w-[7.5rem] text-sm"
+                  title="Cascade depth: Auto matches your completion odds; Deep builds the long relaxation ladder a junior pilot needs"
+                  data-testid="select-optimize-depth"
                 >
-                  <span className="block text-sm font-medium">
-                    {template.label}
-                  </span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    {template.description}
-                  </span>
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Depth: Auto</SelectItem>
+                  <SelectItem value="compact">Depth: Compact</SelectItem>
+                  <SelectItem value="deep">Depth: Deep</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTemplatesClick}
+                title="Start from a strategy template"
+              >
+                <Sparkles className="h-4 w-4 mr-1" /> Templates
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  updateBid(draft => {
+                    draft.groups.splice(draft.groups.length - 1, 0, {
+                      type: 'pairings',
+                      preferences: [],
+                    });
+                  })
+                }
+              >
+                <Plus className="h-4 w-4 mr-1" /> Group
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmClear(true)}
+              >
+                Clear draft
+              </Button>
+            </div>
+          </div>
 
-        {bid.groups.map((group: BidGroup, groupIndex: number) => (
-          <Card key={groupIndex}>
-            <CardHeader className="py-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
-                  Group {groupIndex + 1}:{' '}
-                  {group.type === 'reserve' ? 'Reserve' : 'Pairings'}
+          {userId && bidProfile && (
+            <details className="rounded-lg border bg-card">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+                Your preference profile{' '}
+                <span className="ml-2 font-normal text-muted-foreground">
+                  Review or update
+                </span>
+              </summary>
+              <Card className="border-0 shadow-none">
+                <CardHeader className="py-3">
+                  <CardTitle className="flex items-center justify-between text-sm font-medium">
+                    <span>Preference profile</span>
+                    <Badge variant="outline">
+                      {bidProfile.source === 'none'
+                        ? 'not set'
+                        : `${bidProfile.source}${bidProfile.learnedFromPeriods ? ` · ${bidProfile.learnedFromPeriods} periods` : ''}`}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-2">
+                  {bidProfile.source !== 'none' && bidProfile.weights && (
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <Badge variant="secondary">
+                        {bidProfile.weights.creditLeaning <= -0.33
+                          ? 'Quality-of-life bidder'
+                          : bidProfile.weights.creditLeaning >= 0.33
+                            ? 'Credit maximizer'
+                            : 'Balanced credit/QoL'}
+                      </Badge>
+                      {(bidProfile.weights.checkInStationAvoids ?? []).map(
+                        (s: string) => (
+                          <Badge key={s} variant="secondary">
+                            avoids {s} check-in
+                          </Badge>
+                        )
+                      )}
+                      {bidProfile.weights.avoidsCarryOut && (
+                        <Badge variant="secondary">avoids carry-out</Badge>
+                      )}
+                      {bidProfile.weights.avoidsRedeyes && (
+                        <Badge variant="secondary">avoids redeyes</Badge>
+                      )}
+                      {(bidProfile.weights.preferOffDOWs ?? []).length > 0 && (
+                        <Badge variant="secondary">
+                          off{' '}
+                          {(bidProfile.weights.preferOffDOWs as string[])
+                            .map(d => d.slice(0, 3))
+                            .join('/')}
+                        </Badge>
+                      )}
+                      {bidProfile.weights.preferredPattern && (
+                        <Badge variant="secondary">
+                          pattern{' '}
+                          {bidProfile.weights.preferredPattern.daysOnMin}-
+                          {bidProfile.weights.preferredPattern.daysOnMax} on /{' '}
+                          {bidProfile.weights.preferredPattern.daysOffMin}+ off
+                        </Badge>
+                      )}
+                      {(bidProfile.weights.preferredTripLengths ?? []).length >
+                        0 && (
+                        <Badge variant="secondary">
+                          trips{' '}
+                          {(
+                            bidProfile.weights.preferredTripLengths as number[]
+                          ).join('>')}
+                          d
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs">
+                        Employee number (learn from your own bid history)
+                      </Label>
+                      <Input
+                        placeholder="e.g. 050000600"
+                        value={learnEmployeeNumber}
+                        onChange={e => setLearnEmployeeNumber(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        !learnEmployeeNumber.trim() ||
+                        learnProfileMutation.isPending
+                      }
+                      onClick={() => learnProfileMutation.mutate()}
+                    >
+                      {learnProfileMutation.isPending
+                        ? 'Learning…'
+                        : bidProfile.source === 'none'
+                          ? 'Learn profile'
+                          : 'Re-learn'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Your profile is learned only from your own Reasons history
+                    and drives Auto-draft. Nothing is preset.
+                  </p>
+                </CardContent>
+              </Card>
+            </details>
+          )}
+
+          {optimizerRationale.length > 0 && (
+            <Card className="border-dashed">
+              <CardHeader className="py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4" /> Why this draft
                 </CardTitle>
-                {bid.groups.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      updateBid(draft => {
-                        draft.groups.splice(groupIndex, 1);
-                      })
-                    }
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
+                  {optimizerRationale.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {templatesVisible && (
+            <Card ref={templatesCardRef} className="border-dashed">
+              <CardHeader className="py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  Start from a strategy
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2 sm:grid-cols-3">
+                {BID_TEMPLATES.map(template => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => applyTemplate(template)}
+                    className="rounded-lg border p-3 text-left transition-colors hover:border-primary hover:bg-accent"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {group.type === 'reserve' ? (
-                <p className="text-sm text-muted-foreground">
-                  Reserve fallback group. Reserve line construction is not
-                  simulated; keeping this group is the handbook's rule of
-                  thumb — it does not hurt regular-line chances.
-                </p>
-              ) : (
-                <>
-                  {group.preferences.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      No preferences yet. PBS would fill this group with the
-                      system-generated Award Pairings.
-                    </p>
-                  )}
-                  {group.preferences.map(
-                    (pref: BidPreference, prefIndex: number) => {
-                      const style = PREFERENCE_STYLE[pref.type];
-                      const PrefIcon = style.icon;
-                      return (
-                      <div
-                        key={prefIndex}
-                        className={`flex items-center gap-2 rounded border border-l-4 ${style.accent} px-2 py-1.5 text-sm`}
+                    <span className="block text-sm font-medium">
+                      {template.label}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {template.description}
+                    </span>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {bid.groups.map((group: BidGroup, groupIndex: number) => (
+            <details
+              key={groupIndex}
+              open={groupIndex === 0 || addingToGroup === groupIndex}
+              className="rounded-xl border bg-card"
+              id={`bid-group-${groupIndex}`}
+            >
+              <summary className="cursor-pointer px-4 py-3 font-medium text-sm">
+                Group {groupIndex + 1} ·{' '}
+                {group.type === 'reserve' ? 'Reserve fallback' : 'Pairings'}{' '}
+                <span className="ml-2 text-muted-foreground font-normal">
+                  {group.preferences.length} preferences
+                </span>
+              </summary>
+              <Card className="border-0 shadow-none">
+                <CardHeader className="py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">
+                      Group {groupIndex + 1}:{' '}
+                      {group.type === 'reserve' ? 'Reserve' : 'Pairings'}
+                    </CardTitle>
+                    {bid.groups.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          updateBid(draft => {
+                            draft.groups.splice(groupIndex, 1);
+                          })
+                        }
                       >
-                        <PrefIcon
-                          className={`h-4 w-4 shrink-0 ${style.chip}`}
-                        />
-                        <span className="flex-1">
-                          <span className="mr-1.5 text-xs text-muted-foreground">
-                            {prefIndex + 1}.
-                          </span>
-                          {summarizePreference(pref)}
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">
+                          Remove group {groupIndex + 1}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          disabled={prefIndex === 0}
-                          onClick={() =>
-                            movePreference(groupIndex, prefIndex, -1)
-                          }
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          disabled={prefIndex === group.preferences.length - 1}
-                          onClick={() =>
-                            movePreference(groupIndex, prefIndex, 1)
-                          }
-                        >
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() =>
-                            updateBid(draft => {
-                              draft.groups[groupIndex].preferences.splice(
-                                prefIndex,
-                                1
-                              );
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                      );
-                    }
-                  )}
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {group.type === 'reserve' ? (
+                    <p className="text-sm text-muted-foreground">
+                      Reserve fallback group. Reserve line construction is not
+                      simulated; keeping this group is the handbook's rule of
+                      thumb — it does not hurt regular-line chances.
+                    </p>
+                  ) : (
+                    <>
+                      {group.preferences.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No preferences yet. PBS would fill this group with the
+                          system-generated Award Pairings.
+                        </p>
+                      )}
+                      {group.preferences.map(
+                        (pref: BidPreference, prefIndex: number) => {
+                          const style = PREFERENCE_STYLE[pref.type];
+                          const PrefIcon = style.icon;
+                          return (
+                            <div
+                              key={prefIndex}
+                              className={`flex items-center gap-2 rounded border border-l-4 ${style.accent} px-2 py-1.5 text-sm`}
+                            >
+                              <PrefIcon
+                                className={`h-4 w-4 shrink-0 ${style.chip}`}
+                              />
+                              <span className="min-w-0 flex-1 break-words">
+                                <span className="mr-1.5 text-xs text-muted-foreground">
+                                  {prefIndex + 1}.
+                                </span>
+                                {summarizePreference(pref)}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 shrink-0 p-0"
+                                disabled={prefIndex === 0}
+                                onClick={() =>
+                                  movePreference(groupIndex, prefIndex, -1)
+                                }
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                                <span className="sr-only">
+                                  Move preference {prefIndex + 1} up in group{' '}
+                                  {groupIndex + 1}
+                                </span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 shrink-0 p-0"
+                                disabled={
+                                  prefIndex === group.preferences.length - 1
+                                }
+                                onClick={() =>
+                                  movePreference(groupIndex, prefIndex, 1)
+                                }
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                                <span className="sr-only">
+                                  Move preference {prefIndex + 1} down in group{' '}
+                                  {groupIndex + 1}
+                                </span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 shrink-0 p-0"
+                                onClick={() =>
+                                  updateBid(draft => {
+                                    draft.groups[groupIndex].preferences.splice(
+                                      prefIndex,
+                                      1
+                                    );
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">
+                                  Remove preference {prefIndex + 1} from group{' '}
+                                  {groupIndex + 1}
+                                </span>
+                              </Button>
+                            </div>
+                          );
+                        }
+                      )}
 
-                  {addingToGroup === groupIndex ? (
-                    <div className="space-y-3 rounded border p-3">
-                      <div className="space-y-1.5">
-                        <Label>Preference type</Label>
-                        <Select
-                          value={form.kind}
-                          onValueChange={value =>
-                            setForm(prev => ({
-                              ...prev,
-                              kind: value as PreferenceKind,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(
-                              Object.keys(PREFERENCE_LABELS) as PreferenceKind[]
-                            ).map(kind => (
-                              <SelectItem key={kind} value={kind}>
-                                {PREFERENCE_LABELS[kind]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {(form.kind === 'award' || form.kind === 'avoid') && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Trip shape
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Days min</Label>
-                            <Input
-                              type="number"
-                              value={form.pairingDaysMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  pairingDaysMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Days max</Label>
-                            <Input
-                              type="number"
-                              value={form.pairingDaysMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  pairingDaysMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs"># Layovers min</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.layoverCountMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  layoverCountMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs"># Layovers max</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.layoverCountMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  layoverCountMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Deadheads min</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.deadheadsMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  deadheadsMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Deadheads max</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.deadheadsMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  deadheadsMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Carry-out days min
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.carryOutMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  carryOutMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Carry-out days max
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={form.carryOutMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  carryOutMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Redeye</Label>
+                      {addingToGroup === groupIndex ? (
+                        <div className="space-y-3 rounded border p-3">
+                          <div className="space-y-1.5">
+                            <Label>Preference type</Label>
                             <Select
-                              value={form.redeye || 'any'}
+                              value={form.kind}
                               onValueChange={value =>
-                                setForm(p => ({
-                                  ...p,
-                                  redeye: (value === 'any' ? '' : value) as
-                                    | ''
-                                    | 'has'
-                                    | 'none',
+                                setForm(prev => ({
+                                  ...prev,
+                                  kind: value as PreferenceKind,
                                 }))
                               }
                             >
@@ -1297,741 +1231,965 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="any">
-                                  Either (no condition)
-                                </SelectItem>
-                                <SelectItem value="has">
-                                  Has a redeye leg
-                                </SelectItem>
-                                <SelectItem value="none">No redeyes</SelectItem>
+                                {(
+                                  Object.keys(
+                                    PREFERENCE_LABELS
+                                  ) as PreferenceKind[]
+                                ).map(kind => (
+                                  <SelectItem key={kind} value={kind}>
+                                    {PREFERENCE_LABELS[kind]}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Credit & block
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Credit min (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.creditMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  creditMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Credit max (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.creditMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  creditMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Block min (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.blockMin}
-                              onChange={e =>
-                                setForm(p => ({ ...p, blockMin: e.target.value }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Block max (hrs)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.blockMax}
-                              onChange={e =>
-                                setForm(p => ({ ...p, blockMax: e.target.value }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Avg daily credit min
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.25"
-                              value={form.averageDailyCreditMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  averageDailyCreditMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Avg daily credit max
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.25"
-                              value={form.averageDailyCreditMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  averageDailyCreditMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Avg daily block min
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.25"
-                              value={form.averageDailyBlockMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  averageDailyBlockMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Avg daily block max
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.25"
-                              value={form.averageDailyBlockMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  averageDailyBlockMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Layovers
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Layover cities (comma-separated)
-                            </Label>
-                            <Input
-                              placeholder="BOS, MIA"
-                              value={form.layoverCities}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  layoverCities: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Exclude layover cities (comma-separated)
-                            </Label>
-                            <Input
-                              placeholder="ORD, DFW"
-                              value={form.excludeLayoverCities}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  excludeLayoverCities: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Total layover min (hrs)
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.totalLayoverHoursMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  totalLayoverHoursMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Total layover max (hrs)
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              value={form.totalLayoverHoursMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  totalLayoverHoursMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Check-in & specifics
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Check-in from (0-23)
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="23"
-                              value={form.checkInHourMin}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  checkInHourMin: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              Check-in to (0-23)
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="23"
-                              value={form.checkInHourMax}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  checkInHourMax: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Check-in stations (comma-separated)
-                            </Label>
-                            <Input
-                              placeholder="JFK, LGA"
-                              value={form.checkInStations}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  checkInStations: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">
-                              Specific pairing numbers (optional)
-                            </Label>
-                            <Input
-                              placeholder="7601, 7645"
-                              value={form.pairingNumbers}
-                              onChange={e =>
-                                setForm(p => ({
-                                  ...p,
-                                  pairingNumbers: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                          {form.kind === 'award' && (
-                            <div className="space-y-1">
-                              <Label className="text-xs">
-                                Limit (max awards)
-                              </Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={form.limit}
-                                onChange={e =>
-                                  setForm(p => ({
-                                    ...p,
-                                    limit: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                          )}
-                          {form.kind === 'avoid' && (
-                            <div className="flex items-center gap-2 pt-5">
-                              <Switch
-                                checked={form.elseStartNext}
-                                onCheckedChange={checked =>
-                                  setForm(p => ({
-                                    ...p,
-                                    elseStartNext: checked,
-                                  }))
-                                }
-                              />
-                              <Label className="text-xs">
-                                Else Start Next
-                              </Label>
-                            </div>
-                          )}
-                        </div>
-                      )}
 
-                      {form.kind === 'preferOff' && (
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">
-                            Pick dates in true priority order awareness: list
-                            the most important first — in Denial Mode, PBS
-                            drops Prefer Off dates from the END of the list.
-                          </p>
-                          <Calendar
-                            mode="multiple"
-                            selected={form.preferOffDates}
-                            onSelect={dates =>
-                              setForm(p => ({
-                                ...p,
-                                preferOffDates: dates ?? [],
-                              }))
-                            }
-                          />
-                          {/* Recurring weekdays are a separate NAVBLUE form
-                              of Prefer Off; either or both may be set. */}
-                          <div className="space-y-1.5 pt-1">
-                            <Label className="text-xs">
-                              Every week (optional)
-                            </Label>
-                            <div className="flex flex-wrap gap-1">
-                              {WEEKDAYS.map(day => {
-                                const on = form.preferOffDOWs.includes(
-                                  day.value
-                                );
-                                return (
-                                  <Button
-                                    key={day.value}
-                                    type="button"
-                                    size="sm"
-                                    variant={on ? 'default' : 'outline'}
-                                    className="h-7 px-2 text-xs"
-                                    aria-pressed={on}
-                                    data-testid={`preferoff-dow-${day.short.toLowerCase()}`}
-                                    onClick={() =>
+                          {(form.kind === 'award' || form.kind === 'avoid') && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Trip shape
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Days min</Label>
+                                <Input
+                                  type="number"
+                                  value={form.pairingDaysMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      pairingDaysMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Days max</Label>
+                                <Input
+                                  type="number"
+                                  value={form.pairingDaysMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      pairingDaysMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  # Layovers min
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.layoverCountMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      layoverCountMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  # Layovers max
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.layoverCountMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      layoverCountMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Deadheads min</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.deadheadsMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      deadheadsMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Deadheads max</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.deadheadsMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      deadheadsMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Carry-out days min
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.carryOutMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      carryOutMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Carry-out days max
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={form.carryOutMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      carryOutMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Redeye</Label>
+                                <Select
+                                  value={form.redeye || 'any'}
+                                  onValueChange={value =>
+                                    setForm(p => ({
+                                      ...p,
+                                      redeye: (value === 'any' ? '' : value) as
+                                        | ''
+                                        | 'has'
+                                        | 'none',
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="any">
+                                      Either (no condition)
+                                    </SelectItem>
+                                    <SelectItem value="has">
+                                      Has a redeye leg
+                                    </SelectItem>
+                                    <SelectItem value="none">
+                                      No redeyes
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Credit & block
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Credit min (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.creditMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      creditMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Credit max (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.creditMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      creditMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Block min (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.blockMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      blockMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Block max (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.blockMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      blockMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Avg daily credit min
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  value={form.averageDailyCreditMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      averageDailyCreditMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Avg daily credit max
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  value={form.averageDailyCreditMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      averageDailyCreditMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Avg daily block min
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  value={form.averageDailyBlockMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      averageDailyBlockMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Avg daily block max
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  value={form.averageDailyBlockMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      averageDailyBlockMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Layovers
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <Label className="text-xs">
+                                  Layover cities (comma-separated)
+                                </Label>
+                                <Input
+                                  placeholder="BOS, MIA"
+                                  value={form.layoverCities}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      layoverCities: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <Label className="text-xs">
+                                  Exclude layover cities (comma-separated)
+                                </Label>
+                                <Input
+                                  placeholder="ORD, DFW"
+                                  value={form.excludeLayoverCities}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      excludeLayoverCities: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Total layover min (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.totalLayoverHoursMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      totalLayoverHoursMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Total layover max (hrs)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.5"
+                                  value={form.totalLayoverHoursMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      totalLayoverHoursMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="col-span-2 mt-1 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Check-in & specifics
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Check-in from (0-23)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="23"
+                                  value={form.checkInHourMin}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      checkInHourMin: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Check-in to (0-23)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="23"
+                                  value={form.checkInHourMax}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      checkInHourMax: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <Label className="text-xs">
+                                  Check-in stations (comma-separated)
+                                </Label>
+                                <Input
+                                  placeholder="JFK, LGA"
+                                  value={form.checkInStations}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      checkInStations: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <Label className="text-xs">
+                                  Specific pairing numbers (optional)
+                                </Label>
+                                <Input
+                                  placeholder="7601, 7645"
+                                  value={form.pairingNumbers}
+                                  onChange={e =>
+                                    setForm(p => ({
+                                      ...p,
+                                      pairingNumbers: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              {form.kind === 'award' && (
+                                <div className="space-y-1">
+                                  <Label className="text-xs">
+                                    Limit (max awards)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={form.limit}
+                                    onChange={e =>
                                       setForm(p => ({
                                         ...p,
-                                        preferOffDOWs: on
-                                          ? p.preferOffDOWs.filter(
-                                              d => d !== day.value
-                                            )
-                                          : [...p.preferOffDOWs, day.value],
+                                        limit: e.target.value,
                                       }))
                                     }
-                                  >
-                                    {day.short}
-                                  </Button>
-                                );
-                              })}
+                                  />
+                                </div>
+                              )}
+                              {form.kind === 'avoid' && (
+                                <div className="flex items-center gap-2 pt-5">
+                                  <Switch
+                                    checked={form.elseStartNext}
+                                    onCheckedChange={checked =>
+                                      setForm(p => ({
+                                        ...p,
+                                        elseStartNext: checked,
+                                      }))
+                                    }
+                                  />
+                                  <Label className="text-xs">
+                                    Else Start Next
+                                  </Label>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              Applies to every one of these weekdays in the
-                              bid period — use instead of, or alongside,
-                              specific dates.
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={form.elseStartNext}
-                              onCheckedChange={checked =>
-                                setForm(p => ({ ...p, elseStartNext: checked }))
-                              }
-                            />
-                            <Label className="text-xs">Else Start Next</Label>
-                          </div>
-                        </div>
-                      )}
+                          )}
 
-                      {form.kind === 'setConditionCredit' && (
-                        <div className="space-y-2">
-                          <Select
-                            value={form.creditWindow}
-                            onValueChange={value =>
-                              setForm(p => ({
-                                ...p,
-                                creditWindow: value as 'min' | 'max' | 'mid',
-                              }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="max">
-                                Maximum Credit (ALV to top of window)
-                              </SelectItem>
-                              <SelectItem value="min">
-                                Minimum Credit (bottom of window to ALV)
-                              </SelectItem>
-                              <SelectItem value="mid">
-                                Mid Credit (ALV ±5, cannot be capped)
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Min/Max Credit bidders can be capped by seniority;
-                            without an exit, PBS ignores a capped condition.
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={form.elseStartNext}
-                              onCheckedChange={checked =>
-                                setForm(p => ({ ...p, elseStartNext: checked }))
-                              }
-                            />
-                            <Label className="text-xs">Else Start Next</Label>
-                          </div>
-                        </div>
-                      )}
-
-                      {form.kind === 'setConditionPattern' && (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Days on (min)</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={form.patternDaysOnMin}
-                                onChange={e =>
+                          {form.kind === 'preferOff' && (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                Pick dates in true priority order awareness:
+                                list the most important first — in Denial Mode,
+                                PBS drops Prefer Off dates from the END of the
+                                list.
+                              </p>
+                              <Calendar
+                                mode="multiple"
+                                selected={form.preferOffDates}
+                                onSelect={dates =>
                                   setForm(p => ({
                                     ...p,
-                                    patternDaysOnMin: e.target.value,
+                                    preferOffDates: dates ?? [],
                                   }))
                                 }
                               />
+                              {/* Recurring weekdays are a separate NAVBLUE form
+                              of Prefer Off; either or both may be set. */}
+                              <div className="space-y-1.5 pt-1">
+                                <Label className="text-xs">
+                                  Every week (optional)
+                                </Label>
+                                <div className="flex flex-wrap gap-1">
+                                  {WEEKDAYS.map(day => {
+                                    const on = form.preferOffDOWs.includes(
+                                      day.value
+                                    );
+                                    return (
+                                      <Button
+                                        key={day.value}
+                                        type="button"
+                                        size="sm"
+                                        variant={on ? 'default' : 'outline'}
+                                        className="h-7 px-2 text-xs"
+                                        aria-pressed={on}
+                                        data-testid={`preferoff-dow-${day.short.toLowerCase()}`}
+                                        onClick={() =>
+                                          setForm(p => ({
+                                            ...p,
+                                            preferOffDOWs: on
+                                              ? p.preferOffDOWs.filter(
+                                                  d => d !== day.value
+                                                )
+                                              : [...p.preferOffDOWs, day.value],
+                                          }))
+                                        }
+                                      >
+                                        {day.short}
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Applies to every one of these weekdays in the
+                                  bid period — use instead of, or alongside,
+                                  specific dates.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={form.elseStartNext}
+                                  onCheckedChange={checked =>
+                                    setForm(p => ({
+                                      ...p,
+                                      elseStartNext: checked,
+                                    }))
+                                  }
+                                />
+                                <Label className="text-xs">
+                                  Else Start Next
+                                </Label>
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Days on (max)</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={form.patternDaysOnMax}
-                                onChange={e =>
+                          )}
+
+                          {form.kind === 'setConditionCredit' && (
+                            <div className="space-y-2">
+                              <Select
+                                value={form.creditWindow}
+                                onValueChange={value =>
                                   setForm(p => ({
                                     ...p,
-                                    patternDaysOnMax: e.target.value,
+                                    creditWindow: value as
+                                      | 'min'
+                                      | 'max'
+                                      | 'mid',
                                   }))
                                 }
-                              />
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="max">
+                                    Maximum Credit (ALV to top of window)
+                                  </SelectItem>
+                                  <SelectItem value="min">
+                                    Minimum Credit (bottom of window to ALV)
+                                  </SelectItem>
+                                  <SelectItem value="mid">
+                                    Mid Credit (ALV ±5, cannot be capped)
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                Min/Max Credit bidders can be capped by
+                                seniority; without an exit, PBS ignores a capped
+                                condition.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={form.elseStartNext}
+                                  onCheckedChange={checked =>
+                                    setForm(p => ({
+                                      ...p,
+                                      elseStartNext: checked,
+                                    }))
+                                  }
+                                />
+                                <Label className="text-xs">
+                                  Else Start Next
+                                </Label>
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Days off (min)</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={form.patternDaysOffMin}
-                                onChange={e =>
-                                  setForm(p => ({
-                                    ...p,
-                                    patternDaysOffMin: e.target.value,
-                                  }))
-                                }
-                              />
+                          )}
+
+                          {form.kind === 'setConditionPattern' && (
+                            <div className="space-y-2">
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">
+                                    Days on (min)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={form.patternDaysOnMin}
+                                    onChange={e =>
+                                      setForm(p => ({
+                                        ...p,
+                                        patternDaysOnMin: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">
+                                    Days on (max)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={form.patternDaysOnMax}
+                                    onChange={e =>
+                                      setForm(p => ({
+                                        ...p,
+                                        patternDaysOnMax: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">
+                                    Days off (min)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={form.patternDaysOffMin}
+                                    onChange={e =>
+                                      setForm(p => ({
+                                        ...p,
+                                        patternDaysOffMin: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Shapes the whole line: work stretches of min–max
+                                days separated by at least the given days off.
+                                Exported exactly; not yet scored by Simulate.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={form.elseStartNext}
+                                  onCheckedChange={checked =>
+                                    setForm(p => ({
+                                      ...p,
+                                      elseStartNext: checked,
+                                    }))
+                                  }
+                                />
+                                <Label className="text-xs">
+                                  Else Start Next
+                                </Label>
+                              </div>
                             </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Shapes the whole line: work stretches of min–max
-                            days separated by at least the given days off.
-                            Exported exactly; not yet scored by Simulate.
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={form.elseStartNext}
-                              onCheckedChange={checked =>
-                                setForm(p => ({ ...p, elseStartNext: checked }))
-                              }
-                            />
-                            <Label className="text-xs">Else Start Next</Label>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => addPreference(groupIndex)}
+                            >
+                              Add
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setAddingToGroup(null)}
+                            >
+                              Cancel
+                            </Button>
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex gap-2">
+                      ) : (
                         <Button
-                          size="sm"
-                          onClick={() => addPreference(groupIndex)}
-                        >
-                          Add
-                        </Button>
-                        <Button
-                          size="sm"
                           variant="outline"
-                          onClick={() => setAddingToGroup(null)}
+                          size="sm"
+                          onClick={() => {
+                            setAddingToGroup(groupIndex);
+                            setForm({ ...EMPTY_FORM });
+                          }}
                         >
-                          Cancel
+                          <Plus className="h-4 w-4 mr-1" /> Add preference
                         </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAddingToGroup(groupIndex);
-                        setForm({ ...EMPTY_FORM });
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> Add preference
-                    </Button>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            </details>
+          ))}
+        </div>
 
-      {/* Results column — sticky on wide screens so simulation results stay
+        {/* Results column — sticky on wide screens so simulation results stay
           visible while editing a long draft on the left. The height cap and
           overflow are what make sticky usable: without them the panel pins
           its top and anything past the fold (later groups' outcomes, the
           caveats) can never be scrolled to, because only the left column
           moves. overscroll-contain stops the tab panel from lurching when
           this pane reaches its end. */}
-      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={() => simulateMutation.mutate()}
-            disabled={simulateMutation.isPending || preferenceCount === 0}
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100svh-9rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <section
+            className="rounded-xl border bg-card p-4"
+            aria-label="Bid summary"
           >
-            <Play className="h-4 w-4 mr-1" />
-            {simulateMutation.isPending ? 'Simulating…' : 'Simulate'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => exportMutation.mutate()}
-            disabled={exportMutation.isPending || preferenceCount === 0}
-          >
-            <ClipboardCopy className="h-4 w-4 mr-1" />
-            {exportMutation.isPending ? 'Exporting…' : 'Export NAVBLUE text'}
-          </Button>
-        </div>
-
-        {!simulation && !exported && (
-          <Card className="border-dashed">
-            <CardContent className="flex items-start gap-3 py-6 text-sm text-muted-foreground">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <h2 className="font-semibold">Review & simulate</h2>
+            <dl className="my-4 grid grid-cols-2 gap-3">
               <div>
-                <p className="font-medium text-foreground">
-                  Test before you bid.
-                </p>
-                <p className="mt-1">
-                  Simulate runs your draft against every pairing in this
-                  package and predicts what you could hold at your seniority.
-                  Export produces the NAVBLUE text to enter into PBS — with
-                  warnings for structural mistakes the guides call out.
-                </p>
+                <dt className="text-sm text-muted-foreground">Groups</dt>
+                <dd className="text-2xl font-semibold">{bid.groups.length}</dd>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <div>
+                <dt className="text-sm text-muted-foreground">Preferences</dt>
+                <dd className="text-2xl font-semibold">{preferenceCount}</dd>
+              </div>
+            </dl>
+            <p className="text-sm text-muted-foreground">
+              {simulation
+                ? 'Simulation is ready. Review the results below before exporting.'
+                : preferenceCount
+                  ? 'Ready to simulate. Results refresh after each edit and new simulation.'
+                  : 'Add preferences or choose a template to start your bid.'}
+            </p>
+          </section>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => simulateMutation.mutate()}
+              disabled={simulateMutation.isPending || preferenceCount === 0}
+            >
+              <Play className="h-4 w-4 mr-1" />
+              {simulateMutation.isPending ? 'Simulating…' : 'Simulate'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isPending || preferenceCount === 0}
+            >
+              <ClipboardCopy className="h-4 w-4 mr-1" />
+              {exportMutation.isPending ? 'Exporting…' : 'Prepare PBS export'}
+            </Button>
+          </div>
 
-        {simulation && (
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-medium">
-                Predicted line
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">
-                  Credit {formatHours(simulation.totalCredit)}
-                </Badge>
-                <Badge variant="secondary">
-                  Expected {formatHours(simulation.expectedCredit)}
-                </Badge>
-                <Badge variant="secondary">
-                  Window {formatHours(simulation.window.min)}–
-                  {formatHours(simulation.window.max)}
-                </Badge>
-                <Badge
-                  variant={simulation.lineComplete ? 'default' : 'destructive'}
-                >
-                  {simulation.lineComplete ? 'Line complete' : 'Incomplete'}
-                </Badge>
-                {/* Which group won matters: earlier groups may have set a
+          {!simulation && !exported && (
+            <Card className="border-dashed">
+              <CardContent className="flex items-start gap-3 py-6 text-sm text-muted-foreground">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium text-foreground">
+                    Check the fit before you export.
+                  </p>
+                  <p className="mt-1">
+                    Simulate runs your draft against every pairing in this
+                    package and predicts what you could hold at your seniority.
+                    Export produces the NAVBLUE text to enter into PBS — with
+                    warnings for structural mistakes the guides call out.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {simulation && (
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-medium">
+                  Predicted line
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">
+                    Credit {formatHours(simulation.totalCredit)}
+                  </Badge>
+                  <Badge variant="secondary">
+                    Expected {formatHours(simulation.expectedCredit)}
+                  </Badge>
+                  <Badge variant="secondary">
+                    Window {formatHours(simulation.window.min)}–
+                    {formatHours(simulation.window.max)}
+                  </Badge>
+                  <Badge
+                    variant={
+                      simulation.lineComplete ? 'default' : 'destructive'
+                    }
+                  >
+                    {simulation.lineComplete ? 'Line complete' : 'Incomplete'}
+                  </Badge>
+                  {/* Which group won matters: earlier groups may have set a
                     different credit window or failed their Pattern, and
                     their settings do not apply to this line. */}
-                {simulation.awards.length > 0 &&
-                  simulation.awards[0].groupIndex > 0 && (
-                    <Badge variant="outline">
-                      From group {simulation.awards[0].groupIndex + 1} — earlier
-                      group(s) failed
-                    </Badge>
-                  )}
-              </div>
+                  {simulation.awards.length > 0 &&
+                    simulation.awards[0].groupIndex > 0 && (
+                      <Badge variant="outline">
+                        From group {simulation.awards[0].groupIndex + 1} —
+                        earlier group(s) failed
+                      </Badge>
+                    )}
+                </div>
 
-              {simulation.awards.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Pairing</TableHead>
-                      <TableHead>Days</TableHead>
-                      <TableHead>Credit</TableHead>
-                      <TableHead>Hold</TableHead>
-                      <TableHead>By pref</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {simulation.awards.map(award => (
-                      <TableRow key={award.pairingNumber}>
-                        <TableCell>
-                          <PairingDisplay
-                            pairing={{ pairingNumber: award.pairingNumber }}
-                            displayText={award.pairingNumber}
-                          />
-                        </TableCell>
-                        <TableCell>{award.pairingDays}d</TableCell>
-                        <TableCell>{formatHours(award.creditHours)}</TableCell>
-                        <TableCell>
-                          {award.holdProbability !== null
-                            ? `${award.holdProbability}%`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>#{award.awardedByPreference}</TableCell>
+                {simulation.awards.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pairing</TableHead>
+                        <TableHead>Days</TableHead>
+                        <TableHead>Credit</TableHead>
+                        <TableHead>Hold</TableHead>
+                        <TableHead>By pref</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No pairings predicted from your Award preferences.
-                </p>
-              )}
+                    </TableHeader>
+                    <TableBody>
+                      {simulation.awards.map(award => (
+                        <TableRow key={award.pairingNumber}>
+                          <TableCell>
+                            <PairingDisplay
+                              pairing={{ pairingNumber: award.pairingNumber }}
+                              displayText={award.pairingNumber}
+                            />
+                          </TableCell>
+                          <TableCell>{award.pairingDays}d</TableCell>
+                          <TableCell>
+                            {formatHours(award.creditHours)}
+                          </TableCell>
+                          <TableCell>
+                            {award.holdProbability !== null
+                              ? `${award.holdProbability}%`
+                              : '—'}
+                          </TableCell>
+                          <TableCell>#{award.awardedByPreference}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No pairings predicted from your Award preferences.
+                  </p>
+                )}
 
-              {/* Every preference gets a disposition, the way the real
+                {/* Every preference gets a disposition, the way the real
                   Reasons Report reads: honored or denied with the reason,
                   in bid order (top-down, as PBS evaluates). */}
-              {simulation.groupResults.some(
-                g => (g.preferenceOutcomes ?? []).length > 0
-              ) && (
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium">Preference results</p>
-                  {(() => {
-                    // Which group actually built the line — settings shown
-                    // under a failed group (e.g. its credit window) do NOT
-                    // apply to the predicted line, so each group is headed
-                    // with its fate to keep those from reading as
-                    // contradictions.
-                    const winningGroup =
-                      simulation.awards[0]?.groupIndex ?? null;
-                    return simulation.groupResults.map(g => {
-                      const outcomes = g.preferenceOutcomes ?? [];
-                      if (outcomes.length === 0) {
-                        return null;
-                      }
-                      const won = g.groupIndex === winningGroup;
-                      // Only a group that actually carries a Set Condition
-                      // Pattern can fail one — otherwise an infeasible
-                      // placement means its awards could not be arranged on
-                      // the calendar at all.
-                      const hasPattern = (
-                        bid.groups[g.groupIndex]?.preferences ?? []
-                      ).some(p => p.type === 'setConditionPattern');
-                      const placementFailed =
-                        g.placement && !g.placement.feasible;
-                      return (
-                        <div key={g.groupIndex} className="space-y-1">
-                          <p className="flex items-baseline gap-1.5 pt-1 font-medium">
-                            <span>Group {g.groupIndex + 1}</span>
-                            {won ? (
-                              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                                ✓ built the predicted line
-                              </span>
-                            ) : winningGroup !== null &&
-                              g.groupIndex < winningGroup ? (
-                              <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                                {placementFailed
-                                  ? hasPattern
-                                    ? 'failed — Pattern could not be honored, moved to next group'
-                                    : 'failed — awards could not be built into a line, moved to next group'
-                                  : 'failed — credit did not reach the window minimum'}
-                              </span>
-                            ) : winningGroup !== null &&
-                              g.groupIndex > winningGroup ? (
-                              <span className="text-xs text-muted-foreground">
-                                not reached
-                              </span>
-                            ) : null}
-                          </p>
-                          {outcomes.map((o, i) => (
-                            <p
-                              key={`${g.groupIndex}-${i}`}
-                              className="flex items-baseline gap-1.5 pl-3 text-muted-foreground"
-                            >
-                              <span
-                                className={
-                                  o.status === 'honored'
-                                    ? 'shrink-0 font-medium text-emerald-600 dark:text-emerald-400'
-                                    : o.status === 'denied'
-                                      ? 'shrink-0 font-medium text-red-600 dark:text-red-400'
-                                      : 'shrink-0 font-medium text-amber-600 dark:text-amber-400'
-                                }
-                              >
-                                {o.status === 'honored'
-                                  ? 'Honored'
-                                  : o.status === 'denied'
-                                    ? 'Denied'
-                                    : 'Not scored'}
-                              </span>
-                              <span>
-                                — pref {o.preferenceIndex + 1}: {o.detail}
-                              </span>
+                {simulation.groupResults.some(
+                  g => (g.preferenceOutcomes ?? []).length > 0
+                ) && (
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium">Preference results</p>
+                    {(() => {
+                      // Which group actually built the line — settings shown
+                      // under a failed group (e.g. its credit window) do NOT
+                      // apply to the predicted line, so each group is headed
+                      // with its fate to keep those from reading as
+                      // contradictions.
+                      const winningGroup =
+                        simulation.awards[0]?.groupIndex ?? null;
+                      return simulation.groupResults.map(g => {
+                        const outcomes = g.preferenceOutcomes ?? [];
+                        if (outcomes.length === 0) {
+                          return null;
+                        }
+                        const won = g.groupIndex === winningGroup;
+                        // Only a group that actually carries a Set Condition
+                        // Pattern can fail one — otherwise an infeasible
+                        // placement means its awards could not be arranged on
+                        // the calendar at all.
+                        const hasPattern = (
+                          bid.groups[g.groupIndex]?.preferences ?? []
+                        ).some(p => p.type === 'setConditionPattern');
+                        const placementFailed =
+                          g.placement && !g.placement.feasible;
+                        return (
+                          <div key={g.groupIndex} className="space-y-1">
+                            <p className="flex items-baseline gap-1.5 pt-1 font-medium">
+                              <span>Group {g.groupIndex + 1}</span>
+                              {won ? (
+                                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                  ✓ built the predicted line
+                                </span>
+                              ) : winningGroup !== null &&
+                                g.groupIndex < winningGroup ? (
+                                <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                                  {placementFailed
+                                    ? hasPattern
+                                      ? 'failed — Pattern could not be honored, moved to next group'
+                                      : 'failed — awards could not be built into a line, moved to next group'
+                                    : 'failed — credit did not reach the window minimum'}
+                                </span>
+                              ) : winningGroup !== null &&
+                                g.groupIndex > winningGroup ? (
+                                <span className="text-xs text-muted-foreground">
+                                  not reached
+                                </span>
+                              ) : null}
                             </p>
-                          ))}
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              )}
+                            {outcomes.map((o, i) => (
+                              <p
+                                key={`${g.groupIndex}-${i}`}
+                                className="flex items-baseline gap-1.5 pl-3 text-muted-foreground"
+                              >
+                                <span
+                                  className={
+                                    o.status === 'honored'
+                                      ? 'shrink-0 font-medium text-emerald-600 dark:text-emerald-400'
+                                      : o.status === 'denied'
+                                        ? 'shrink-0 font-medium text-red-600 dark:text-red-400'
+                                        : 'shrink-0 font-medium text-amber-600 dark:text-amber-400'
+                                  }
+                                >
+                                  {o.status === 'honored'
+                                    ? 'Honored'
+                                    : o.status === 'denied'
+                                      ? 'Denied'
+                                      : 'Not scored'}
+                                </span>
+                                <span>
+                                  — pref {o.preferenceIndex + 1}: {o.detail}
+                                </span>
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
 
-              <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
-                <p className="flex items-center gap-1 text-sm font-medium text-amber-800 dark:text-amber-300">
-                  <AlertTriangle className="h-4 w-4" /> What this does NOT
-                  model
-                </p>
-                {simulation.caveats.map((caveat, i) => (
-                  <p
-                    key={i}
-                    className="text-xs text-amber-800 dark:text-amber-300"
-                  >
-                    • {caveat}
+                <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
+                  <p className="flex items-center gap-1 text-sm font-medium text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4" /> What this does NOT
+                    model
                   </p>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  {simulation.caveats.map((caveat, i) => (
+                    <p
+                      key={i}
+                      className="text-xs text-amber-800 dark:text-amber-300"
+                    >
+                      • {caveat}
+                    </p>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-        {exported && (
-          <PbsEntryAssistant exported={exported} onCopyAll={copyExport} />
-        )}
-      </div>
+          {exported && (
+            <PbsEntryAssistant exported={exported} onCopyAll={copyExport} />
+          )}
+        </div>
       </div>
     </div>
   );
