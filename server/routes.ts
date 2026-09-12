@@ -2617,7 +2617,7 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
-      const { question, bidPackageId, seniorityPercentile, sessionId, userId } =
+      const { question, bidPackageId, sessionId } =
         req.body;
 
       if (!question || typeof question !== 'string') {
@@ -2665,14 +2665,14 @@ export async function registerRoutes(app: Express) {
               }));
           }
 
+          // The authenticated deployment owns one profile. Resolve it here so
+          // every client gets the same learned weights and current seniority.
+          const profile = await storage.getPrimaryUser();
           const result = await simpleAI.query({
             message: question,
             bidPackageId: finalBidPackageId,
-            userId: typeof userId === 'number' ? userId : undefined,
-            seniorityPercentile:
-              typeof seniorityPercentile === 'number'
-                ? seniorityPercentile
-                : undefined,
+            userId: profile?.id,
+            seniorityPercentile: profile?.seniorityPercentile ?? undefined,
             conversationHistory,
           });
 
