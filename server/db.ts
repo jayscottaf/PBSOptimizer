@@ -187,13 +187,23 @@ export const executeWithRetry = async <T>(
     console.error(`${operationName} failed:`, error);
     circuitBreaker.onFailure();
 
-    const isConnectionError =
-      error instanceof Error &&
-      (error.message.includes('Connection terminated') ||
-        error.message.includes('connection closed') ||
-        error.message.includes('ECONNREFUSED') ||
-        error.message.includes('WebSocket') ||
-        error.message.includes('Pool is ending'));
+    // Drizzle wraps driver failures in a query error. Inspect the cause chain
+    // so an ORM upgrade does not disable connection recovery.
+    let cause: unknown = error;
+    let isConnectionError = false;
+    const seen = new Set<unknown>();
+    while (cause instanceof Error && !seen.has(cause)) {
+      seen.add(cause);
+      if (
+        /Connection terminated|connection closed|ECONNREFUSED|WebSocket|Pool is ending/i.test(
+          cause.message
+        )
+      ) {
+        isConnectionError = true;
+        break;
+      }
+      cause = (cause as Error & { cause?: unknown }).cause;
+    }
 
     if (isConnectionError && circuitBreaker.canExecute()) {
       console.log(`Attempting recovery for ${operationName}...`);
