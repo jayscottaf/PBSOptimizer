@@ -1007,10 +1007,11 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                   )}
                   <div className="flex items-end gap-2">
                     <div className="flex-1 space-y-1">
-                      <Label className="text-xs">
+                      <Label className="text-xs" htmlFor="bid-field-1">
                         Employee number (learn from your own bid history)
                       </Label>
                       <Input
+                        id="bid-field-1"
                         placeholder="e.g. 050000600"
                         value={learnEmployeeNumber}
                         onChange={e => setLearnEmployeeNumber(e.target.value)}
@@ -1227,7 +1228,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 }))
                               }
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label="Preference type">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1250,8 +1251,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 Trip shape
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Days min</Label>
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-2"
+                                >
+                                  Days min
+                                </Label>
                                 <Input
+                                  id="bid-field-2"
                                   type="number"
                                   value={form.pairingDaysMin}
                                   onChange={e =>
@@ -1263,8 +1270,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Days max</Label>
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-3"
+                                >
+                                  Days max
+                                </Label>
                                 <Input
+                                  id="bid-field-3"
                                   type="number"
                                   value={form.pairingDaysMax}
                                   onChange={e =>
@@ -1276,10 +1289,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-4"
+                                >
                                   # Layovers min
                                 </Label>
                                 <Input
+                                  id="bid-field-4"
                                   type="number"
                                   min="0"
                                   value={form.layoverCountMin}
@@ -1292,10 +1309,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-5"
+                                >
                                   # Layovers max
                                 </Label>
                                 <Input
+                                  id="bid-field-5"
                                   type="number"
                                   min="0"
                                   value={form.layoverCountMax}
@@ -1308,8 +1329,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Deadheads min</Label>
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-6"
+                                >
+                                  Deadheads min
+                                </Label>
                                 <Input
+                                  id="bid-field-6"
                                   type="number"
                                   min="0"
                                   value={form.deadheadsMin}
@@ -1322,8 +1349,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Deadheads max</Label>
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-7"
+                                >
+                                  Deadheads max
+                                </Label>
                                 <Input
+                                  id="bid-field-7"
                                   type="number"
                                   min="0"
                                   value={form.deadheadsMax}
@@ -1336,10 +1369,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-8"
+                                >
                                   Carry-out days min
                                 </Label>
                                 <Input
+                                  id="bid-field-8"
                                   type="number"
                                   min="0"
                                   value={form.carryOutMin}
@@ -1352,10 +1389,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-9"
+                                >
                                   Carry-out days max
                                 </Label>
                                 <Input
+                                  id="bid-field-9"
                                   type="number"
                                   min="0"
                                   value={form.carryOutMax}
@@ -1381,7 +1422,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                     }))
                                   }
                                 >
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label="Redeye">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1401,10 +1442,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 Credit & block
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-10"
+                                >
                                   Credit min (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-10"
                                   type="number"
                                   step="0.5"
                                   value={form.creditMin}
@@ -1417,10 +1462,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-11"
+                                >
                                   Credit max (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-11"
                                   type="number"
                                   step="0.5"
                                   value={form.creditMax}
@@ -1433,10 +1482,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-12"
+                                >
                                   Block min (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-12"
                                   type="number"
                                   step="0.5"
                                   value={form.blockMin}
@@ -1449,10 +1502,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-13"
+                                >
                                   Block max (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-13"
                                   type="number"
                                   step="0.5"
                                   value={form.blockMax}
@@ -1465,10 +1522,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-14"
+                                >
                                   Avg daily credit min
                                 </Label>
                                 <Input
+                                  id="bid-field-14"
                                   type="number"
                                   step="0.25"
                                   value={form.averageDailyCreditMin}
@@ -1481,10 +1542,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-15"
+                                >
                                   Avg daily credit max
                                 </Label>
                                 <Input
+                                  id="bid-field-15"
                                   type="number"
                                   step="0.25"
                                   value={form.averageDailyCreditMax}
@@ -1497,10 +1562,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-16"
+                                >
                                   Avg daily block min
                                 </Label>
                                 <Input
+                                  id="bid-field-16"
                                   type="number"
                                   step="0.25"
                                   value={form.averageDailyBlockMin}
@@ -1513,10 +1582,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-17"
+                                >
                                   Avg daily block max
                                 </Label>
                                 <Input
+                                  id="bid-field-17"
                                   type="number"
                                   step="0.25"
                                   value={form.averageDailyBlockMax}
@@ -1532,10 +1605,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 Layovers
                               </div>
                               <div className="col-span-2 space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-18"
+                                >
                                   Layover cities (comma-separated)
                                 </Label>
                                 <Input
+                                  id="bid-field-18"
                                   placeholder="BOS, MIA"
                                   value={form.layoverCities}
                                   onChange={e =>
@@ -1547,10 +1624,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="col-span-2 space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-19"
+                                >
                                   Exclude layover cities (comma-separated)
                                 </Label>
                                 <Input
+                                  id="bid-field-19"
                                   placeholder="ORD, DFW"
                                   value={form.excludeLayoverCities}
                                   onChange={e =>
@@ -1562,10 +1643,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-20"
+                                >
                                   Total layover min (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-20"
                                   type="number"
                                   step="0.5"
                                   value={form.totalLayoverHoursMin}
@@ -1578,10 +1663,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-21"
+                                >
                                   Total layover max (hrs)
                                 </Label>
                                 <Input
+                                  id="bid-field-21"
                                   type="number"
                                   step="0.5"
                                   value={form.totalLayoverHoursMax}
@@ -1597,10 +1686,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 Check-in & specifics
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-22"
+                                >
                                   Check-in from (0-23)
                                 </Label>
                                 <Input
+                                  id="bid-field-22"
                                   type="number"
                                   min="0"
                                   max="23"
@@ -1614,10 +1707,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-23"
+                                >
                                   Check-in to (0-23)
                                 </Label>
                                 <Input
+                                  id="bid-field-23"
                                   type="number"
                                   min="0"
                                   max="23"
@@ -1631,10 +1728,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="col-span-2 space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-24"
+                                >
                                   Check-in stations (comma-separated)
                                 </Label>
                                 <Input
+                                  id="bid-field-24"
                                   placeholder="JFK, LGA"
                                   value={form.checkInStations}
                                   onChange={e =>
@@ -1646,10 +1747,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                 />
                               </div>
                               <div className="col-span-2 space-y-1">
-                                <Label className="text-xs">
+                                <Label
+                                  className="text-xs"
+                                  htmlFor="bid-field-25"
+                                >
                                   Specific pairing numbers (optional)
                                 </Label>
                                 <Input
+                                  id="bid-field-25"
                                   placeholder="7601, 7645"
                                   value={form.pairingNumbers}
                                   onChange={e =>
@@ -1662,10 +1767,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               </div>
                               {form.kind === 'award' && (
                                 <div className="space-y-1">
-                                  <Label className="text-xs">
+                                  <Label
+                                    className="text-xs"
+                                    htmlFor="bid-field-26"
+                                  >
                                     Limit (max awards)
                                   </Label>
                                   <Input
+                                    id="bid-field-26"
                                     type="number"
                                     min="1"
                                     value={form.limit}
@@ -1681,6 +1790,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               {form.kind === 'avoid' && (
                                 <div className="flex items-center gap-2 pt-5">
                                   <Switch
+                                    aria-label="Else Start Next"
                                     checked={form.elseStartNext}
                                     onCheckedChange={checked =>
                                       setForm(p => ({
@@ -1759,6 +1869,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Switch
+                                  aria-label="Else Start Next"
                                   checked={form.elseStartNext}
                                   onCheckedChange={checked =>
                                     setForm(p => ({
@@ -1788,7 +1899,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                   }))
                                 }
                               >
-                                <SelectTrigger>
+                                <SelectTrigger aria-label="Credit preference">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1810,6 +1921,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               </p>
                               <div className="flex items-center gap-2">
                                 <Switch
+                                  aria-label="Else Start Next"
                                   checked={form.elseStartNext}
                                   onCheckedChange={checked =>
                                     setForm(p => ({
@@ -1829,10 +1941,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                             <div className="space-y-2">
                               <div className="grid grid-cols-3 gap-2">
                                 <div className="space-y-1">
-                                  <Label className="text-xs">
+                                  <Label
+                                    className="text-xs"
+                                    htmlFor="bid-field-27"
+                                  >
                                     Days on (min)
                                   </Label>
                                   <Input
+                                    id="bid-field-27"
                                     type="number"
                                     min="1"
                                     value={form.patternDaysOnMin}
@@ -1845,10 +1961,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs">
+                                  <Label
+                                    className="text-xs"
+                                    htmlFor="bid-field-28"
+                                  >
                                     Days on (max)
                                   </Label>
                                   <Input
+                                    id="bid-field-28"
                                     type="number"
                                     min="1"
                                     value={form.patternDaysOnMax}
@@ -1861,10 +1981,14 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs">
+                                  <Label
+                                    className="text-xs"
+                                    htmlFor="bid-field-29"
+                                  >
                                     Days off (min)
                                   </Label>
                                   <Input
+                                    id="bid-field-29"
                                     type="number"
                                     min="1"
                                     value={form.patternDaysOffMin}
@@ -1884,6 +2008,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
                               </p>
                               <div className="flex items-center gap-2">
                                 <Switch
+                                  aria-label="Else Start Next"
                                   checked={form.elseStartNext}
                                   onCheckedChange={checked =>
                                     setForm(p => ({
