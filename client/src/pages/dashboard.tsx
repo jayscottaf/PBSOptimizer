@@ -2532,10 +2532,12 @@ export default function Dashboard() {
                   Sync PIN
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Set a PIN, then enter it on any other device to load this same profile, favorites, calendar, and chat history there.
+                  After signing in to the app, use a 4–12 digit PIN to load this profile and saved work on another device.
                 </p>
                 <div className="flex gap-2">
                   <Input
+                    type="password"
+                    maxLength={12}
                     value={syncPinDraft}
                     onChange={e => setSyncPinDraft(e.target.value)}
                     inputMode="numeric"

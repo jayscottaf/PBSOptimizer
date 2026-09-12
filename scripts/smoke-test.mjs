@@ -23,6 +23,7 @@ async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       Accept: 'application/json',
+      ...(process.env.SMOKE_ACCESS_PASSWORD ? { Authorization: `Basic ${Buffer.from(`pilot:${process.env.SMOKE_ACCESS_PASSWORD}`).toString('base64')}` } : {}),
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     },

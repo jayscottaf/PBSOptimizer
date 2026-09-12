@@ -1,6 +1,7 @@
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
 import { storage } from './storage';
+import { accessControl, publicUser } from './lib/access-control';
 import { seedDatabase } from './seedData';
 import { pdfParser } from './pdfParser';
 import {
@@ -345,6 +346,28 @@ function handleMulterUpload(
 const withDatabaseRetry = executeWithRetry;
 
 export async function registerRoutes(app: Express) {
+  app.use(accessControl());
+  app.get('/api/access', (_req, res) => res.redirect('/'));
+  // This deployment is single-user. IDs identify records, never grant access.
+  app.use('/api', async (req, res, next) => {
+    try {
+      if (req.body?.userId !== undefined || req.query.userId !== undefined) {
+        const primary = await storage.getPrimaryUser();
+        const supplied = [req.body?.userId, req.query.userId].filter(id => id !== undefined);
+        if (!primary || supplied.some(id => Number(id) !== primary.id)) {
+          return res.status(403).json({ message: 'Profile does not belong to this deployment' });
+        }
+      }
+      next();
+    } catch (error) { next(error); }
+  });
+  app.param('userId', async (req, res, next, value) => {
+    try {
+      const primary = await storage.getPrimaryUser();
+      if (!primary || Number(value) !== primary.id) return res.status(403).json({ message: 'Profile does not belong to this deployment' });
+      next();
+    } catch (error) { next(error); }
+  });
   // Health check endpoint (enhanced for PWA Stage 7)
   app.head('/api/health', (req, res) => {
     res.status(200).end();
@@ -2247,22 +2270,19 @@ export async function registerRoutes(app: Express) {
         aircraft,
       });
 
-      res.json(user);
+      res.json(publicUser(user));
     } catch (error) {
       console.error('Error creating/updating user:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  // Link a new device to the pilot's existing profile using their sync PIN.
-  // This is how the app stays login-free while still syncing across devices:
-  // there is exactly one canonical user, and the PIN is the only thing that
-  // proves "this new browser belongs to the same pilot."
+  // PIN linking is a convenience behind the deployment's access gate.
   app.post('/api/user/link-device', async (req, res) => {
     try {
       const { pin } = req.body;
 
-      if (!pin || typeof pin !== 'string') {
+      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) {
         return res.status(400).json({ error: 'Missing pin' });
       }
 
@@ -2272,7 +2292,7 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ error: 'Invalid PIN' });
       }
 
-      res.json(user);
+      res.json(publicUser(user));
     } catch (error) {
       console.error('Error linking device:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -2282,14 +2302,12 @@ export async function registerRoutes(app: Express) {
   // Set or change the sync PIN used to link additional devices.
   app.patch('/api/user/pin', async (req, res) => {
     try {
-      const { userId, pin } = req.body;
-
-      if (!userId || !pin || typeof pin !== 'string') {
-        return res.status(400).json({ error: 'Missing userId or pin' });
-      }
-
-      const user = await storage.setSyncPin(parseInt(userId), pin);
-      res.json(user);
+      const { pin } = req.body;
+      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) return res.status(400).json({ error: 'PIN must contain 4 to 12 digits' });
+      const primary = await storage.getPrimaryUser();
+      if (!primary) return res.status(404).json({ error: 'Create a profile first' });
+      const user = await storage.setSyncPin(primary.id, pin);
+      res.json(publicUser(user));
     } catch (error) {
       console.error('Error setting sync pin:', error);
       res.status(500).json({ error: 'Internal server error' });

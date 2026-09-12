@@ -1,3 +1,4 @@
+import { hashPin, verifyPin } from './lib/access-control';
 import {
   users,
   bidPackages,
@@ -356,17 +357,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPin(pin: string): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.syncPin, pin));
-    return user || undefined;
+    const user = await this.getPrimaryUser();
+    if (!user?.syncPin || !(await verifyPin(pin, user.syncPin))) return undefined;
+    // Upgrade legacy plaintext only after a successful authenticated link.
+    if (!user.syncPin.startsWith('scrypt:')) return this.setSyncPin(user.id, pin);
+    return user;
   }
 
   async setSyncPin(userId: number, pin: string): Promise<User> {
     const [updatedUser] = await db
       .update(users)
-      .set({ syncPin: pin, updatedAt: new Date() })
+      .set({ syncPin: await hashPin(pin), updatedAt: new Date() })
       .where(eq(users.id, userId))
       .returning();
     return updatedUser;

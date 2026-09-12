@@ -24,7 +24,7 @@ export const users = pgTable('users', {
   seniorityPercentile: integer('seniority_percentile').default(50), // 0-100, lower is more senior
   base: varchar('base', { length: 10 }).notNull(),
   aircraft: varchar('aircraft', { length: 50 }).notNull(),
-  syncPin: varchar('sync_pin', { length: 20 }), // pilot-chosen PIN used to link additional devices to this profile
+  syncPin: text('sync_pin'), // pilot-chosen PIN used to link additional devices to this profile
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

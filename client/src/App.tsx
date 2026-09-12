@@ -1,4 +1,5 @@
 import React from 'react';
+import { AccessGate } from '@/components/access-gate';
 import { Switch, Route } from 'wouter';
 import { queryClient } from './lib/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -48,7 +49,7 @@ function App() {
         <TooltipProvider delayDuration={200} skipDelayDuration={0}>
           <OfflineBanner />
           <Toaster />
-          <Router />
+          <AccessGate><Router /></AccessGate>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
