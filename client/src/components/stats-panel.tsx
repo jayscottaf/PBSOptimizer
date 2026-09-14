@@ -1,3 +1,5 @@
+import { hasRedeye } from '@/lib/pbsDerivations';
+import { pct } from '@/lib/packageStats';
 import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -479,6 +481,23 @@ export function StatsPanel({
   const isProcessing = bidPackage?.status === 'processing';
   const isFailed = bidPackage?.status === 'failed';
   const displayTotalPairings = stats.totalPairings;
+  const redeyeCount = pairings.filter(hasRedeye).length;
+  const redeyeStat = (
+    <div className="text-center">
+      <div className="text-xl lg:text-2xl font-bold text-primary">
+        {redeyeCount}{' '}
+        <span className="text-sm font-medium">
+          ({pct(redeyeCount, pairings.length)})
+        </span>
+      </div>
+      <div className="text-xs lg:text-sm text-muted-foreground">
+        Red-eye pairings
+      </div>
+      <div className="text-xs text-muted-foreground">
+        At least one leg departs 22:00–04:59
+      </div>
+    </div>
+  );
 
   if (hideHeader) {
     return (
@@ -499,7 +518,8 @@ export function StatsPanel({
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+          {redeyeStat}
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-blue-600">
               {displayTotalPairings}
@@ -735,7 +755,8 @@ export function StatsPanel({
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+          {redeyeStat}
           <div className="text-center">
             <div className="text-xl lg:text-2xl font-bold text-blue-600">
               {displayTotalPairings}
