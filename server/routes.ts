@@ -1,3 +1,4 @@
+import { decodeReasonsUpload } from './lib/decode-reasons-upload';
 import { categorySeniorityInput } from '../shared/category-seniority';
 import { getCategorySeniority, getCategoryComparisons, getAnalysisSeniority } from './lib/category-seniority';
 import { printedDurationHours } from '../shared/durations';
@@ -285,8 +286,7 @@ const uploadReasonsReport = multer({
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype === 'text/html' ||
-      file.originalname.endsWith('.htm') ||
-      file.originalname.endsWith('.html')
+      /\.html?(\.gz)?$/i.test(file.originalname)
     ) {
       cb(null, true);
     } else {
@@ -954,14 +954,11 @@ export async function registerRoutes(app: Express) {
 
         console.log('Processing reasons report:', req.file.originalname);
 
-        // Real NAVBLUE composite exports are Windows-1252-ish and use \xA0
-        // (NBSP) as visual spacing throughout. Decoding those bytes as UTF-8
-        // turns every \xA0 into U+FFFD, which silently breaks all Reasons-pane
-        // phrase matching — so fall back to latin1 when the buffer isn't
-        // valid UTF-8 (U+FFFD in the decoded text is the tell).
-        let htmlContent = req.file.buffer.toString('utf-8');
-        if (htmlContent.includes('\uFFFD')) {
-          htmlContent = req.file.buffer.toString('latin1');
+        let htmlContent: string;
+        try {
+          htmlContent = await decodeReasonsUpload(req.file.buffer, req.file.originalname);
+        } catch (error) {
+          return sendApiError(res, 400, (error as Error).message, 'REASONS_PROCESSING_FAILED');
         }
         const awards =
           await ReasonsReportParser.parseReasonsReportFromContent(htmlContent);

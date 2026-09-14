@@ -1,3 +1,4 @@
+import { prepareReasonsUpload } from '@/lib/prepare-reasons-upload';
 import { useState, useRef } from 'react';
 import { Button } from './ui/button';
 import { CloudUpload, FileText } from 'lucide-react';
@@ -44,22 +45,11 @@ export function ReasonsReportUpload({
   };
 
   const handleFile = async (file: File) => {
-    // Validate file type (HTML only)
-    if (file.type !== 'text/html' && !file.name.endsWith('.html')) {
-      toast({
-        title: 'Invalid file type',
-        description: 'Please upload an HTML file (.html).',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsUploading(true);
 
     try {
       // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('reasonsReport', file);
+      const formData = await prepareReasonsUpload(file);
 
       // Upload the reasons report
       const response = await fetch('/api/upload-reasons-report', {
@@ -77,7 +67,8 @@ export function ReasonsReportUpload({
 
       // Build description with skipped and linking info
       let description = `Processed ${result.stats.stored} new awards from ${result.stats.month} ${result.stats.year} (${result.stats.base} ${result.stats.aircraft})`;
-      if (result.stats.refreshed > 0) description += `. ${result.stats.refreshed} existing credits corrected.`;
+      if (result.stats.refreshed > 0)
+        description += `. ${result.stats.refreshed} existing credits corrected.`;
       if (result.stats.skipped > 0) {
         description += `. ${result.stats.skipped} duplicates skipped.`;
       }
@@ -89,7 +80,7 @@ export function ReasonsReportUpload({
         title: 'Upload successful',
         description,
       });
-      
+
       // Show warning if no bid package was found
       if (result.warning) {
         toast({
@@ -115,6 +106,7 @@ export function ReasonsReportUpload({
       });
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
