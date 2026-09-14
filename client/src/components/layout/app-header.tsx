@@ -31,7 +31,7 @@ export function AppHeader({
       <h1 className="text-title truncate">{title}</h1>
       {currentUser?.seniorityNumber ? (
         <Badge variant="outline" className="hidden text-xs sm:inline-flex">
-          Seniority #{currentUser.seniorityNumber}
+          Profile seniority #{currentUser.seniorityNumber}
           {seniorityPercentile !== null && seniorityPercentile !== undefined
             ? ` (${seniorityPercentile}%)`
             : ''}

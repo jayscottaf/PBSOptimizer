@@ -1,5 +1,5 @@
 import { categorySeniorityInput } from '../shared/category-seniority';
-import { getCategorySeniority } from './lib/category-seniority';
+import { getCategorySeniority, getCategoryComparisons } from './lib/category-seniority';
 import { printedDurationHours } from '../shared/durations';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
@@ -2247,6 +2247,22 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching similar bid history:', error);
       res.status(500).json({ message: 'Failed to fetch similar bid history' });
+    }
+  });
+
+  app.get('/api/category-seniority/comparisons', async (req, res) => {
+    const parsed = categorySeniorityInput.shape.seniorityNumber.safeParse(
+      req.query.seniorityNumber
+    );
+    if (!parsed.success)
+      return res.status(400).json({ error: 'Enter a valid seniority number.' });
+    try {
+      res.json({ categories: await getCategoryComparisons(parsed.data) });
+    } catch (error) {
+      console.error('Error comparing category seniority:', error);
+      res
+        .status(503)
+        .json({ error: 'Category comparisons are temporarily unavailable.' });
     }
   });
 

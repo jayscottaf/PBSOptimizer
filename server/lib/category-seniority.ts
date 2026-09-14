@@ -86,3 +86,47 @@ export async function getCategorySeniority(
     input.seniorityNumber
   );
 }
+
+/** Read-only what-if comparisons; never update the pilot's saved position. */
+export async function getCategoryComparisons(
+  seniorityNumber: number,
+  executor: Pick<typeof db, 'execute'> = db
+): Promise<import('../../shared/category-seniority').CategoryComparison[]> {
+  const result = await executor.execute(sql`
+    SELECT upper(trim(base)) AS base,
+      ${sql.raw(normalizedAircraftSqlExpr('aircraft'))} AS aircraft,
+      right(upper(regexp_replace(aircraft, '\\s+', '', 'g')), 1) AS position,
+      upper(left(trim(month), 3)) AS month, year,
+      array_agg(DISTINCT pilot_seniority_number ORDER BY pilot_seniority_number) AS seniorities
+    FROM reasons_report_preferences
+    WHERE pilot_seniority_number > 0
+      AND upper(regexp_replace(aircraft, '\\s+', '', 'g')) ~ '[AB]$'
+    GROUP BY 1, 2, 3, 4, 5
+  `);
+  type Period = {
+    base: string;
+    aircraft: string;
+    position: 'A' | 'B';
+    month: string;
+    year: number;
+    seniorities: number[];
+  };
+  const categories = new Map<string, Period[]>();
+  for (const row of result.rows as Period[]) {
+    const key = `${row.base}|${row.aircraft}|${row.position}`;
+    const periods = categories.get(key) ?? [];
+    periods.push(row);
+    categories.set(key, periods);
+  }
+  return [...categories.values()]
+    .flatMap(periods => {
+      const seniority = calculateCategorySeniority(periods, seniorityNumber);
+      const { base, aircraft, position } = periods[0];
+      return seniority ? [{ base, aircraft, position, ...seniority }] : [];
+    })
+    .sort((a, b) =>
+      `${a.base}|${a.aircraft}|${a.position}`.localeCompare(
+        `${b.base}|${b.aircraft}|${b.position}`
+      )
+    );
+}

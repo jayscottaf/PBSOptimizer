@@ -14,3 +14,9 @@ export interface CategorySeniority {
   month: string;
   year: number;
 }
+
+export interface CategoryComparison extends CategorySeniority {
+  base: string;
+  aircraft: string;
+  position: 'A' | 'B';
+}

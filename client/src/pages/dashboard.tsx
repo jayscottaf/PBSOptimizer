@@ -1,3 +1,4 @@
+import { CategoryComparisonPanel } from '@/components/category-comparison';
 import type { CategorySeniority } from '@shared/category-seniority';
 import { pairingsCsv, downloadText } from '@/lib/pairing-export';
 import { printedDurationMinutes } from '@shared/durations';
@@ -306,6 +307,7 @@ export default function Dashboard() {
     base: string;
     aircraft: string;
     updatedAt?: string;
+    position?: string;
   };
   const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(
     () => {
@@ -324,6 +326,7 @@ export default function Dashboard() {
         base: localStorage.getItem('base') || '',
         aircraft: localStorage.getItem('aircraft') || '',
         updatedAt: localStorage.getItem('profileUpdatedAt') || undefined,
+        position: localStorage.getItem('position') || undefined,
       };
     }
   );
@@ -373,6 +376,7 @@ export default function Dashboard() {
         base: user.base,
         aircraft: user.aircraft,
         updatedAt: user.updatedAt,
+        position: user.position,
       });
       setName(user.name || '');
       setSeniorityNumber(String(user.seniorityNumber));
@@ -1246,6 +1250,18 @@ export default function Dashboard() {
                     before the full table (insight → detail reading order). */}
                   {bidPackageId && (
                     <>
+                      <CategoryComparisonPanel
+                        key={bidPackageId}
+                        seniorityNumber={currentUser?.seniorityNumber}
+                        base={latestBidPackage?.base}
+                        aircraft={latestBidPackage?.aircraft}
+                        position={currentUser?.position || position || 'B'}
+                        savedCategory={
+                          currentUser
+                            ? `${currentUser.base} ${currentUser.aircraft}${currentUser.position || position}`
+                            : undefined
+                        }
+                      />
                       <KpiStrip
                         pairings={displayPairings || []}
                         bidPackage={latestBidPackage}
@@ -1564,7 +1580,22 @@ export default function Dashboard() {
                 </Suspense>
               </TabsContent>
 
-              <TabsContent value="trends" className="flex-1 overflow-auto p-1">
+              <TabsContent
+                value="trends"
+                className="flex-1 overflow-auto p-1 space-y-4"
+              >
+                <CategoryComparisonPanel
+                  key={bidPackageId}
+                  seniorityNumber={currentUser?.seniorityNumber}
+                  base={latestBidPackage?.base}
+                  aircraft={latestBidPackage?.aircraft}
+                  position={currentUser?.position || position || 'B'}
+                  savedCategory={
+                    currentUser
+                      ? `${currentUser.base} ${currentUser.aircraft}${currentUser.position || position}`
+                      : undefined
+                  }
+                />
                 <Suspense
                   fallback={
                     <div className="text-sm text-muted-foreground">
@@ -2013,6 +2044,18 @@ export default function Dashboard() {
                     Position A or B (matches ALV table)
                   </p>
                 </div>
+                <CategoryComparisonPanel
+                  key={bidPackageId}
+                  seniorityNumber={Number(seniorityNumber)}
+                  base={latestBidPackage?.base || base}
+                  aircraft={latestBidPackage?.aircraft || aircraft}
+                  position={position || 'B'}
+                  savedCategory={
+                    currentUser
+                      ? `${currentUser.base} ${currentUser.aircraft}${currentUser.position || position}`
+                      : undefined
+                  }
+                />
                 {currentUser && (
                   <div className="border-t pt-4 mt-4">
                     <div className="text-sm font-medium text-secondary-foreground mb-1">

@@ -6,8 +6,10 @@ import { db, cleanup } from '../db';
 import {
   calculateCategorySeniority,
   getCategorySeniority,
+  getCategoryComparisons,
 } from '../lib/category-seniority';
 import { categorySeniorityInput } from '../../shared/category-seniority';
+import { categoryKey } from '../../shared/category-key';
 import { publicUser } from '../lib/access-control';
 
 after(cleanup);
@@ -75,6 +77,29 @@ test('category lookup separates fleet, base and seat in PostgreSQL without chang
       await getCategorySeniority({ ...input, base: 'SEA' }, tx),
       null
     );
+    const comparisons = await getCategoryComparisons(200, tx);
+    const fo220 = comparisons.find(
+      row =>
+        row.base === 'NYC' && row.aircraft === '220' && row.position === 'B'
+    );
+    const fo330 = comparisons.find(
+      row =>
+        row.base === 'NYC' && row.aircraft === '330' && row.position === 'B'
+    );
+    assert.equal(fo220?.percentile, 66.7);
+    assert.equal(fo220?.month, 'AUG');
+    assert.equal(fo330?.percentile, 0);
+    assert.equal(fo330?.month, 'SEP');
+    assert.equal(comparisons.length, 4);
+    assert.equal(
+      categoryKey('NYC', 'A330', 'B'),
+      categoryKey(fo330!.base, fo330!.aircraft, fo330!.position)
+    );
+    assert.notEqual(
+      categoryKey('NYC', 'A220', 'B'),
+      categoryKey('NYC', 'A330', 'B')
+    );
+    assert.equal(categoryKey('nyc', '330-A', 'B'), 'NYC|330|A');
   });
 });
 
@@ -154,6 +179,29 @@ test('profile save derives its percentage server-side and preserves the selected
       assert.equal(profile.aircraft, 'A220');
       assert.equal(saved?.aircraft, 'A220-B');
       assert.equal(profile.categorySeniority.percentile, 66.7);
+      const savedBeforeComparison = saved;
+      const comparisonResponse = await fetch(
+        url + '/api/category-seniority/comparisons?seniorityNumber=100'
+      );
+      assert.equal(comparisonResponse.status, 200);
+      assert.equal(
+        (await comparisonResponse.json()).categories[0].percentile,
+        33.3
+      );
+      assert.equal(
+        saved,
+        savedBeforeComparison,
+        'a comparison must not save a new profile'
+      );
+      assert.equal(
+        (
+          await fetch(
+            url + '/api/category-seniority/comparisons?seniorityNumber=bad'
+          )
+        ).status,
+        400
+      );
+
       const invalid = await fetch(url + '/api/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
