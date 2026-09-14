@@ -7,9 +7,10 @@ import {
   calculateCategorySeniority,
   getCategorySeniority,
   getCategoryComparisons,
+  getAnalysisSeniority,
 } from '../lib/category-seniority';
 import { categorySeniorityInput } from '../../shared/category-seniority';
-import { categoryKey } from '../../shared/category-key';
+import { categoryKey, analysisCategory } from '../../shared/category-key';
 import { publicUser } from '../lib/access-control';
 
 after(cleanup);
@@ -77,6 +78,46 @@ test('category lookup separates fleet, base and seat in PostgreSQL without chang
       await getCategorySeniority({ ...input, base: 'SEA' }, tx),
       null
     );
+    const savedPilot = {
+      seniorityNumber: 200,
+      aircraft: 'A220-B',
+      seniorityPercentile: 48,
+    };
+    assert.equal(
+      await getAnalysisSeniority(
+        savedPilot,
+        { base: 'NYC', aircraft: '330-B' },
+        tx
+      ),
+      0
+    );
+    assert.equal(
+      await getAnalysisSeniority(
+        savedPilot,
+        { base: 'NYC', aircraft: 'A220' },
+        tx
+      ),
+      66.7
+    );
+    assert.equal(
+      savedPilot.seniorityPercentile,
+      48,
+      'viewing another fleet must not mutate the saved profile'
+    );
+    assert.equal(
+      await getAnalysisSeniority(
+        savedPilot,
+        { base: 'SEA', aircraft: '330-B' },
+        tx
+      ),
+      50
+    );
+    assert.deepEqual(analysisCategory('NYC', '330', 'A220-B'), {
+      base: 'NYC',
+      aircraft: '330',
+      position: 'B',
+    });
+    assert.equal(analysisCategory('NYC', '330-A', 'A220-B').position, 'A');
     const comparisons = await getCategoryComparisons(200, tx);
     const fo220 = comparisons.find(
       row =>

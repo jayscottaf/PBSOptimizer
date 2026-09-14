@@ -26,10 +26,11 @@ export interface TopPicksResult {
  */
 export function useTopPicks(
   bidPackageId: number | undefined,
-  userId: number | undefined
+  userId: number | undefined,
+  analysisKey?: string
 ) {
   return useQuery<TopPicksResult>({
-    queryKey: ['top-picks', bidPackageId ?? null, userId ?? null],
+    queryKey: ['top-picks', bidPackageId ?? null, userId ?? null, analysisKey],
     queryFn: async () => {
       const res = await fetch('/api/optimize-bid', {
         method: 'POST',

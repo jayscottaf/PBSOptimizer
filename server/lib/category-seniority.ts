@@ -1,3 +1,4 @@
+import { analysisCategory } from '../../shared/category-key';
 import { sql } from 'drizzle-orm';
 import { db } from '../db';
 import { normalizedAircraftSqlExpr, parseAircraftCode } from './aircraft';
@@ -129,4 +130,23 @@ export async function getCategoryComparisons(
         `${b.base}|${b.aircraft}|${b.position}`
       )
     );
+}
+
+/** Never apply a saved fleet's percentile to a different package category. */
+export async function getAnalysisSeniority(
+  user: { seniorityNumber: number; aircraft: string } | null | undefined,
+  bidPackage: { base: string; aircraft: string } | null | undefined,
+  executor: Pick<typeof db, 'execute'> = db
+): Promise<number> {
+  if (!user || !bidPackage) return 50;
+  const category = analysisCategory(
+    bidPackage.base,
+    bidPackage.aircraft,
+    user.aircraft
+  );
+  const roster = await getCategorySeniority(
+    { ...category, seniorityNumber: user.seniorityNumber },
+    executor
+  );
+  return roster?.percentile ?? 50;
 }

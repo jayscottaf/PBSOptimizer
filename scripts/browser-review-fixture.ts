@@ -17,7 +17,7 @@ const packages = [9001, 9002].map((id, index) => ({
   month: index ? 'September' : 'August',
   year: 2026,
   base: 'NYC',
-  aircraft: '220-B',
+  aircraft: index ? '330-B' : '220-B',
   status: 'completed',
   uploadedAt: `2026-08-0${2 - index}T00:00:00Z`,
 }));
@@ -67,10 +67,47 @@ app.use('/api', (req, _res, next) => {
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', database: 'connected' })
 );
+const categoryFixtures = [
+  {
+    base: 'NYC',
+    aircraft: '220',
+    position: 'B',
+    percentile: 48,
+    seniorOrEqual: 48,
+    totalPilots: 100,
+    month: 'JUL',
+    year: 2026,
+  },
+  {
+    base: 'NYC',
+    aircraft: '330',
+    position: 'B',
+    percentile: 100,
+    seniorOrEqual: 308,
+    totalPilots: 308,
+    month: 'AUG',
+    year: 2026,
+  },
+];
+app.get('/api/category-seniority/comparisons', (_req, res) =>
+  res.json({ categories: categoryFixtures })
+);
+app.get('/api/category-seniority', (req, res) =>
+  res.json({
+    categorySeniority:
+      categoryFixtures.find(
+        row =>
+          row.aircraft === req.query.aircraft &&
+          row.position === req.query.position &&
+          row.base === req.query.base
+      ) ?? null,
+  })
+);
 app.get('/api/bid-packages', (_req, res) => res.json(packages));
 app.get('/api/bid-packages/:id/dataset', (req, res) => {
   if (datasetUnavailable)
     return res.status(503).json({ message: 'Synthetic network failure' });
+  requests['lastDatasetPercentile'] = Number(req.query.seniorityPercentile);
   const pairings = rows(Number(req.params.id));
   res.json({
     schema: 1,
@@ -110,7 +147,7 @@ app.get('/', async (req, res) => {
   const seed = {
     name: 'Synthetic pilot',
     seniorityNumber: '100',
-    seniorityPercentile: '50',
+    seniorityPercentile: '48',
     base: 'NYC',
     aircraft: 'A220',
     position: 'B',
@@ -120,7 +157,7 @@ app.get('/', async (req, res) => {
     app_version: '1.3.0',
   };
   const html = await readFile(path.join(root, 'index.html'), 'utf8');
-  const script = `<script>${simulateOffline ? `Object.defineProperty(navigator, 'onLine', { get: () => false });` : ''}if(!localStorage.getItem('pbs:fixture')){for(const [k,v] of Object.entries(${JSON.stringify(seed)}))localStorage.setItem(k,v);localStorage.setItem('pbs:fixture','true');}</script>`;
+  const script = `<script>${simulateOffline ? `Object.defineProperty(navigator, 'onLine', { get: () => false });` : ''}if(!localStorage.getItem('pbs:fixture:category-v2')){for(const [k,v] of Object.entries(${JSON.stringify(seed)}))localStorage.setItem(k,v);localStorage.setItem('pbs:fixture:category-v2','true');}</script>`;
   res.type('html').send(html.replace('<head>', `<head>${script}`));
 });
 app.use(express.static(root));

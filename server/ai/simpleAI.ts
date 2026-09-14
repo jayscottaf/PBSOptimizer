@@ -1,3 +1,4 @@
+import { getAnalysisSeniority } from '../lib/category-seniority';
 /**
  * Simple AI - Works like ChatGPT web
  * No complex pipelines, just send the data and let GPT figure it out
@@ -405,7 +406,7 @@ export class SimpleAI {
       }
     }
     const optimized = optimizeBid(pairings, weights, {
-      seniorityPercentile: user?.seniorityPercentile ?? undefined,
+      seniorityPercentile: await getAnalysisSeniority(user, { base, aircraft }),
       holdBoundaries: [...boundaryByDays.entries()].map(
         ([pairingDays, juniorMostPercentile]) => ({
           pairingDays,

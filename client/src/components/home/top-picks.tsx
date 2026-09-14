@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTopPicks } from '@/hooks/use-top-picks';
 
 interface TopPicksProps {
+  analysisKey?: string;
   bidPackageId: number | undefined;
   userId: number | undefined;
   pairings: any[];
@@ -27,13 +28,18 @@ function holdBadgeClass(hold: number | null): string {
  * nothing on error/offline so the Home never blocks on it.
  */
 export function TopPicks({
+  analysisKey,
   bidPackageId,
   userId,
   pairings,
   onPairingClick,
   onOpenBidBuilder,
 }: TopPicksProps) {
-  const { data, isLoading, isError } = useTopPicks(bidPackageId, userId);
+  const { data, isLoading, isError } = useTopPicks(
+    bidPackageId,
+    userId,
+    analysisKey
+  );
 
   if (!bidPackageId) return null;
 

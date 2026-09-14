@@ -467,21 +467,7 @@ export const api = {
 
   // AI Chat Analysis
   async analyzePairings(question: string, bidPackageId?: number, sessionId?: string) {
-    // Seniority rides along as a real request field. The pilot's name,
-    // seniority and bid-package identity are NOT prefixed onto the question
-    // text: the server already puts all of that in the system prompt, which
-    // is prompt-cached, whereas anything prepended here is billed as
-    // uncached input on every single turn. (Building that prefix also cost
-    // a full /api/bid-packages round trip per message.)
-    let seniorityFromLocal: string | null = null;
-    try {
-      if (typeof window !== 'undefined') {
-        seniorityFromLocal = localStorage.getItem('seniorityPercentile');
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-
+    // The server resolves seniority from the selected package's category.
     const response = await fetch('/api/askAssistant', {
       method: 'POST',
       headers: {
@@ -490,9 +476,6 @@ export const api = {
       body: JSON.stringify({
         question,
         bidPackageId,
-        seniorityPercentile: seniorityFromLocal
-          ? parseFloat(seniorityFromLocal)
-          : undefined,
         sessionId,
       }),
     });

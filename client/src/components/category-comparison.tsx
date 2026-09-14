@@ -124,7 +124,8 @@ export function CategoryComparisonPanel({
               : 'No matching Reasons Report roster is imported for this category. Choose another available category above.'}
       </p>
       <p className="text-xs text-muted-foreground">
-        Comparisons do not change your saved position or bid analysis.
+        Your saved position stays the same. Bid analysis uses the category of
+        the selected bid package.
       </p>
       {query.isError && (
         <Button size="sm" variant="outline" onClick={() => query.refetch()}>

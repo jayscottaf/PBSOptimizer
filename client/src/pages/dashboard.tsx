@@ -1,3 +1,4 @@
+import { analysisCategory } from '@shared/category-key';
 import { CategoryComparisonPanel } from '@/components/category-comparison';
 import type { CategorySeniority } from '@shared/category-seniority';
 import { pairingsCsv, downloadText } from '@/lib/pairing-export';
@@ -334,7 +335,6 @@ export default function Dashboard() {
   const [historyRevision, setHistoryRevision] = useState(
     () => localStorage.getItem('historyRevision') || '0'
   );
-  const probabilityCacheUser = `${currentUser?.id ?? 'guest'}:${seniorityPercentile || '50'}:${currentUser?.updatedAt || ''}:${historyRevision}`;
 
   // Track if this is the initial load to prevent overwriting saved values
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -524,6 +524,72 @@ export default function Dashboard() {
   }, [bidPackages, selectedBidPackageId]);
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
+  const viewedCategory = analysisCategory(
+    latestBidPackage?.base || '',
+    latestBidPackage?.aircraft || '',
+    currentUser?.aircraft || '',
+    currentUser?.position || position
+  );
+  const viewedSeniorityQuery = useQuery<{
+    categorySeniority: CategorySeniority | null;
+    cached?: boolean;
+  }>({
+    queryKey: [
+      'viewed-category-seniority',
+      currentUser?.seniorityNumber,
+      viewedCategory.base,
+      viewedCategory.aircraft,
+      viewedCategory.position,
+      historyRevision,
+    ],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({
+        ...viewedCategory,
+        seniorityNumber: String(currentUser!.seniorityNumber),
+      });
+      const cacheKey = `viewed-seniority:${currentUser!.seniorityNumber}:${viewedCategory.base}:${viewedCategory.aircraft}:${viewedCategory.position}`;
+      try {
+        const response = await fetch(`/api/category-seniority?${params}`, {
+          signal,
+        });
+        if (!response.ok)
+          throw new Error('Could not load seniority for the viewed category.');
+        const data = await response.json();
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch {
+          /* Storage may be unavailable. */
+        }
+        return data;
+      } catch (error) {
+        if (navigator.onLine || signal.aborted) throw error;
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+          const pct = cached?.categorySeniority?.percentile;
+          if (
+            typeof pct === 'number' &&
+            Number.isFinite(pct) &&
+            pct >= 0 &&
+            pct <= 100
+          )
+            return { ...cached, cached: true };
+        } catch {
+          /* No valid offline roster for this category. */
+        }
+        throw error;
+      }
+    },
+    enabled: !!currentUser?.seniorityNumber && !!bidPackageId,
+    networkMode: 'always',
+    retry: 1,
+    staleTime: 0,
+  });
+  const viewedPercentile =
+    viewedSeniorityQuery.data?.categorySeniority?.percentile;
+  const analysisPercentile = viewedPercentile ?? 50;
+  const displayedPercentile =
+    viewedPercentile === undefined ? undefined : String(viewedPercentile);
+  const probabilityCacheUser = `category-v2:${currentUser?.id ?? 'guest'}:${viewedCategory.base}:${viewedCategory.aircraft}:${viewedCategory.position}:${analysisPercentile}:${currentUser?.updatedAt || ''}:${historyRevision}`;
   // Check if we have any completed bid packages
   const hasCompletedBidPackages = bidPackages.some(
     (pkg: any) => pkg.status === 'completed'
@@ -583,14 +649,15 @@ export default function Dashboard() {
     queryFn: () =>
       api.loadPairingDataset(
         bidPackageId!,
-        Number(seniorityPercentile || 50),
+        analysisPercentile,
         probabilityCacheUser,
         String(latestBidPackage?.uploadedAt)
       ),
     enabled:
       hasInitialized &&
       !!bidPackageId &&
-      latestBidPackage?.status === 'completed',
+      latestBidPackage?.status === 'completed' &&
+      (!currentUser || viewedSeniorityQuery.isSuccess),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
@@ -1207,7 +1274,7 @@ export default function Dashboard() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         currentUser={currentUser}
-        seniorityPercentile={seniorityPercentile}
+        seniorityPercentile={displayedPercentile}
         bidPackages={bidPackages as any[]}
         selectedPackage={latestBidPackage}
         onSelectPackage={setSelectedBidPackageId}
@@ -1222,7 +1289,7 @@ export default function Dashboard() {
         <AppHeader
           activeTab={activeTab}
           currentUser={currentUser}
-          seniorityPercentile={seniorityPercentile}
+          seniorityPercentile={displayedPercentile}
           onUpload={() => setShowUploadModal(true)}
           onOpenAI={openAIAssistant}
         />
@@ -1262,12 +1329,41 @@ export default function Dashboard() {
                             : undefined
                         }
                       />
+                      {viewedSeniorityQuery.data?.cached && (
+                        <p className="text-sm text-muted-foreground">
+                          Using the saved offline seniority for this category.
+                        </p>
+                      )}
+                      {viewedSeniorityQuery.isError && (
+                        <div
+                          role="alert"
+                          className="rounded-lg border p-3 text-sm"
+                        >
+                          Could not load this category's seniority.{' '}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => viewedSeniorityQuery.refetch()}
+                          >
+                            Retry category seniority
+                          </Button>
+                        </div>
+                      )}
+                      {currentUser &&
+                        viewedSeniorityQuery.isSuccess &&
+                        viewedPercentile === undefined && (
+                          <p className="text-sm text-muted-foreground">
+                            No roster is available for this package's category.
+                            Hold estimates use a neutral 50% assumption.
+                          </p>
+                        )}
                       <KpiStrip
                         pairings={displayPairings || []}
                         bidPackage={latestBidPackage}
-                        seniorityPercentile={seniorityPercentile}
+                        seniorityPercentile={displayedPercentile}
                       />
                       <TopPicks
+                        analysisKey={probabilityCacheUser}
                         bidPackageId={bidPackageId}
                         userId={currentUser?.id}
                         pairings={pairings || []}
@@ -1604,7 +1700,7 @@ export default function Dashboard() {
                   }
                 >
                   <TrendsPanel
-                    seniorityPercentile={seniorityPercentile}
+                    seniorityPercentile={displayedPercentile}
                     base={latestBidPackage?.base}
                     aircraft={latestBidPackage?.aircraft}
                   />

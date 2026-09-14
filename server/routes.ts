@@ -1,5 +1,5 @@
 import { categorySeniorityInput } from '../shared/category-seniority';
-import { getCategorySeniority, getCategoryComparisons } from './lib/category-seniority';
+import { getCategorySeniority, getCategoryComparisons, getAnalysisSeniority } from './lib/category-seniority';
 import { printedDurationHours } from '../shared/durations';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
@@ -1432,7 +1432,7 @@ export async function registerRoutes(app: Express) {
       const weights = (profileRow?.weights as any) ?? neutralProfile();
 
       const user = Number.isNaN(uid) ? undefined : await storage.getUser(uid);
-      const seniorityPercentile = user?.seniorityPercentile ?? undefined;
+      const seniorityPercentile = await getAnalysisSeniority(user, bidPackage);
 
       const [trends, realWindow] = await Promise.all([
         storage
@@ -2717,7 +2717,7 @@ export async function registerRoutes(app: Express) {
             message: question,
             bidPackageId: finalBidPackageId,
             userId: profile?.id,
-            seniorityPercentile: profile?.seniorityPercentile ?? undefined,
+            seniorityPercentile: await getAnalysisSeniority(profile, finalBidPackageId ? await storage.getBidPackage(finalBidPackageId) : undefined),
             conversationHistory,
           });
 

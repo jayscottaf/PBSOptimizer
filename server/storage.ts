@@ -1,3 +1,4 @@
+import { getAnalysisSeniority } from './lib/category-seniority';
 import { printedDurationMinutesSql } from './lib/duration-sql';
 import { hashPin, verifyPin } from './lib/access-control';
 import {
@@ -565,7 +566,7 @@ export class DatabaseStorage implements IStorage {
       const frequencies = new Map<string, number>();
       for (const p of numbers) frequencies.set(p.pairingNumber, (frequencies.get(p.pairingNumber) ?? 0) + 1);
       results.push(...personalizeHoldProbabilities(rows.filter(p => p.bidPackageId === id), {
-        user, percentile, bidPackage, history, rosters, frequencies,
+        user, percentile: percentile ?? await getAnalysisSeniority(user, bidPackage), bidPackage, history, rosters, frequencies,
       }));
     }
     const byId = new Map(results.map(p => [p.id, p]));
