@@ -195,7 +195,15 @@ export function accessControl(
 
 export function publicUser<T extends { syncPin?: string | null }>(user: T) {
   const { syncPin, ...profile } = user;
-  return { ...profile, hasSyncPin: Boolean(syncPin) };
+  const category =
+    'aircraft' in profile && typeof profile.aircraft === 'string'
+      ? profile.aircraft.match(/^(.*)-([AB])$/)
+      : null;
+  return {
+    ...profile,
+    ...(category ? { aircraft: category[1], position: category[2] } : {}),
+    hasSyncPin: Boolean(syncPin),
+  };
 }
 
 function pinPage(message?: string, setup = false) {

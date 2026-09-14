@@ -1,3 +1,4 @@
+import type { CategorySeniority } from '@shared/category-seniority';
 import { pairingsCsv, downloadText } from '@/lib/pairing-export';
 import { printedDurationMinutes } from '@shared/durations';
 import { filterPairings } from '@/lib/filter-pairings';
@@ -383,6 +384,7 @@ export default function Dashboard() {
       );
       setBase(user.base);
       setAircraft(user.aircraft);
+      if (user.position) setPosition(user.position);
       localStorage.setItem('userId', String(user.id));
       localStorage.setItem('profileUpdatedAt', user.updatedAt || '');
       queryClient.invalidateQueries();
@@ -405,6 +407,34 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const validCategory =
+    /^[1-9]\d*$/.test(seniorityNumber) &&
+    Number(seniorityNumber) <= 2147483647 &&
+    !!base &&
+    !!aircraft &&
+    !!position;
+  const categorySeniorityQuery = useQuery<{
+    categorySeniority: CategorySeniority | null;
+  }>({
+    queryKey: ['category-seniority', seniorityNumber, base, aircraft, position],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({
+        seniorityNumber,
+        base,
+        aircraft,
+        position,
+      });
+      const response = await fetch(`/api/category-seniority?${params}`, {
+        signal,
+      });
+      if (!response.ok) throw new Error('Could not load the category roster.');
+      return response.json();
+    },
+    enabled: showProfileModal && validCategory,
+    staleTime: 0,
+    retry: 1,
+  });
+  const categorySeniority = categorySeniorityQuery.data?.categorySeniority;
   // First-run welcome step inside the profile dialog (presentation only —
   // the dialog's open/close gating below is untouched).
   const [welcomeIntroDone, setWelcomeIntroDone] = useState(false);
@@ -1853,6 +1883,8 @@ export default function Dashboard() {
                     Seniority Number <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="profile-seniority"
+                    aria-label="Seniority Number"
                     data-testid="input-seniority-number"
                     value={seniorityNumber}
                     onChange={e => setSeniorityNumber(e.target.value)}
@@ -1868,25 +1900,49 @@ export default function Dashboard() {
                     required
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
-                    Category Seniority %
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={seniorityPercentile}
-                    onChange={e => setSeniorityPercentile(e.target.value)}
-                    placeholder="e.g., 47.6 (optional)"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Lower % = more senior
+                <div
+                  className="rounded-lg border bg-muted/30 p-3"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="text-sm font-medium">
+                    Category seniority · Automatic estimate
                   </p>
+                  <p
+                    className="mt-1 text-2xl font-semibold"
+                    data-testid="category-seniority"
+                  >
+                    {categorySeniority
+                      ? `${categorySeniority.percentile}%`
+                      : '—'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {!validCategory
+                      ? 'Enter your seniority number, base, aircraft and position below.'
+                      : categorySeniorityQuery.isFetching
+                        ? 'Calculating from your category roster…'
+                        : categorySeniorityQuery.isError
+                          ? 'Roster lookup failed. Retry before saving.'
+                          : categorySeniority
+                            ? `${base} ${aircraft} ${position === 'A' ? 'Captain' : 'First Officer'} · ${categorySeniority.month} ${categorySeniority.year} Reasons Report · ${categorySeniority.seniorOrEqual} of ${categorySeniority.totalPilots} reported pilots at or above your seniority. Lower % means more senior. Recalculated when you save; hold estimates use the nearest whole percent.`
+                            : 'No matching roster imported. Upload a Reasons Report for this category, then save your profile again. Until then, hold estimates use a neutral 50% assumption.'}
+                  </p>
+                  {categorySeniorityQuery.isError && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => categorySeniorityQuery.refetch()}
+                    >
+                      Retry roster lookup
+                    </Button>
+                  )}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                  <label
+                    htmlFor="profile-base"
+                    className="text-sm font-medium text-secondary-foreground mb-1 block"
+                  >
                     Base <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -1909,7 +1965,10 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                  <label
+                    htmlFor="profile-aircraft"
+                    className="text-sm font-medium text-secondary-foreground mb-1 block"
+                  >
                     Aircraft <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -1932,7 +1991,10 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-secondary-foreground mb-1 block">
+                  <label
+                    htmlFor="profile-position"
+                    className="text-sm font-medium text-secondary-foreground mb-1 block"
+                  >
                     Position <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -1944,8 +2006,8 @@ export default function Dashboard() {
                     required
                   >
                     <option value="">Select your position</option>
-                    <option value="A">A - Position A</option>
-                    <option value="B">B - Position B</option>
+                    <option value="A">Captain (A)</option>
+                    <option value="B">First Officer (B)</option>
                   </select>
                   <p className="text-xs text-muted-foreground mt-1">
                     Position A or B (matches ALV table)
@@ -2106,7 +2168,7 @@ export default function Dashboard() {
                     data-testid="button-save-profile"
                     onClick={async () => {
                       // Validate required fields
-                      if (!seniorityNumber || !base || !aircraft || !position) {
+                      if (!validCategory) {
                         toast({
                           title: 'Missing Required Fields',
                           description:
@@ -2120,10 +2182,8 @@ export default function Dashboard() {
                         // Create or update the one canonical user in the database
                         const savedUser = await api.createOrUpdateUser({
                           name: name || undefined,
-                          seniorityNumber: parseInt(seniorityNumber),
-                          seniorityPercentile: seniorityPercentile
-                            ? Math.round(parseFloat(seniorityPercentile))
-                            : undefined,
+                          seniorityNumber: Number(seniorityNumber),
+                          position,
                           base,
                           aircraft,
                         });
@@ -2131,8 +2191,9 @@ export default function Dashboard() {
 
                         toast({
                           title: 'Profile Saved',
-                          description:
-                            'Your profile has been saved successfully!',
+                          description: savedUser.categorySeniority
+                            ? 'Your category percentage was calculated and saved.'
+                            : 'Profile saved. No matching roster is available; hold estimates use a neutral 50% assumption.',
                         });
 
                         setShowProfileModal(false);

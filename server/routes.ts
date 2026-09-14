@@ -1,3 +1,5 @@
+import { categorySeniorityInput } from '../shared/category-seniority';
+import { getCategorySeniority } from './lib/category-seniority';
 import { printedDurationHours } from '../shared/durations';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
@@ -2248,44 +2250,59 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Create/update user
-  app.post('/api/user', async (req, res) => {
+  // Preview uses the same category calculation as saving the profile.
+  app.get('/api/category-seniority', async (req, res) => {
+    const parsed = categorySeniorityInput.safeParse(req.query);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({
+          error: 'Enter a valid seniority number, base, aircraft and position.',
+        });
     try {
-      const { name, seniorityNumber, seniorityPercentile, base, aircraft } =
-        req.body;
+      res.json({ categorySeniority: await getCategorySeniority(parsed.data) });
+    } catch (error) {
+      console.error('Error calculating category seniority:', error);
+      res
+        .status(503)
+        .json({
+          error: 'Category seniority is temporarily unavailable. Please retry.',
+        });
+    }
+  });
 
-      if (!seniorityNumber || !base || !aircraft) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      const parsedSeniorityNumber = parseInt(seniorityNumber);
-      if (Number.isNaN(parsedSeniorityNumber)) {
-        return res.status(400).json({ error: 'Invalid seniorityNumber' });
-      }
-
-      // users.seniorityPercentile is an integer column — round, don't just
-      // truncate via parseFloat, or a value like "47.6" 500s on insert.
-      let parsedPercentile = 50;
-      if (seniorityPercentile !== undefined && seniorityPercentile !== null && seniorityPercentile !== '') {
-        const rounded = Math.round(Number(seniorityPercentile));
-        if (Number.isNaN(rounded)) {
-          return res.status(400).json({ error: 'Invalid seniorityPercentile' });
-        }
-        parsedPercentile = rounded;
-      }
-
+  // Calculate on the server rather than trusting a client-supplied percentage.
+  app.post('/api/user', async (req, res) => {
+    const parsed = categorySeniorityInput.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({
+          error: 'Enter a valid seniority number, base, aircraft and position.',
+        });
+    try {
+      const input = parsed.data;
+      const categorySeniority = await getCategorySeniority(input);
       const user = await storage.createOrUpdateUser({
-        name,
-        seniorityNumber: parsedSeniorityNumber,
-        seniorityPercentile: parsedPercentile,
-        base,
-        aircraft,
+        name: typeof req.body.name === 'string' ? req.body.name : undefined,
+        seniorityNumber: input.seniorityNumber,
+        // The current database stores whole percentages. Unknown categories use
+        // the existing neutral fallback, explicitly disclosed in the profile.
+        seniorityPercentile: categorySeniority
+          ? Math.round(categorySeniority.percentile)
+          : 50,
+        base: input.base,
+        // Persist seat in the existing category code (e.g. A220-B).
+        aircraft: `${input.aircraft.replace(/-?[AB]$/, '')}-${input.position}`,
       });
-
-      res.json(publicUser(user));
+      res.json({ ...publicUser(user), categorySeniority });
     } catch (error) {
       console.error('Error creating/updating user:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res
+        .status(500)
+        .json({
+          error: 'Could not calculate and save your profile. Please retry.',
+        });
     }
   });
 

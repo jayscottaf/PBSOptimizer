@@ -331,7 +331,7 @@ export const api = {
   createOrUpdateUser: async (data: {
     name?: string;
     seniorityNumber: number;
-    seniorityPercentile?: number;
+    position: string;
     base: string;
     aircraft: string;
   }) => {

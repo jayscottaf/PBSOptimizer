@@ -340,7 +340,7 @@ export class DatabaseStorage implements IStorage {
         seniorityNumber: userData.seniorityNumber,
         base: userData.base,
         aircraft: userData.aircraft,
-        seniorityPercentile: userData.seniorityPercentile || 50, // Default to 50 if not provided
+        seniorityPercentile: userData.seniorityPercentile ?? 50, // Default to 50 if not provided
       };
 
       // Only add name if it's provided
