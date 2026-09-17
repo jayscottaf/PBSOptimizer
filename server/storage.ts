@@ -46,6 +46,7 @@ import { parseOutcomeMetrics } from './lib/outcome-metrics';
 import { parseCategoryStanding } from './lib/category-standing';
 import { parseAircraftCode, normalizedAircraftSqlExpr } from './lib/aircraft';
 import { countOperatingInstances, monthNameToNumber } from './lib/bidSimulator';
+import { ensureWideScheduleStorage } from './lib/wide-schedule-storage';
 import {
   eq,
   and,
@@ -526,6 +527,7 @@ export class DatabaseStorage implements IStorage {
     },
     lines: InsertWideScheduleLine[]
   ): Promise<WideScheduleLine[]> {
+    await ensureWideScheduleStorage();
     return db.transaction(async tx => {
       await tx
         .delete(wideScheduleLines)
@@ -550,6 +552,7 @@ export class DatabaseStorage implements IStorage {
     aircraft: string;
     position: string;
   }): Promise<WideScheduleLine[]> {
+    await ensureWideScheduleStorage();
     return db
       .select()
       .from(wideScheduleLines)
@@ -569,6 +572,7 @@ export class DatabaseStorage implements IStorage {
     aircraft: string;
     position: string;
   }): Promise<WideScheduleLine[]> {
+    await ensureWideScheduleStorage();
     const matching = await db
       .select()
       .from(wideScheduleLines)
