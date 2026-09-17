@@ -7,11 +7,14 @@ import {
   countLongLayover,
   pct,
 } from '@/lib/packageStats';
+import { findBidCategoryParameters } from '@shared/bid-package-parameters';
 
 interface KpiStripProps {
   pairings: any[];
   bidPackage: any | null;
   seniorityPercentile: number | string | null | undefined;
+  position?: 'A' | 'B';
+  categoryStanding?: number;
 }
 
 interface KpiCardProps {
@@ -47,6 +50,8 @@ export function KpiStrip({
   pairings,
   bidPackage,
   seniorityPercentile,
+  position,
+  categoryStanding,
 }: KpiStripProps) {
   const total = pairings.length;
   const hold = countLikelyToHold(pairings);
@@ -57,6 +62,17 @@ export function KpiStrip({
       reason.includes('No award history imported')
     )
   );
+  const categoryParameters = findBidCategoryParameters(
+    bidPackage?.alvTable,
+    bidPackage?.base,
+    bidPackage?.aircraft,
+    position
+  );
+  const duration = (value: number | undefined) => {
+    if (value === undefined) return '—';
+    const totalMinutes = Math.round(value * 60);
+    return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`;
+  };
 
   return (
     <section aria-label="Package summary" className="space-y-2">
@@ -64,6 +80,28 @@ export function KpiStrip({
         <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-sm">
           Hold estimates use seniority only. Add Reasons Reports for{' '}
           {bidPackage?.base} {bidPackage?.aircraft} to include award history.
+        </p>
+      )}
+      {categoryParameters && (
+        <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          <span className="font-medium">
+            Official {categoryParameters.displayName} parameters:
+          </span>{' '}
+          {duration(categoryParameters.lineConstructionMinHours)}–
+          {duration(categoryParameters.lineConstructionMaxHours)} credit window
+          {' · '}reserve {duration(categoryParameters.reserveGuaranteeHours)}
+          {categoryParameters.reserveRule
+            ? ` · reserve rule ${categoryParameters.reserveRule}`
+            : ''}
+          {categoryParameters.rllLimit !== undefined
+            ? ` · RLL limit ${categoryParameters.rllLimit}`
+            : ''}
+          {categoryStanding !== undefined &&
+          categoryParameters.rllLimit !== undefined
+            ? ` · your reported standing ${categoryStanding} is ${categoryStanding <= categoryParameters.rllLimit ? 'within' : 'beyond'} that limit`
+            : ''}
+          {categoryParameters.extraXDay ? ' · extra X-day' : ''}
+          {categoryParameters.vacationSlide ? ' · 3-day vacation slide' : ''}
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

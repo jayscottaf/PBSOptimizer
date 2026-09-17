@@ -140,7 +140,10 @@ export async function getApiErrorMessage(
   }
 }
 
-const loadDataset = createDatasetLoader<Pairing>({ read: loadPairingsCache, write: savePairingsCache });
+const loadDataset = createDatasetLoader<Pairing>({
+  read: loadPairingsCache,
+  write: savePairingsCache,
+});
 
 export const api = {
   // Bid packages
@@ -152,7 +155,9 @@ export const api = {
       return data;
     } catch (error) {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        const cached = await loadPairingsCache<BidPackage[]>('bid-packages:v1').catch(() => undefined);
+        const cached = await loadPairingsCache<BidPackage[]>(
+          'bid-packages:v1'
+        ).catch(() => undefined);
         if (cached) return cached;
       }
       throw error;
@@ -163,7 +168,7 @@ export const api = {
   simulateBid: async (
     bidPackageId: number,
     bid: DraftBid,
-    opts?: { alv?: number; threshold?: number }
+    opts?: { alv?: number; threshold?: number; position?: 'A' | 'B' }
   ): Promise<SimulationResult> => {
     const response = await apiRequest('POST', '/api/bid/simulate', {
       bidPackageId,
@@ -203,15 +208,29 @@ export const api = {
 
   // Get unique layover locations for a bid package
   getLayoverLocations: async (bidPackageId: number): Promise<string[]> => {
-    const response = await apiRequest('GET', `/api/layover-locations?bidPackageId=${bidPackageId}`);
+    const response = await apiRequest(
+      'GET',
+      `/api/layover-locations?bidPackageId=${bidPackageId}`
+    );
     return response.json();
   },
 
-  loadPairingDataset: async (bidPackageId: number, seniorityPercentile: number, profileRevision: string, packageRevision: string) => {
+  loadPairingDataset: async (
+    bidPackageId: number,
+    seniorityPercentile: number,
+    profileRevision: string,
+    packageRevision: string
+  ) => {
     const key = `${cacheKeyForPairings(bidPackageId, { seniorityPercentile, packageRevision }, profileRevision)}:dataset:v1`;
     return loadDataset(key, async () => {
-      const response = await fetch(`/api/bid-packages/${bidPackageId}/dataset?seniorityPercentile=${seniorityPercentile}`, { credentials: 'include' });
-      if (!response.ok) throw Object.assign(new Error('Failed to load pairing dataset'), { status: response.status });
+      const response = await fetch(
+        `/api/bid-packages/${bidPackageId}/dataset?seniorityPercentile=${seniorityPercentile}`,
+        { credentials: 'include' }
+      );
+      if (!response.ok)
+        throw Object.assign(new Error('Failed to load pairing dataset'), {
+          status: response.status,
+        });
       return response.json();
     });
   },
@@ -347,7 +366,10 @@ export const api = {
 
   // Set or change the sync PIN used to link additional devices.
   setSyncPin: async (userId: number, pin: string) => {
-    const response = await apiRequest('PATCH', '/api/user/pin', { userId, pin });
+    const response = await apiRequest('PATCH', '/api/user/pin', {
+      userId,
+      pin,
+    });
     return response.json();
   },
 
@@ -455,7 +477,11 @@ export const api = {
   },
 
   // Get similar historical pairings using fingerprint matching
-  getSimilarBidHistory: async (pairingId: number, base?: string, aircraft?: string) => {
+  getSimilarBidHistory: async (
+    pairingId: number,
+    base?: string,
+    aircraft?: string
+  ) => {
     const params = new URLSearchParams();
     if (base) params.append('base', base);
     if (aircraft) params.append('aircraft', aircraft);
@@ -466,7 +492,11 @@ export const api = {
   },
 
   // AI Chat Analysis
-  async analyzePairings(question: string, bidPackageId?: number, sessionId?: string) {
+  async analyzePairings(
+    question: string,
+    bidPackageId?: number,
+    sessionId?: string
+  ) {
     // The server resolves seniority from the selected package's category.
     const response = await fetch('/api/askAssistant', {
       method: 'POST',

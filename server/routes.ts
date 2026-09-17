@@ -56,6 +56,7 @@ import { simulateBid } from './lib/bidSimulator';
 import { exportBid } from './lib/bidExporter';
 import { parseAircraftCode } from './lib/aircraft';
 import type { DraftBid } from '../shared/bidTypes';
+import { findBidCategoryParameters } from '../shared/bid-package-parameters';
 import * as fs from 'fs/promises';
 
 type ApiErrorCode =
@@ -1342,13 +1343,14 @@ export async function registerRoutes(app: Express) {
   // pass - see server/lib/bidSimulator.ts for what is and is not modeled)
   app.post('/api/bid/simulate', async (req, res) => {
     try {
-      const { bidPackageId, bid, alv, threshold, aircraftCategory } =
+      const { bidPackageId, bid, alv, threshold, aircraftCategory, position } =
         req.body as {
           bidPackageId: number;
           bid: DraftBid;
           alv?: number;
           threshold?: number;
           aircraftCategory?: 'narrowbody' | 'widebody';
+          position?: 'A' | 'B';
         };
       if (!bidPackageId || !bid || !Array.isArray(bid.groups)) {
         return sendApiError(
@@ -1365,6 +1367,12 @@ export async function registerRoutes(app: Express) {
       const packagePairings = await storage.getPairings(bidPackageId);
       const packageAlv =
         alv ??
+        findBidCategoryParameters(
+          bidPackage.alvTable,
+          bidPackage.base,
+          bidPackage.aircraft,
+          position
+        )?.alvHours ??
         (bidPackage.alvHours
           ? parseFloat(String(bidPackage.alvHours))
           : undefined);
@@ -1374,16 +1382,32 @@ export async function registerRoutes(app: Express) {
         bidPackage.base,
         bidPackage.aircraft
       );
+      const categoryParameters = findBidCategoryParameters(
+        bidPackage.alvTable,
+        bidPackage.base,
+        bidPackage.aircraft,
+        position
+      );
+      const packageWindow =
+        categoryParameters?.lineConstructionMinHours !== undefined &&
+        categoryParameters?.lineConstructionMaxHours !== undefined
+          ? {
+              windowMin: categoryParameters.lineConstructionMinHours,
+              windowMax: categoryParameters.lineConstructionMaxHours,
+            }
+          : undefined;
       const { monthNameToNumber } = await import('./lib/bidSimulator');
       const result = simulateBid(bid, packagePairings, {
         alv: packageAlv,
         threshold: threshold ?? realWindow?.threshold,
         aircraftCategory,
-        windowMin: realWindow?.windowMin,
-        windowMax: realWindow?.windowMax,
-        windowSource: realWindow
-          ? `the ${realWindow.period} Reasons Report`
-          : undefined,
+        windowMin: packageWindow?.windowMin ?? realWindow?.windowMin,
+        windowMax: packageWindow?.windowMax ?? realWindow?.windowMax,
+        windowSource: packageWindow
+          ? `the ${bidPackage.month} ${bidPackage.year} bid package`
+          : realWindow
+            ? `the ${realWindow.period} Reasons Report`
+            : undefined,
         periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
         periodYear: bidPackage.year ?? undefined,
       });
@@ -1541,6 +1565,15 @@ export async function registerRoutes(app: Express) {
 
       const user = Number.isNaN(uid) ? undefined : await storage.getUser(uid);
       const seniorityPercentile = await getAnalysisSeniority(user, bidPackage);
+      const userPosition = user?.aircraft
+        ?.toUpperCase()
+        .match(/-?([AB])$/)?.[1];
+      const categoryParameters = findBidCategoryParameters(
+        bidPackage.alvTable,
+        bidPackage.base,
+        bidPackage.aircraft,
+        userPosition
+      );
 
       const [trends, realWindow] = await Promise.all([
         storage
@@ -1576,15 +1609,23 @@ export async function registerRoutes(app: Express) {
         depth: ['auto', 'compact', 'deep'].includes(depth) ? depth : undefined,
       });
       const simulation = simulateBid(optimized.bid, pairingsList, {
-        alv: bidPackage.alvHours
-          ? parseFloat(String(bidPackage.alvHours))
-          : undefined,
+        alv:
+          categoryParameters?.alvHours ??
+          (bidPackage.alvHours
+            ? parseFloat(String(bidPackage.alvHours))
+            : undefined),
         threshold: realWindow?.threshold,
-        windowMin: realWindow?.windowMin,
-        windowMax: realWindow?.windowMax,
-        windowSource: realWindow
-          ? `the ${realWindow.period} Reasons Report`
-          : undefined,
+        windowMin:
+          categoryParameters?.lineConstructionMinHours ?? realWindow?.windowMin,
+        windowMax:
+          categoryParameters?.lineConstructionMaxHours ?? realWindow?.windowMax,
+        windowSource:
+          categoryParameters?.lineConstructionMinHours !== undefined &&
+          categoryParameters?.lineConstructionMaxHours !== undefined
+            ? `the ${bidPackage.month} ${bidPackage.year} bid package`
+            : realWindow
+              ? `the ${realWindow.period} Reasons Report`
+              : undefined,
         periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
         periodYear: bidPackage.year ?? undefined,
       });

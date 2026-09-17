@@ -585,9 +585,14 @@ function buildPreference(form: PreferenceFormState): BidPreference | null {
 interface BidBuilderProps {
   bidPackageId?: number;
   userId?: number;
+  position?: 'A' | 'B';
 }
 
-export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
+export function BidBuilder({
+  bidPackageId,
+  userId,
+  position,
+}: BidBuilderProps) {
   const { toast } = useToast();
   const [bid, setBid] = useState<DraftBid>(loadDraft);
   const [draftSaved, setDraftSaved] = useState(true);
@@ -660,7 +665,7 @@ export function BidBuilder({ bidPackageId, userId }: BidBuilderProps) {
   );
 
   const simulateMutation = useMutation({
-    mutationFn: () => api.simulateBid(bidPackageId!, bid),
+    mutationFn: () => api.simulateBid(bidPackageId!, bid, { position }),
     onSuccess: result => {
       setSimulation(result);
     },

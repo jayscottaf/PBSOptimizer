@@ -1361,6 +1361,11 @@ export default function Dashboard() {
                         pairings={displayPairings || []}
                         bidPackage={latestBidPackage}
                         seniorityPercentile={displayedPercentile}
+                        position={viewedCategory.position}
+                        categoryStanding={
+                          viewedSeniorityQuery.data?.categorySeniority
+                            ?.seniorOrEqual
+                        }
                       />
                       <TopPicks
                         analysisKey={probabilityCacheUser}
@@ -1672,6 +1677,7 @@ export default function Dashboard() {
                   <BidBuilder
                     bidPackageId={bidPackageId}
                     userId={currentUser?.id}
+                    position={viewedCategory.position}
                   />
                 </Suspense>
               </TabsContent>

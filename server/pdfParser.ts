@@ -1,4 +1,8 @@
-import { printedDurationHours, printedDurationMinutes, formatDuration } from '../shared/durations';
+import {
+  printedDurationHours,
+  printedDurationMinutes,
+  formatDuration,
+} from '../shared/durations';
 import fs from 'fs';
 import path from 'path';
 // Import the internal module directly. pdf-parse's index.js has a debug block
@@ -14,10 +18,21 @@ import {
   parseEffectiveRangeText,
   parseOperatingDays,
 } from '../shared/operatingDays';
+import { parseBidCategoryParameters } from './lib/bid-package-parameters';
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 interface FlightSegment {
@@ -76,7 +91,8 @@ export class PDFParser {
       userSeniorityPercentile !== undefined ? userSeniorityPercentile : 50; // Middle seniority as default
 
     // Extract layover cities for location-based adjustments
-    const layoverCities = pairing.layovers?.map(l => l.city).filter(c => c) || [];
+    const layoverCities =
+      pairing.layovers?.map(l => l.city).filter(c => c) || [];
 
     const desirabilityScore =
       HoldProbabilityCalculator.calculateDesirabilityScore(pairing, bidMonth);
@@ -138,7 +154,20 @@ export class PDFParser {
     return cleanedRoute.join('-');
   }
 
-  private extractALVTable(text: string): { alvTable: any[]; defaultALV: number | null } {
+  private extractALVTable(text: string): {
+    alvTable: any[];
+    defaultALV: number | null;
+  } {
+    const categoryParameters = parseBidCategoryParameters(text);
+    if (categoryParameters.length > 0) {
+      return {
+        alvTable: categoryParameters,
+        // This document-wide table covers every category, so its first row is
+        // not a safe package default. Callers match the category-specific row.
+        defaultALV: null,
+      };
+    }
+
     const lines = text.split('\n');
     const alvTable: any[] = [];
     let defaultALV: number | null = null;
@@ -161,12 +190,17 @@ export class PDFParser {
           const hours = parseInt(alvHeaderMatch[1]);
           const minutes = parseInt(alvHeaderMatch[2]);
           defaultALV = hours + minutes / 60;
-          console.log(`✅ Found default ALV in header: ${defaultALV.toFixed(2)} hours`);
+          console.log(
+            `✅ Found default ALV in header: ${defaultALV.toFixed(2)} hours`
+          );
         }
       }
 
       // Stop parsing after ALV section if we hit another major section
-      if (inALVSection && line.match(/^(PAIRING|#\d{4}|EFFECTIVE|DAY\s+[A-J])/)) {
+      if (
+        inALVSection &&
+        line.match(/^(PAIRING|#\d{4}|EFFECTIVE|DAY\s+[A-J])/)
+      ) {
         console.log(`ALV section ended at line ${i}`);
         break;
       }
@@ -176,7 +210,9 @@ export class PDFParser {
 
       // Pattern 1: Standard format "NYC 220 B    72:00" or "NYC A220 B    72.00"
       // Captures: BASE(3-letter) AIRCRAFT(alphanumeric) POSITION(1-2 letters) HOURS
-      const alvRowMatch = line.match(/^([A-Z]{2,3})\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/);
+      const alvRowMatch = line.match(
+        /^([A-Z]{2,3})\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/
+      );
       if (alvRowMatch) {
         const base = alvRowMatch[1];
         const aircraft = alvRowMatch[2];
@@ -187,7 +223,10 @@ export class PDFParser {
 
         // Avoid duplicates
         const exists = alvTable.some(
-          row => row.base === base && row.aircraft === aircraft && row.position === position
+          row =>
+            row.base === base &&
+            row.aircraft === aircraft &&
+            row.position === position
         );
 
         if (!exists) {
@@ -198,21 +237,27 @@ export class PDFParser {
             alvHours,
             displayName: `${base} ${aircraft} ${position}`,
           });
-          console.log(`✅ Found ALV row: ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`);
+          console.log(
+            `✅ Found ALV row: ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`
+          );
         }
       }
 
       // Pattern 2: Full city name format "NEW YORK CITY 220 B    72:00"
-      const alvRowAltMatch = line.match(/^(NEW\s+YORK\s+CITY|NEWARK|LOS\s+ANGELES|SAN\s+FRANCISCO)\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/i);
+      const alvRowAltMatch = line.match(
+        /^(NEW\s+YORK\s+CITY|NEWARK|LOS\s+ANGELES|SAN\s+FRANCISCO)\s+([\w\d-]+)\s+([A-Z]{1,2})\s+(\d{1,3})[:\.](\d{2})/i
+      );
       if (alvRowAltMatch) {
         const baseFull = alvRowAltMatch[1];
         const baseMap: Record<string, string> = {
           'NEW YORK CITY': 'NYC',
-          'NEWARK': 'EWR',
+          NEWARK: 'EWR',
           'LOS ANGELES': 'LAX',
           'SAN FRANCISCO': 'SFO',
         };
-        const base = baseMap[baseFull.toUpperCase().trim()] || baseFull.substring(0, 3).toUpperCase();
+        const base =
+          baseMap[baseFull.toUpperCase().trim()] ||
+          baseFull.substring(0, 3).toUpperCase();
         const aircraft = alvRowAltMatch[2];
         const position = alvRowAltMatch[3];
         const hours = parseInt(alvRowAltMatch[4]);
@@ -220,7 +265,10 @@ export class PDFParser {
         const alvHours = hours + minutes / 60;
 
         const exists = alvTable.some(
-          row => row.base === base && row.aircraft === aircraft && row.position === position
+          row =>
+            row.base === base &&
+            row.aircraft === aircraft &&
+            row.position === position
         );
 
         if (!exists) {
@@ -231,14 +279,18 @@ export class PDFParser {
             alvHours,
             displayName: `${base} ${aircraft} ${position}`,
           });
-          console.log(`✅ Found ALV row (full name): ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`);
+          console.log(
+            `✅ Found ALV row (full name): ${base} ${aircraft} ${position} = ${alvHours.toFixed(2)}h`
+          );
         }
       }
     }
 
     console.log(`\n=== ALV Extraction Summary ===`);
     console.log(`Total entries found: ${alvTable.length}`);
-    console.log(`Default ALV: ${defaultALV ? defaultALV.toFixed(2) + 'h' : 'Not found'}`);
+    console.log(
+      `Default ALV: ${defaultALV ? defaultALV.toFixed(2) + 'h' : 'Not found'}`
+    );
     if (alvTable.length > 0) {
       console.log('Entries:');
       alvTable.forEach(entry => {
@@ -255,18 +307,30 @@ export class PDFParser {
   ): { startDate: string; endDate: string } | null {
     const lines = text.split('\n');
     const monthMap: { [key: string]: number } = {
-      january: 0, jan: 0,
-      february: 1, feb: 1,
-      march: 2, mar: 2,
-      april: 3, apr: 3,
+      january: 0,
+      jan: 0,
+      february: 1,
+      feb: 1,
+      march: 2,
+      mar: 2,
+      april: 3,
+      apr: 3,
       may: 4,
-      june: 5, jun: 5,
-      july: 6, jul: 6,
-      august: 7, aug: 7,
-      september: 8, sep: 8, sept: 8,
-      october: 9, oct: 9,
-      november: 10, nov: 10,
-      december: 11, dec: 11,
+      june: 5,
+      jun: 5,
+      july: 6,
+      jul: 6,
+      august: 7,
+      aug: 7,
+      september: 8,
+      sep: 8,
+      sept: 8,
+      october: 9,
+      oct: 9,
+      november: 10,
+      nov: 10,
+      december: 11,
+      dec: 11,
     };
     for (let i = 0; i < Math.min(20, lines.length); i++) {
       const line = lines[i].trim();
@@ -398,8 +462,17 @@ export class PDFParser {
           // Taking the start month labeled the second shape a month early.
           // The period midpoint lands in the majority month either way.
           const MONTHS: Record<string, number> = {
-            january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-            july: 6, august: 7, september: 8, october: 9, november: 10,
+            january: 0,
+            february: 1,
+            march: 2,
+            april: 3,
+            may: 4,
+            june: 5,
+            july: 6,
+            august: 7,
+            september: 8,
+            october: 9,
+            november: 10,
             december: 11,
           };
           const sm = MONTHS[startMonth.toLowerCase()];
@@ -850,8 +923,12 @@ export class PDFParser {
         const creditM = parseInt(totalCreditMatch[2]);
         const blockH = parseInt(totalCreditMatch[3]);
         const blockM = parseInt(totalCreditMatch[4]);
-        creditHours = printedDurationHours(`${creditH}:${String(creditM).padStart(2, '0')}`).toFixed(2);
-        blockHours = printedDurationHours(`${blockH}:${String(blockM).padStart(2, '0')}`).toFixed(2);
+        creditHours = printedDurationHours(
+          `${creditH}:${String(creditM).padStart(2, '0')}`
+        ).toFixed(2);
+        blockHours = printedDurationHours(
+          `${blockH}:${String(blockM).padStart(2, '0')}`
+        ).toFixed(2);
       }
 
       // Look for TAFB - it's just the hours value, not converted to days
@@ -931,7 +1008,9 @@ export class PDFParser {
     // For example: A->C (skipping B due to long layover) should be 3 days, not 2
     let pairingDays = 1; // Default to 1 day minimum
     // Find all day letters mentioned in the full text block
-    const dayPatternMatches = block.match(/^([A-J])\s+(?:DH\s+)?\*?\d{3,4}\s/gm);
+    const dayPatternMatches = block.match(
+      /^([A-J])\s+(?:DH\s+)?\*?\d{3,4}\s/gm
+    );
     if (dayPatternMatches) {
       const allDayLetters = dayPatternMatches.map(match =>
         match.trim().charAt(0)
@@ -978,7 +1057,7 @@ export class PDFParser {
         seenCities.add(cityUpper);
       }
     }
-    
+
     // Additional validation: max layovers should be pairingDays - 1
     // (you can only have one layover per night, and nights = days - 1)
     const maxAllowedLayovers = Math.max(0, pairingDays - 1);
@@ -1077,19 +1156,23 @@ export class PDFParser {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
 
       let text: string;
-      
+
       if (Buffer.isBuffer(fileData) || fileData instanceof Uint8Array) {
         // Convert buffer to temp file for processing
-        const bufferData = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData);
+        const bufferData = Buffer.isBuffer(fileData)
+          ? fileData
+          : Buffer.from(fileData);
         console.log(`Received buffer of size: ${bufferData.length} bytes`);
-        
+
         // Write to temp file
         tempFilePath = `/tmp/bid-package-${bidPackageId}-${Date.now()}.${mimeType === 'text/plain' ? 'txt' : 'pdf'}`;
         fs.writeFileSync(tempFilePath, bufferData);
-        
+
         if (mimeType === 'text/plain') {
           text = await this.extractTextFromTXT(tempFilePath);
-          console.log(`TXT file parsed successfully, ${text.length} characters`);
+          console.log(
+            `TXT file parsed successfully, ${text.length} characters`
+          );
         } else {
           text = await this.extractTextFromPDF(tempFilePath);
           console.log(`PDF parsed successfully, ${text.length} characters`);
@@ -1098,7 +1181,9 @@ export class PDFParser {
         // Handle file path (local development)
         if (mimeType === 'text/plain') {
           text = await this.extractTextFromTXT(fileData);
-          console.log(`TXT file parsed successfully, ${text.length} characters`);
+          console.log(
+            `TXT file parsed successfully, ${text.length} characters`
+          );
         } else {
           text = await this.extractTextFromPDF(fileData);
           console.log(`PDF parsed successfully, ${text.length} characters`);
@@ -1161,7 +1246,9 @@ export class PDFParser {
       // Extract ALV (Average Line Value) table from the PDF
       const { alvTable, defaultALV } = this.extractALVTable(text);
       if (alvTable.length > 0 || defaultALV !== null) {
-        console.log(`Extracted ALV data: ${alvTable.length} table entries, default: ${defaultALV}`);
+        console.log(
+          `Extracted ALV data: ${alvTable.length} table entries, default: ${defaultALV}`
+        );
         await storage.updateBidPackageInfo(bidPackageId, {
           alvTable: alvTable.length > 0 ? alvTable : undefined,
           alvHours: defaultALV !== null ? defaultALV : undefined,
@@ -1233,9 +1320,11 @@ export class PDFParser {
       // Get bid package month for seasonal hold probability adjustments
       const bidPackageInfo = await storage.getBidPackage(bidPackageId);
       const bidMonth = bidPackageInfo?.month;
-      
+
       // Calculate hold probabilities now that we have all pairings
-      console.log(`Calculating hold probabilities (month: ${bidMonth || 'unknown'})...`);
+      console.log(
+        `Calculating hold probabilities (month: ${bidMonth || 'unknown'})...`
+      );
       const frequencyMap =
         HoldProbabilityCalculator.buildPairingFrequencyMap(parsedPairings);
       for (const pairing of parsedPairings) {
