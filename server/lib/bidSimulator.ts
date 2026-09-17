@@ -24,6 +24,7 @@ import type {
 } from '../../shared/bidTypes';
 import { constructPatternLine } from './lineConstructor';
 import { parseMonthDayToken } from '../../shared/operatingDays';
+import type { CarryOutCreditAllocation } from '../../shared/bid-package-parameters';
 
 export interface SimulatorOptions {
   /** Average Line Value for the category. Defaults to 78:00. */
@@ -55,6 +56,8 @@ export interface SimulatorOptions {
   windowMax?: number;
   /** Where the window/threshold values came from, for the caveat text. */
   windowSource?: string;
+  /** Date-specific current-month credit from the bid package carry-out report. */
+  creditAllocations?: CarryOutCreditAllocation[];
 }
 
 export interface SimPairing {
@@ -83,14 +86,22 @@ export interface SimPairing {
    * populated only when the simulator knows the bid period's month/year.
    * Each instance spans [start, start + pairingDays - 1] in ms epoch days.
    */
-  instances: { startDay: number; endDay: number; startDow: number }[];
+  instances: {
+    startDay: number;
+    endDay: number;
+    startDow: number;
+    creditHours?: number;
+  }[];
 }
 
 const MS_PER_DAY = 86_400_000;
 
 /** "August" / "AUG" / "aug" → 8; null when unrecognized. */
 export function monthNameToNumber(name: unknown): number | null {
-  const key = String(name ?? '').trim().slice(0, 3).toUpperCase();
+  const key = String(name ?? '')
+    .trim()
+    .slice(0, 3)
+    .toUpperCase();
   return key in MONTH_TOKENS ? MONTH_TOKENS[key] : null;
 }
 
@@ -207,8 +218,18 @@ function layoverHours(layovers: any[]): number {
 }
 
 const MONTH_TOKENS: Record<string, number> = {
-  JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
-  JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
+  JAN: 1,
+  FEB: 2,
+  MAR: 3,
+  APR: 4,
+  MAY: 5,
+  JUN: 6,
+  JUL: 7,
+  AUG: 8,
+  SEP: 9,
+  OCT: 10,
+  NOV: 11,
+  DEC: 12,
 };
 
 function toNumber(value: unknown): number {
@@ -256,7 +277,8 @@ function parseEffectiveDates(text: unknown): {
 function toSimPairing(
   p: any,
   periodMonth?: number,
-  periodYear?: number
+  periodYear?: number,
+  creditAllocations: CarryOutCreditAllocation[] = []
 ): SimPairing {
   let layovers = p.layovers;
   if (typeof layovers === 'string') {
@@ -297,8 +319,37 @@ function toSimPairing(
         carryEnd.day + days - 1 - (DAYS_IN_MONTH[carryEnd.month - 1] ?? 31)
       )
     : 0;
+  const pairingNumber = String(p.pairingNumber ?? '');
+  const allocationsByDate = new Map(
+    creditAllocations
+      .filter(allocation => allocation.pairingNumber === pairingNumber)
+      .map(allocation => [
+        allocation.departureDate,
+        allocation.currentMonthCreditHours,
+      ])
+  );
+  const instances =
+    periodMonth !== undefined && periodYear !== undefined
+      ? enumerateInstances(
+          start,
+          end,
+          days,
+          periodMonth,
+          periodYear,
+          Array.isArray(p.operatingDows) ? (p.operatingDows as number[]) : null,
+          Array.isArray(p.exceptDates) ? (p.exceptDates as string[]) : null
+        ).map(instance => {
+          const date = new Date(instance.startDay * MS_PER_DAY);
+          const key = `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')}`;
+          const allocatedCredit = allocationsByDate.get(key);
+          return allocatedCredit === undefined
+            ? instance
+            : { ...instance, creditHours: allocatedCredit };
+        })
+      : [];
+
   return {
-    pairingNumber: String(p.pairingNumber ?? ''),
+    pairingNumber,
     creditHours: toNumber(p.creditHours),
     blockHours: toNumber(p.blockHours),
     pairingDays: p.pairingDays || 1,
@@ -316,22 +367,7 @@ function toSimPairing(
     carryOutDays,
     effectiveStart: start,
     effectiveEnd: end,
-    instances:
-      periodMonth !== undefined && periodYear !== undefined
-        ? enumerateInstances(
-            start,
-            end,
-            days,
-            periodMonth,
-            periodYear,
-            Array.isArray(p.operatingDows)
-              ? (p.operatingDows as number[])
-              : null,
-            Array.isArray(p.exceptDates)
-              ? (p.exceptDates as string[])
-              : null
-          )
-        : [],
+    instances,
   };
 }
 
@@ -406,10 +442,16 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   ) {
     return false;
   }
-  if (filter.creditMin !== undefined && pairing.creditHours < filter.creditMin) {
+  if (
+    filter.creditMin !== undefined &&
+    pairing.creditHours < filter.creditMin
+  ) {
     return false;
   }
-  if (filter.creditMax !== undefined && pairing.creditHours > filter.creditMax) {
+  if (
+    filter.creditMax !== undefined &&
+    pairing.creditHours > filter.creditMax
+  ) {
     return false;
   }
   if (filter.blockMin !== undefined && pairing.blockHours < filter.blockMin) {
@@ -418,7 +460,10 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
   if (filter.blockMax !== undefined && pairing.blockHours > filter.blockMax) {
     return false;
   }
-  if (filter.checkInHourMin !== undefined || filter.checkInHourMax !== undefined) {
+  if (
+    filter.checkInHourMin !== undefined ||
+    filter.checkInHourMax !== undefined
+  ) {
     if (pairing.checkInHour === null) return false;
     if (
       filter.checkInHourMin !== undefined &&
@@ -433,10 +478,16 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
       return false;
     }
   }
-  if (filter.deadheadsMax !== undefined && pairing.deadheads > filter.deadheadsMax) {
+  if (
+    filter.deadheadsMax !== undefined &&
+    pairing.deadheads > filter.deadheadsMax
+  ) {
     return false;
   }
-  if (filter.deadheadsMin !== undefined && pairing.deadheads < filter.deadheadsMin) {
+  if (
+    filter.deadheadsMin !== undefined &&
+    pairing.deadheads < filter.deadheadsMin
+  ) {
     return false;
   }
   const days = Math.max(1, pairing.pairingDays);
@@ -475,7 +526,10 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
       return false;
     }
   }
-  if (filter.hasRedeye !== undefined && pairing.hasRedeye !== filter.hasRedeye) {
+  if (
+    filter.hasRedeye !== undefined &&
+    pairing.hasRedeye !== filter.hasRedeye
+  ) {
     return false;
   }
   if (
@@ -499,7 +553,9 @@ function matchesFilter(pairing: SimPairing, filter: PairingFilter): boolean {
     // the requested weekdays. Without instances (no period anchor) this
     // condition is permissive and surfaced as a caveat instead.
     const wanted = new Set(
-      filter.departOnDOWs.map(d => DOW_NAME_TO_NUM[d]).filter(n => n !== undefined)
+      filter.departOnDOWs
+        .map(d => DOW_NAME_TO_NUM[d])
+        .filter(n => n !== undefined)
     );
     if (!pairing.instances.some(i => wanted.has(i.startDow))) {
       return false;
@@ -521,8 +577,7 @@ function touchesDate(pairing: SimPairing, isoDate: string): boolean {
   const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return false;
   const target = parseInt(m[2], 10) * 100 + parseInt(m[3], 10);
-  const start =
-    pairing.effectiveStart.month * 100 + pairing.effectiveStart.day;
+  const start = pairing.effectiveStart.month * 100 + pairing.effectiveStart.day;
   const endBase = pairing.effectiveEnd ?? pairing.effectiveStart;
   // Add trip length to the last departure day (approximate across month ends).
   let endMonth = endBase.month;
@@ -546,7 +601,9 @@ function creditWindow(
   // Real observed bounds (from a Reasons Report) replace the ALV±10
   // approximation; Set Condition sub-windows split at the midpoint.
   const bottom = realBounds ? realBounds.min : alv - 10;
-  const top = realBounds ? Math.min(realBounds.max, cap) : Math.min(alv + 10, cap);
+  const top = realBounds
+    ? Math.min(realBounds.max, cap)
+    : Math.min(alv + 10, cap);
   const middle = realBounds ? (bottom + top) / 2 : alv;
   switch (windowType) {
     case 'min':
@@ -603,12 +660,17 @@ export function simulateBid(
   const calendarAware =
     options.periodMonth !== undefined && options.periodYear !== undefined;
   const allPairings = rawPairings.map(p =>
-    toSimPairing(p, options.periodMonth, options.periodYear)
+    toSimPairing(
+      p,
+      options.periodMonth,
+      options.periodYear,
+      options.creditAllocations
+    )
   );
 
   const caveats = [
     'Static first pass: substitution, vertical swapping, shuffling, Denial Mode, and coverage awards are NOT modeled.',
-    'Other pilots\' bids are unknown; hold probability per pairing is the only competition signal.',
+    "Other pilots' bids are unknown; hold probability per pairing is the only competition signal.",
     calendarAware
       ? 'Awards are checked for calendar placement (no overlaps; Pattern gaps honored greedily), but FAR/PWA rest rules between awards are not modeled.'
       : 'Pairing date-overlap legality and FAR/PWA rest rules between awards are not checked.',
@@ -619,6 +681,11 @@ export function simulateBid(
       ? `Credit window ${realBounds.min.toFixed(1)}-${realBounds.max.toFixed(1)} and threshold ${(options.threshold ?? alv).toFixed(1)} come from ${options.windowSource ?? 'an imported Reasons Report'}; the current month's admin values may differ.`
       : `Threshold is admin-set and not published; this run assumes ${(options.threshold ?? alv).toFixed(1)} credit hours.`,
   ];
+  if ((options.creditAllocations?.length ?? 0) > 0) {
+    caveats.push(
+      'Month-end trip instances use the bid package’s published current-month credit; carry-out credit is excluded from this bid period.'
+    );
+  }
   if (
     bid.groups.some(g =>
       g.preferences.some(p => p.type === 'setConditionPattern')
@@ -781,9 +848,7 @@ export function simulateBid(
               }
               return p.instances.some(
                 inst =>
-                  !offDays.some(
-                    d => d >= inst.startDay && d <= inst.endDay
-                  )
+                  !offDays.some(d => d >= inst.startDay && d <= inst.endDay)
               );
             });
           } else {
@@ -830,7 +895,8 @@ export function simulateBid(
         }
         outcomes.push({
           preferenceIndex: i,
-          status: offUnscored && offDetails.length === 1 ? 'notScored' : 'honored',
+          status:
+            offUnscored && offDetails.length === 1 ? 'notScored' : 'honored',
           detail: offDetails.join(' ') || 'Nothing to evaluate.',
         });
         continue;
@@ -1085,17 +1151,22 @@ export function simulateBid(
   if (!chosen) {
     const pairingGroups = groupResults.filter(g => g.type === 'pairings');
     chosen =
-      pairingGroups.sort((a, b) => b.creditFromAwards - a.creditFromAwards)[0] ??
-      null;
+      pairingGroups.sort(
+        (a, b) => b.creditFromAwards - a.creditFromAwards
+      )[0] ?? null;
     caveats.push(
       'No bid group reached the credit-window minimum from its own Award preferences; in the real system the system-generated Award Pairings, shuffling, and Denial Mode would fill or alter the line.'
     );
   }
 
   const awards = chosen ? (chosen as SimulationGroupResult).awards : [];
-  const totalCredit = awards.reduce((s: number, a: SimulatedAward) => s + a.creditHours, 0);
+  const totalCredit = awards.reduce(
+    (s: number, a: SimulatedAward) => s + a.creditHours,
+    0
+  );
   const expectedCredit = awards.reduce(
-    (s: number, a: SimulatedAward) => s + a.creditHours * ((a.holdProbability ?? 50) / 100),
+    (s: number, a: SimulatedAward) =>
+      s + a.creditHours * ((a.holdProbability ?? 50) / 100),
     0
   );
 

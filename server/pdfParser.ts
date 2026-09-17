@@ -18,7 +18,11 @@ import {
   parseEffectiveRangeText,
   parseOperatingDays,
 } from '../shared/operatingDays';
-import { parseBidCategoryParameters } from './lib/bid-package-parameters';
+import {
+  attachCarryOutCreditAllocations,
+  parseBidCategoryParameters,
+  parseCarryOutCreditAllocations,
+} from './lib/bid-package-parameters';
 
 const MONTH_NAMES = [
   'January',
@@ -1244,7 +1248,14 @@ export class PDFParser {
       }
 
       // Extract ALV (Average Line Value) table from the PDF
-      const { alvTable, defaultALV } = this.extractALVTable(text);
+      let { alvTable, defaultALV } = this.extractALVTable(text);
+      const carryOutCreditAllocations = parseCarryOutCreditAllocations(text);
+      if (alvTable.length > 0 && carryOutCreditAllocations.length > 0) {
+        alvTable = attachCarryOutCreditAllocations(
+          alvTable,
+          carryOutCreditAllocations
+        );
+      }
       if (alvTable.length > 0 || defaultALV !== null) {
         console.log(
           `Extracted ALV data: ${alvTable.length} table entries, default: ${defaultALV}`

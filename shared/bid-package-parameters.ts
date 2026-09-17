@@ -10,7 +10,19 @@ export interface BidCategoryParameters {
   extraXDay?: boolean;
   vacationSlide?: boolean;
   rllLimit?: number;
+  carryOutCreditAllocations?: CarryOutCreditAllocation[];
   displayName?: string;
+}
+
+export interface CarryOutCreditAllocation {
+  base: string;
+  aircraft: string;
+  pairingNumber: string;
+  departureDate: string;
+  arrivalDate: string;
+  totalCreditHours: number;
+  currentMonthCreditHours: number;
+  carryOutCreditHours: number;
 }
 
 const normalizedFleet = (value: unknown) =>

@@ -1408,6 +1408,7 @@ export async function registerRoutes(app: Express) {
           : realWindow
             ? `the ${realWindow.period} Reasons Report`
             : undefined,
+        creditAllocations: categoryParameters?.carryOutCreditAllocations,
         periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
         periodYear: bidPackage.year ?? undefined,
       });
@@ -1626,6 +1627,7 @@ export async function registerRoutes(app: Express) {
             : realWindow
               ? `the ${realWindow.period} Reasons Report`
               : undefined,
+        creditAllocations: categoryParameters?.carryOutCreditAllocations,
         periodMonth: monthNameToNumber(bidPackage.month) ?? undefined,
         periodYear: bidPackage.year ?? undefined,
       });

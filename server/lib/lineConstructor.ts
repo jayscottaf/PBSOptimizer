@@ -33,6 +33,8 @@
 export interface ConstructionInstance {
   startDay: number;
   endDay: number;
+  /** Override for this departure date, such as current-month carry-out credit. */
+  creditHours?: number;
 }
 
 export interface ConstructionCandidate {
@@ -153,16 +155,20 @@ export function constructPatternLine(input: {
   const overLimit = (c: ConstructionCandidate): boolean =>
     c.limit !== undefined && (takenPerPref.get(c.prefIndex) ?? 0) >= c.limit;
 
+  const instanceCredit = (x: IndexedInstance): number =>
+    x.inst.creditHours ?? x.cand.creditHours;
+
   const place = (x: IndexedInstance, pulledForward: boolean): void => {
     used.add(x.cand.pairingNumber);
     takenPerPref.set(
       x.cand.prefIndex,
       (takenPerPref.get(x.cand.prefIndex) ?? 0) + 1
     );
-    credit += x.cand.creditHours;
+    const tripCredit = instanceCredit(x);
+    credit += tripCredit;
     placed.push({
       pairingNumber: x.cand.pairingNumber,
-      creditHours: x.cand.creditHours,
+      creditHours: tripCredit,
       pairingDays: x.cand.pairingDays,
       holdProbability: x.cand.holdProbability,
       prefIndex: x.cand.prefIndex,
@@ -177,7 +183,7 @@ export function constructPatternLine(input: {
       x.cand.prefIndex,
       (takenPerPref.get(x.cand.prefIndex) ?? 0) - 1
     );
-    credit -= x.cand.creditHours;
+    credit -= instanceCredit(x);
     placed.pop();
   };
 
@@ -224,7 +230,6 @@ export function constructPatternLine(input: {
           if (branches >= BRANCH_WIDTH) break;
           if (used.has(seed.cand.pairingNumber)) continue;
           if (overLimit(seed.cand)) continue;
-          if (credit + seed.cand.creditHours > window.max) continue;
           // Earliest legal instance for this candidate after the gap.
           const inst = seed.cand.instances
             .filter(i => i.startDay > lastEnd + gap)
@@ -233,10 +238,11 @@ export function constructPatternLine(input: {
               null
             );
           if (!inst) continue;
+          const x = { cand: seed.cand, inst };
+          if (credit + instanceCredit(x) > window.max) continue;
           // A single trip longer than the whole band can never legalize.
           if (seed.cand.pairingDays > maxOn) continue;
           branches++;
-          const x = { cand: seed.cand, inst };
           place(x, false);
           if (
             search(lastEnd, {
@@ -280,7 +286,7 @@ export function constructPatternLine(input: {
         if (branches >= BRANCH_WIDTH) break;
         if (used.has(x.cand.pairingNumber)) continue;
         if (overLimit(x.cand)) continue;
-        if (credit + x.cand.creditHours > window.max) continue;
+        if (credit + instanceCredit(x) > window.max) continue;
         if (len + x.cand.pairingDays > maxOn) continue;
         branches++;
         const pulledForward = x.cand.prefIndex > open.seedPref;
@@ -359,7 +365,9 @@ export function constructPatternLine(input: {
       (bestCredit > 0
         ? `; best legal construction reached ${bestCredit.toFixed(2)}.`
         : '.') +
-      (budgetExhausted ? ' Search budget exhausted before all arrangements were tried.' : '')
+      (budgetExhausted
+        ? ' Search budget exhausted before all arrangements were tried.'
+        : '')
   );
   for (const b of blocking) {
     notes.push(`Blocking: ${b}.`);
