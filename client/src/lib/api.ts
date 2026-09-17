@@ -268,6 +268,31 @@ export const api = {
     return response.json();
   },
 
+  uploadWideSchedule: async (file: File) => {
+    const formData = new FormData();
+    formData.append('wideSchedule', file);
+    const response = await fetch('/api/wide-schedules/upload', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, 'Failed to upload wide schedule')
+      );
+    }
+    return response.json() as Promise<{
+      category: string;
+      month: string;
+      year: number;
+      linesStored: number;
+      regularLines: number;
+      reserveLines: number;
+      openLines: number;
+      privacy: string;
+    }>;
+  },
+
   // Pairings
   getPairings: async (
     bidPackageId?: number,

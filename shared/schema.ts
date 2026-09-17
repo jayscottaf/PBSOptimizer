@@ -162,8 +162,41 @@ export const reasonsReportPreferences = pgTable(
     // (and often narrows by month/year) — /api/trends alone fires 5 such
     // queries per page load and /api/bid-patterns 7. Without this the
     // planner had only a sequential scan over the whole ~96k-row table.
-    baseYearMonthIdx: index('reasons_report_preferences_base_year_month_idx').on(
+    baseYearMonthIdx: index(
+      'reasons_report_preferences_base_year_month_idx'
+    ).on(table.base, table.year, table.month),
+  })
+);
+
+// Anonymized line-level outcomes from a NAVBLUE wide schedule. Names and
+// employee numbers are intentionally never stored; seniority and the awarded
+// schedule are enough to calibrate the optimizer.
+export const wideScheduleLines = pgTable(
+  'wide_schedule_lines',
+  {
+    id: serial('id').primaryKey(),
+    month: text('month').notNull(),
+    year: integer('year').notNull(),
+    base: text('base').notNull(),
+    aircraft: text('aircraft').notNull(),
+    position: text('position').notNull(),
+    pilotSeniority: integer('pilot_seniority'),
+    sourceLabel: text('source_label'), // Open-1, Open-2, ...; never a pilot name
+    totalCreditHours: decimal('total_credit_hours', {
+      precision: 5,
+      scale: 2,
+    }).notNull(),
+    daysOff: integer('days_off'),
+    lineType: text('line_type').notNull(), // regular | reserve | open
+    flags: jsonb('flags').notNull(),
+    events: jsonb('events').notNull(),
+    uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+  },
+  table => ({
+    categoryPeriodIdx: index('wide_schedule_category_period_idx').on(
       table.base,
+      table.aircraft,
+      table.position,
       table.year,
       table.month
     ),
@@ -330,6 +363,13 @@ export const insertReasonsReportPreferenceSchema = createInsertSchema(
   uploadedAt: true,
 });
 
+export const insertWideScheduleLineSchema = createInsertSchema(
+  wideScheduleLines
+).omit({
+  id: true,
+  uploadedAt: true,
+});
+
 export const insertUserFavoriteSchema = createInsertSchema(userFavorites).omit({
   id: true,
   createdAt: true,
@@ -355,6 +395,10 @@ export type ReasonsReportPreference =
   typeof reasonsReportPreferences.$inferSelect;
 export type InsertReasonsReportPreference = z.infer<
   typeof insertReasonsReportPreferenceSchema
+>;
+export type WideScheduleLine = typeof wideScheduleLines.$inferSelect;
+export type InsertWideScheduleLine = z.infer<
+  typeof insertWideScheduleLineSchema
 >;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;

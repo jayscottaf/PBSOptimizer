@@ -55,6 +55,7 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
 import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
+import { WideScheduleUpload } from '@/components/wide-schedule-upload';
 
 // Code-split: these are only needed once the pilot opens the Calendar tab,
 // the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
@@ -1737,7 +1738,8 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Upload Files</DialogTitle>
             <DialogDescription>
-              Upload bid packages or reasons reports to improve predictions
+              Upload bid packages, reasons reports, or wide schedules to improve
+              predictions
             </DialogDescription>
           </DialogHeader>
           <Tabs defaultValue="upload" className="w-full">
@@ -1748,7 +1750,7 @@ export default function Dashboard() {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="upload" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-3">
                 {/* Bid Package Upload */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-secondary-foreground">
@@ -1804,6 +1806,19 @@ export default function Dashboard() {
                       }}
                     />
                   </Suspense>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium text-secondary-foreground">
+                    Wide Schedule
+                  </h3>
+                  <WideScheduleUpload
+                    onUploadSuccess={() => queryClient.invalidateQueries()}
+                  />
+                  <div className="flex items-center text-xs text-muted-foreground">
+                    <span className="mr-2 h-2 w-2 rounded-full bg-green-500" />
+                    PDF · names and employee numbers discarded
+                  </div>
                 </div>
               </div>
             </TabsContent>

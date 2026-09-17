@@ -57,6 +57,7 @@ import { exportBid } from './lib/bidExporter';
 import { parseAircraftCode } from './lib/aircraft';
 import type { DraftBid } from '../shared/bidTypes';
 import { findBidCategoryParameters } from '../shared/bid-package-parameters';
+import { parseWideSchedulePdf } from './wideScheduleParser';
 import * as fs from 'fs/promises';
 
 type ApiErrorCode =
@@ -67,6 +68,7 @@ type ApiErrorCode =
   | 'BID_PACKAGE_PARSE_FAILED'
   | 'REASONS_METADATA_FAILED'
   | 'REASONS_PROCESSING_FAILED'
+  | 'WIDE_SCHEDULE_PARSE_FAILED'
   | 'UPLOAD_FAILED'
   | 'INVALID_SIMULATION_REQUEST'
   | 'INVALID_EXPORT_REQUEST'
@@ -755,6 +757,82 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ error: 'Failed to fetch bid package stats' });
     }
   });
+
+  app.post(
+    '/api/wide-schedules/upload',
+    handleMulterUpload(upload.single('wideSchedule')),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return sendApiError(
+            res,
+            400,
+            'No wide schedule PDF was uploaded.',
+            'MISSING_FILE'
+          );
+        }
+        if (
+          req.file.mimetype !== 'application/pdf' ||
+          req.file.buffer.subarray(0, 5).toString('latin1') !== '%PDF-'
+        ) {
+          return sendApiError(
+            res,
+            400,
+            'Wide schedules must be valid PDF files.',
+            'INVALID_FILE_TYPE'
+          );
+        }
+
+        const parsed = await parseWideSchedulePdf(req.file.buffer);
+        const stored = await storage.replaceWideScheduleLines(
+          {
+            month: parsed.month,
+            year: parsed.year,
+            base: parsed.base,
+            aircraft: parsed.aircraft,
+            position: parsed.position,
+          },
+          parsed.lines.map(line => ({
+            month: parsed.month,
+            year: parsed.year,
+            base: parsed.base,
+            aircraft: parsed.aircraft,
+            position: parsed.position,
+            pilotSeniority: line.pilotSeniority,
+            sourceLabel: line.sourceLabel,
+            totalCreditHours: line.totalCreditHours.toFixed(2),
+            daysOff: line.daysOff,
+            lineType: line.lineType,
+            flags: line.flags,
+            events: line.events,
+          }))
+        );
+        res.json({
+          category: `${parsed.base} ${parsed.aircraft}${parsed.position}`,
+          month: parsed.month,
+          year: parsed.year,
+          linesStored: stored.length,
+          regularLines: stored.filter(line => line.lineType === 'regular')
+            .length,
+          reserveLines: stored.filter(line => line.lineType === 'reserve')
+            .length,
+          openLines: stored.filter(line => line.lineType === 'open').length,
+          privacy:
+            'Pilot names and employee numbers were discarded before storage.',
+        });
+      } catch (error) {
+        console.error('Wide schedule upload failed:', error);
+        return sendApiError(
+          res,
+          400,
+          error instanceof Error
+            ? error.message
+            : 'Could not parse the wide schedule.',
+          'WIDE_SCHEDULE_PARSE_FAILED'
+        );
+      }
+    }
+  );
 
   // Upload bid package PDF
   app.post(

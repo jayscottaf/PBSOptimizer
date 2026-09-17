@@ -7,6 +7,7 @@ import {
   pairings,
   bidHistory,
   reasonsReportPreferences,
+  wideScheduleLines,
   userFavorites,
   chatHistory,
   userCalendarEvents,
@@ -20,6 +21,8 @@ import {
   type InsertBidHistory,
   type ReasonsReportPreference,
   type InsertReasonsReportPreference,
+  type WideScheduleLine,
+  type InsertWideScheduleLine,
   type UserFavorite,
   type InsertUserFavorite,
   type ChatMessage,
@@ -31,20 +34,18 @@ import {
   type UserBidProfile,
 } from '../shared/schema';
 import { db } from './db';
-import { personalizeHoldProbabilities, pairingStatistics, type HoldPairing } from './lib/hold-probabilities';
+import {
+  personalizeHoldProbabilities,
+  pairingStatistics,
+  type HoldPairing,
+} from './lib/hold-probabilities';
 import { percentileWithin } from './lib/empiricalHold';
 import { pilotRosterCtes } from './lib/pilot-roster';
 import { markActiveBidGroups } from './lib/bid-groups';
 import { parseOutcomeMetrics } from './lib/outcome-metrics';
 import { parseCategoryStanding } from './lib/category-standing';
-import {
-  parseAircraftCode,
-  normalizedAircraftSqlExpr,
-} from './lib/aircraft';
-import {
-  countOperatingInstances,
-  monthNameToNumber,
-} from './lib/bidSimulator';
+import { parseAircraftCode, normalizedAircraftSqlExpr } from './lib/aircraft';
+import { countOperatingInstances, monthNameToNumber } from './lib/bidSimulator';
 import {
   eq,
   and,
@@ -113,6 +114,16 @@ export interface IStorage {
   deleteBidPackage(id: number): Promise<void>;
   deletePairingsForBidPackage(bidPackageId: number): Promise<void>;
   clearAllData(): Promise<void>;
+  replaceWideScheduleLines(
+    category: {
+      month: string;
+      year: number;
+      base: string;
+      aircraft: string;
+      position: string;
+    },
+    lines: InsertWideScheduleLine[]
+  ): Promise<WideScheduleLine[]>;
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
@@ -236,7 +247,11 @@ export interface IStorage {
     topRequestedLayovers: Array<{ city: string; count: number }>;
     topAvoidedLayovers: Array<{ city: string; count: number }>;
     earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
-    checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+    checkInStations: Array<{
+      station: string;
+      awarded: number;
+      avoided: number;
+    }>;
     daysOffPatterns: Array<{ days: number; count: number }>;
   }>;
 
@@ -389,9 +404,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByPin(pin: string): Promise<User | undefined> {
     const user = await this.getPrimaryUser();
-    if (!user?.syncPin || !(await verifyPin(pin, user.syncPin))) return undefined;
+    if (!user?.syncPin || !(await verifyPin(pin, user.syncPin)))
+      return undefined;
     // Upgrade legacy plaintext only after a successful authenticated link.
-    if (!user.syncPin.startsWith('scrypt:')) return this.setSyncPin(user.id, pin);
+    if (!user.syncPin.startsWith('scrypt:'))
+      return this.setSyncPin(user.id, pin);
     return user;
   }
 
@@ -487,6 +504,33 @@ export class DatabaseStorage implements IStorage {
     await db.update(bidPackages).set(updateData).where(eq(bidPackages.id, id));
   }
 
+  async replaceWideScheduleLines(
+    category: {
+      month: string;
+      year: number;
+      base: string;
+      aircraft: string;
+      position: string;
+    },
+    lines: InsertWideScheduleLine[]
+  ): Promise<WideScheduleLine[]> {
+    return db.transaction(async tx => {
+      await tx
+        .delete(wideScheduleLines)
+        .where(
+          and(
+            eq(wideScheduleLines.month, category.month),
+            eq(wideScheduleLines.year, category.year),
+            eq(wideScheduleLines.base, category.base),
+            eq(wideScheduleLines.aircraft, category.aircraft),
+            eq(wideScheduleLines.position, category.position)
+          )
+        );
+      if (lines.length === 0) return [];
+      return tx.insert(wideScheduleLines).values(lines).returning();
+    });
+  }
+
   // Removes any pairings already inserted for a bid package whose parse
   // failed partway through, without deleting the bid package row itself
   // (it stays visible in the UI with status 'failed').
@@ -542,6 +586,7 @@ export class DatabaseStorage implements IStorage {
   async clearAllData(): Promise<void> {
     await db.delete(chatHistory);
     await db.delete(userFavorites);
+    await db.delete(wideScheduleLines);
     await db.delete(userCalendarEvents);
     await db.delete(bidHistory);
     await db.delete(pairings);
@@ -554,9 +599,7 @@ export class DatabaseStorage implements IStorage {
     return newPairing;
   }
 
-  async createPairingsBatch(
-    pairingsData: InsertPairing[]
-  ): Promise<Pairing[]> {
+  async createPairingsBatch(pairingsData: InsertPairing[]): Promise<Pairing[]> {
     if (pairingsData.length === 0) {
       return [];
     }
@@ -577,7 +620,10 @@ export class DatabaseStorage implements IStorage {
     return Number(row?.n ?? 0);
   }
 
-  async personalizePairings<T extends HoldPairing>(rows: T[], percentile?: number): Promise<T[]> {
+  async personalizePairings<T extends HoldPairing>(
+    rows: T[],
+    percentile?: number
+  ): Promise<T[]> {
     if (rows.length === 0) return rows;
     const user = await this.getPrimaryUser();
     const results: T[] = [];
@@ -585,25 +631,54 @@ export class DatabaseStorage implements IStorage {
       const bidPackage = await this.getBidPackage(id);
       if (!bidPackage) throw new Error('Bid package not found');
       const [history, rosters, numbers] = await Promise.all([
-        user ? db.select().from(bidHistory).where(and(
-          eq(bidHistory.base, bidPackage.base),
-          sql`${sql.raw(normalizedAircraftSqlExpr('aircraft'))} = ${parseAircraftCode(bidPackage.aircraft).baseType}`
-        )) : Promise.resolve([]),
-        user ? this.getCategoryRosters(bidPackage.base, bidPackage.aircraft) : Promise.resolve(new Map<string, number[]>()),
-        db.select({ pairingNumber: pairings.pairingNumber }).from(pairings).where(eq(pairings.bidPackageId, id)),
+        user
+          ? db
+              .select()
+              .from(bidHistory)
+              .where(
+                and(
+                  eq(bidHistory.base, bidPackage.base),
+                  sql`${sql.raw(normalizedAircraftSqlExpr('aircraft'))} = ${parseAircraftCode(bidPackage.aircraft).baseType}`
+                )
+              )
+          : Promise.resolve([]),
+        user
+          ? this.getCategoryRosters(bidPackage.base, bidPackage.aircraft)
+          : Promise.resolve(new Map<string, number[]>()),
+        db
+          .select({ pairingNumber: pairings.pairingNumber })
+          .from(pairings)
+          .where(eq(pairings.bidPackageId, id)),
       ]);
       const frequencies = new Map<string, number>();
-      for (const p of numbers) frequencies.set(p.pairingNumber, (frequencies.get(p.pairingNumber) ?? 0) + 1);
-      results.push(...personalizeHoldProbabilities(rows.filter(p => p.bidPackageId === id), {
-        user, percentile: percentile ?? await getAnalysisSeniority(user, bidPackage), bidPackage, history, rosters, frequencies,
-      }));
+      for (const p of numbers)
+        frequencies.set(
+          p.pairingNumber,
+          (frequencies.get(p.pairingNumber) ?? 0) + 1
+        );
+      results.push(
+        ...personalizeHoldProbabilities(
+          rows.filter(p => p.bidPackageId === id),
+          {
+            user,
+            percentile:
+              percentile ?? (await getAnalysisSeniority(user, bidPackage)),
+            bidPackage,
+            history,
+            rosters,
+            frequencies,
+          }
+        )
+      );
     }
     const byId = new Map(results.map(p => [p.id, p]));
     return rows.map(p => byId.get(p.id)!);
   }
 
   async getPairings(bidPackageId?: number): Promise<Pairing[]> {
-    const rows = await db.select().from(pairings)
+    const rows = await db
+      .select()
+      .from(pairings)
       .where(bidPackageId ? eq(pairings.bidPackageId, bidPackageId) : undefined)
       .orderBy(asc(pairings.pairingNumber));
     return this.personalizePairings(rows);
@@ -711,7 +786,9 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (filters.rotationNumber) {
-        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
+        conditions.push(
+          sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`
+        );
       }
 
       if (filters.creditMin !== undefined) {
@@ -737,7 +814,6 @@ export class DatabaseStorage implements IStorage {
         );
       }
 
-
       if (filters.pairingDays !== undefined) {
         conditions.push(eq(pairings.pairingDays, filters.pairingDays));
       }
@@ -758,10 +834,14 @@ export class DatabaseStorage implements IStorage {
       // TAFB filter: compare as minutes (handles 'HH:MM' format)
       // TAFB filter: compare as minutes, supports 'HH:MM' and decimal 'HH.MM'
       if (filters.tafbMin !== undefined) {
-        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`);
+        conditions.push(
+          sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`
+        );
       }
       if (filters.tafbMax !== undefined) {
-        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`);
+        conditions.push(
+          sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`
+        );
       }
 
       if (conditions.length > 0) {
@@ -782,7 +862,11 @@ export class DatabaseStorage implements IStorage {
         }
 
         results = await this.personalizePairings(results);
-        return results.filter(p => filters.holdProbabilityMin === undefined || (p.holdProbability ?? 0) >= filters.holdProbabilityMin);
+        return results.filter(
+          p =>
+            filters.holdProbabilityMin === undefined ||
+            (p.holdProbability ?? 0) >= filters.holdProbabilityMin
+        );
       }
 
       return await db
@@ -878,7 +962,9 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (filters.rotationNumber) {
-        conditions.push(sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`);
+        conditions.push(
+          sql`${pairings.pairingNumber} ILIKE ${`%${filters.rotationNumber}%`}`
+        );
       }
 
       if (filters.creditMin !== undefined) {
@@ -905,7 +991,6 @@ export class DatabaseStorage implements IStorage {
         );
       }
 
-
       if (filters.pairingDays !== undefined) {
         conditions.push(eq(pairings.pairingDays, filters.pairingDays));
       }
@@ -919,10 +1004,14 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (filters.tafbMin !== undefined) {
-        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`);
+        conditions.push(
+          sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} >= ${Math.round(filters.tafbMin * 60)}`
+        );
       }
       if (filters.tafbMax !== undefined) {
-        conditions.push(sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`);
+        conditions.push(
+          sql`${printedDurationMinutesSql(sql`${pairings.tafb}`)} <= ${Math.round(filters.tafbMax * 60)}`
+        );
       }
 
       // Computed SQL expressions
@@ -1174,7 +1263,9 @@ export class DatabaseStorage implements IStorage {
           holdProbability: pairings.holdProbability,
           holdProbabilityReasoning: pairings.holdProbabilityReasoning,
           pairingDays: pairings.pairingDays,
-          fullTextBlock: filters.compact ? sql<string>`''` : pairings.fullTextBlock,
+          fullTextBlock: filters.compact
+            ? sql<string>`''`
+            : pairings.fullTextBlock,
         })
         .from(pairings)
         .where(and(...conditions))
@@ -1182,16 +1273,26 @@ export class DatabaseStorage implements IStorage {
         .execute();
 
       let personalized = await this.personalizePairings(
-        pairingsResult as Pairing[], filters.seniorityPercentile ?? filters.seniorityPercentage
+        pairingsResult as Pairing[],
+        filters.seniorityPercentile ?? filters.seniorityPercentage
       );
       if (filters.holdProbabilityMin !== undefined) {
-        personalized = personalized.filter(p => (p.holdProbability ?? 0) >= filters.holdProbabilityMin!);
+        personalized = personalized.filter(
+          p => (p.holdProbability ?? 0) >= filters.holdProbabilityMin!
+        );
       }
       if (sortColumn === 'holdProbability') {
         const direction = filters.sortOrder === 'desc' ? -1 : 1;
-        personalized.sort((a, b) => direction * ((a.holdProbability ?? 0) - (b.holdProbability ?? 0)) || a.pairingNumber.localeCompare(b.pairingNumber));
+        personalized.sort(
+          (a, b) =>
+            direction * ((a.holdProbability ?? 0) - (b.holdProbability ?? 0)) ||
+            a.pairingNumber.localeCompare(b.pairingNumber)
+        );
       }
-      return { pairings: personalized, statistics: pairingStatistics(personalized) };
+      return {
+        pairings: personalized,
+        statistics: pairingStatistics(personalized),
+      };
     } catch (error) {
       console.error('Error in getAllPairingsForBidPackage:', error);
       // Rethrow instead of returning an empty result — this is the primary
@@ -1319,8 +1420,9 @@ export class DatabaseStorage implements IStorage {
       ? sql`AND upper(left(trim(r.month), 3)) = ${monthCode}`
       : sql``;
     const fleetR = this.fleetMatches('r.aircraft', aircraft);
-    const [contention, boundaries, composition, rosters, window] = await Promise.all([
-      db.execute(sql`
+    const [contention, boundaries, composition, rosters, window] =
+      await Promise.all([
+        db.execute(sql`
       SELECT year, month,
         count(*) AS total_prefs,
         count(DISTINCT pilot_seniority_number) AS pilots,
@@ -1330,7 +1432,7 @@ export class DatabaseStorage implements IStorage {
       WHERE base = ${base} ${monthCond} ${fleet}
       GROUP BY year, month
     `),
-      db.execute(sql`
+        db.execute(sql`
       SELECT year, month, pairing_days,
         max(junior_holder_seniority) AS junior_most,
         count(*) AS awards
@@ -1340,25 +1442,40 @@ export class DatabaseStorage implements IStorage {
         ${monthCond}
       GROUP BY year, month, pairing_days
     `),
-      db.execute(sql`
+        db.execute(sql`
         SELECT DISTINCT r.year, r.month, banner
         FROM reasons_report_preferences r,
           LATERAL jsonb_array_elements_text(coalesce(r.report_banners, '[]'::jsonb)) AS banner
         WHERE r.base = ${base} AND banner LIKE 'Standing Category %'
           ${monthCondR} ${fleetR}
       `),
-      this.getCategoryRosters(base, aircraft),
-      this.getCategoryCreditWindow(base, aircraft),
-    ]);
+        this.getCategoryRosters(base, aircraft),
+        this.getCategoryCreditWindow(base, aircraft),
+      ]);
 
     const monthNum = (m: string) => {
-      const idx = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
-        .indexOf(String(m).trim().slice(0, 3).toUpperCase());
+      const idx = [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEP',
+        'OCT',
+        'NOV',
+        'DEC',
+      ].indexOf(String(m).trim().slice(0, 3).toUpperCase());
       return idx === -1 ? 0 : idx + 1;
     };
     const sortKey = (r: any) => Number(r.year) * 100 + monthNum(r.month);
 
-    const compositionByPeriod = new Map<string, ReturnType<typeof parseCategoryStanding>>();
+    const compositionByPeriod = new Map<
+      string,
+      ReturnType<typeof parseCategoryStanding>
+    >();
     for (const row of composition.rows as any[]) {
       const key = `${String(row.month).trim().slice(0, 3).toUpperCase()} ${row.year}`;
       const standing = parseCategoryStanding(String(row.banner));
@@ -1388,7 +1505,8 @@ export class DatabaseStorage implements IStorage {
       // but the API response should not wobble between identical requests.
       .sort(
         (a, b) =>
-          sortKey(a) - sortKey(b) || Number(a.pairing_days) - Number(b.pairing_days)
+          sortKey(a) - sortKey(b) ||
+          Number(a.pairing_days) - Number(b.pairing_days)
       )
       .map(r => {
         const key = `${String(r.month).trim().slice(0, 3).toUpperCase()}-${r.year}`;
@@ -1596,7 +1714,11 @@ export class DatabaseStorage implements IStorage {
     topRequestedLayovers: Array<{ city: string; count: number }>;
     topAvoidedLayovers: Array<{ city: string; count: number }>;
     earlyCheckInAvoidance: Array<{ hour: number; count: number }>;
-    checkInStations: Array<{ station: string; awarded: number; avoided: number }>;
+    checkInStations: Array<{
+      station: string;
+      awarded: number;
+      avoided: number;
+    }>;
     /**
      * Supply side: share of pairings actually starting at each station, by
      * bid-package period. Sourced from parsed pairings, not Reasons Reports,
@@ -1751,7 +1873,11 @@ export class DatabaseStorage implements IStorage {
     `);
     const supplyByPeriod = new Map<
       string,
-      { period: string; total: number; stations: Array<{ station: string; count: number }> }
+      {
+        period: string;
+        total: number;
+        stations: Array<{ station: string; count: number }>;
+      }
     >();
     for (const r of stationSupply.rows as any[]) {
       if (!r.station) {
@@ -2014,8 +2140,10 @@ export class DatabaseStorage implements IStorage {
       avgCreditHours:
         allPairings.length === 0
           ? 0
-          : allPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0) /
-            allPairings.length,
+          : allPairings.reduce(
+              (sum, p) => sum + parseDecimal(p.creditHours),
+              0
+            ) / allPairings.length,
       minCredit:
         allPairings.length === 0
           ? 0
@@ -2057,7 +2185,11 @@ export class DatabaseStorage implements IStorage {
      *   x real operating instances (weekday clause and EXCEPT dates
      *   honored). Null when the package's period anchor is unknown.
      */
-    layoverCities: Array<{ city: string; count: number; nights: number | null }>;
+    layoverCities: Array<{
+      city: string;
+      count: number;
+      nights: number | null;
+    }>;
     /**
      * Supply mix: how many pairings begin at each check-in station (the
      * first flight segment's departure airport), most common first. This is
@@ -2140,7 +2272,9 @@ export class DatabaseStorage implements IStorage {
         : 0;
       const cities = new Set<string>();
       for (const l of layovers as Array<{ city?: string }>) {
-        const city = String(l?.city || '').trim().toUpperCase();
+        const city = String(l?.city || '')
+          .trim()
+          .toUpperCase();
         if (!city) continue;
         cities.add(city);
         if (nightsKnown) {
@@ -2180,10 +2314,18 @@ export class DatabaseStorage implements IStorage {
     const avgByDays: { [key: number]: { credit: number; block: number } } = {};
     const pairingTypeBreakdown: { [key: number]: number } = {};
     for (let days = 1; days <= maxDays; days++) {
-      const dayPairings = allPairings.filter((p: any) => p.pairingDays === days);
+      const dayPairings = allPairings.filter(
+        (p: any) => p.pairingDays === days
+      );
       if (dayPairings.length > 0) {
-        const dayCredit = dayPairings.reduce((sum, p) => sum + parseDecimal(p.creditHours), 0);
-        const dayBlock = dayPairings.reduce((sum, p) => sum + parseDecimal(p.blockHours), 0);
+        const dayCredit = dayPairings.reduce(
+          (sum, p) => sum + parseDecimal(p.creditHours),
+          0
+        );
+        const dayBlock = dayPairings.reduce(
+          (sum, p) => sum + parseDecimal(p.blockHours),
+          0
+        );
         avgByDays[days] = {
           credit: dayCredit / dayPairings.length,
           block: dayBlock / dayPairings.length,
@@ -2210,7 +2352,7 @@ export class DatabaseStorage implements IStorage {
 
         if (percentile >= 0.75) {
           acc.excellent++;
-        } else if (percentile >= 0.50) {
+        } else if (percentile >= 0.5) {
           acc.good++;
         } else if (percentile >= 0.25) {
           acc.average++;
@@ -2459,8 +2601,10 @@ export class DatabaseStorage implements IStorage {
       avgDuration:
         allPairings.length === 0
           ? 0
-          : allPairings.reduce((sum, p) => sum + parseNullable(p.pairingDays), 0) /
-            allPairings.length,
+          : allPairings.reduce(
+              (sum, p) => sum + parseNullable(p.pairingDays),
+              0
+            ) / allPairings.length,
     };
   }
 
@@ -2739,7 +2883,9 @@ export class DatabaseStorage implements IStorage {
       period: raw[0] ? `${raw[0].month} ${raw[0].year}` : null,
       creditWindow:
         reportBanners.find(banner => banner.startsWith('Window ')) ?? null,
-      preAwards: reportBanners.filter(banner => banner.startsWith('Pre-Award ')),
+      preAwards: reportBanners.filter(banner =>
+        banner.startsWith('Pre-Award ')
+      ),
       preferences,
     };
   }
