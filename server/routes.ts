@@ -1,7 +1,10 @@
 import { decodeReasonsUpload } from './lib/decode-reasons-upload';
 import { categorySeniorityInput } from '../shared/category-seniority';
-import { getCategorySeniority, getCategoryComparisons, getAnalysisSeniority } from './lib/category-seniority';
-import { printedDurationHours } from '../shared/durations';
+import {
+  getCategorySeniority,
+  getCategoryComparisons,
+  getAnalysisSeniority,
+} from './lib/category-seniority';
 import type { Express, NextFunction, Request, Response } from 'express';
 import { createServer, type Server } from 'http';
 import { storage } from './storage';
@@ -40,6 +43,7 @@ import { openaiAssistant } from './openaiAssistant';
 import { ReasonsReportParser } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
 import { persistReasonsImport } from './lib/reasons-import';
+import { parseReasonsCredits } from './lib/reasons-credit';
 import multer from 'multer';
 import { z } from 'zod';
 import {
@@ -356,20 +360,31 @@ export async function registerRoutes(app: Express) {
     try {
       if (req.body?.userId !== undefined || req.query.userId !== undefined) {
         const primary = await storage.getPrimaryUser();
-        const supplied = [req.body?.userId, req.query.userId].filter(id => id !== undefined);
+        const supplied = [req.body?.userId, req.query.userId].filter(
+          id => id !== undefined
+        );
         if (!primary || supplied.some(id => Number(id) !== primary.id)) {
-          return res.status(403).json({ message: 'Profile does not belong to this deployment' });
+          return res
+            .status(403)
+            .json({ message: 'Profile does not belong to this deployment' });
         }
       }
       next();
-    } catch (error) { next(error); }
+    } catch (error) {
+      next(error);
+    }
   });
   app.param('userId', async (req, res, next, value) => {
     try {
       const primary = await storage.getPrimaryUser();
-      if (!primary || Number(value) !== primary.id) return res.status(403).json({ message: 'Profile does not belong to this deployment' });
+      if (!primary || Number(value) !== primary.id)
+        return res
+          .status(403)
+          .json({ message: 'Profile does not belong to this deployment' });
       next();
-    } catch (error) { next(error); }
+    } catch (error) {
+      next(error);
+    }
   });
   // Health check endpoint (enhanced for PWA Stage 7)
   app.head('/api/health', (req, res) => {
@@ -445,7 +460,8 @@ export async function registerRoutes(app: Express) {
       for (const pkg of packages) {
         if (
           pkg.status === 'processing' &&
-          now - new Date(pkg.uploadedAt).getTime() > STUCK_PROCESSING_THRESHOLD_MS
+          now - new Date(pkg.uploadedAt).getTime() >
+            STUCK_PROCESSING_THRESHOLD_MS
         ) {
           console.warn(
             `Bid package ${pkg.id} has been stuck in 'processing' for over 15 minutes — marking failed`
@@ -738,204 +754,213 @@ export async function registerRoutes(app: Express) {
   });
 
   // Upload bid package PDF
-  app.post('/api/upload', handleMulterUpload(upload.single('bidPackage')), async (req, res) => {
-    try {
-      if (!req.file) {
-        return sendApiError(
-          res,
-          400,
-          'No bid package file was uploaded.',
-          'MISSING_FILE'
-        );
-      }
-
-      // multer's fileFilter only checked the client-supplied mimetype header,
-      // which is trivially spoofable. Sniff the actual PDF magic bytes for
-      // anything claiming to be a PDF before handing it to the parser.
-      if (
-        req.file.mimetype === 'application/pdf' &&
-        req.file.buffer.subarray(0, 5).toString('latin1') !== '%PDF-'
-      ) {
-        return sendApiError(
-          res,
-          400,
-          'File does not appear to be a valid PDF.',
-          'INVALID_FILE_TYPE'
-        );
-      }
-
-      const { name, month, year, base, aircraft } = req.body;
-
-      // Metadata is provisional until parsing. Uploading never deletes an
-      // existing package or the favorites, calendar, and chat attached to it.
-      const bidPackageData = insertBidPackageSchema.parse({
-        name,
-        month,
-        year: parseInt(year),
-        base,
-        aircraft,
-      });
-
-      const bidPackage = await storage.createBidPackage(bidPackageData);
-
-      // Parse file synchronously so processing completes before the serverless
-      // function terminates. On Vercel, the runtime is killed once the response
-      // is sent — background .then() chains never execute.
+  app.post(
+    '/api/upload',
+    handleMulterUpload(upload.single('bidPackage')),
+    async (req, res) => {
       try {
-        await pdfParser.parseFile(
-          req.file.buffer,
-          bidPackage.id,
-          req.file.mimetype
-        );
-        console.log(`File parsing completed for bid package ${bidPackage.id}`);
-        // Status is set to 'completed' inside parseFile() after all batch inserts finish
-
-        // The coach memoizes this package's pairings + rendered prompt
-        // block; a re-parse must not keep serving the old rows.
-        try {
-          const { invalidatePairingContextCache } = await import(
-            './ai/simpleAI'
+        if (!req.file) {
+          return sendApiError(
+            res,
+            400,
+            'No bid package file was uploaded.',
+            'MISSING_FILE'
           );
-          invalidatePairingContextCache(bidPackage.id);
-        } catch {
-          // Cache invalidation is best-effort; never fail an upload over it.
         }
 
-        // Link any existing unlinked bid_history records to the new pairings
-        try {
-          // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
-          const freshBidPackage = await storage.getBidPackage(bidPackage.id);
-          if (!freshBidPackage) {
-            // Throw (not `return`) so this is caught by the enclosing
-            // catch below and auto-linking is skipped as best-effort —
-            // a bare `return` here previously exited the whole route
-            // handler before the success response was sent, hanging the
-            // client's upload request until it timed out.
-            throw new Error(
-              `Auto-linking: Could not find bid package ${bidPackage.id}`
-            );
-          }
+        // multer's fileFilter only checked the client-supplied mimetype header,
+        // which is trivially spoofable. Sniff the actual PDF magic bytes for
+        // anything claiming to be a PDF before handing it to the parser.
+        if (
+          req.file.mimetype === 'application/pdf' &&
+          req.file.buffer.subarray(0, 5).toString('latin1') !== '%PDF-'
+        ) {
+          return sendApiError(
+            res,
+            400,
+            'File does not appear to be a valid PDF.',
+            'INVALID_FILE_TYPE'
+          );
+        }
 
-          const fetchedPairings = await storage.getPairings(freshBidPackage.id);
+        const { name, month, year, base, aircraft } = req.body;
+
+        // Metadata is provisional until parsing. Uploading never deletes an
+        // existing package or the favorites, calendar, and chat attached to it.
+        const bidPackageData = insertBidPackageSchema.parse({
+          name,
+          month,
+          year: parseInt(year),
+          base,
+          aircraft,
+        });
+
+        const bidPackage = await storage.createBidPackage(bidPackageData);
+
+        // Parse file synchronously so processing completes before the serverless
+        // function terminates. On Vercel, the runtime is killed once the response
+        // is sent — background .then() chains never execute.
+        try {
+          await pdfParser.parseFile(
+            req.file.buffer,
+            bidPackage.id,
+            req.file.mimetype
+          );
           console.log(
-            `Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`
+            `File parsing completed for bid package ${bidPackage.id}`
           );
+          // Status is set to 'completed' inside parseFile() after all batch inserts finish
 
-          if (fetchedPairings.length > 0) {
-            // Find unlinked bid_history records that match this package
-            const { baseType: pkgAircraftBase } = parseAircraftCode(
-              freshBidPackage.aircraft
+          // The coach memoizes this package's pairings + rendered prompt
+          // block; a re-parse must not keep serving the old rows.
+          try {
+            const { invalidatePairingContextCache } = await import(
+              './ai/simpleAI'
             );
-            const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
-            console.log(
-              `Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`
-            );
-
-            // Get all unlinked history records
-            const unlinkedRecords = await db
-              .select()
-              .from(bidHistory)
-              .where(sql`linked_pairing_id IS NULL`);
-            console.log(
-              `Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`
-            );
-
-            // Build a map of pairing numbers for fast lookup
-            const pairingMap = new Map(
-              fetchedPairings.map(p => [p.pairingNumber, p])
-            );
-
-            let linkedCount = 0;
-            let matchingRecords = 0;
-            // Group history record ids by target pairing so we can issue one
-            // UPDATE per pairing instead of one per matched history record —
-            // this loop can otherwise be hundreds of sequential round-trips
-            // inside the synchronous upload request.
-            const recordIdsByPairingId = new Map<number, number[]>();
-            for (const record of unlinkedRecords) {
-              const { baseType: histAircraftBase } = parseAircraftCode(
-                record.aircraft
-              );
-              const histMonthNorm = normalizeMonth(record.month);
-
-              // Check if this record matches the bid package
-              if (
-                histMonthNorm === pkgMonthNorm &&
-                record.year === freshBidPackage.year &&
-                record.base === freshBidPackage.base &&
-                histAircraftBase === pkgAircraftBase
-              ) {
-                matchingRecords++;
-                // Find matching pairing by number
-                const matchingPairing = pairingMap.get(record.pairingNumber);
-                if (matchingPairing) {
-                  const ids = recordIdsByPairingId.get(matchingPairing.id) || [];
-                  ids.push(record.id);
-                  recordIdsByPairingId.set(matchingPairing.id, ids);
-                    }
-              }
-            }
-
-            for (const [pairingId, recordIds] of recordIdsByPairingId) {
-              await db
-                .update(bidHistory)
-                .set({ linkedPairingId: pairingId })
-                .where(inArray(bidHistory.id, recordIds));
-            }
-
-            console.log(
-              `Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`
-            );
-
-            // Uploads create a new version. Keep earlier packages and all of
-            // their saved references; only explicit package deletion removes them.
-
+            invalidatePairingContextCache(bidPackage.id);
+          } catch {
+            // Cache invalidation is best-effort; never fail an upload over it.
           }
-        } catch (linkError) {
+
+          // Link any existing unlinked bid_history records to the new pairings
+          try {
+            // IMPORTANT: Fetch fresh bid package data from DB since parsing may have updated month/year/base/aircraft
+            const freshBidPackage = await storage.getBidPackage(bidPackage.id);
+            if (!freshBidPackage) {
+              // Throw (not `return`) so this is caught by the enclosing
+              // catch below and auto-linking is skipped as best-effort —
+              // a bare `return` here previously exited the whole route
+              // handler before the success response was sent, hanging the
+              // client's upload request until it timed out.
+              throw new Error(
+                `Auto-linking: Could not find bid package ${bidPackage.id}`
+              );
+            }
+
+            const fetchedPairings = await storage.getPairings(
+              freshBidPackage.id
+            );
+            console.log(
+              `Auto-linking: Found ${fetchedPairings.length} pairings for bid package ${freshBidPackage.id}`
+            );
+
+            if (fetchedPairings.length > 0) {
+              // Find unlinked bid_history records that match this package
+              const { baseType: pkgAircraftBase } = parseAircraftCode(
+                freshBidPackage.aircraft
+              );
+              const pkgMonthNorm = normalizeMonth(freshBidPackage.month);
+              console.log(
+                `Auto-linking: Package criteria - month: ${pkgMonthNorm}, year: ${freshBidPackage.year}, base: ${freshBidPackage.base}, aircraft: ${pkgAircraftBase}`
+              );
+
+              // Get all unlinked history records
+              const unlinkedRecords = await db
+                .select()
+                .from(bidHistory)
+                .where(sql`linked_pairing_id IS NULL`);
+              console.log(
+                `Auto-linking: Found ${unlinkedRecords.length} unlinked bid_history records`
+              );
+
+              // Build a map of pairing numbers for fast lookup
+              const pairingMap = new Map(
+                fetchedPairings.map(p => [p.pairingNumber, p])
+              );
+
+              let linkedCount = 0;
+              let matchingRecords = 0;
+              // Group history record ids by target pairing so we can issue one
+              // UPDATE per pairing instead of one per matched history record —
+              // this loop can otherwise be hundreds of sequential round-trips
+              // inside the synchronous upload request.
+              const recordIdsByPairingId = new Map<number, number[]>();
+              for (const record of unlinkedRecords) {
+                const { baseType: histAircraftBase } = parseAircraftCode(
+                  record.aircraft
+                );
+                const histMonthNorm = normalizeMonth(record.month);
+
+                // Check if this record matches the bid package
+                if (
+                  histMonthNorm === pkgMonthNorm &&
+                  record.year === freshBidPackage.year &&
+                  record.base === freshBidPackage.base &&
+                  histAircraftBase === pkgAircraftBase
+                ) {
+                  matchingRecords++;
+                  // Find matching pairing by number
+                  const matchingPairing = pairingMap.get(record.pairingNumber);
+                  if (matchingPairing) {
+                    const ids =
+                      recordIdsByPairingId.get(matchingPairing.id) || [];
+                    ids.push(record.id);
+                    recordIdsByPairingId.set(matchingPairing.id, ids);
+                  }
+                }
+              }
+
+              for (const [pairingId, recordIds] of recordIdsByPairingId) {
+                await db
+                  .update(bidHistory)
+                  .set({ linkedPairingId: pairingId })
+                  .where(inArray(bidHistory.id, recordIds));
+              }
+
+              console.log(
+                `Auto-linking: ${matchingRecords} records matched criteria, ${linkedCount} successfully linked`
+              );
+
+              // Uploads create a new version. Keep earlier packages and all of
+              // their saved references; only explicit package deletion removes them.
+            }
+          } catch (linkError) {
+            console.error(
+              'Error linking existing bid_history records:',
+              linkError
+            );
+          }
+        } catch (parseError) {
           console.error(
-            'Error linking existing bid_history records:',
-            linkError
+            `File parsing failed for bid package ${bidPackage.id}:`,
+            parseError
+          );
+          await storage.updateBidPackageStatus(bidPackage.id, 'failed');
+          return sendApiError(
+            res,
+            500,
+            'Failed to parse bid package PDF. Check that the file is a Delta PBS bid package PDF or TXT export.',
+            'BID_PACKAGE_PARSE_FAILED'
           );
         }
-      } catch (parseError) {
-        console.error(
-          `File parsing failed for bid package ${bidPackage.id}:`,
-          parseError
-        );
-        await storage.updateBidPackageStatus(bidPackage.id, 'failed');
-        return sendApiError(
-          res,
-          500,
-          'Failed to parse bid package PDF. Check that the file is a Delta PBS bid package PDF or TXT export.',
-          'BID_PACKAGE_PARSE_FAILED'
-        );
-      }
 
-      res.json({
-        success: true,
-        bidPackage,
-        message: 'Bid package processed. Earlier versions and their saved work are preserved.',
-      });
-    } catch (error) {
-      console.error('Error uploading bid package:', error);
-      if (error instanceof z.ZodError) {
-        sendApiError(
-          res,
-          400,
-          'Invalid bid package upload details.',
-          'INVALID_UPLOAD_DATA',
-          error.errors
-        );
-      } else {
-        sendApiError(
-          res,
-          500,
-          'Failed to upload bid package.',
-          'UPLOAD_FAILED'
-        );
+        res.json({
+          success: true,
+          bidPackage,
+          message:
+            'Bid package processed. Earlier versions and their saved work are preserved.',
+        });
+      } catch (error) {
+        console.error('Error uploading bid package:', error);
+        if (error instanceof z.ZodError) {
+          sendApiError(
+            res,
+            400,
+            'Invalid bid package upload details.',
+            'INVALID_UPLOAD_DATA',
+            error.errors
+          );
+        } else {
+          sendApiError(
+            res,
+            500,
+            'Failed to upload bid package.',
+            'UPLOAD_FAILED'
+          );
+        }
       }
     }
-  });
+  );
 
   // Upload reasons report (HTML)
   app.post(
@@ -956,9 +981,17 @@ export async function registerRoutes(app: Express) {
 
         let htmlContent: string;
         try {
-          htmlContent = await decodeReasonsUpload(req.file.buffer, req.file.originalname);
+          htmlContent = await decodeReasonsUpload(
+            req.file.buffer,
+            req.file.originalname
+          );
         } catch (error) {
-          return sendApiError(res, 400, (error as Error).message, 'REASONS_PROCESSING_FAILED');
+          return sendApiError(
+            res,
+            400,
+            (error as Error).message,
+            'REASONS_PROCESSING_FAILED'
+          );
         }
         const awards =
           await ReasonsReportParser.parseReasonsReportFromContent(htmlContent);
@@ -1050,7 +1083,12 @@ export async function registerRoutes(app: Express) {
         // Prepare the whole report before starting its atomic database write.
         const pane = ReasonsReportParser.parseReasonsPane(htmlContent);
         if (awards.length === 0 && pane.preferences.length === 0) {
-          return sendApiError(res, 400, 'No awards or preference outcomes were found in this report.', 'REASONS_PROCESSING_FAILED');
+          return sendApiError(
+            res,
+            400,
+            'No awards or preference outcomes were found in this report.',
+            'REASONS_PROCESSING_FAILED'
+          );
         }
         const rowsToInsert: (typeof bidHistory.$inferInsert)[] = [];
         for (const award of awards) {
@@ -1059,13 +1097,13 @@ export async function registerRoutes(app: Express) {
             const fingerprint =
               ReasonsReportParser.createTripFingerprint(award);
 
-            // Parse credit hours as decimal
-            const creditHours = printedDurationHours(award.monthCredit);
-            const totalCredit = printedDurationHours(award.totalCredit);
-
-            if (!Number.isFinite(creditHours) || !Number.isFinite(totalCredit)) {
-              throw new Error(`Invalid credit for pairing ${award.pairingNumber}`);
-            }
+            // Total credit is optional in NAVBLUE exports and is sometimes
+            // rendered as #N/A even when month credit is valid.
+            const { creditHours, totalCredit } = parseReasonsCredits(
+              award.pairingNumber,
+              award.monthCredit,
+              award.totalCredit
+            );
 
             // Look up matching pairing from bid package
             const matchingPairing = pairingMap.get(award.pairingNumber);
@@ -1124,7 +1162,7 @@ export async function registerRoutes(app: Express) {
               awardType: award.awardType,
               pairingDays: award.pairingDays,
               creditHours: creditHours.toString(),
-              totalCredit: totalCredit.toString(),
+              totalCredit: totalCredit?.toString() ?? null,
               layoverCities: award.layoverCities,
               checkInDate: award.checkInDate,
               checkOutDate: award.checkOutDate,
@@ -1138,25 +1176,44 @@ export async function registerRoutes(app: Express) {
               ),
             });
           } catch (error) {
-            throw new Error(`Unable to prepare award ${award.pairingNumber}`, { cause: error });
+            throw new Error(`Unable to prepare award ${award.pairingNumber}`, {
+              cause: error,
+            });
           }
         }
 
-        const { storedCount, refreshedCount, skippedCount, linkedCount, unlinkedCount, preferencesParsed } = await persistReasonsImport({
+        const {
+          storedCount,
+          refreshedCount,
+          skippedCount,
+          linkedCount,
+          unlinkedCount,
+          preferencesParsed,
+        } = await persistReasonsImport({
           metadata,
           awards: rowsToInsert,
           preferences: pane.preferences.map(pref => ({
-            month: metadata.month, year: metadata.year, base: metadata.base, aircraft: metadata.aircraft,
-            pilotSeniorityNumber: pref.pilotSeniorityNumber, pilotEmployeeNumber: pref.pilotEmployeeNumber,
-            preferenceNumber: pref.preferenceNumber, preferenceText: pref.preferenceText,
-            outcome: pref.outcome, outcomeDetail: pref.outcomeDetail,
+            month: metadata.month,
+            year: metadata.year,
+            base: metadata.base,
+            aircraft: metadata.aircraft,
+            pilotSeniorityNumber: pref.pilotSeniorityNumber,
+            pilotEmployeeNumber: pref.pilotEmployeeNumber,
+            preferenceNumber: pref.preferenceNumber,
+            preferenceText: pref.preferenceText,
+            outcome: pref.outcome,
+            outcomeDetail: pref.outcomeDetail,
             awardedPairingNumbers: pref.awardedPairingNumbers,
-            reportBanners: pref.windowInfo ? [...pane.banners, pref.windowInfo] : pane.banners,
+            reportBanners: pref.windowInfo
+              ? [...pane.banners, pref.windowInfo]
+              : pane.banners,
           })),
         });
         // Invalidation happens only after the complete transaction commits.
         try {
-          const { invalidateReasonsAggregateCache } = await import('./ai/simpleAI');
+          const { invalidateReasonsAggregateCache } = await import(
+            './ai/simpleAI'
+          );
           invalidateReasonsAggregateCache();
         } catch (error) {
           console.warn('Could not invalidate coach cache after import:', error);
@@ -1246,9 +1303,24 @@ export async function registerRoutes(app: Express) {
   // Get pairings with optional filtering
   app.get('/api/pairings', async (req, res) => {
     try {
-      if (!req.query.bidPackageId) return res.status(400).json({ error: 'bidPackageId is required' });
+      if (!req.query.bidPackageId)
+        return res.status(400).json({ error: 'bidPackageId is required' });
       const filters: Record<string, any> = { ...req.query };
-      for (const key of ['bidPackageId', 'creditMin', 'creditMax', 'blockMin', 'blockMax', 'tafbMin', 'tafbMax', 'holdProbabilityMin', 'pairingDays', 'pairingDaysMin', 'pairingDaysMax', 'efficiency', 'seniorityPercentile']) {
+      for (const key of [
+        'bidPackageId',
+        'creditMin',
+        'creditMax',
+        'blockMin',
+        'blockMax',
+        'tafbMin',
+        'tafbMax',
+        'holdProbabilityMin',
+        'pairingDays',
+        'pairingDaysMin',
+        'pairingDaysMax',
+        'efficiency',
+        'seniorityPercentile',
+      ]) {
         if (filters[key] !== undefined) filters[key] = Number(filters[key]);
       }
       res.set('Cache-Control', 'no-store');
@@ -1287,7 +1359,9 @@ export async function registerRoutes(app: Express) {
       const packagePairings = await storage.getPairings(bidPackageId);
       const packageAlv =
         alv ??
-        (bidPackage.alvHours ? parseFloat(String(bidPackage.alvHours)) : undefined);
+        (bidPackage.alvHours
+          ? parseFloat(String(bidPackage.alvHours))
+          : undefined);
       // Real credit window/threshold from the latest imported Reasons Report
       // (explicit request values still win).
       const realWindow = await storage.getCategoryCreditWindow(
@@ -1377,7 +1451,7 @@ export async function registerRoutes(app: Express) {
       if (!employeeNumber) {
         return res.status(400).json({
           message:
-            'employeeNumber is required — profiles learn only from that pilot\'s own history.',
+            "employeeNumber is required — profiles learn only from that pilot's own history.",
         });
       }
       const { rows, periods } =
@@ -1416,7 +1490,9 @@ export async function registerRoutes(app: Express) {
       if (!bidPackage) {
         return res.status(404).json({ message: 'Bid package not found' });
       }
-      const pairingsList = await storage.searchPairings({ bidPackageId: pkgId });
+      const pairingsList = await storage.searchPairings({
+        bidPackageId: pkgId,
+      });
       if (pairingsList.length === 0) {
         return res.status(400).json({ message: 'Bid package has no pairings' });
       }
@@ -1462,9 +1538,7 @@ export async function registerRoutes(app: Express) {
         holdBoundaries,
         threshold: realWindow?.threshold ?? undefined,
         overrides,
-        depth: ['auto', 'compact', 'deep'].includes(depth)
-          ? depth
-          : undefined,
+        depth: ['auto', 'compact', 'deep'].includes(depth) ? depth : undefined,
       });
       const simulation = simulateBid(optimized.bid, pairingsList, {
         alv: bidPackage.alvHours
@@ -1587,13 +1661,36 @@ export async function registerRoutes(app: Express) {
   app.get('/api/bid-packages/:id/dataset', async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const percentile = req.query.seniorityPercentile === undefined ? undefined : Number(req.query.seniorityPercentile);
-      if (!Number.isInteger(id) || id < 1 || (percentile !== undefined && (!Number.isFinite(percentile) || percentile < 0 || percentile > 100))) return res.status(400).json({ message: 'Invalid dataset request' });
+      const percentile =
+        req.query.seniorityPercentile === undefined
+          ? undefined
+          : Number(req.query.seniorityPercentile);
+      if (
+        !Number.isInteger(id) ||
+        id < 1 ||
+        (percentile !== undefined &&
+          (!Number.isFinite(percentile) || percentile < 0 || percentile > 100))
+      )
+        return res.status(400).json({ message: 'Invalid dataset request' });
       const pkg = await storage.getBidPackage(id);
-      if (!pkg) return res.status(404).json({ message: 'Bid package not found' });
-      if (pkg.status !== 'completed') return res.status(409).json({ message: 'Bid package is not complete' });
-      const result = await storage.getAllPairingsForBidPackage({ bidPackageId: id, seniorityPercentile: percentile, compact: true });
-      res.json({ ...result, pairings: result.pairings.map(({ fullTextBlock, ...pairing }) => pairing), schema: 1, complete: true, total: result.pairings.length });
+      if (!pkg)
+        return res.status(404).json({ message: 'Bid package not found' });
+      if (pkg.status !== 'completed')
+        return res.status(409).json({ message: 'Bid package is not complete' });
+      const result = await storage.getAllPairingsForBidPackage({
+        bidPackageId: id,
+        seniorityPercentile: percentile,
+        compact: true,
+      });
+      res.json({
+        ...result,
+        pairings: result.pairings.map(
+          ({ fullTextBlock, ...pairing }) => pairing
+        ),
+        schema: 1,
+        complete: true,
+        total: result.pairings.length,
+      });
     } catch (error) {
       console.error('Dataset load failed:', error);
       res.status(500).json({ message: 'Failed to load pairing dataset' });
@@ -1647,9 +1744,18 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      const percentile = filters.seniorityPercentile ?? filters.seniorityPercentage;
-      if (percentile !== undefined && (typeof percentile !== 'number' || !Number.isFinite(percentile) || percentile < 0 || percentile > 100)) {
-        return res.status(400).json({ message: 'Seniority percentile must be between 0 and 100' });
+      const percentile =
+        filters.seniorityPercentile ?? filters.seniorityPercentage;
+      if (
+        percentile !== undefined &&
+        (typeof percentile !== 'number' ||
+          !Number.isFinite(percentile) ||
+          percentile < 0 ||
+          percentile > 100)
+      ) {
+        return res
+          .status(400)
+          .json({ message: 'Seniority percentile must be between 0 and 100' });
       }
 
       const result = await storage.getAllPairingsForBidPackage({
@@ -1886,7 +1992,9 @@ export async function registerRoutes(app: Express) {
           .where(
             and(
               eq(bidHistory.pairingDays, pairingDays),
-              ...(pairingPackage ? [eq(bidHistory.base, pairingPackage.base)] : [])
+              ...(pairingPackage
+                ? [eq(bidHistory.base, pairingPackage.base)]
+                : [])
             )
           )
       ).filter(h =>
@@ -2267,20 +2375,16 @@ export async function registerRoutes(app: Express) {
   app.get('/api/category-seniority', async (req, res) => {
     const parsed = categorySeniorityInput.safeParse(req.query);
     if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          error: 'Enter a valid seniority number, base, aircraft and position.',
-        });
+      return res.status(400).json({
+        error: 'Enter a valid seniority number, base, aircraft and position.',
+      });
     try {
       res.json({ categorySeniority: await getCategorySeniority(parsed.data) });
     } catch (error) {
       console.error('Error calculating category seniority:', error);
-      res
-        .status(503)
-        .json({
-          error: 'Category seniority is temporarily unavailable. Please retry.',
-        });
+      res.status(503).json({
+        error: 'Category seniority is temporarily unavailable. Please retry.',
+      });
     }
   });
 
@@ -2288,11 +2392,9 @@ export async function registerRoutes(app: Express) {
   app.post('/api/user', async (req, res) => {
     const parsed = categorySeniorityInput.safeParse(req.body);
     if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          error: 'Enter a valid seniority number, base, aircraft and position.',
-        });
+      return res.status(400).json({
+        error: 'Enter a valid seniority number, base, aircraft and position.',
+      });
     try {
       const input = parsed.data;
       const categorySeniority = await getCategorySeniority(input);
@@ -2311,11 +2413,9 @@ export async function registerRoutes(app: Express) {
       res.json({ ...publicUser(user), categorySeniority });
     } catch (error) {
       console.error('Error creating/updating user:', error);
-      res
-        .status(500)
-        .json({
-          error: 'Could not calculate and save your profile. Please retry.',
-        });
+      res.status(500).json({
+        error: 'Could not calculate and save your profile. Please retry.',
+      });
     }
   });
 
@@ -2345,9 +2445,13 @@ export async function registerRoutes(app: Express) {
   app.patch('/api/user/pin', async (req, res) => {
     try {
       const { pin } = req.body;
-      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) return res.status(400).json({ error: 'PIN must contain 4 to 12 digits' });
+      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin))
+        return res
+          .status(400)
+          .json({ error: 'PIN must contain 4 to 12 digits' });
       const primary = await storage.getPrimaryUser();
-      if (!primary) return res.status(404).json({ error: 'Create a profile first' });
+      if (!primary)
+        return res.status(404).json({ error: 'Create a profile first' });
       const user = await storage.setSyncPin(primary.id, pin);
       res.json(publicUser(user));
     } catch (error) {
@@ -2362,12 +2466,21 @@ export async function registerRoutes(app: Express) {
       const { bidPackageId, seniorityPercentile, seniorityNumber } = req.body;
 
       const parsedPercentile = Number(seniorityPercentile);
-      if (!bidPackageId || seniorityPercentile === undefined || Number.isNaN(parsedPercentile)) {
-        return res.status(400).json({ error: 'Missing or invalid required fields' });
+      if (
+        !bidPackageId ||
+        seniorityPercentile === undefined ||
+        Number.isNaN(parsedPercentile)
+      ) {
+        return res
+          .status(400)
+          .json({ error: 'Missing or invalid required fields' });
       }
       const parsedSeniorityNumber =
         seniorityNumber === undefined ? undefined : Number(seniorityNumber);
-      if (parsedSeniorityNumber !== undefined && Number.isNaN(parsedSeniorityNumber)) {
+      if (
+        parsedSeniorityNumber !== undefined &&
+        Number.isNaN(parsedSeniorityNumber)
+      ) {
         return res.status(400).json({ error: 'Invalid seniorityNumber' });
       }
 
@@ -2659,8 +2772,7 @@ export async function registerRoutes(app: Express) {
   // OpenAI Assistant API endpoint with hybrid token optimization
   app.post('/api/askAssistant', async (req, res) => {
     try {
-      const { question, bidPackageId, sessionId } =
-        req.body;
+      const { question, bidPackageId, sessionId } = req.body;
 
       if (!question || typeof question !== 'string') {
         return res.status(400).json({ message: 'Question is required' });
@@ -2714,7 +2826,12 @@ export async function registerRoutes(app: Express) {
             message: question,
             bidPackageId: finalBidPackageId,
             userId: profile?.id,
-            seniorityPercentile: await getAnalysisSeniority(profile, finalBidPackageId ? await storage.getBidPackage(finalBidPackageId) : undefined),
+            seniorityPercentile: await getAnalysisSeniority(
+              profile,
+              finalBidPackageId
+                ? await storage.getBidPackage(finalBidPackageId)
+                : undefined
+            ),
             conversationHistory,
           });
 
