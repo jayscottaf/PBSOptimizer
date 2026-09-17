@@ -44,18 +44,19 @@ test('latest category roster is chronological, deduplicated and supports seniori
 test('category lookup separates fleet, base and seat in PostgreSQL without changing real reports', async () => {
   await db.transaction(async tx => {
     await tx.execute(sql`CREATE TEMP TABLE reasons_report_preferences (
-      month text, year integer, base text, aircraft text, pilot_seniority_number integer
+      month text, year integer, base text, aircraft text, pilot_seniority_number integer,
+      report_banners jsonb
     ) ON COMMIT DROP`);
     await tx.execute(sql`INSERT INTO reasons_report_preferences VALUES
-      ('AUG', 2026, 'NYC', '220-B', 100),
-      ('AUG', 2026, 'NYC', 'A220-B', 200),
-      ('AUG', 2026, 'NYC', '220 B', 300),
-      ('AUG', 2026, 'NYC', '220-B', 300),
-      ('AUG', 2026, 'NYC', '220-A', 100),
-      ('AUG', 2026, 'NYC', '220', 999),
-      ('SEP', 2026, 'ATL', '220-B', 999),
-      ('SEP', 2026, 'NYC', '330-B', 999),
-      ('JUL', 2026, 'NYC', '220-B', 999)`);
+      ('AUG', 2026, 'NYC', '220-B', 100, null),
+      ('AUG', 2026, 'NYC', 'A220-B', 200, null),
+      ('AUG', 2026, 'NYC', '220 B', 300, null),
+      ('AUG', 2026, 'NYC', '220-B', 300, null),
+      ('AUG', 2026, 'NYC', '220-A', 100, null),
+      ('AUG', 2026, 'NYC', '220', 999, null),
+      ('SEP', 2026, 'ATL', '220-B', 999, null),
+      ('SEP', 2026, 'NYC', '330-B', 999, null),
+      ('JUL', 2026, 'NYC', '220-B', 999, null)`);
     const input = {
       base: 'NYC',
       aircraft: 'A220',
@@ -66,6 +67,16 @@ test('category lookup separates fleet, base and seat in PostgreSQL without chang
       percentile: 66.7,
       seniorOrEqual: 2,
       totalPilots: 3,
+      month: 'AUG',
+      year: 2026,
+    });
+    await tx.execute(sql`UPDATE reasons_report_preferences
+      SET report_banners = '["Standing Category 73/165, Regular 70/129, Reserve 3 above/36"]'::jsonb
+      WHERE pilot_seniority_number = 200 AND aircraft = 'A220-B'`);
+    assert.deepEqual(await getCategorySeniority(input, tx), {
+      percentile: 44.2,
+      seniorOrEqual: 73,
+      totalPilots: 165,
       month: 'AUG',
       year: 2026,
     });
@@ -97,7 +108,7 @@ test('category lookup separates fleet, base and seat in PostgreSQL without chang
         { base: 'NYC', aircraft: 'A220' },
         tx
       ),
-      66.7
+      44.2
     );
     assert.equal(
       savedPilot.seniorityPercentile,
@@ -196,10 +207,13 @@ test('profile save derives its percentage server-side and preserves the selected
   try {
     await db.transaction(async tx => {
       await tx.execute(sql`CREATE TEMP TABLE reasons_report_preferences (
-        month text, year integer, base text, aircraft text, pilot_seniority_number integer
+        month text, year integer, base text, aircraft text, pilot_seniority_number integer,
+        report_banners jsonb
       ) ON COMMIT DROP`);
       await tx.execute(sql`INSERT INTO reasons_report_preferences VALUES
-        ('JUL', 2026, 'NYC', '220-B', 100), ('JUL', 2026, 'NYC', '220-B', 200), ('JUL', 2026, 'NYC', '220-B', 300)`);
+        ('JUL', 2026, 'NYC', '220-B', 100, null),
+        ('JUL', 2026, 'NYC', '220-B', 200, null),
+        ('JUL', 2026, 'NYC', '220-B', 300, null)`);
       db.execute = tx.execute.bind(tx) as typeof db.execute;
       const input = {
         seniorityNumber: 200,

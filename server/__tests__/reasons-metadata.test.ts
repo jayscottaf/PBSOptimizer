@@ -17,3 +17,17 @@ test('extracts metadata for numeric and alphanumeric fleet codes', () => {
     { base: 'NYC', aircraft: '7ER-B', month: 'OCT', year: 2025 }
   );
 });
+
+test('preserves explicit category standing on parsed preferences', () => {
+  const pane = ReasonsReportParser.parseReasonsPane(`<body>
+    Seniority 14985 Category NYC-220-B MERGL 050000600
+    Minimum window &lt;062:00&gt; Threshold &lt;082:00&gt; Maximum window &lt;082:00&gt;
+    Category:73/165 Regular:70/129 Reserve:3(above)/36
+    2. Award Pairings If Departing On Monday
+    Honored
+  </body>`);
+  assert.equal(
+    pane.preferences[0].standingInfo,
+    'Standing Category 73/165, Regular 70/129, Reserve 3 above/36'
+  );
+});

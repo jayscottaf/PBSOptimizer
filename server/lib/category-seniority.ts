@@ -67,6 +67,39 @@ export async function getCategorySeniority(
   executor: Pick<typeof db, 'execute'> = db
 ): Promise<CategorySeniority | null> {
   const fleet = parseAircraftCode(input.aircraft).baseType;
+  const exact = await executor.execute(sql`
+    SELECT upper(left(trim(month), 3)) AS month, year, banner
+    FROM reasons_report_preferences r,
+      LATERAL jsonb_array_elements_text(coalesce(r.report_banners, '[]'::jsonb)) AS banner
+    WHERE upper(trim(base)) = ${input.base}
+      AND ${sql.raw(normalizedAircraftSqlExpr('aircraft'))} = ${fleet}
+      AND right(upper(regexp_replace(aircraft, '\\s+', '', 'g')), 1) = ${input.position}
+      AND pilot_seniority_number = ${input.seniorityNumber}
+      AND banner LIKE 'Standing Category %'
+    ORDER BY year DESC,
+      array_position(
+        ARRAY['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],
+        upper(left(trim(month), 3))
+      ) DESC
+    LIMIT 1
+  `);
+  const standing = exact.rows[0] as
+    | { month: string; year: number; banner: string }
+    | undefined;
+  const match = standing?.banner.match(/^Standing Category (\d+)\/(\d+),/);
+  if (standing && match) {
+    const seniorOrEqual = Number(match[1]);
+    const totalPilots = Number(match[2]);
+    if (seniorOrEqual > 0 && totalPilots >= seniorOrEqual) {
+      return {
+        percentile: Math.round((seniorOrEqual / totalPilots) * 1000) / 10,
+        seniorOrEqual,
+        totalPilots,
+        month: standing.month,
+        year: Number(standing.year),
+      };
+    }
+  }
   // Require an explicit seat: unclassified records must not mix captains and FOs.
   const result = await executor.execute(sql`
     SELECT upper(left(trim(month), 3)) AS month, year,

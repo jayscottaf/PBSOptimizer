@@ -1204,9 +1204,11 @@ export async function registerRoutes(app: Express) {
             outcome: pref.outcome,
             outcomeDetail: pref.outcomeDetail,
             awardedPairingNumbers: pref.awardedPairingNumbers,
-            reportBanners: pref.windowInfo
-              ? [...pane.banners, pref.windowInfo]
-              : pane.banners,
+            reportBanners: [
+              ...pane.banners,
+              ...(pref.windowInfo ? [pref.windowInfo] : []),
+              ...(pref.standingInfo ? [pref.standingInfo] : []),
+            ],
           })),
         });
         // Invalidation happens only after the complete transaction commits.

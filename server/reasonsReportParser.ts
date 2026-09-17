@@ -58,6 +58,7 @@ export interface ParsedPreferenceReason {
   // The pilot's credit-window header line ("Window 062:00-082:00, Threshold
   // 082:00") — real per-pilot threshold data the simulator otherwise guesses.
   windowInfo: string | null;
+  standingInfo: string | null;
 }
 
 export interface ParsedReasonsPane {
@@ -125,6 +126,9 @@ const PILOT_HEADER =
 // "Minimum window <062:00>  Threshold <082:00>  Maximum window <082:00>"
 const WINDOW_LINE =
   /Minimum\s+window\s+<(\d{1,3}:\d{2})>\s+Threshold\s+<(\d{1,3}:\d{2})>\s+Maximum\s+window\s+<(\d{1,3}:\d{2})>/;
+
+const STANDING_LINE =
+  /Category:(\d+)\/(\d+)\s+Regular:(\d+)\/(\d+)\s+Reserve:(\d+)\(above\)\/(\d+)/;
 
 // An award event under a preference: pairing number followed by check-in and
 // check-out timestamps, e.g. "7773  2026-07-07 14:45  2026-07-07 23:29 (006:23) (B)".
@@ -235,6 +239,7 @@ export class ReasonsReportParser {
     let pilotEmployeeNumber: string | null = null;
     let pilotName: string | null = null;
     let windowInfo: string | null = null;
+    let standingInfo: string | null = null;
 
     const finalize = () => {
       if (current) {
@@ -251,12 +256,19 @@ export class ReasonsReportParser {
         pilotName = headerMatch[3].trim();
         pilotEmployeeNumber = headerMatch[4];
         windowInfo = null;
+        standingInfo = null;
         continue;
       }
 
       const windowMatch = line.match(WINDOW_LINE);
       if (windowMatch) {
         windowInfo = `Window ${windowMatch[1]}-${windowMatch[3]}, Threshold ${windowMatch[2]}`;
+        continue;
+      }
+
+      const standingMatch = line.match(STANDING_LINE);
+      if (standingMatch) {
+        standingInfo = `Standing Category ${standingMatch[1]}/${standingMatch[2]}, Regular ${standingMatch[3]}/${standingMatch[4]}, Reserve ${standingMatch[5]} above/${standingMatch[6]}`;
         continue;
       }
 
@@ -273,6 +285,7 @@ export class ReasonsReportParser {
           pilotEmployeeNumber,
           pilotName,
           windowInfo,
+          standingInfo,
         };
         continue;
       }
