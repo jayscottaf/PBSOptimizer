@@ -1,6 +1,7 @@
 import { hasRedeye } from '@/lib/pbsDerivations';
 import { pct } from '@/lib/packageStats';
 import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
+import { findBidCategoryParameters } from '@shared/bid-package-parameters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { Pairing, BidPackage } from '@/lib/api';
@@ -37,6 +38,7 @@ interface BackendStatistics {
 interface StatsPanelProps {
   pairings: Pairing[];
   bidPackage?: BidPackage;
+  position?: 'A' | 'B';
   hideHeader?: boolean;
   statistics?: BackendStatistics;
   bidPackageStats?: {
@@ -80,6 +82,7 @@ interface ComputedStats {
 export function StatsPanel({
   pairings,
   bidPackage,
+  position,
   hideHeader = false,
   statistics,
   bidPackageStats,
@@ -427,6 +430,152 @@ export function StatsPanel({
   const stationStats = bidPackageStats?.checkInStations ?? [];
   const stationTotal = stationStats.reduce((sum, s) => sum + s.count, 0);
 
+  const categoryParameters = findBidCategoryParameters(
+    bidPackage?.alvTable,
+    bidPackage?.base,
+    bidPackage?.aircraft,
+    position
+  );
+  const publishedSupply = categoryParameters?.tripSupply;
+  const commutability = categoryParameters?.commutability;
+  const marketChanges = categoryParameters?.marketChanges;
+  const blockChangePercent = marketChanges
+    ? ((marketChanges.currentBlockHours - marketChanges.previousBlockHours) /
+        marketChanges.previousBlockHours) *
+      100
+    : 0;
+
+  const publishedAnalyticsSection =
+    publishedSupply || commutability || marketChanges ? (
+      <div className="mt-6 border-t border-border pt-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-medium text-foreground">
+              Published category outlook
+            </h4>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Airline planning data for {bidPackage?.base}{' '}
+              {bidPackage?.aircraft} {position}
+            </p>
+          </div>
+          {publishedSupply && (
+            <div className="text-right">
+              <div className="text-sm font-semibold text-foreground">
+                {publishedSupply.totalTrips.toLocaleString()} departures
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {publishedSupply.averageTripDays.toFixed(2)} average days
+              </div>
+            </div>
+          )}
+        </div>
+
+        {commutability && (
+          <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-border bg-muted/40 p-3 text-center">
+            {[
+              ['Both ends', commutability.bothEndsPercent],
+              ['Commute in', commutability.startPercent],
+              ['Commute home', commutability.endPercent],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <div className="text-base font-semibold text-foreground">
+                  {value}%
+                </div>
+                <div className="text-[11px] text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {publishedSupply && (
+          <div className="space-y-1">
+            <div className="grid grid-cols-4 gap-2 border-b border-border pb-1 text-xs font-medium text-muted-foreground">
+              <div>Trip</div>
+              <div className="text-right">Departures</div>
+              <div className="text-right">Trip mix</div>
+              <div className="text-right">Credit mix</div>
+            </div>
+            {publishedSupply.byDays.map(day => (
+              <button
+                key={day.days}
+                type="button"
+                className="grid w-full grid-cols-4 gap-2 rounded py-1 text-xs transition-colors hover:bg-muted"
+                onClick={() => onTripLengthFilter?.(day.days)}
+              >
+                <span className="text-left font-medium text-secondary-foreground">
+                  {day.days}-day
+                </span>
+                <span className="text-right font-medium text-foreground">
+                  {day.count}
+                </span>
+                <span className="text-right font-medium text-foreground">
+                  {day.tripPercent}%
+                </span>
+                <span className="text-right font-medium text-foreground">
+                  {day.hoursPercent}%
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {marketChanges && (
+          <div className="mt-4 rounded-lg border border-border p-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium text-foreground">
+                Monthly block hours
+              </span>
+              <span
+                className={`text-xs font-semibold ${blockChangePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}
+              >
+                {blockChangePercent >= 0 ? '+' : ''}
+                {blockChangePercent.toFixed(1)}%
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {marketChanges.currentBlockHours.toLocaleString()} this month ·{' '}
+              {marketChanges.previousBlockHours.toLocaleString()} prior month
+            </div>
+            {(marketChanges.addedRoutes.length > 0 ||
+              marketChanges.removedRoutes.length > 0) && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-green-600">
+                    Added markets
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {marketChanges.addedRoutes.map(route => (
+                      <span
+                        key={`added-${route}`}
+                        className="rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-700 dark:text-green-400"
+                      >
+                        {route.slice(0, 3)}–{route.slice(3)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-red-600">
+                    Removed markets
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {marketChanges.removedRoutes.map(route => (
+                      <span
+                        key={`removed-${route}`}
+                        className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-400"
+                      >
+                        {route.slice(0, 3)}–{route.slice(3)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    ) : null;
+
   const checkInStationSection =
     stationStats.length > 0 ? (
       <div className="mt-6 pt-4 border-t border-border">
@@ -549,6 +698,8 @@ export function StatsPanel({
             </div>
           </div>
         </div>
+
+        {publishedAnalyticsSection}
 
         {/* Combined Trip Types Table */}
         {stats.totalPairings > 0 && (
@@ -786,6 +937,8 @@ export function StatsPanel({
             </div>
           </div>
         </div>
+
+        {publishedAnalyticsSection}
 
         {/* Combined Trip Types Table */}
         {stats.totalPairings > 0 && (

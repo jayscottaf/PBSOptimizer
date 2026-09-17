@@ -35,6 +35,7 @@ export interface BidPackage {
   aircraft: string;
   uploadedAt: string;
   status: string;
+  alvTable?: unknown;
 }
 
 export interface Pairing {

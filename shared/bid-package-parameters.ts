@@ -11,7 +11,36 @@ export interface BidCategoryParameters {
   vacationSlide?: boolean;
   rllLimit?: number;
   carryOutCreditAllocations?: CarryOutCreditAllocation[];
+  commutability?: CommutabilitySummary;
+  tripSupply?: TripSupplySummary;
+  marketChanges?: MarketChangesSummary;
   displayName?: string;
+}
+
+export interface CommutabilitySummary {
+  bothEndsPercent: number;
+  startPercent: number;
+  endPercent: number;
+}
+
+export interface TripSupplyDay {
+  days: number;
+  count: number;
+  tripPercent: number;
+  hoursPercent: number;
+}
+
+export interface TripSupplySummary {
+  totalTrips: number;
+  averageTripDays: number;
+  byDays: TripSupplyDay[];
+}
+
+export interface MarketChangesSummary {
+  currentBlockHours: number;
+  previousBlockHours: number;
+  addedRoutes: string[];
+  removedRoutes: string[];
 }
 
 export interface CarryOutCreditAllocation {

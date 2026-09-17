@@ -19,6 +19,7 @@ import {
   parseOperatingDays,
 } from '../shared/operatingDays';
 import {
+  attachPublishedBidAnalytics,
   attachCarryOutCreditAllocations,
   parseBidCategoryParameters,
   parseCarryOutCreditAllocations,
@@ -1255,6 +1256,9 @@ export class PDFParser {
           alvTable,
           carryOutCreditAllocations
         );
+      }
+      if (alvTable.length > 0) {
+        alvTable = attachPublishedBidAnalytics(alvTable, text);
       }
       if (alvTable.length > 0 || defaultALV !== null) {
         console.log(

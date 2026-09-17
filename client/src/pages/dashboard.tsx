@@ -1393,6 +1393,7 @@ export default function Dashboard() {
                             <StatsPanel
                               pairings={displayPairings || []}
                               bidPackage={latestBidPackage}
+                              position={viewedCategory.position}
                               statistics={effectiveStatistics}
                               bidPackageStats={bidPackageStats}
                               onTripLengthFilter={handleTripLengthFilter}

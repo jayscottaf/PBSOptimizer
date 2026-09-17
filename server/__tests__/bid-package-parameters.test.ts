@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  attachPublishedBidAnalytics,
   attachCarryOutCreditAllocations,
   parseBidCategoryParameters,
   parseCarryOutCreditAllocations,
+  parsePublishedFleetAnalytics,
+  parsePublishedTripSupply,
 } from '../lib/bid-package-parameters';
 import { findBidCategoryParameters } from '../../shared/bid-package-parameters';
 import { constructPatternLine } from '../lib/lineConstructor';
@@ -89,4 +92,68 @@ test('line construction uses the date-specific current-month credit', () => {
   assert.equal(result.feasible, true);
   assert.equal(result.placed[0].creditHours, 4 + 32 / 60);
   assert.equal(result.bestCredit, 4 + 32 / 60);
+});
+
+const publishedAnalytics = `
+220 – Bridgette Long, Senior Crew Planner - bridgette.long@delta.com
+October 2026 in bid period pilot block totals 28,002 hours versus September at 26,207 hours
+220 Market Changes from September to October
+Added to 220 Removed from 220
+BILSLC PITSLC ATLBUR
+BOSDCA PSCSLC ATLIAD
+HRLMSP   CVGMSP
+Commutable trips:
+NYC – 55% commutable both ends, commutable starts are 67% and commutable ends are 85%
+|  220|  NYC| CA |# Trips|  62|  67| 134| 113|  73|   0|   0|   0|   0|   0|   0|   0|   0|   0|  449|  3.22|
+|     |     |    |% Trips| 14%| 15%| 30%| 25%| 16%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|     |      |
+|     |     |    |% Hours|  5%| 10%| 29%| 31%| 26%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|     |      |
+|     |     | FO |# Trips|  62|  67| 134| 113|  73|   0|   0|   0|   0|   0|   0|   0|   0|   0|  449|  3.22|
+|     |     |    |% Trips| 14%| 15%| 30%| 25%| 16%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|     |      |
+|     |     |    |% Hours|  5%| 10%| 29%| 31%| 26%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|  0%|     |      |
+`;
+
+test('parses published trip supply independently for each seat', () => {
+  const supply = parsePublishedTripSupply(publishedAnalytics);
+  const firstOfficer = supply.find(row => row.position === 'B');
+
+  assert.equal(supply.length, 2);
+  assert.equal(firstOfficer?.tripSupply.totalTrips, 449);
+  assert.equal(firstOfficer?.tripSupply.averageTripDays, 3.22);
+  assert.deepEqual(firstOfficer?.tripSupply.byDays[2], {
+    days: 3,
+    count: 134,
+    tripPercent: 30,
+    hoursPercent: 29,
+  });
+});
+
+test('attaches published commutability, block trends, and route changes', () => {
+  const fleet = parsePublishedFleetAnalytics(publishedAnalytics);
+  const rows = attachPublishedBidAnalytics(
+    parseBidCategoryParameters(table),
+    publishedAnalytics
+  );
+  const row = findBidCategoryParameters(rows, 'NYC', '220', 'B');
+
+  assert.equal(fleet.length, 2);
+  assert.deepEqual(row?.commutability, {
+    bothEndsPercent: 55,
+    startPercent: 67,
+    endPercent: 85,
+  });
+  assert.equal(row?.marketChanges?.currentBlockHours, 28002);
+  assert.equal(row?.marketChanges?.previousBlockHours, 26207);
+  assert.deepEqual(row?.marketChanges?.addedRoutes, [
+    'BILSLC',
+    'PITSLC',
+    'BOSDCA',
+    'PSCSLC',
+    'HRLMSP',
+  ]);
+  assert.deepEqual(row?.marketChanges?.removedRoutes, [
+    'ATLBUR',
+    'ATLIAD',
+    'CVGMSP',
+  ]);
+  assert.equal(row?.tripSupply?.totalTrips, 449);
 });
