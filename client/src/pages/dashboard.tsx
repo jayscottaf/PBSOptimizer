@@ -51,8 +51,10 @@ import { AwardValidationPanel } from '@/components/home/award-validation-panel';
 import { MonthlyWorkspaceHeader } from '@/components/home/monthly-workspace-header';
 import { PairingComparisonBar } from '@/components/pairing-comparison-bar';
 import { PairingComparisonSheet } from '@/components/pairing-comparison-sheet';
+import { CommuteFitControl } from '@/components/commute-fit-control';
 import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 import { WideScheduleUpload } from '@/components/wide-schedule-upload';
+import { useCommuteFit } from '@/hooks/use-commute-fit';
 
 // Code-split: these are only needed once the pilot opens the Calendar tab,
 // the AI chat, the Bid Builder tab, or the upload dialog's Data Overview tab —
@@ -729,6 +731,12 @@ export default function Dashboard() {
   const isFullCacheReady = pairingsResponse?.cached ?? false;
   const pairings = pairingsResponse?.pairings ?? EMPTY_ARRAY;
   const fullLocal = pairings;
+  const {
+    preferences: commutePreferences,
+    setPreferences: setCommutePreferences,
+    results: commuteFitResults,
+    counts: commuteFitCounts,
+  } = useCommuteFit(pairings);
   const comparedPairings = useMemo(() => {
     const byId = new Map(pairings.map((pairing: any) => [pairing.id, pairing]));
     return [...comparePairingIds]
@@ -1252,6 +1260,10 @@ export default function Dashboard() {
     setFilters({});
     setActiveFilters([]);
     setHideConflicts(false);
+    setCommutePreferences(current => ({
+      ...current,
+      onlyShowBothWays: false,
+    }));
     // SmartFilterSystem tracks its own local state for Days Off / Layover
     // selections (needed for its "N selected" buttons). Bumping this key
     // remounts it with fresh state so those buttons don't keep showing a
@@ -1308,13 +1320,27 @@ export default function Dashboard() {
     return new Map();
   }, [displayPairings, calendarEventsData, latestBidPackage]);
 
-  // Filter out conflict pairings if hideConflicts is enabled
+  // Apply local-only filters that rely on calendar or commute calculations.
   const filteredDisplayPairings = React.useMemo(() => {
-    if (!hideConflicts) {
-      return displayPairings;
-    }
-    return displayPairings.filter(p => !conflictMap.has(p.id));
-  }, [displayPairings, hideConflicts, conflictMap]);
+    return displayPairings.filter(pairing => {
+      if (hideConflicts && conflictMap.has(pairing.id)) return false;
+      if (
+        commutePreferences.enabled &&
+        commutePreferences.onlyShowBothWays &&
+        commuteFitResults.get(pairing.id)?.status !== 'both'
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    displayPairings,
+    hideConflicts,
+    conflictMap,
+    commutePreferences.enabled,
+    commutePreferences.onlyShowBothWays,
+    commuteFitResults,
+  ]);
   const pairingPageSize = 50;
   const pairingTotalPages = Math.max(
     1,
@@ -1328,6 +1354,12 @@ export default function Dashboard() {
     sortColumn,
     sortDirection,
     hideConflicts,
+    commutePreferences.enabled,
+    commutePreferences.onlyShowBothWays,
+    commutePreferences.earliestAcceptableReportMinutes,
+    commutePreferences.latestAcceptableReleaseMinutes,
+    commutePreferences.inboundBufferMinutes,
+    commutePreferences.outboundBufferMinutes,
   ]);
   useEffect(() => {
     setPairingPage(page => Math.min(page, pairingTotalPages));
@@ -1459,9 +1491,17 @@ export default function Dashboard() {
                   <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
                     <div className="w-full bg-card border-b p-3 sm:p-4">
                       <div className="space-y-4">
-                        <h3 className="text-sm font-semibold text-secondary-foreground">
-                          Filters
-                        </h3>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-secondary-foreground">
+                            Filters
+                          </h3>
+                          <CommuteFitControl
+                            value={commutePreferences}
+                            onChange={setCommutePreferences}
+                            counts={commuteFitCounts}
+                            disabled={!pairings.length}
+                          />
+                        </div>
                         <SmartFilterSystem
                           key={filterResetKey}
                           pairings={pairings || []}
@@ -1589,12 +1629,20 @@ export default function Dashboard() {
                             isError={isPairingsError}
                             onRetry={handleRetryPairings}
                             hasActiveFilters={
-                              activeFilters.length > 0 || hideConflicts
+                              activeFilters.length > 0 ||
+                              hideConflicts ||
+                              (commutePreferences.enabled &&
+                                commutePreferences.onlyShowBothWays)
                             }
                             favoritePairingIds={favoritePairingIds}
                             onToggleFavorite={handleToggleFavorite}
                             comparePairingIds={comparePairingIds}
                             onToggleCompare={handleToggleCompare}
+                            commuteFits={
+                              commutePreferences.enabled
+                                ? commuteFitResults
+                                : undefined
+                            }
                             pagination={{
                               page: pairingPage,
                               limit: pairingPageSize,
@@ -1818,6 +1866,7 @@ export default function Dashboard() {
           setIsComparisonOpen(false);
           setSelectedPairing(pairing);
         }}
+        commuteFits={commutePreferences.enabled ? commuteFitResults : undefined}
       />
 
       {/* Pairing Modal */}

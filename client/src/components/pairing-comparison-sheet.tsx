@@ -4,6 +4,7 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CommuteFitBadge } from '@/components/commute-fit-badge';
 import {
   Sheet,
   SheetContent,
@@ -12,6 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { Pairing } from '@/lib/api';
+import type { CommuteFitResult } from '@/lib/commute-fit';
 import {
   bestPairingIds,
   buildPairingComparison,
@@ -27,6 +29,7 @@ interface PairingComparisonSheetProps {
   pairings: Pairing[];
   onRemove: (id: number) => void;
   onView: (pairing: Pairing) => void;
+  commuteFits?: Map<number, CommuteFitResult>;
 }
 
 interface ComparisonRowProps {
@@ -123,6 +126,7 @@ export function PairingComparisonSheet({
   pairings,
   onRemove,
   onView,
+  commuteFits,
 }: PairingComparisonSheetProps) {
   const items = useMemo(
     () =>
@@ -334,6 +338,21 @@ export function PairingComparisonSheet({
                         .join(' · ') || '—'
                     }
                   />
+                  {commuteFits && (
+                    <ComparisonRow
+                      label="Commute fit"
+                      detail="Schedule timing only"
+                      comparisons={comparisons}
+                      renderValue={comparison => {
+                        const result = commuteFits.get(comparison.id);
+                        return result ? (
+                          <CommuteFitBadge result={result} showTimes />
+                        ) : (
+                          '—'
+                        );
+                      }}
+                    />
+                  )}
                   <ComparisonRow
                     label="Deadheads"
                     comparisons={comparisons}

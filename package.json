@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:bid-tools": "tsx scripts/bid-tools-check.ts",
-    "check:pairing-comparison": "tsx scripts/pairing-comparison-check.ts"
+    "check:pairing-comparison": "tsx scripts/pairing-comparison-check.ts",
+    "check:commute-fit": "tsx scripts/commute-fit-check.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

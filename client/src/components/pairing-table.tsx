@@ -29,6 +29,8 @@ import {
   Columns3,
 } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
+import type { CommuteFitResult } from '@/lib/commute-fit';
+import { CommuteFitBadge } from '@/components/commute-fit-badge';
 import { memo, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -73,6 +75,8 @@ interface PairingTableProps {
   /** Pairing ids selected for side-by-side comparison. */
   comparePairingIds?: Set<number>;
   onToggleCompare?: (pairing: Pairing) => void;
+  /** Optional schedule-only commute assessment for each pairing. */
+  commuteFits?: Map<number, CommuteFitResult>;
 }
 
 // Pure per-pairing formatters, hoisted to module scope so the component
@@ -339,6 +343,7 @@ function PairingTableImpl({
   onToggleFavorite,
   comparePairingIds,
   onToggleCompare,
+  commuteFits,
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -820,6 +825,13 @@ function PairingTableImpl({
                     </div>
                   ))}
                 </dl>
+                {commuteFits?.get(pairing.id) && (
+                  <CommuteFitBadge
+                    result={commuteFits.get(pairing.id)!}
+                    className="mt-3"
+                    showTimes
+                  />
+                )}
                 {conflicts.has(pairing.id) && (
                   <p className="mt-3 text-sm text-warning">
                     Conflicts with your calendar
@@ -1213,6 +1225,12 @@ function PairingTableImpl({
                       >
                         {rowDisplay[index]?.effective}
                       </div>
+                      {commuteFits?.get(pairing.id) && (
+                        <CommuteFitBadge
+                          result={commuteFits.get(pairing.id)!}
+                          className="mt-1"
+                        />
+                      )}
                     </td>
                     <td className="px-2 sm:px-4 py-2 sm:py-4 whitespace-nowrap">
                       <span className="font-mono text-xs sm:text-sm font-medium text-foreground">
