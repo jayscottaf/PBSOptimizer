@@ -6,14 +6,33 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from 'next-themes';
-import Dashboard from '@/pages/dashboard';
 import NotFound from '@/pages/not-found';
+
+const Dashboard = React.lazy(() => import('@/pages/dashboard'));
+
+function DashboardLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="w-full max-w-sm space-y-4 text-center" role="status">
+        <div className="mx-auto h-10 w-10 animate-pulse rounded-xl bg-primary/15" />
+        <div className="space-y-2">
+          <div className="mx-auto h-4 w-40 animate-pulse rounded bg-muted" />
+          <div className="mx-auto h-3 w-56 animate-pulse rounded bg-muted/70" />
+        </div>
+        <span className="sr-only">Loading your bid workspace</span>
+      </div>
+    </div>
+  );
+}
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route component={NotFound} />
-    </Switch>
+    <React.Suspense fallback={<DashboardLoading />}>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route component={NotFound} />
+      </Switch>
+    </React.Suspense>
   );
 }
 
@@ -49,7 +68,9 @@ function App() {
         <TooltipProvider delayDuration={200} skipDelayDuration={0}>
           <OfflineBanner />
           <Toaster />
-          <AccessGate><Router /></AccessGate>
+          <AccessGate>
+            <Router />
+          </AccessGate>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
