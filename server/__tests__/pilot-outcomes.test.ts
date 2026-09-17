@@ -25,7 +25,7 @@ test('latest pilot outcomes preserve active group evidence', async () => {
           '["Bid Group 2: Pairing Bid Group"]',
           'OCT', 2026, 14985, 'NYC', '220-B'),
         (17, 'Award Monday trips', 'Awarded to senior bidder',
-          '11; (1 Awarded, 18 Matching)', '["7900"]',
+          '11; (1 Awarded, 18 Matching, Running total: 012:43)', '["7900"]',
           '["Bid Group 2: Pairing Bid Group"]',
           'OCT', 2026, 14985, 'NYC', '220-B')`);
       db.execute = tx.execute.bind(tx) as typeof db.execute;
@@ -40,6 +40,20 @@ test('latest pilot outcomes preserve active group evidence', async () => {
         [false, true, true]
       );
       assert.deepEqual(result.preferences[2].awardedPairingNumbers, ['7900']);
+      assert.deepEqual(
+        {
+          awarded: result.preferences[2].awardedCount,
+          matching: result.preferences[2].matchingCount,
+          runningTotal: result.preferences[2].runningTotal,
+          seniorBidders: result.preferences[2].seniorBidderCount,
+        },
+        {
+          awarded: 1,
+          matching: 18,
+          runningTotal: '012:43',
+          seniorBidders: 11,
+        }
+      );
     });
   } finally {
     db.execute = originalExecute;

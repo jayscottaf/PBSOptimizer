@@ -35,6 +35,7 @@ import { personalizeHoldProbabilities, pairingStatistics, type HoldPairing } fro
 import { percentileWithin } from './lib/empiricalHold';
 import { pilotRosterCtes } from './lib/pilot-roster';
 import { markActiveBidGroups } from './lib/bid-groups';
+import { parseOutcomeMetrics } from './lib/outcome-metrics';
 import {
   parseAircraftCode,
   normalizedAircraftSqlExpr,
@@ -304,6 +305,10 @@ export interface IStorage {
       awardedPairingNumbers: string[];
       bidGroup?: string;
       groupActive?: boolean;
+      awardedCount: number | null;
+      matchingCount: number | null;
+      runningTotal: string | null;
+      seniorBidderCount: number | null;
     }>;
   }>;
 }
@@ -2689,6 +2694,7 @@ export class DatabaseStorage implements IStorage {
       awardedPairingNumbers: row.awardedPairingNumbers,
       bidGroup: row.bidGroup,
       groupActive: row.groupActive,
+      ...parseOutcomeMetrics(row.outcome, row.outcomeDetail),
     }));
     return {
       period: raw[0] ? `${raw[0].month} ${raw[0].year}` : null,

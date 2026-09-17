@@ -90,6 +90,10 @@ interface PilotBidOutcomesResponse {
     awardedPairingNumbers: string[];
     bidGroup?: string;
     groupActive?: boolean;
+    awardedCount: number | null;
+    matchingCount: number | null;
+    runningTotal: string | null;
+    seniorBidderCount: number | null;
   }>;
 }
 
@@ -709,14 +713,22 @@ export function TrendsPanel({
                     </span>
                   </div>
                   {(preference.awardedPairingNumbers.length > 0 ||
-                    preference.outcomeDetail) && (
+                    preference.matchingCount !== null ||
+                    preference.seniorBidderCount !== null ||
+                    preference.runningTotal) && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {preference.awardedPairingNumbers.length > 0 &&
                         `Awarded ${preference.awardedPairingNumbers.join(', ')}`}
                       {preference.awardedPairingNumbers.length > 0 &&
-                        preference.outcomeDetail &&
+                        preference.matchingCount !== null &&
                         ' · '}
-                      {preference.outcomeDetail}
+                      {preference.awardedCount !== null &&
+                        preference.matchingCount !== null &&
+                        `${preference.awardedCount} of ${preference.matchingCount} matches awarded`}
+                      {preference.seniorBidderCount !== null &&
+                        ` · ${preference.seniorBidderCount} went to senior bidders`}
+                      {preference.runningTotal &&
+                        ` · line total ${preference.runningTotal}`}
                     </p>
                   )}
                 </div>
