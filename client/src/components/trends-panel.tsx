@@ -15,6 +15,9 @@ interface TrendPeriod {
   totalPrefs: number;
   honored: number;
   lostToSenior: number;
+  categoryPilots: number | null;
+  regularPilots: number | null;
+  reservePilots: number | null;
 }
 
 interface HoldBoundary {
@@ -674,6 +677,9 @@ export function TrendsPanel({
   const honoredCount = explainedOutcomes.filter(
     preference => preference.outcome === 'Honored'
   ).length;
+  const compositionPeriods = data.periods.filter(
+    period => period.regularPilots !== null && period.reservePilots !== null
+  );
 
   return (
     <div className="space-y-4 p-1">
@@ -809,6 +815,51 @@ export function TrendsPanel({
           </div>
         </CardHeader>
       </Card>
+
+      {compositionPeriods.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Category composition</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Explicit regular and reserve populations reported by NAVBLUE for
+              each imported period.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {compositionPeriods.map(period => {
+              const total = period.categoryPilots || 1;
+              return (
+                <div
+                  key={period.period}
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <span className="w-20 shrink-0 font-mono text-muted-foreground">
+                    {period.period}
+                  </span>
+                  <div className="flex h-4 flex-1 overflow-hidden rounded bg-muted">
+                    <div
+                      className="h-full bg-blue-500/80"
+                      style={{
+                        width: `${((period.regularPilots ?? 0) / total) * 100}%`,
+                      }}
+                    />
+                    <div
+                      className="h-full bg-purple-500/80"
+                      style={{
+                        width: `${((period.reservePilots ?? 0) / total) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="w-44 shrink-0 text-right text-muted-foreground">
+                    {period.regularPilots} regular · {period.reservePilots}{' '}
+                    reserve · {period.categoryPilots} total
+                  </span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

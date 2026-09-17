@@ -4,6 +4,7 @@ import { db } from '../db';
 import { normalizedAircraftSqlExpr, parseAircraftCode } from './aircraft';
 import { normalizeMonth3, percentileWithin } from './empiricalHold';
 import type { CategorySeniority } from '../../shared/category-seniority';
+import { parseCategoryStanding } from './category-standing';
 
 const months = [
   'JAN',
@@ -86,10 +87,10 @@ export async function getCategorySeniority(
   const standing = exact.rows[0] as
     | { month: string; year: number; banner: string }
     | undefined;
-  const match = standing?.banner.match(/^Standing Category (\d+)\/(\d+),/);
-  if (standing && match) {
-    const seniorOrEqual = Number(match[1]);
-    const totalPilots = Number(match[2]);
+  const parsedStanding = parseCategoryStanding(standing?.banner);
+  if (standing && parsedStanding) {
+    const seniorOrEqual = parsedStanding.categoryPosition;
+    const totalPilots = parsedStanding.categoryTotal;
     if (seniorOrEqual > 0 && totalPilots >= seniorOrEqual) {
       return {
         percentile: Math.round((seniorOrEqual / totalPilots) * 1000) / 10,

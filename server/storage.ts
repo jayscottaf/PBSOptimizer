@@ -36,6 +36,7 @@ import { percentileWithin } from './lib/empiricalHold';
 import { pilotRosterCtes } from './lib/pilot-roster';
 import { markActiveBidGroups } from './lib/bid-groups';
 import { parseOutcomeMetrics } from './lib/outcome-metrics';
+import { parseCategoryStanding } from './lib/category-standing';
 import {
   parseAircraftCode,
   normalizedAircraftSqlExpr,
@@ -171,6 +172,9 @@ export interface IStorage {
       totalPrefs: number;
       honored: number;
       lostToSenior: number;
+      categoryPilots: number | null;
+      regularPilots: number | null;
+      reservePilots: number | null;
     }>;
     holdBoundaries: Array<{
       period: string;
@@ -1288,6 +1292,9 @@ export class DatabaseStorage implements IStorage {
       totalPrefs: number;
       honored: number;
       lostToSenior: number;
+      categoryPilots: number | null;
+      regularPilots: number | null;
+      reservePilots: number | null;
     }>;
     holdBoundaries: Array<{
       period: string;
@@ -1308,7 +1315,12 @@ export class DatabaseStorage implements IStorage {
       ? sql`AND upper(left(trim(month), 3)) = ${monthCode}`
       : sql``;
 
-    const contention = await db.execute(sql`
+    const monthCondR = monthCode
+      ? sql`AND upper(left(trim(r.month), 3)) = ${monthCode}`
+      : sql``;
+    const fleetR = this.fleetMatches('r.aircraft', aircraft);
+    const [contention, boundaries, composition, rosters, window] = await Promise.all([
+      db.execute(sql`
       SELECT year, month,
         count(*) AS total_prefs,
         count(DISTINCT pilot_seniority_number) AS pilots,
@@ -1317,9 +1329,8 @@ export class DatabaseStorage implements IStorage {
       FROM reasons_report_preferences
       WHERE base = ${base} ${monthCond} ${fleet}
       GROUP BY year, month
-    `);
-
-    const boundaries = await db.execute(sql`
+    `),
+      db.execute(sql`
       SELECT year, month, pairing_days,
         max(junior_holder_seniority) AS junior_most,
         count(*) AS awards
@@ -1328,10 +1339,17 @@ export class DatabaseStorage implements IStorage {
         AND (award_type IS NULL OR award_type NOT ILIKE '%coverage%')
         ${monthCond}
       GROUP BY year, month, pairing_days
-    `);
-
-    const rosters = await this.getCategoryRosters(base, aircraft);
-    const window = await this.getCategoryCreditWindow(base, aircraft);
+    `),
+      db.execute(sql`
+        SELECT DISTINCT r.year, r.month, banner
+        FROM reasons_report_preferences r,
+          LATERAL jsonb_array_elements_text(coalesce(r.report_banners, '[]'::jsonb)) AS banner
+        WHERE r.base = ${base} AND banner LIKE 'Standing Category %'
+          ${monthCondR} ${fleetR}
+      `),
+      this.getCategoryRosters(base, aircraft),
+      this.getCategoryCreditWindow(base, aircraft),
+    ]);
 
     const monthNum = (m: string) => {
       const idx = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
@@ -1340,15 +1358,28 @@ export class DatabaseStorage implements IStorage {
     };
     const sortKey = (r: any) => Number(r.year) * 100 + monthNum(r.month);
 
+    const compositionByPeriod = new Map<string, ReturnType<typeof parseCategoryStanding>>();
+    for (const row of composition.rows as any[]) {
+      const key = `${String(row.month).trim().slice(0, 3).toUpperCase()} ${row.year}`;
+      const standing = parseCategoryStanding(String(row.banner));
+      if (standing) compositionByPeriod.set(key, standing);
+    }
     const periods = (contention.rows as any[])
       .sort((a, b) => sortKey(a) - sortKey(b))
-      .map(r => ({
-        period: `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`,
-        pilots: Number(r.pilots),
-        totalPrefs: Number(r.total_prefs),
-        honored: Number(r.honored),
-        lostToSenior: Number(r.lost_to_senior),
-      }));
+      .map(r => {
+        const period = `${String(r.month).trim().slice(0, 3).toUpperCase()} ${r.year}`;
+        const standing = compositionByPeriod.get(period);
+        return {
+          period,
+          pilots: Number(r.pilots),
+          totalPrefs: Number(r.total_prefs),
+          honored: Number(r.honored),
+          lostToSenior: Number(r.lost_to_senior),
+          categoryPilots: standing?.categoryTotal ?? null,
+          regularPilots: standing?.regularTotal ?? null,
+          reservePilots: standing?.reserveTotal ?? null,
+        };
+      });
 
     const holdBoundaries = (boundaries.rows as any[])
       // Tie-break on trip length: sortKey only encodes year+month, so rows
