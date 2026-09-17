@@ -69,6 +69,8 @@ type ApiErrorCode =
   | 'UPLOAD_FAILED'
   | 'INVALID_SIMULATION_REQUEST'
   | 'INVALID_EXPORT_REQUEST'
+  | 'INVALID_QUERY'
+  | 'BID_OUTCOMES_FAILED'
   | 'NOT_FOUND';
 
 function sendApiError(
@@ -1414,6 +1416,35 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching bid profile:', error);
       res.status(500).json({ message: 'Failed to fetch bid profile' });
+    }
+  });
+
+  app.get('/api/pilot-bid-outcomes', async (req, res) => {
+    try {
+      const input = z
+        .object({
+          seniorityNumber: z.coerce.number().int().positive(),
+          base: z.string().trim().toUpperCase().min(1).max(10),
+          aircraft: z.string().trim().toUpperCase().min(1).max(50),
+        })
+        .parse(req.query);
+      res.json(await storage.getLatestPilotOutcomes(input));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return sendApiError(
+          res,
+          400,
+          'Valid seniority number, base, and aircraft are required.',
+          'INVALID_QUERY'
+        );
+      }
+      console.error('Error fetching pilot bid outcomes:', error);
+      sendApiError(
+        res,
+        500,
+        'Failed to load bid outcomes.',
+        'BID_OUTCOMES_FAILED'
+      );
     }
   });
 

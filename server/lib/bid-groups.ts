@@ -7,7 +7,9 @@ export interface StoredBidPreferenceRow {
   producedAward: boolean;
 }
 
-export function markActiveBidGroups(rows: StoredBidPreferenceRow[]) {
+export function markActiveBidGroups<T extends StoredBidPreferenceRow>(
+  rows: T[]
+) {
   const activeGroups = new Set(
     rows
       .filter(
@@ -23,10 +25,7 @@ export function markActiveBidGroups(rows: StoredBidPreferenceRow[]) {
     const period = `${row.month}|${row.year}`;
     const groupKey = row.bidGroup ? `${period}|${row.bidGroup}` : null;
     return {
-      preferenceText: row.preferenceText,
-      outcome: row.outcome,
-      month: row.month,
-      year: row.year,
+      ...row,
       groupActive: groupKey
         ? activeGroups.has(groupKey) || !periodsWithActiveGroup.has(period)
         : undefined,

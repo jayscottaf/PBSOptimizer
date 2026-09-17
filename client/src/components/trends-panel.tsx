@@ -80,6 +80,19 @@ interface BidPatternsResponse {
   daysOffPatterns: Array<{ days: number; count: number }>;
 }
 
+interface PilotBidOutcomesResponse {
+  period: string | null;
+  preferences: Array<{
+    preferenceNumber: number;
+    preferenceText: string;
+    outcome: string;
+    outcomeDetail: string | null;
+    awardedPairingNumbers: string[];
+    bidGroup?: string;
+    groupActive?: boolean;
+  }>;
+}
+
 // Stable colors per station so a station keeps its color across periods.
 const STATION_COLORS = [
   '#60a5fa',
@@ -542,10 +555,12 @@ const INSIGHT_STYLES: Record<
 
 export function TrendsPanel({
   seniorityPercentile,
+  seniorityNumber,
   base,
   aircraft,
 }: {
   seniorityPercentile?: number | string | null;
+  seniorityNumber?: number | null;
   /** Category of the selected bid package. History is per base+fleet. */
   base?: string | null;
   aircraft?: string | null;
@@ -578,6 +593,21 @@ export function TrendsPanel({
     staleTime: 5 * 60 * 1000,
     enabled:
       hasCategory && !isLoading && !isError && !!data && data.periods.length > 0,
+  });
+  const { data: pilotOutcomes } = useQuery<PilotBidOutcomesResponse>({
+    queryKey: ['/api/pilot-bid-outcomes', seniorityNumber, base, aircraft],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        seniorityNumber: String(seniorityNumber),
+        base: String(base),
+        aircraft: String(aircraft),
+      });
+      const res = await fetch(`/api/pilot-bid-outcomes?${params}`);
+      if (!res.ok) throw new Error('Failed to load pilot bid outcomes');
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: hasCategory && Boolean(seniorityNumber),
   });
 
   if (!hasCategory) {
@@ -623,9 +653,78 @@ export function TrendsPanel({
       ? Number(seniorityPercentile)
       : undefined;
   const insights = deriveInsights(data, Number.isNaN(userPct) ? undefined : userPct);
+  const explainedOutcomes = (pilotOutcomes?.preferences ?? []).filter(
+    preference =>
+      preference.groupActive !== false &&
+      (preference.outcome !== 'Unknown' ||
+        preference.awardedPairingNumbers.length > 0)
+  );
+  const awardedCount = new Set(
+    explainedOutcomes.flatMap(preference => preference.awardedPairingNumbers)
+  ).size;
+  const lostToSeniorCount = explainedOutcomes.filter(preference =>
+    preference.outcome.startsWith('Awarded to senior')
+  ).length;
+  const honoredCount = explainedOutcomes.filter(
+    preference => preference.outcome === 'Honored'
+  ).length;
 
   return (
     <div className="space-y-4 p-1">
+      {explainedOutcomes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CircleCheck className="h-5 w-5 text-emerald-500" />
+              Your latest bid explained — {pilotOutcomes?.period}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {awardedCount} pairings awarded · {honoredCount} preferences
+              honored · {lostToSeniorCount} lost to senior bidders
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {explainedOutcomes.map(preference => {
+              const isLoss = preference.outcome.startsWith('Awarded to senior');
+              const isHonored = preference.outcome === 'Honored';
+              return (
+                <div
+                  key={`${preference.preferenceNumber}-${preference.preferenceText}`}
+                  className="rounded-lg border border-border/70 p-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-sm font-medium">
+                      {preference.preferenceNumber}. {preference.preferenceText}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        isLoss
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : isHonored
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {preference.outcome}
+                    </span>
+                  </div>
+                  {(preference.awardedPairingNumbers.length > 0 ||
+                    preference.outcomeDetail) && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {preference.awardedPairingNumbers.length > 0 &&
+                        `Awarded ${preference.awardedPairingNumbers.join(', ')}`}
+                      {preference.awardedPairingNumbers.length > 0 &&
+                        preference.outcomeDetail &&
+                        ' · '}
+                      {preference.outcomeDetail}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
       {insights.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {insights.map((insight, i) => {

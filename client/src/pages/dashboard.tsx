@@ -1701,6 +1701,7 @@ export default function Dashboard() {
                 >
                   <TrendsPanel
                     seniorityPercentile={displayedPercentile}
+                    seniorityNumber={currentUser?.seniorityNumber}
                     base={latestBidPackage?.base}
                     aircraft={latestBidPackage?.aircraft}
                   />

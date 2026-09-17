@@ -290,6 +290,22 @@ export interface IStorage {
     }[];
     periods: number;
   }>;
+  getLatestPilotOutcomes(input: {
+    seniorityNumber: number;
+    base: string;
+    aircraft: string;
+  }): Promise<{
+    period: string | null;
+    preferences: Array<{
+      preferenceNumber: number;
+      preferenceText: string;
+      outcome: string;
+      outcomeDetail: string | null;
+      awardedPairingNumbers: string[];
+      bidGroup?: string;
+      groupActive?: boolean;
+    }>;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2615,6 +2631,69 @@ export class DatabaseStorage implements IStorage {
     const rows = markActiveBidGroups(rawRows);
     const periods = new Set(rows.map(r => `${r.month} ${r.year}`)).size;
     return { rows, periods };
+  }
+
+  async getLatestPilotOutcomes(input: {
+    seniorityNumber: number;
+    base: string;
+    aircraft: string;
+  }) {
+    const fleet = this.fleetMatches('aircraft', input.aircraft);
+    const rows = await db.execute(sql`
+      WITH latest AS (
+        SELECT year, month
+        FROM reasons_report_preferences
+        WHERE pilot_seniority_number = ${input.seniorityNumber}
+          AND upper(trim(base)) = ${input.base} ${fleet}
+        ORDER BY year DESC,
+          array_position(
+            ARRAY['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],
+            upper(left(trim(month), 3))
+          ) DESC
+        LIMIT 1
+      )
+      SELECT r.preference_number, r.preference_text, r.outcome,
+        r.outcome_detail, r.awarded_pairing_numbers, r.report_banners,
+        r.month, r.year
+      FROM reasons_report_preferences r
+      JOIN latest l ON l.year = r.year AND l.month = r.month
+      WHERE r.pilot_seniority_number = ${input.seniorityNumber}
+        AND upper(trim(r.base)) = ${input.base}
+        ${this.fleetMatches('r.aircraft', input.aircraft)}
+      ORDER BY r.preference_number
+    `);
+    const raw = (rows.rows as any[]).map(row => ({
+      preferenceNumber: Number(row.preference_number),
+      preferenceText: String(row.preference_text),
+      outcome: String(row.outcome),
+      outcomeDetail: row.outcome_detail ? String(row.outcome_detail) : null,
+      awardedPairingNumbers: Array.isArray(row.awarded_pairing_numbers)
+        ? row.awarded_pairing_numbers.map(String)
+        : [],
+      month: String(row.month),
+      year: Number(row.year),
+      bidGroup: Array.isArray(row.report_banners)
+        ? row.report_banners.find((banner: unknown) =>
+            String(banner).startsWith('Bid Group ')
+          )
+        : undefined,
+      producedAward:
+        Array.isArray(row.awarded_pairing_numbers) &&
+        row.awarded_pairing_numbers.length > 0,
+    }));
+    const preferences = markActiveBidGroups(raw).map(row => ({
+      preferenceNumber: row.preferenceNumber,
+      preferenceText: row.preferenceText,
+      outcome: row.outcome,
+      outcomeDetail: row.outcomeDetail,
+      awardedPairingNumbers: row.awardedPairingNumbers,
+      bidGroup: row.bidGroup,
+      groupActive: row.groupActive,
+    }));
+    return {
+      period: raw[0] ? `${raw[0].month} ${raw[0].year}` : null,
+      preferences,
+    };
   }
 }
 
