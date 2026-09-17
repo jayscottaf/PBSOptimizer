@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseWideSchedulePageItems } from '../wideScheduleParser';
+import { buildWideScheduleValidation } from '../lib/wide-schedule-validation';
+import type { WideScheduleLine } from '../../shared/schema';
 
 const dates = Array.from({ length: 31 }, (_, index) => ({
   text: String(index + 1),
@@ -50,4 +52,61 @@ test('parses anonymized schedule lines from positioned PDF text', () => {
   assert.equal(parsed.lines[1].pilotSeniority, null);
   assert.equal(parsed.lines[1].sourceLabel, 'Open-1');
   assert.equal(parsed.lines[1].lineType, 'open');
+});
+
+const scheduleLine = (
+  seniority: number,
+  credit: number,
+  daysOff: number,
+  lineType: 'regular' | 'reserve',
+  pairings: string[]
+): WideScheduleLine => ({
+  id: seniority,
+  month: 'OCT',
+  year: 2026,
+  base: 'NYC',
+  aircraft: '220',
+  position: 'B',
+  pilotSeniority: seniority,
+  sourceLabel: null,
+  totalCreditHours: credit.toFixed(2),
+  daysOff,
+  lineType,
+  flags: [],
+  events: pairings.map((code, index) => ({
+    day: index + 1,
+    type: 'pairing',
+    code,
+  })),
+  uploadedAt: new Date('2026-09-17T00:00:00Z'),
+});
+
+test('builds exact-line benchmarks and pairing reach from award results', () => {
+  const result = buildWideScheduleValidation(
+    [
+      scheduleLine(14900, 70, 17, 'regular', ['7900', '8004']),
+      scheduleLine(14985, 63, 20, 'regular', ['7900', '8109']),
+      scheduleLine(15100, 67, 18, 'reserve', ['8109', '8200']),
+    ],
+    14985,
+    3
+  );
+
+  assert.ok(result);
+  assert.equal(result.exactLine?.totalCreditHours, 63);
+  assert.deepEqual(result.exactLine?.pairingNumbers, ['7900', '8109']);
+  assert.equal(result.nearby.medianCreditHours, 67);
+  assert.equal(result.nearby.medianDaysOff, 18);
+  assert.equal(result.nearby.regularLines, 2);
+  assert.equal(result.nearby.reserveLines, 1);
+  assert.equal(result.nearby.averagePairings, 2);
+
+  const juniorAward = result.pairingOutcomes.find(
+    outcome => outcome.pairingNumber === '8200'
+  );
+  const seniorOnlyAward = result.pairingOutcomes.find(
+    outcome => outcome.pairingNumber === '8004'
+  );
+  assert.equal(juniorAward?.awardedAtOrJuniorToUser, true);
+  assert.equal(seniorOnlyAward?.awardedAtOrJuniorToUser, false);
 });

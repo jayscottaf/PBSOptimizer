@@ -58,6 +58,7 @@ import { parseAircraftCode } from './lib/aircraft';
 import type { DraftBid } from '../shared/bidTypes';
 import { findBidCategoryParameters } from '../shared/bid-package-parameters';
 import { parseWideSchedulePdf } from './wideScheduleParser';
+import { buildWideScheduleValidation } from './lib/wide-schedule-validation';
 import * as fs from 'fs/promises';
 
 type ApiErrorCode =
@@ -69,6 +70,7 @@ type ApiErrorCode =
   | 'REASONS_METADATA_FAILED'
   | 'REASONS_PROCESSING_FAILED'
   | 'WIDE_SCHEDULE_PARSE_FAILED'
+  | 'WIDE_SCHEDULE_VALIDATION_FAILED'
   | 'UPLOAD_FAILED'
   | 'INVALID_SIMULATION_REQUEST'
   | 'INVALID_EXPORT_REQUEST'
@@ -755,6 +757,71 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching bid package stats:', error);
       res.status(500).json({ error: 'Failed to fetch bid package stats' });
+    }
+  });
+
+  app.get('/api/wide-schedules/validation', async (req, res) => {
+    const parsed = z
+      .object({
+        bidPackageId: z.coerce.number().int().positive(),
+        position: z.enum(['A', 'B']),
+        seniorityNumber: z.coerce.number().int().positive(),
+      })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      return sendApiError(
+        res,
+        400,
+        'A bid package, seat, and valid seniority number are required.',
+        'INVALID_QUERY'
+      );
+    }
+
+    try {
+      const bidPackage = await storage.getBidPackage(parsed.data.bidPackageId);
+      if (!bidPackage) {
+        return sendApiError(res, 404, 'Bid package not found.', 'NOT_FOUND');
+      }
+      const month = bidPackage.month.trim().slice(0, 3).toUpperCase();
+      const base = bidPackage.base.trim().toUpperCase();
+      const aircraft = parseAircraftCode(bidPackage.aircraft).baseType;
+      let lines = await storage.getWideScheduleLines({
+        month,
+        year: bidPackage.year,
+        base,
+        aircraft,
+        position: parsed.data.position,
+      });
+      const periodMatchesPackage = lines.length > 0;
+      if (!periodMatchesPackage) {
+        lines = await storage.getLatestWideScheduleLines({
+          base,
+          aircraft,
+          position: parsed.data.position,
+        });
+      }
+      const validation = buildWideScheduleValidation(
+        lines,
+        parsed.data.seniorityNumber,
+        12,
+        periodMatchesPackage
+      );
+      if (validation) return res.json(validation);
+
+      return res.json({
+        available: false,
+        month,
+        year: bidPackage.year,
+        category: `${base} ${aircraft}${parsed.data.position}`,
+      });
+    } catch (error) {
+      console.error('Wide schedule validation failed:', error);
+      return sendApiError(
+        res,
+        500,
+        'Could not compare this package with the wide schedule.',
+        'WIDE_SCHEDULE_VALIDATION_FAILED'
+      );
     }
   });
 

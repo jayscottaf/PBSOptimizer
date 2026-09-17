@@ -54,6 +54,7 @@ import { AppHeader } from '@/components/layout/app-header';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
+import { AwardValidationPanel } from '@/components/home/award-validation-panel';
 import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 import { WideScheduleUpload } from '@/components/wide-schedule-upload';
 
@@ -1367,6 +1368,12 @@ export default function Dashboard() {
                           viewedSeniorityQuery.data?.categorySeniority
                             ?.seniorOrEqual
                         }
+                      />
+                      <AwardValidationPanel
+                        bidPackageId={bidPackageId}
+                        seniorityNumber={currentUser?.seniorityNumber}
+                        position={viewedCategory.position}
+                        pairings={pairings || []}
                       />
                       <TopPicks
                         analysisKey={probabilityCacheUser}

@@ -124,6 +124,18 @@ export interface IStorage {
     },
     lines: InsertWideScheduleLine[]
   ): Promise<WideScheduleLine[]>;
+  getWideScheduleLines(category: {
+    month: string;
+    year: number;
+    base: string;
+    aircraft: string;
+    position: string;
+  }): Promise<WideScheduleLine[]>;
+  getLatestWideScheduleLines(category: {
+    base: string;
+    aircraft: string;
+    position: string;
+  }): Promise<WideScheduleLine[]>;
 
   // Pairing operations
   createPairing(pairing: InsertPairing): Promise<Pairing>;
@@ -529,6 +541,51 @@ export class DatabaseStorage implements IStorage {
       if (lines.length === 0) return [];
       return tx.insert(wideScheduleLines).values(lines).returning();
     });
+  }
+
+  async getWideScheduleLines(category: {
+    month: string;
+    year: number;
+    base: string;
+    aircraft: string;
+    position: string;
+  }): Promise<WideScheduleLine[]> {
+    return db
+      .select()
+      .from(wideScheduleLines)
+      .where(
+        and(
+          eq(wideScheduleLines.month, category.month),
+          eq(wideScheduleLines.year, category.year),
+          eq(wideScheduleLines.base, category.base),
+          eq(wideScheduleLines.aircraft, category.aircraft),
+          eq(wideScheduleLines.position, category.position)
+        )
+      );
+  }
+
+  async getLatestWideScheduleLines(category: {
+    base: string;
+    aircraft: string;
+    position: string;
+  }): Promise<WideScheduleLine[]> {
+    const matching = await db
+      .select()
+      .from(wideScheduleLines)
+      .where(
+        and(
+          eq(wideScheduleLines.base, category.base),
+          eq(wideScheduleLines.aircraft, category.aircraft),
+          eq(wideScheduleLines.position, category.position)
+        )
+      )
+      .orderBy(desc(wideScheduleLines.uploadedAt));
+    const latest = matching[0];
+    return latest
+      ? matching.filter(
+          line => line.month === latest.month && line.year === latest.year
+        )
+      : [];
   }
 
   // Removes any pairings already inserted for a bid package whose parse
