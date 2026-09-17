@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { ClipboardCheck, Users } from 'lucide-react';
 import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
-import type { WideScheduleValidationResult } from '@shared/wide-schedule-validation';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useWideScheduleValidation } from '@/hooks/use-wide-schedule-validation';
 
 interface AwardValidationPanelProps {
   bidPackageId?: number;
@@ -19,29 +18,11 @@ export function AwardValidationPanel({
   position,
   pairings,
 }: AwardValidationPanelProps) {
-  const { data } = useQuery<WideScheduleValidationResult>({
-    queryKey: [
-      'wide-schedule-validation',
-      bidPackageId,
-      position,
-      seniorityNumber,
-    ],
-    queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({
-        bidPackageId: String(bidPackageId),
-        position,
-        seniorityNumber: String(seniorityNumber),
-      });
-      const response = await fetch(`/api/wide-schedules/validation?${params}`, {
-        signal,
-      });
-      if (!response.ok) throw new Error('Could not load award validation.');
-      return response.json();
-    },
-    enabled: Boolean(bidPackageId && seniorityNumber),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  const { data } = useWideScheduleValidation(
+    bidPackageId,
+    seniorityNumber,
+    position
+  );
 
   const packageEvidence = useMemo(() => {
     if (!data?.available) return { observed: 0, reachable: 0 };
@@ -77,8 +58,16 @@ export function AwardValidationPanel({
             </p>
           </div>
           {exactLine && (
-            <Badge className="bg-success/15 text-success hover:bg-success/15">
-              Exact seniority found
+            <Badge
+              className={
+                data.periodMatchesPackage
+                  ? 'bg-success/15 text-success hover:bg-success/15'
+                  : 'bg-warning/15 text-warning hover:bg-warning/15'
+              }
+            >
+              {data.periodMatchesPackage
+                ? 'Exact seniority found'
+                : `${data.month} evidence · different package month`}
             </Badge>
           )}
         </div>

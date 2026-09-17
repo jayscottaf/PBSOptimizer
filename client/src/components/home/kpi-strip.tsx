@@ -73,6 +73,35 @@ export function KpiStrip({
     const totalMinutes = Math.round(value * 60);
     return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`;
   };
+  const parameterDetails: string[] = [];
+  if (
+    categoryParameters?.lineConstructionMinHours !== undefined &&
+    categoryParameters.lineConstructionMaxHours !== undefined
+  ) {
+    parameterDetails.push(
+      `${duration(categoryParameters.lineConstructionMinHours)}–${duration(categoryParameters.lineConstructionMaxHours)} credit window`
+    );
+  }
+  if (categoryParameters?.reserveGuaranteeHours !== undefined) {
+    parameterDetails.push(
+      `reserve ${duration(categoryParameters.reserveGuaranteeHours)}`
+    );
+  }
+  if (categoryParameters?.reserveRule) {
+    parameterDetails.push(`reserve rule ${categoryParameters.reserveRule}`);
+  }
+  if (categoryParameters?.rllLimit !== undefined) {
+    parameterDetails.push(`RLL limit ${categoryParameters.rllLimit}`);
+    if (categoryStanding !== undefined) {
+      parameterDetails.push(
+        `your reported standing ${categoryStanding} is ${categoryStanding <= categoryParameters.rllLimit ? 'within' : 'beyond'} that limit`
+      );
+    }
+  }
+  if (categoryParameters?.extraXDay) parameterDetails.push('extra X-day');
+  if (categoryParameters?.vacationSlide) {
+    parameterDetails.push('3-day vacation slide');
+  }
 
   return (
     <section aria-label="Package summary" className="space-y-2">
@@ -82,26 +111,12 @@ export function KpiStrip({
           {bidPackage?.base} {bidPackage?.aircraft} to include award history.
         </p>
       )}
-      {categoryParameters && (
+      {categoryParameters && parameterDetails.length > 0 && (
         <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
           <span className="font-medium">
             Official {categoryParameters.displayName} parameters:
           </span>{' '}
-          {duration(categoryParameters.lineConstructionMinHours)}–
-          {duration(categoryParameters.lineConstructionMaxHours)} credit window
-          {' · '}reserve {duration(categoryParameters.reserveGuaranteeHours)}
-          {categoryParameters.reserveRule
-            ? ` · reserve rule ${categoryParameters.reserveRule}`
-            : ''}
-          {categoryParameters.rllLimit !== undefined
-            ? ` · RLL limit ${categoryParameters.rllLimit}`
-            : ''}
-          {categoryStanding !== undefined &&
-          categoryParameters.rllLimit !== undefined
-            ? ` · your reported standing ${categoryStanding} is ${categoryStanding <= categoryParameters.rllLimit ? 'within' : 'beyond'} that limit`
-            : ''}
-          {categoryParameters.extraXDay ? ' · extra X-day' : ''}
-          {categoryParameters.vacationSlide ? ' · 3-day vacation slide' : ''}
+          {parameterDetails.join(' · ')}
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

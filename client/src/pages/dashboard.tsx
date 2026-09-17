@@ -16,13 +16,6 @@ import React, {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -55,6 +48,7 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
 import { AwardValidationPanel } from '@/components/home/award-validation-panel';
+import { MonthlyWorkspaceHeader } from '@/components/home/monthly-workspace-header';
 import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 import { WideScheduleUpload } from '@/components/wide-schedule-upload';
 
@@ -92,7 +86,7 @@ const TrendsPanel = lazy(() =>
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { purgeUserCache, getCacheInfo } from '@/lib/offlineCache';
 import { api } from '@/lib/api';
-import { filterFieldMeta, formatBidPeriod } from '@shared/pbsFilterLabels';
+import { filterFieldMeta } from '@shared/pbsFilterLabels';
 import { maxLayoverMinutes } from '@/lib/layover';
 import { detectConflicts, type ConflictInfo } from '@/lib/conflictDetection';
 import {
@@ -669,6 +663,16 @@ export default function Dashboard() {
   const isFullCacheReady = pairingsResponse?.cached ?? false;
   const pairings = pairingsResponse?.pairings ?? EMPTY_ARRAY;
   const fullLocal = pairings;
+  const hasReasonsEvidence = useMemo(
+    () =>
+      pairings.length > 0 &&
+      !pairings.some((pairing: any) =>
+        pairing.holdProbabilityReasoning?.some((reason: string) =>
+          reason.includes('No award history imported')
+        )
+      ),
+    [pairings]
+  );
 
   // Calculate full dataset statistics when using offline cache
   const effectiveStatistics = React.useMemo(() => {
@@ -1290,8 +1294,6 @@ export default function Dashboard() {
       >
         <AppHeader
           activeTab={activeTab}
-          currentUser={currentUser}
-          seniorityPercentile={displayedPercentile}
           onUpload={() => setShowUploadModal(true)}
           onOpenAI={openAIAssistant}
         />
@@ -1303,33 +1305,19 @@ export default function Dashboard() {
               onValueChange={setActiveTab}
               className="h-full flex flex-col border-0 shadow-none"
             >
-              {/* Navigation now lives in the sidebar + mobile bottom nav; the
-                  TabsList is kept for screen readers / keyboard tab semantics. */}
-              <TabsList className="sr-only focus-within:not-sr-only">
-                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-                <TabsTrigger value="favorites">Favorites</TabsTrigger>
-                <TabsTrigger value="calendar">Calendar</TabsTrigger>
-                <TabsTrigger value="bidBuilder">Bid Builder</TabsTrigger>
-                <TabsTrigger value="trends">Trends</TabsTrigger>
-              </TabsList>
-
               <TabsContent value="dashboard" className="flex-1 overflow-auto">
-                <div className="space-y-4">
-                  {/* Insight-first Home: KPIs and the optimizer's picks come
-                    before the full table (insight → detail reading order). */}
+                <div className="mx-auto w-full max-w-[1600px] space-y-4">
                   {bidPackageId && (
                     <>
-                      <CategoryComparisonPanel
-                        key={bidPackageId}
+                      <MonthlyWorkspaceHeader
+                        bidPackage={latestBidPackage}
                         seniorityNumber={currentUser?.seniorityNumber}
-                        base={latestBidPackage?.base}
-                        aircraft={latestBidPackage?.aircraft}
-                        position={currentUser?.position || position || 'B'}
-                        savedCategory={
-                          currentUser
-                            ? `${currentUser.base} ${currentUser.aircraft}${currentUser.position || position}`
-                            : undefined
-                        }
+                        seniorityPercentile={viewedPercentile}
+                        position={viewedCategory.position}
+                        pairingCount={pairings.length}
+                        hasReasonsEvidence={hasReasonsEvidence}
+                        onBuildBid={() => setActiveTab('bidBuilder')}
+                        onUpload={() => setShowUploadModal(true)}
                       />
                       {viewedSeniorityQuery.data?.cached && (
                         <p className="text-sm text-muted-foreground">
@@ -1359,22 +1347,6 @@ export default function Dashboard() {
                             Hold estimates use a neutral 50% assumption.
                           </p>
                         )}
-                      <KpiStrip
-                        pairings={displayPairings || []}
-                        bidPackage={latestBidPackage}
-                        seniorityPercentile={displayedPercentile}
-                        position={viewedCategory.position}
-                        categoryStanding={
-                          viewedSeniorityQuery.data?.categorySeniority
-                            ?.seniorOrEqual
-                        }
-                      />
-                      <AwardValidationPanel
-                        bidPackageId={bidPackageId}
-                        seniorityNumber={currentUser?.seniorityNumber}
-                        position={viewedCategory.position}
-                        pairings={pairings || []}
-                      />
                       <TopPicks
                         analysisKey={probabilityCacheUser}
                         bidPackageId={bidPackageId}
@@ -1383,31 +1355,6 @@ export default function Dashboard() {
                         onPairingClick={handlePairingClick}
                         onOpenBidBuilder={() => setActiveTab('bidBuilder')}
                       />
-                      <details
-                        className="rounded-xl border bg-card"
-                        onToggle={event =>
-                          setShowQuickStats(event.currentTarget.open)
-                        }
-                      >
-                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-primary">
-                          Package statistics{' '}
-                          <span className="ml-2 hidden sm:inline font-normal text-muted-foreground">
-                            Credit, trip lengths and layovers
-                          </span>
-                        </summary>
-                        {showQuickStats && (
-                          <div className="p-4 pt-0">
-                            <StatsPanel
-                              pairings={displayPairings || []}
-                              bidPackage={latestBidPackage}
-                              position={viewedCategory.position}
-                              statistics={effectiveStatistics}
-                              bidPackageStats={bidPackageStats}
-                              onTripLengthFilter={handleTripLengthFilter}
-                            />
-                          </div>
-                        )}
-                      </details>
                     </>
                   )}
 
@@ -1441,61 +1388,11 @@ export default function Dashboard() {
                               <Search className="h-5 w-5 text-muted-foreground" />
                               Browse pairings
                             </CardTitle>
-                            {bidPackages.length > 1 ? (
-                              <Select
-                                value={
-                                  latestBidPackage
-                                    ? String(latestBidPackage.id)
-                                    : undefined
-                                }
-                                onValueChange={value =>
-                                  setSelectedBidPackageId(parseInt(value))
-                                }
-                              >
-                                <SelectTrigger
-                                  className="h-8 w-auto min-w-[180px] text-sm"
-                                  aria-label="Bid package"
-                                  data-testid="select-bid-package"
-                                >
-                                  <SelectValue placeholder="Select bid package" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {(bidPackages as any[])
-                                    .slice()
-                                    .sort(
-                                      (a, b) =>
-                                        new Date(b.uploadedAt).getTime() -
-                                        new Date(a.uploadedAt).getTime()
-                                    )
-                                    .map(pkg => (
-                                      <SelectItem
-                                        key={pkg.id}
-                                        value={String(pkg.id)}
-                                      >
-                                        {pkg.month} {pkg.year} · {pkg.base}{' '}
-                                        {pkg.aircraft}
-                                        {pkg.status !== 'completed'
-                                          ? ` (${pkg.status})`
-                                          : ''}
-                                        {/* Period runs into the prior month for
-                                          some packages (Sep = Aug 31–Sep 30) */}
-                                        {formatBidPeriod(
-                                          pkg.bidPeriodStart,
-                                          pkg.bidPeriodEnd
-                                        )
-                                          ? ` · ${formatBidPeriod(pkg.bidPeriodStart, pkg.bidPeriodEnd)}`
-                                          : ''}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                {latestBidPackage
-                                  ? `${latestBidPackage.month} ${latestBidPackage.year}`
-                                  : ''}
-                              </span>
-                            )}
+                            <span className="text-sm text-muted-foreground">
+                              {latestBidPackage
+                                ? `${latestBidPackage.month} ${latestBidPackage.year}`
+                                : ''}
+                            </span>
                             <span className="text-sm text-muted-foreground">
                               {filteredDisplayPairings.length}{' '}
                               {filteredDisplayPairings.length === 1
@@ -1591,6 +1488,62 @@ export default function Dashboard() {
                       </Card>
                     </div>
                   </div>
+
+                  {bidPackageId && (
+                    <details
+                      className="rounded-xl border bg-card"
+                      onToggle={event =>
+                        setShowQuickStats(event.currentTarget.open)
+                      }
+                    >
+                      <summary className="cursor-pointer px-4 py-3 text-sm font-medium marker:text-primary">
+                        Seniority and package insights{' '}
+                        <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">
+                          Award evidence, official parameters and statistics
+                        </span>
+                      </summary>
+                      {showQuickStats && (
+                        <div className="space-y-4 p-4 pt-1">
+                          <CategoryComparisonPanel
+                            key={bidPackageId}
+                            seniorityNumber={currentUser?.seniorityNumber}
+                            base={latestBidPackage?.base}
+                            aircraft={latestBidPackage?.aircraft}
+                            position={currentUser?.position || position || 'B'}
+                            savedCategory={
+                              currentUser
+                                ? `${currentUser.base} ${currentUser.aircraft}${currentUser.position || position}`
+                                : undefined
+                            }
+                          />
+                          <KpiStrip
+                            pairings={displayPairings || []}
+                            bidPackage={latestBidPackage}
+                            seniorityPercentile={displayedPercentile}
+                            position={viewedCategory.position}
+                            categoryStanding={
+                              viewedSeniorityQuery.data?.categorySeniority
+                                ?.seniorOrEqual
+                            }
+                          />
+                          <AwardValidationPanel
+                            bidPackageId={bidPackageId}
+                            seniorityNumber={currentUser?.seniorityNumber}
+                            position={viewedCategory.position}
+                            pairings={pairings || []}
+                          />
+                          <StatsPanel
+                            pairings={displayPairings || []}
+                            bidPackage={latestBidPackage}
+                            position={viewedCategory.position}
+                            statistics={effectiveStatistics}
+                            bidPackageStats={bidPackageStats}
+                            onTripLengthFilter={handleTripLengthFilter}
+                          />
+                        </div>
+                      )}
+                    </details>
+                  )}
                 </div>
               </TabsContent>
 
