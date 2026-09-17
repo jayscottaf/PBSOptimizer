@@ -71,7 +71,10 @@ export interface ScoredPairing {
 export interface OptimizedBid {
   bid: DraftBid;
   rationale: string[];
+  /** Full profile-fit ranking, before seniority reachability is applied. */
   scored: ScoredPairing[];
+  /** Ranking used for named picks and Home recommendations. */
+  recommendations: ScoredPairing[];
   /** 0..1 estimate that group 1 completes at this seniority. */
   group1Completion: number;
 }
@@ -650,5 +653,11 @@ export function optimizeBid(
     `Top-scored pairings named explicitly per preferred trip length (${(profile.preferredTripLengths.length ? profile.preferredTripLengths : ['auto']).join(', ')}), then attribute tiers, then a generic fallback.`
   );
 
-  return { bid: { groups }, rationale, scored, group1Completion: completion };
+  return {
+    bid: { groups },
+    rationale,
+    scored,
+    recommendations: cascadeSource,
+    group1Completion: completion,
+  };
 }

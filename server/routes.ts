@@ -1780,7 +1780,11 @@ export async function registerRoutes(app: Express) {
         bid: optimized.bid,
         rationale: optimized.rationale,
         group1Completion: optimized.group1Completion,
-        topScored: optimized.scored.slice(0, 25),
+        // Keep Home recommendations aligned with the exact ranking used to
+        // name trips in Auto-draft. Junior pilots are ranked by fit × hold
+        // reachability here, while `scored` remains available internally as
+        // the complete profile-fit ordering.
+        topScored: optimized.recommendations.slice(0, 25),
         simulation,
         profileSource: profileRow?.source ?? 'neutral',
       });

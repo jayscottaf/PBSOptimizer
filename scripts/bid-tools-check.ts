@@ -701,6 +701,14 @@ assert(
   assert(!namedNumbers(ghostJunior.bid).includes('7699'), 'junior named picks exclude unreachable (hold < 20%) pairings');
   assert(namedNumbers(ghostSenior.bid).includes('7699'), 'senior named picks still include the popular low-hold pairing');
   assert(
+    !ghostJunior.recommendations.some(p => p.pairingNumber === '7699'),
+    'junior Home recommendations use the same reachability floor as Auto-draft'
+  );
+  assert(
+    ghostSenior.recommendations.some(p => p.pairingNumber === '7699'),
+    'senior Home recommendations preserve the profile-fit ranking'
+  );
+  assert(
     ghostJunior.rationale.some(r => r.includes('hold')),
     'junior rationale explains the reachability re-rank'
   );
