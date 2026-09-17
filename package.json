@@ -15,7 +15,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:bid-tools": "tsx scripts/bid-tools-check.ts"
+    "check:bid-tools": "tsx scripts/bid-tools-check.ts",
+    "check:pairing-comparison": "tsx scripts/pairing-comparison-check.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

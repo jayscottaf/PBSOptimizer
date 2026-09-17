@@ -26,6 +26,7 @@ import {
   Calendar,
   Info,
   AlertTriangle,
+  Columns3,
 } from 'lucide-react';
 import type { Pairing } from '@/lib/api';
 import { memo, useMemo, useState } from 'react';
@@ -69,6 +70,9 @@ interface PairingTableProps {
   /** Pairing ids currently favorited — turns the row star into a toggle. */
   favoritePairingIds?: Set<number>;
   onToggleFavorite?: (pairing: Pairing) => void;
+  /** Pairing ids selected for side-by-side comparison. */
+  comparePairingIds?: Set<number>;
+  onToggleCompare?: (pairing: Pairing) => void;
 }
 
 // Pure per-pairing formatters, hoisted to module scope so the component
@@ -333,6 +337,8 @@ function PairingTableImpl({
   hasActiveFilters = false,
   favoritePairingIds,
   onToggleFavorite,
+  comparePairingIds,
+  onToggleCompare,
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
@@ -745,21 +751,38 @@ function PairingTableImpl({
                   >
                     #{pairing.pairingNumber} →
                   </button>
-                  {onToggleFavorite && (
-                    <Button
-                      variant="ghost"
-                      className="h-11 w-11"
-                      aria-label={`${favoritePairingIds?.has(pairing.id) ? 'Remove' : 'Add'} ${pairing.pairingNumber} ${favoritePairingIds?.has(pairing.id) ? 'from' : 'to'} favorites`}
-                      aria-pressed={
-                        favoritePairingIds?.has(pairing.id) ?? false
-                      }
-                      onClick={() => onToggleFavorite(pairing)}
-                    >
-                      <Star
-                        className={`h-5 w-5 ${favoritePairingIds?.has(pairing.id) ? 'fill-warning text-warning' : ''}`}
-                      />
-                    </Button>
-                  )}
+                  <div className="flex items-center">
+                    {onToggleCompare && (
+                      <Button
+                        variant="ghost"
+                        className="h-11 w-11"
+                        aria-label={`${comparePairingIds?.has(pairing.id) ? 'Remove' : 'Add'} ${pairing.pairingNumber} ${comparePairingIds?.has(pairing.id) ? 'from' : 'to'} comparison`}
+                        aria-pressed={
+                          comparePairingIds?.has(pairing.id) ?? false
+                        }
+                        onClick={() => onToggleCompare(pairing)}
+                      >
+                        <Columns3
+                          className={`h-5 w-5 ${comparePairingIds?.has(pairing.id) ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                      </Button>
+                    )}
+                    {onToggleFavorite && (
+                      <Button
+                        variant="ghost"
+                        className="h-11 w-11"
+                        aria-label={`${favoritePairingIds?.has(pairing.id) ? 'Remove' : 'Add'} ${pairing.pairingNumber} ${favoritePairingIds?.has(pairing.id) ? 'from' : 'to'} favorites`}
+                        aria-pressed={
+                          favoritePairingIds?.has(pairing.id) ?? false
+                        }
+                        onClick={() => onToggleFavorite(pairing)}
+                      >
+                        <Star
+                          className={`h-5 w-5 ${favoritePairingIds?.has(pairing.id) ? 'fill-warning text-warning' : ''}`}
+                        />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-1 break-words text-sm font-medium">
                   {pairing.route}
@@ -1058,6 +1081,33 @@ function PairingTableImpl({
                           pairing.holdProbability >= 80 && (
                             <Star className="text-yellow-400 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                           )
+                        )}
+                        {onToggleCompare && (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              onToggleCompare(pairing);
+                            }}
+                            title={
+                              comparePairingIds?.has(pairing.id)
+                                ? 'Remove from comparison'
+                                : 'Add to comparison'
+                            }
+                            aria-label={
+                              comparePairingIds?.has(pairing.id)
+                                ? `Remove ${pairing.pairingNumber} from comparison`
+                                : `Add ${pairing.pairingNumber} to comparison`
+                            }
+                            aria-pressed={comparePairingIds?.has(pairing.id)}
+                            className={`inline-flex items-center justify-center rounded p-0.5 transition-colors hover:bg-muted ${
+                              comparePairingIds?.has(pairing.id)
+                                ? 'text-primary'
+                                : 'text-muted-foreground/60'
+                            }`}
+                          >
+                            <Columns3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </button>
                         )}
                         {conflicts.has(pairing.id) && (
                           <Popover>

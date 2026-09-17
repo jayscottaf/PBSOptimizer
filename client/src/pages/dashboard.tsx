@@ -49,6 +49,8 @@ import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
 import { AwardValidationPanel } from '@/components/home/award-validation-panel';
 import { MonthlyWorkspaceHeader } from '@/components/home/monthly-workspace-header';
+import { PairingComparisonBar } from '@/components/pairing-comparison-bar';
+import { PairingComparisonSheet } from '@/components/pairing-comparison-sheet';
 import { WelcomeIntro } from '@/components/onboarding/welcome-flow';
 import { WideScheduleUpload } from '@/components/wide-schedule-upload';
 
@@ -402,6 +404,10 @@ export default function Dashboard() {
   const [isSavingPin, setIsSavingPin] = useState(false);
 
   const [selectedPairing, setSelectedPairing] = useState<any>(null);
+  const [comparePairingIds, setComparePairingIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [sortColumn, setSortColumn] = useState<string | null>(
     'holdProbability'
   );
@@ -521,6 +527,65 @@ export default function Dashboard() {
   }, [bidPackages, selectedBidPackageId]);
 
   const bidPackageId = latestBidPackage?.id; // Assuming you need this ID for other queries
+  useEffect(() => {
+    setIsComparisonOpen(false);
+    if (!bidPackageId) {
+      setComparePairingIds(new Set());
+      return;
+    }
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(`pbs.compare.${bidPackageId}`) || '[]'
+      );
+      setComparePairingIds(
+        new Set(
+          Array.isArray(saved)
+            ? saved.filter(id => Number.isInteger(id)).slice(0, 3)
+            : []
+        )
+      );
+    } catch {
+      setComparePairingIds(new Set());
+    }
+  }, [bidPackageId]);
+
+  const updateComparedPairings = useCallback(
+    (update: (current: Set<number>) => Set<number>) => {
+      setComparePairingIds(current => {
+        const next = update(current);
+        if (bidPackageId) {
+          localStorage.setItem(
+            `pbs.compare.${bidPackageId}`,
+            JSON.stringify([...next])
+          );
+        }
+        return next;
+      });
+    },
+    [bidPackageId]
+  );
+
+  const handleToggleCompare = useCallback(
+    (pairing: any) => {
+      updateComparedPairings(current => {
+        const next = new Set(current);
+        if (next.has(pairing.id)) {
+          next.delete(pairing.id);
+          return next;
+        }
+        if (next.size >= 3) {
+          toast({
+            title: 'Comparison is full',
+            description: 'Remove one trip before adding another.',
+          });
+          return current;
+        }
+        next.add(pairing.id);
+        return next;
+      });
+    },
+    [updateComparedPairings]
+  );
   const viewedCategory = analysisCategory(
     latestBidPackage?.base || '',
     latestBidPackage?.aircraft || '',
@@ -664,6 +729,12 @@ export default function Dashboard() {
   const isFullCacheReady = pairingsResponse?.cached ?? false;
   const pairings = pairingsResponse?.pairings ?? EMPTY_ARRAY;
   const fullLocal = pairings;
+  const comparedPairings = useMemo(() => {
+    const byId = new Map(pairings.map((pairing: any) => [pairing.id, pairing]));
+    return [...comparePairingIds]
+      .map(id => byId.get(id))
+      .filter((pairing): pairing is any => Boolean(pairing));
+  }, [comparePairingIds, pairings]);
   const hasReasonsEvidence = useMemo(
     () =>
       pairings.length > 0 &&
@@ -1403,6 +1474,19 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    <PairingComparisonBar
+                      pairings={comparedPairings}
+                      onRemove={id =>
+                        updateComparedPairings(current => {
+                          const next = new Set(current);
+                          next.delete(id);
+                          return next;
+                        })
+                      }
+                      onClear={() => updateComparedPairings(() => new Set())}
+                      onCompare={() => setIsComparisonOpen(true)}
+                    />
+
                     {/* Pairing Results Section — fixed viewport-height panel so
                       the table keeps its own scroll while the page scrolls
                       the insight sections above it. */}
@@ -1509,6 +1593,8 @@ export default function Dashboard() {
                             }
                             favoritePairingIds={favoritePairingIds}
                             onToggleFavorite={handleToggleFavorite}
+                            comparePairingIds={comparePairingIds}
+                            onToggleCompare={handleToggleCompare}
                             pagination={{
                               page: pairingPage,
                               limit: pairingPageSize,
@@ -1716,6 +1802,23 @@ export default function Dashboard() {
       </SidebarInset>
 
       <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <PairingComparisonSheet
+        open={isComparisonOpen}
+        onOpenChange={setIsComparisonOpen}
+        pairings={comparedPairings}
+        onRemove={id =>
+          updateComparedPairings(current => {
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+          })
+        }
+        onView={pairing => {
+          setIsComparisonOpen(false);
+          setSelectedPairing(pairing);
+        }}
+      />
 
       {/* Pairing Modal */}
       {selectedPairing && (
