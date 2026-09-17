@@ -119,7 +119,8 @@ const BANNER_PATTERNS = [
 // Composite reports contain one Reasons section per pilot, each opened by a
 // header like "Seniority  05105  Category NYC-220-B  GRENIER  084785700".
 // Names can contain spaces and hyphens (DIAZ GOMEZ, SCOTT-BENNETT).
-const PILOT_HEADER = /^Seniority\s+(\d{3,5})\s+Category\s+(\S+)\s+(.+?)\s+(\d{6,9})$/;
+const PILOT_HEADER =
+  /^Seniority\s+(\d{3,5})\s+Category\s+(\S+)\s+(.+?)\s+(\d{6,9})$/;
 
 // "Minimum window <062:00>  Threshold <082:00>  Maximum window <082:00>"
 const WINDOW_LINE =
@@ -144,7 +145,9 @@ export class ReasonsReportParser {
     return this.parseReasonsReportFromContent(htmlContent);
   }
 
-  static async parseReasonsReportFromContent(htmlContent: string): Promise<PairingAward[]> {
+  static async parseReasonsReportFromContent(
+    htmlContent: string
+  ): Promise<PairingAward[]> {
     const $ = cheerio.load(htmlContent);
     const awards: PairingAward[] = [];
 
@@ -207,7 +210,9 @@ export class ReasonsReportParser {
     const $ = cheerio.load(htmlContent);
     // Real exports pad with non-breaking spaces (\xA0) instead of spaces;
     // normalize so every regex and phrase match below sees plain spaces.
-    const text = $('body').text().replace(/\u00A0/g, ' ');
+    const text = $('body')
+      .text()
+      .replace(/\u00A0/g, ' ');
     const lines = text
       .split(/\r?\n/)
       .map(line => line.trim())
@@ -318,16 +323,18 @@ export class ReasonsReportParser {
     // Format: "NYC-220-B OCT 2025 Composite Report" (may have special chars instead of spaces)
     const title = $('title').text();
 
-    // Extract base (e.g., NYC, ATL, DTW)
-    const baseMatch = title.match(/([A-Z]{3})-/);
-    const base = baseMatch ? baseMatch[1] : '';
-
-    // Extract aircraft (e.g., 220-B, 350B)
-    const aircraftMatch = title.match(/-(\d{3}[-]?[A-Z]?)/);
-    const aircraft = aircraftMatch ? aircraftMatch[1] : '';
+    // Extract the category prefix together so fleet codes containing letters
+    // (for example 7ER-B) are handled without matching unrelated title text.
+    const categoryMatch = title.match(
+      /\b([A-Z]{3})-([A-Z0-9]{3}(?:-?[A-Z])?)\b/i
+    );
+    const base = categoryMatch ? categoryMatch[1].toUpperCase() : '';
+    const aircraft = categoryMatch ? categoryMatch[2].toUpperCase() : '';
 
     // Extract month (e.g., OCT, NOV, DEC) - simple pattern that works with special chars
-    const monthMatch = title.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i);
+    const monthMatch = title.match(
+      /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i
+    );
     const month = monthMatch ? monthMatch[1].toUpperCase() : '';
 
     // Extract year (e.g., 2024, 2025) - more flexible matching
@@ -348,11 +355,11 @@ export class ReasonsReportParser {
     // Parse layover cities from format like "SAT-15 BOS-11 BOS-15"
     let layoverCities = award.layoverCities
       .split(/\s+/)
-      .filter((city) => city.length > 0)
-      .map((city) => city.replace(/-\d+$/, '')) // Remove hours like "BOS-14"
-      .filter((city) => city.toLowerCase() !== 'none') // Remove literal "none"
+      .filter(city => city.length > 0)
+      .map(city => city.replace(/-\d+$/, '')) // Remove hours like "BOS-14"
+      .filter(city => city.toLowerCase() !== 'none') // Remove literal "none"
       .sort();
-    
+
     // Canonicalize empty layovers to ['none'] ONLY for single-day trips (pairingDays === 1)
     // This is expected for turn trips; multi-day trips keep empty to distinguish missing data
     if (layoverCities.length === 0 && award.pairingDays === 1) {
