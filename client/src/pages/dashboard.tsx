@@ -135,6 +135,7 @@ export default function Dashboard() {
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [hideConflicts, setHideConflicts] = useState(false);
   const [filterResetKey, setFilterResetKey] = useState(0);
+  const [pairingPage, setPairingPage] = useState(1);
 
   const queryClient = useQueryClient();
 
@@ -1243,6 +1244,31 @@ export default function Dashboard() {
     }
     return displayPairings.filter(p => !conflictMap.has(p.id));
   }, [displayPairings, hideConflicts, conflictMap]);
+  const pairingPageSize = 50;
+  const pairingTotalPages = Math.max(
+    1,
+    Math.ceil(filteredDisplayPairings.length / pairingPageSize)
+  );
+  useEffect(() => {
+    setPairingPage(1);
+  }, [
+    bidPackageId,
+    debouncedFilters,
+    sortColumn,
+    sortDirection,
+    hideConflicts,
+  ]);
+  useEffect(() => {
+    setPairingPage(page => Math.min(page, pairingTotalPages));
+  }, [pairingTotalPages]);
+  const pagedDisplayPairings = useMemo(
+    () =>
+      filteredDisplayPairings.slice(
+        (pairingPage - 1) * pairingPageSize,
+        pairingPage * pairingPageSize
+      ),
+    [filteredDisplayPairings, pairingPage]
+  );
 
   const openAIAssistant = useCallback(() => {
     // On mobile: show full-screen AI view; on desktop: open the modal.
@@ -1380,7 +1406,7 @@ export default function Dashboard() {
                     {/* Pairing Results Section — fixed viewport-height panel so
                       the table keeps its own scroll while the page scrolls
                       the insight sections above it. */}
-                    <div className="h-[75vh] min-h-[420px]">
+                    <div className="min-h-[420px] lg:h-[75vh]">
                       <Card className="h-full flex flex-col border-0 shadow-none">
                         <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
@@ -1468,7 +1494,7 @@ export default function Dashboard() {
                             </div>
                           )}
                           <PairingTable
-                            pairings={filteredDisplayPairings || EMPTY_ARRAY}
+                            pairings={pagedDisplayPairings || EMPTY_ARRAY}
                             onSort={handleSort}
                             sortColumn={sortColumn || ''}
                             sortDirection={sortDirection}
@@ -1483,6 +1509,15 @@ export default function Dashboard() {
                             }
                             favoritePairingIds={favoritePairingIds}
                             onToggleFavorite={handleToggleFavorite}
+                            pagination={{
+                              page: pairingPage,
+                              limit: pairingPageSize,
+                              total: filteredDisplayPairings.length,
+                              totalPages: pairingTotalPages,
+                              hasNext: pairingPage < pairingTotalPages,
+                              hasPrev: pairingPage > 1,
+                            }}
+                            onPageChange={setPairingPage}
                           />
                         </CardContent>
                       </Card>

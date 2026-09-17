@@ -336,7 +336,9 @@ function PairingTableImpl({
 }: PairingTableProps) {
   const [selectedPairing, setSelectedPairing] = useState<Pairing | null>(null);
   const queryClient = useQueryClient();
-  const isMobile = useIsMobile();
+  // The full comparison table needs more room than a typical tablet offers.
+  // Keep the readable card layout until the large-screen breakpoint.
+  const isMobile = useIsMobile(1024);
 
   // Column headers are sortable via plain onClick <th>s with no keyboard
   // access or aria-sort — this spreads onto each one to fix both without
@@ -828,7 +830,7 @@ function PairingTableImpl({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] sm:min-w-[1000px] lg:min-w-[1100px]">
-            <thead className="bg-muted">
+            <thead className="sticky top-0 z-10 bg-muted">
               <tr>
                 <th
                   className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider min-w-[60px] sm:min-w-[70px] cursor-pointer hover:bg-muted/70"
