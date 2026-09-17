@@ -22,11 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { PBS_FILTER_FIELDS } from '@shared/pbsFilterLabels';
@@ -164,12 +160,42 @@ const pbsRangeFields: Array<{
   metaKey: string;
   step: string;
 }> = [
-  { minKey: 'deadheadsMin', maxKey: 'deadheadsMax', metaKey: 'deadheadsMin', step: '1' },
-  { minKey: 'layoverCountMin', maxKey: 'layoverCountMax', metaKey: 'layoverCountMin', step: '1' },
-  { minKey: 'totalLayoverHoursMin', maxKey: 'totalLayoverHoursMax', metaKey: 'totalLayoverHoursMin', step: '0.5' },
-  { minKey: 'averageDailyCreditMin', maxKey: 'averageDailyCreditMax', metaKey: 'averageDailyCreditMin', step: '0.5' },
-  { minKey: 'averageDailyBlockMin', maxKey: 'averageDailyBlockMax', metaKey: 'averageDailyBlockMin', step: '0.5' },
-  { minKey: 'checkInHourMin', maxKey: 'checkInHourMax', metaKey: 'checkInHourMin', step: '1' },
+  {
+    minKey: 'deadheadsMin',
+    maxKey: 'deadheadsMax',
+    metaKey: 'deadheadsMin',
+    step: '1',
+  },
+  {
+    minKey: 'layoverCountMin',
+    maxKey: 'layoverCountMax',
+    metaKey: 'layoverCountMin',
+    step: '1',
+  },
+  {
+    minKey: 'totalLayoverHoursMin',
+    maxKey: 'totalLayoverHoursMax',
+    metaKey: 'totalLayoverHoursMin',
+    step: '0.5',
+  },
+  {
+    minKey: 'averageDailyCreditMin',
+    maxKey: 'averageDailyCreditMax',
+    metaKey: 'averageDailyCreditMin',
+    step: '0.5',
+  },
+  {
+    minKey: 'averageDailyBlockMin',
+    maxKey: 'averageDailyBlockMax',
+    metaKey: 'averageDailyBlockMin',
+    step: '0.5',
+  },
+  {
+    minKey: 'checkInHourMin',
+    maxKey: 'checkInHourMax',
+    metaKey: 'checkInHourMin',
+    step: '1',
+  },
 ];
 
 // Special filter for layover locations - will be populated dynamically
@@ -192,9 +218,18 @@ export function SmartFilterSystem({
     if (!bidPackage) return new Date();
 
     const monthMap: { [key: string]: number } = {
-      'January': 0, 'February': 1, 'March': 2, 'April': 3,
-      'May': 4, 'June': 5, 'July': 6, 'August': 7,
-      'September': 8, 'October': 9, 'November': 10, 'December': 11
+      January: 0,
+      February: 1,
+      March: 2,
+      April: 3,
+      May: 4,
+      June: 5,
+      July: 6,
+      August: 7,
+      September: 8,
+      October: 9,
+      November: 10,
+      December: 11,
     };
 
     const monthNum = monthMap[bidPackage.month];
@@ -214,11 +249,14 @@ export function SmartFilterSystem({
   // Fetch layover locations when bid package changes
   useEffect(() => {
     if (bidPackageId) {
-      api.getLayoverLocations(bidPackageId).then(locations => {
-        setLayoverLocations(locations);
-      }).catch(() => {
-        setLayoverLocations([]);
-      });
+      api
+        .getLayoverLocations(bidPackageId)
+        .then(locations => {
+          setLayoverLocations(locations);
+        })
+        .catch(() => {
+          setLayoverLocations([]);
+        });
     }
   }, [bidPackageId]);
 
@@ -240,9 +278,9 @@ export function SmartFilterSystem({
     const newSelection = selectedLayovers.includes(city)
       ? selectedLayovers.filter(c => c !== city)
       : [...selectedLayovers, city];
-    
+
     setSelectedLayovers(newSelection);
-    
+
     // Apply filter with array of cities
     if (newSelection.length === 0) {
       onFiltersChange({ layoverLocations: undefined });
@@ -311,7 +349,7 @@ export function SmartFilterSystem({
     activeFilters
       .find(filter => filter.key === 'rotationNumber')
       ?.value?.toString() || '';
-  
+
   // Build dynamic filter options (layovers handled separately with multi-select)
   const allFilterOptions = React.useMemo(() => {
     return [...filterOptions];
@@ -328,7 +366,9 @@ export function SmartFilterSystem({
       return;
     }
 
-    const functionOption = allFilterOptions.find(f => f.key === selectedFunction);
+    const functionOption = allFilterOptions.find(
+      f => f.key === selectedFunction
+    );
     const optionList = functionOption?.dataOptions || [];
     const dataOption = optionList.find(d => d.value.toString() === value);
     if (!functionOption || !dataOption) {
@@ -578,8 +618,12 @@ export function SmartFilterSystem({
       {/* Row 1 — search first, then one-tap chips, then pickers */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-56">
+          <label htmlFor="pairing-number-search" className="sr-only">
+            Search pairing number
+          </label>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
+            id="pairing-number-search"
             value={rotationNumber}
             onChange={e => {
               const value = e.target.value.trim();
@@ -654,6 +698,7 @@ export function SmartFilterSystem({
           type="button"
           onClick={() => setShowPbsFilters(v => !v)}
           aria-expanded={showPbsFilters}
+          aria-controls="pbs-filter-fields"
           className="ml-auto flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <SlidersHorizontal className="h-4 w-4" />
@@ -670,6 +715,7 @@ export function SmartFilterSystem({
           type="button"
           onClick={() => setShowAdvanced(v => !v)}
           aria-expanded={showAdvanced}
+          aria-controls="advanced-filter-fields"
           className="flex h-9 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <SlidersHorizontal className="h-4 w-4" />
@@ -744,12 +790,11 @@ export function SmartFilterSystem({
       {/* PBS Filters — real NAVBLUE bid properties, matching the terms
           pilots use in the actual PBS system (see shared/pbsFilterLabels.ts) */}
       <Collapsible open={showPbsFilters} onOpenChange={setShowPbsFilters}>
-        <CollapsibleTrigger className="sr-only">PBS filters</CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent id="pbs-filter-fields">
           <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3">
             <p className="text-xs text-muted-foreground">
-              Filter with the same properties you bid with in PBS. Leave a
-              field blank to ignore it; press Enter or click away to apply.
+              Filter with the same properties you bid with in PBS. Leave a field
+              blank to ignore it; press Enter or click away to apply.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {pbsRangeFields.map(field => {
@@ -784,7 +829,11 @@ export function SmartFilterSystem({
                           }
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
-                              onPbsEnter(key, pbsInputs[key] ?? '', applyPbsNumber);
+                              onPbsEnter(
+                                key,
+                                pbsInputs[key] ?? '',
+                                applyPbsNumber
+                              );
                             }
                           }}
                           className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -916,7 +965,11 @@ export function SmartFilterSystem({
                 >
                   {PBS_FILTER_FIELDS.hasRedeye?.navblueLabel}
                 </label>
-                <div className="flex gap-1" role="radiogroup" aria-label="Redeye">
+                <div
+                  className="flex gap-1"
+                  role="radiogroup"
+                  aria-label="Redeye"
+                >
                   {(
                     [
                       { state: '' as const, label: 'Any' },
@@ -950,10 +1003,7 @@ export function SmartFilterSystem({
 
       {/* Advanced — the function/value picker, unchanged behavior */}
       <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
-        <CollapsibleTrigger className="sr-only">
-          Advanced filters
-        </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent id="advanced-filter-fields">
           <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-secondary-foreground">
@@ -1101,7 +1151,9 @@ export function SmartFilterSystem({
             />
             {selectedDaysOff.length > 0 && (
               <div className="mt-3 w-full">
-                <p className="text-sm text-muted-foreground mb-2">Selected dates:</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Selected dates:
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {selectedDaysOff.map((date, index) => (
                     <Badge
