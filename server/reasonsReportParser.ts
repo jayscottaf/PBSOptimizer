@@ -60,6 +60,7 @@ export interface ParsedPreferenceReason {
   windowInfo: string | null;
   standingInfo: string | null;
   bidGroupInfo: string | null;
+  preAwardInfo: string[];
 }
 
 export interface ParsedReasonsPane {
@@ -140,6 +141,9 @@ const BID_GROUP_LINE =
 // pairing numbers.
 const AWARD_EVENT_LINE =
   /^(\d{4,5})\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\d{4}-\d{2}-\d{2}/;
+
+const PRE_AWARD_EVENT_LINE =
+  /^(\S+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+\((\d{3}:\d{2})\)/;
 
 // "(1 Awarded, 1 Matching, Running total: 065:58)"
 const STATS_LINE = /^\((\d+)\s+Awarded,\s+(\d+)\s+Matching,\s+Running\s+total:/;
@@ -246,6 +250,8 @@ export class ReasonsReportParser {
     let standingInfo: string | null = null;
     let bidGroupInfo: string | null = null;
     let bidGroupNumber = 0;
+    let preAwardInfo: string[] = [];
+    let collectingPreAwards = false;
 
     const finalize = () => {
       if (current) {
@@ -265,6 +271,26 @@ export class ReasonsReportParser {
         standingInfo = null;
         bidGroupInfo = null;
         bidGroupNumber = 0;
+        preAwardInfo = [];
+        collectingPreAwards = false;
+        continue;
+      }
+
+      if (line === 'Pre-Awards') {
+        collectingPreAwards = true;
+        continue;
+      }
+      if (line === '<< Current Bid >>') {
+        collectingPreAwards = false;
+        continue;
+      }
+      if (collectingPreAwards) {
+        const preAwardMatch = line.match(PRE_AWARD_EVENT_LINE);
+        if (preAwardMatch) {
+          preAwardInfo.push(
+            `Pre-Award ${preAwardMatch[1]} | ${preAwardMatch[2]} | ${preAwardMatch[3]} | ${preAwardMatch[4]}`
+          );
+        }
         continue;
       }
 
@@ -303,6 +329,7 @@ export class ReasonsReportParser {
           windowInfo,
           standingInfo,
           bidGroupInfo,
+          preAwardInfo: [...preAwardInfo],
         };
         continue;
       }

@@ -22,7 +22,7 @@ test('latest pilot outcomes preserve active group evidence', async () => {
           '["Bid Group 1: Pairing Bid Group (Reduced Regular Line)"]',
           'OCT', 2026, 14985, 'NYC', '220-B'),
         (12, 'Prefer Off Friday', 'Honored', null, '[]',
-          '["Bid Group 2: Pairing Bid Group"]',
+          '["Window 062:00-082:00, Threshold 082:00", "Pre-Award SVAC | 2026-09-30 00:00 | 2026-10-05 23:59 | 020:00", "Bid Group 2: Pairing Bid Group"]',
           'OCT', 2026, 14985, 'NYC', '220-B'),
         (17, 'Award Monday trips', 'Awarded to senior bidder',
           '11; (1 Awarded, 18 Matching, Running total: 012:43)', '["7900"]',
@@ -35,6 +35,11 @@ test('latest pilot outcomes preserve active group evidence', async () => {
         aircraft: 'A220',
       });
       assert.equal(result.period, 'OCT 2026');
+      assert.equal(
+        result.creditWindow,
+        'Window 062:00-082:00, Threshold 082:00'
+      );
+      assert.equal(result.preAwards.length, 1);
       assert.deepEqual(
         result.preferences.map(row => row.groupActive),
         [false, true, true]

@@ -50,3 +50,21 @@ test('preserves bid group order and reduced-line mode', () => {
     'Bid Group 2: Pairing Bid Group'
   );
 });
+
+test('preserves pre-awards with dates and credit', () => {
+  const pane = ReasonsReportParser.parseReasonsPane(`<body>
+    Seniority 14985 Category NYC-220-B MERGL 050000600
+    Pre-Awards
+    SVAC 2026-09-30 00:00 2026-10-05 23:59 (020:00)
+    7762 2026-09-25 12:55 2026-09-25 20:52 (000:00)
+    (2 Pre-Awarded, Running total: 020:00)
+    &lt;&lt; Current Bid &gt;&gt;
+    1. Pairing Bid Group
+    2. Award Pairings If Pairing Number 8098
+    Honored
+  </body>`);
+  assert.deepEqual(pane.preferences[0].preAwardInfo, [
+    'Pre-Award SVAC | 2026-09-30 00:00 | 2026-10-05 23:59 | 020:00',
+    'Pre-Award 7762 | 2026-09-25 12:55 | 2026-09-25 20:52 | 000:00',
+  ]);
+});

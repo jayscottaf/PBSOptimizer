@@ -82,6 +82,8 @@ interface BidPatternsResponse {
 
 interface PilotBidOutcomesResponse {
   period: string | null;
+  creditWindow: string | null;
+  preAwards: string[];
   preferences: Array<{
     preferenceNumber: number;
     preferenceText: string;
@@ -686,8 +688,29 @@ export function TrendsPanel({
               {awardedCount} pairings awarded · {honoredCount} preferences
               honored · {lostToSeniorCount} lost to senior bidders
             </p>
+            <p className="text-xs text-muted-foreground">
+              {pilotOutcomes?.creditWindow ?? 'No credit window listed'} ·{' '}
+              {pilotOutcomes?.preAwards.length
+                ? `${pilotOutcomes.preAwards.length} pre-awards already on the line`
+                : 'No pre-awards listed'}
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
+            {pilotOutcomes?.preAwards.map(preAward => {
+              const [label, start, end, credit] = preAward.split(' | ');
+              return (
+                <div
+                  key={preAward}
+                  className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3 text-xs"
+                >
+                  <span className="font-medium text-foreground">{label}</span>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {start} to {end} · {credit} credit
+                  </span>
+                </div>
+              );
+            })}
             {explainedOutcomes.map(preference => {
               const isLoss = preference.outcome.startsWith('Awarded to senior');
               const isHonored = preference.outcome === 'Honored';

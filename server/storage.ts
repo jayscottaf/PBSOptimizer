@@ -297,6 +297,8 @@ export interface IStorage {
     aircraft: string;
   }): Promise<{
     period: string | null;
+    creditWindow: string | null;
+    preAwards: string[];
     preferences: Array<{
       preferenceNumber: number;
       preferenceText: string;
@@ -2685,6 +2687,9 @@ export class DatabaseStorage implements IStorage {
       producedAward:
         Array.isArray(row.awarded_pairing_numbers) &&
         row.awarded_pairing_numbers.length > 0,
+      reportBanners: Array.isArray(row.report_banners)
+        ? row.report_banners
+        : [],
     }));
     const preferences = markActiveBidGroups(raw).map(row => ({
       preferenceNumber: row.preferenceNumber,
@@ -2696,8 +2701,14 @@ export class DatabaseStorage implements IStorage {
       groupActive: row.groupActive,
       ...parseOutcomeMetrics(row.outcome, row.outcomeDetail),
     }));
+    const reportBanners = [
+      ...new Set(raw.flatMap(row => row.reportBanners.map(String))),
+    ];
     return {
       period: raw[0] ? `${raw[0].month} ${raw[0].year}` : null,
+      creditWindow:
+        reportBanners.find(banner => banner.startsWith('Window ')) ?? null,
+      preAwards: reportBanners.filter(banner => banner.startsWith('Pre-Award ')),
       preferences,
     };
   }
