@@ -34,6 +34,7 @@ import { db } from './db';
 import { personalizeHoldProbabilities, pairingStatistics, type HoldPairing } from './lib/hold-probabilities';
 import { percentileWithin } from './lib/empiricalHold';
 import { pilotRosterCtes } from './lib/pilot-roster';
+import { markActiveBidGroups } from './lib/bid-groups';
 import {
   parseAircraftCode,
   normalizedAircraftSqlExpr,
@@ -285,6 +286,7 @@ export interface IStorage {
       outcome: string;
       month: string;
       year: number;
+      groupActive?: boolean;
     }[];
     periods: number;
   }>;
@@ -2582,24 +2584,35 @@ export class DatabaseStorage implements IStorage {
       outcome: string;
       month: string;
       year: number;
+      groupActive?: boolean;
     }[];
     periods: number;
   }> {
     // Employee numbers appear zero-padded to varying widths across
     // composite exports; match on the numeric value.
     const result = await db.execute(sql`
-      SELECT preference_text, outcome, month, year
+      SELECT preference_text, outcome, month, year, report_banners,
+        awarded_pairing_numbers
       FROM reasons_report_preferences
       WHERE pilot_employee_number IS NOT NULL
         AND ltrim(pilot_employee_number, '0') = ltrim(${employeeNumber}, '0')
       ORDER BY year, month, preference_number
     `);
-    const rows = (result.rows as any[]).map(r => ({
+    const rawRows = (result.rows as any[]).map(r => ({
       preferenceText: String(r.preference_text),
       outcome: String(r.outcome),
       month: String(r.month),
       year: Number(r.year),
+      bidGroup: Array.isArray(r.report_banners)
+        ? r.report_banners.find((banner: unknown) =>
+            String(banner).startsWith('Bid Group ')
+          )
+        : undefined,
+      producedAward:
+        Array.isArray(r.awarded_pairing_numbers) &&
+        r.awarded_pairing_numbers.length > 0,
     }));
+    const rows = markActiveBidGroups(rawRows);
     const periods = new Set(rows.map(r => `${r.month} ${r.year}`)).size;
     return { rows, periods };
   }

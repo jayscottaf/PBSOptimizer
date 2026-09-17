@@ -1208,6 +1208,7 @@ export async function registerRoutes(app: Express) {
               ...pane.banners,
               ...(pref.windowInfo ? [pref.windowInfo] : []),
               ...(pref.standingInfo ? [pref.standingInfo] : []),
+              ...(pref.bidGroupInfo ? [pref.bidGroupInfo] : []),
             ],
           })),
         });

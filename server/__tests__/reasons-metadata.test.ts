@@ -31,3 +31,22 @@ test('preserves explicit category standing on parsed preferences', () => {
     'Standing Category 73/165, Regular 70/129, Reserve 3 above/36'
   );
 });
+
+test('preserves bid group order and reduced-line mode', () => {
+  const pane = ReasonsReportParser.parseReasonsPane(`<body>
+    Seniority 14985 Category NYC-220-B MERGL 050000600
+    1. Pairing Bid Group (Reduced Regular Line)
+    2. Avoid Pairings If Pairing Check-In Station EWR Else Start Next Bid Group
+    11. Pairing Bid Group
+    12. Prefer Off Friday, Saturday, Sunday
+    Honored
+  </body>`);
+  assert.equal(
+    pane.preferences[0].bidGroupInfo,
+    'Bid Group 1: Pairing Bid Group (Reduced Regular Line)'
+  );
+  assert.equal(
+    pane.preferences[1].bidGroupInfo,
+    'Bid Group 2: Pairing Bid Group'
+  );
+});

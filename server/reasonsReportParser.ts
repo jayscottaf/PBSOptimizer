@@ -59,6 +59,7 @@ export interface ParsedPreferenceReason {
   // 082:00") — real per-pilot threshold data the simulator otherwise guesses.
   windowInfo: string | null;
   standingInfo: string | null;
+  bidGroupInfo: string | null;
 }
 
 export interface ParsedReasonsPane {
@@ -129,6 +130,9 @@ const WINDOW_LINE =
 
 const STANDING_LINE =
   /Category:(\d+)\/(\d+)\s+Regular:(\d+)\/(\d+)\s+Reserve:(\d+)\(above\)\/(\d+)/;
+
+const BID_GROUP_LINE =
+  /^\d{1,3}[.):]?\s+(Pairing Bid Group|Reserve Bid Group)(.*)$/i;
 
 // An award event under a preference: pairing number followed by check-in and
 // check-out timestamps, e.g. "7773  2026-07-07 14:45  2026-07-07 23:29 (006:23) (B)".
@@ -240,6 +244,8 @@ export class ReasonsReportParser {
     let pilotName: string | null = null;
     let windowInfo: string | null = null;
     let standingInfo: string | null = null;
+    let bidGroupInfo: string | null = null;
+    let bidGroupNumber = 0;
 
     const finalize = () => {
       if (current) {
@@ -257,6 +263,8 @@ export class ReasonsReportParser {
         pilotEmployeeNumber = headerMatch[4];
         windowInfo = null;
         standingInfo = null;
+        bidGroupInfo = null;
+        bidGroupNumber = 0;
         continue;
       }
 
@@ -269,6 +277,14 @@ export class ReasonsReportParser {
       const standingMatch = line.match(STANDING_LINE);
       if (standingMatch) {
         standingInfo = `Standing Category ${standingMatch[1]}/${standingMatch[2]}, Regular ${standingMatch[3]}/${standingMatch[4]}, Reserve ${standingMatch[5]} above/${standingMatch[6]}`;
+        continue;
+      }
+
+      const bidGroupMatch = line.match(BID_GROUP_LINE);
+      if (bidGroupMatch) {
+        bidGroupNumber += 1;
+        bidGroupInfo =
+          `Bid Group ${bidGroupNumber}: ${bidGroupMatch[1]}${bidGroupMatch[2]}`.trim();
         continue;
       }
 
@@ -286,6 +302,7 @@ export class ReasonsReportParser {
           pilotName,
           windowInfo,
           standingInfo,
+          bidGroupInfo,
         };
         continue;
       }

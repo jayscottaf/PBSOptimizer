@@ -16,6 +16,8 @@ export interface PilotPreferenceRow {
   outcome?: string;
   month?: string;
   year?: number;
+  /** False when another group in the same period has award/outcome evidence. */
+  groupActive?: boolean;
 }
 
 /** Neutral starting profile — what a brand-new pilot with no history gets. */
@@ -96,7 +98,8 @@ export function learnProfile(
   let preferOffWeekend = 0;
   const preferOffDowCounts = new Map<string, number>();
 
-  for (const row of rows) {
+  const activeRows = rows.filter(row => row.groupActive !== false);
+  for (const row of activeRows) {
     const text = row.preferenceText;
     const isAvoid = /^Avoid Pairings/i.test(text);
     const isAward = /^Award Pairings/i.test(text);
@@ -112,8 +115,10 @@ export function learnProfile(
       }
     }
     if (isAvoid) {
-      for (const c of extractCities(text, /Layovers? In/)) bump(dislikeCities, c);
-      for (const c of extractCities(text, /Check-In Station/)) bump(stationAvoids, c);
+      for (const c of extractCities(text, /Layovers? In/))
+        bump(dislikeCities, c);
+      for (const c of extractCities(text, /Check-In Station/))
+        bump(stationAvoids, c);
       if (/Redeye/i.test(text)) redeyeAvoids++;
       if (/Carry Out\s*>\s*0/i.test(text)) carryOutAvoids++;
     }
@@ -147,7 +152,8 @@ export function learnProfile(
       }
       // Day-of-week Prefer Off ("Prefer Off  Friday, Saturday, Sunday")
       for (const dow of DOW_NAMES) {
-        if (new RegExp(`\\b${dow}\\b`).test(text)) bump(preferOffDowCounts, dow);
+        if (new RegExp(`\\b${dow}\\b`).test(text))
+          bump(preferOffDowCounts, dow);
       }
     }
   }
@@ -183,7 +189,8 @@ export function learnProfile(
     d => (preferOffDowCounts.get(d) ?? 0) >= recurrence
   );
 
-  signals.rows = rows.length;
+  signals.rows = activeRows.length;
+  signals.inactiveGroupRowsIgnored = rows.length - activeRows.length;
   signals.periods = periods;
   signals.minWindow = minWindow;
   signals.maxWindow = maxWindow;
