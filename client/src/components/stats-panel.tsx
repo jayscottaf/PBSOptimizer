@@ -489,6 +489,9 @@ export function StatsPanel({
 
         {publishedSupply && (
           <div className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">
+              Tap a row to filter the trip list to that length.
+            </p>
             <div className="grid grid-cols-4 gap-2 border-b border-border pb-1 text-xs font-medium text-muted-foreground">
               <div>Trip</div>
               <div className="text-right">Departures</div>
@@ -499,8 +502,9 @@ export function StatsPanel({
               <button
                 key={day.days}
                 type="button"
-                className="grid w-full grid-cols-4 gap-2 rounded py-1 text-xs transition-colors hover:bg-muted"
+                className="grid min-h-11 w-full grid-cols-4 items-center gap-2 rounded px-1 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-8"
                 onClick={() => onTripLengthFilter?.(day.days)}
+                aria-label={`Show only ${day.days}-day trips`}
               >
                 <span className="text-left font-medium text-secondary-foreground">
                   {day.days}-day
@@ -709,6 +713,9 @@ export function StatsPanel({
             </h4>
             <div className="space-y-1">
               {/* Header row */}
+              <p className="text-[11px] text-muted-foreground">
+                Tap a row to filter the trip list to that length.
+              </p>
               <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
                 <div>Trip</div>
                 <div className="text-right">%</div>
@@ -732,10 +739,12 @@ export function StatsPanel({
                   bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
-                  <div
+                  <button
                     key={days}
-                    className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
+                    type="button"
+                    className="grid min-h-11 w-full grid-cols-4 items-center gap-2 rounded px-1 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-8"
                     onClick={() => onTripLengthFilter?.(days)}
+                    aria-label={`Show only ${days}-day trips`}
                   >
                     <span className="text-secondary-foreground font-medium">
                       {days}-day
@@ -759,7 +768,7 @@ export function StatsPanel({
                           )
                         : '-'}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -948,6 +957,9 @@ export function StatsPanel({
             </h4>
             <div className="space-y-1">
               {/* Header row */}
+              <p className="text-[11px] text-muted-foreground">
+                Tap a row to filter the trip list to that length.
+              </p>
               <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b border-border">
                 <div>Trip</div>
                 <div className="text-right">%</div>
@@ -971,10 +983,12 @@ export function StatsPanel({
                   bidPackageStats?.avgByDays?.[days] ?? stats.avgByDays[days];
 
                 return (
-                  <div
+                  <button
                     key={days}
-                    className="grid grid-cols-4 gap-2 text-xs py-1 cursor-pointer hover:bg-gray-50 rounded transition-colors"
+                    type="button"
+                    className="grid min-h-11 w-full grid-cols-4 items-center gap-2 rounded px-1 text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-8"
                     onClick={() => onTripLengthFilter?.(days)}
+                    aria-label={`Show only ${days}-day trips`}
                   >
                     <span className="text-secondary-foreground font-medium">
                       {days}-day
@@ -998,7 +1012,7 @@ export function StatsPanel({
                           )
                         : '-'}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>

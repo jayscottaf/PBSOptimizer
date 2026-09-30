@@ -1307,6 +1307,13 @@ export default function Dashboard() {
       ...prev.filter(f => f.key !== 'pairingDays'),
       { key: 'pairingDays', label: `Trip Length: ${days}-day`, value: days },
     ]);
+    // These rows sit in the insights section away from the list, so show
+    // the pilot where the filter landed.
+    resultsCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    toast({
+      title: `Showing ${days}-day trips`,
+      description: 'Remove the Trip Length chip above the list to see all trips.',
+    });
   };
 
   const sortedPairings = React.useMemo(() => {
