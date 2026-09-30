@@ -96,7 +96,7 @@ export function TopPicks({
                     type="button"
                     onClick={() => pairing && onPairingClick(pairing)}
                     disabled={!pairing}
-                    className="group rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md disabled:cursor-default"
+                    className="group rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 p-3 text-left transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/50 enabled:hover:shadow-md disabled:cursor-default disabled:opacity-75"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-mono-data font-semibold">
@@ -125,9 +125,17 @@ export function TopPicks({
                       {pick.reasons.slice(0, 2).join(' · ') ||
                         'Ranked by your current preference profile'}
                     </div>
-                    <div className="mt-3 flex items-center gap-1 text-sm text-primary">
-                      View trip <ArrowRight className="h-3 w-3" />
-                    </div>
+                    {pairing ? (
+                      <div className="mt-3 flex items-center gap-1 text-sm text-primary">
+                        View trip <ArrowRight className="h-3 w-3" />
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-sm text-muted-foreground">
+                        {pairings.length === 0
+                          ? 'Loading trip details…'
+                          : 'Not in the loaded package'}
+                      </div>
+                    )}
                   </button>
                 );
               })}

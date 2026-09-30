@@ -29,11 +29,27 @@ interface StatusPillProps {
   label: string;
   detail: string;
   state: 'ready' | 'attention' | 'missing';
+  /** When set, the pill is a button (e.g. "Add history" opens the upload). */
+  onClick?: () => void;
 }
 
-function StatusPill({ icon: Icon, label, detail, state }: StatusPillProps) {
+function StatusPill({
+  icon: Icon,
+  label,
+  detail,
+  state,
+  onClick,
+}: StatusPillProps) {
+  const Container = onClick ? 'button' : 'div';
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/70 bg-background/65 px-3 py-2 backdrop-blur-sm">
+    <Container
+      {...(onClick ? { type: 'button' as const, onClick } : {})}
+      className={cn(
+        'flex min-w-0 items-center gap-2 rounded-lg border border-border/70 bg-background/65 px-3 py-2 text-left backdrop-blur-sm',
+        onClick &&
+          'min-h-11 transition-colors hover:border-primary/50 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+      )}
+    >
       <div
         className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
@@ -50,11 +66,17 @@ function StatusPill({ icon: Icon, label, detail, state }: StatusPillProps) {
           <Icon className="h-3.5 w-3.5" />
         )}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-foreground">{label}</div>
         <div className="truncate text-xs text-muted-foreground">{detail}</div>
       </div>
-    </div>
+      {onClick && (
+        <ArrowRight
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+      )}
+    </Container>
   );
 }
 
@@ -138,6 +160,7 @@ export function MonthlyWorkspaceHeader({
                   : bidPackage?.status || 'Not ready'
               }
               state={bidPackage?.status === 'completed' ? 'ready' : 'attention'}
+              onClick={bidPackage ? undefined : onUpload}
             />
             <StatusPill
               icon={Database}
@@ -148,6 +171,7 @@ export function MonthlyWorkspaceHeader({
                   : 'Add history for evidence'
               }
               state={hasReasonsEvidence ? 'ready' : 'missing'}
+              onClick={hasReasonsEvidence ? undefined : onUpload}
             />
             <StatusPill
               icon={FileCheck2}
@@ -156,6 +180,7 @@ export function MonthlyWorkspaceHeader({
               state={
                 exactPeriod ? 'ready' : wideReady ? 'attention' : 'missing'
               }
+              onClick={exactPeriod ? undefined : onUpload}
             />
           </div>
         </div>

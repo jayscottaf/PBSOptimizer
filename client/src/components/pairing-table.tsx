@@ -530,7 +530,11 @@ function PairingTableImpl({
   // Single source of truth for hold-probability color grading. Used for the
   // progress fill, the percentage label, and the badge background so the
   // signal is consistent across the cell.
-  const getHoldProbabilityBand = (probability: number) => {
+  const getHoldProbabilityBand = (probability: number | null | undefined) => {
+    // Unknown is not "unlikely": don't paint a missing estimate red.
+    if (probability === null || probability === undefined) {
+      return { bar: 'bg-muted', text: 'text-muted-foreground', bg: 'bg-muted' };
+    }
     if (probability >= 80) {
       return {
         bar: 'bg-green-500',
@@ -661,8 +665,8 @@ function PairingTableImpl({
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 font-medium">Commute</dt>
             <dd className="text-muted-foreground">
-              With Commute fit on, each trip shows whether published flights
-              get you in before check-in and home after release
+              With Commute fit on, each trip shows whether published flights get
+              you in before check-in and home after release
             </dd>
           </div>
         </dl>
@@ -821,7 +825,13 @@ function PairingTableImpl({
                       ),
                     ],
                     ['Days', String(pairing.pairingDays)],
-                    ['Est. hold', `${pairing.holdProbability}%`],
+                    [
+                      'Est. hold',
+                      pairing.holdProbability === null ||
+                      pairing.holdProbability === undefined
+                        ? '—'
+                        : `${pairing.holdProbability}%`,
+                    ],
                     [
                       'Block',
                       formatDuration(
@@ -1179,13 +1189,18 @@ function PairingTableImpl({
                             <div className="flex-1 bg-muted rounded-full h-1.5 sm:h-2 min-w-[30px] sm:min-w-[50px]">
                               <div
                                 className={`h-1.5 sm:h-2 rounded-full ${band.bar}`}
-                                style={{ width: `${pairing.holdProbability}%` }}
+                                style={{
+                                  width: `${pairing.holdProbability ?? 0}%`,
+                                }}
                               />
                             </div>
                             <span
                               className={`text-xs font-semibold px-1.5 py-0.5 rounded ${band.bg} ${band.text} flex-shrink-0`}
                             >
-                              {pairing.holdProbability}%
+                              {pairing.holdProbability === null ||
+                              pairing.holdProbability === undefined
+                                ? '—'
+                                : `${pairing.holdProbability}%`}
                             </span>
                             {(() => {
                               const hasReasoning =
@@ -1210,7 +1225,10 @@ function PairingTableImpl({
                                     <div className="space-y-2">
                                       <div className="font-semibold text-sm border-b border-border pb-2">
                                         Estimated hold:{' '}
-                                        {pairing.holdProbability}%
+                                        {pairing.holdProbability === null ||
+                                        pairing.holdProbability === undefined
+                                          ? 'unknown'
+                                          : `${pairing.holdProbability}%`}
                                       </div>
                                       {pairing.holdProbabilityReasoning?.map(
                                         (reason, idx) => (
@@ -1395,13 +1413,16 @@ function PairingTableImpl({
             >
               Previous
             </Button>
-            <p className="text-center text-xs leading-tight text-muted-foreground" aria-live="polite">
+            <p
+              className="text-center text-xs leading-tight text-muted-foreground"
+              aria-live="polite"
+            >
               <span className="block font-medium text-foreground">
                 Page {pagination.page} of {Math.max(1, pagination.totalPages)}
               </span>
               {(pagination.page - 1) * pagination.limit + 1}–
-              {(pagination.page - 1) * pagination.limit + safePairings.length} of{' '}
-              {pagination.total}
+              {(pagination.page - 1) * pagination.limit + safePairings.length}{' '}
+              of {pagination.total}
             </p>
             <Button
               variant="outline"

@@ -1567,7 +1567,7 @@ export default function Dashboard() {
                     <div className="min-h-[420px] lg:h-[75vh]">
                       <Card
                         ref={resultsCardRef}
-                        className="h-full scroll-mt-3 flex flex-col border-0 shadow-none">
+                        className="relative h-full scroll-mt-3 flex flex-col border-0 shadow-none">
                         <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
                             <CardTitle className="text-lg font-medium flex items-center gap-2">
