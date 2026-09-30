@@ -45,6 +45,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { AppHeader } from '@/components/layout/app-header';
 import { MobileNav } from '@/components/layout/mobile-nav';
+import { cn } from '@/lib/utils';
 import { KpiStrip } from '@/components/home/kpi-strip';
 import { TopPicks } from '@/components/home/top-picks';
 import { AwardValidationPanel } from '@/components/home/award-validation-panel';
@@ -1428,7 +1429,15 @@ export default function Dashboard() {
         />
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          <div className="h-full p-3 pb-20 sm:p-6 md:pb-6">
+          <div
+            className={cn(
+              'h-full p-3 sm:p-6 md:pb-6',
+              // Leave room for the compare tray pinned above the mobile nav.
+              activeTab === 'dashboard' && comparedPairings.length > 0
+                ? 'pb-36'
+                : 'pb-20'
+            )}
+          >
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
