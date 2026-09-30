@@ -167,38 +167,24 @@ export class HoldProbabilityCalculator {
 
       const matches: HistoricalMatch[] = [];
 
-      for (const history of historicalData) {
-        // Coverage/open-time awards are forced onto (or picked up by) pilots
-        // regardless of seniority-based bidding, so they say nothing about
-        // holdability and would make trips look easier to hold than they are.
-        if (history.awardType && /coverage|open/i.test(history.awardType)) {
-          continue;
-        }
-        // Days is a hard filter (same rule as TripMatcher.findBestMatches):
-        // a 2-day trip must not inherit hold evidence from a 4-day lookalike.
-        const historyFingerprint = history.tripFingerprint as TripFingerprint | null;
-        if (
-          historyFingerprint?.pairingDays !== undefined &&
-          historyFingerprint.pairingDays !== currentFingerprint.pairingDays
-        ) {
-          continue;
-        }
-        if (history.tripFingerprint) {
-          const similarity = TripMatcher.calculateSimilarity(
-            currentFingerprint,
-            history.tripFingerprint as TripFingerprint
-          );
+      for (const history of this.candidatesFor(
+        historicalData,
+        currentFingerprint.pairingDays
+      )) {
+        const similarity = TripMatcher.calculateSimilarity(
+          currentFingerprint,
+          history.tripFingerprint as TripFingerprint
+        );
 
-          // Only include matches with >50% similarity
-          if (similarity.score >= 50) {
-            matches.push({
-              seniorityNumber: history.juniorHolderSeniority,
-              month: history.month,
-              year: history.year,
-              similarity: similarity.score,
-              confidence: similarity.confidence,
-            });
-          }
+        // Only include matches with >50% similarity
+        if (similarity.score >= 50) {
+          matches.push({
+            seniorityNumber: history.juniorHolderSeniority,
+            month: history.month,
+            year: history.year,
+            similarity: similarity.score,
+            confidence: similarity.confidence,
+          });
         }
       }
 
@@ -210,6 +196,67 @@ export class HoldProbabilityCalculator {
       console.error('Error finding historical matches:', error);
       return [];
     }
+  }
+
+  // Batch callers pass the same history array for every pairing in a
+  // package, and the dataset endpoint re-personalizes on every load, so
+  // index it once per array instead of re-scanning ~11k rows per pairing.
+  private static historyIndex = new WeakMap<
+    object,
+    {
+      byDays: Map<number, (typeof bidHistory.$inferSelect)[]>;
+      anyDays: (typeof bidHistory.$inferSelect)[];
+      order: Map<typeof bidHistory.$inferSelect, number>;
+    }
+  >();
+
+  /**
+   * History rows that can match a trip of `pairingDays`, in original order.
+   * Applies the two hard filters up front: coverage/open-time awards are
+   * forced onto (or picked up by) pilots regardless of seniority bidding, so
+   * they say nothing about holdability; and days must match (same rule as
+   * TripMatcher.findBestMatches) unless a row's fingerprint has no days.
+   */
+  private static candidatesFor(
+    historicalData: (typeof bidHistory.$inferSelect)[],
+    pairingDays: number | undefined
+  ): (typeof bidHistory.$inferSelect)[] {
+    let index = this.historyIndex.get(historicalData);
+    if (!index) {
+      const byDays = new Map<number, (typeof bidHistory.$inferSelect)[]>();
+      const anyDays: (typeof bidHistory.$inferSelect)[] = [];
+      historicalData.forEach(history => {
+        if (!history.tripFingerprint) return;
+        if (history.awardType && /coverage|open/i.test(history.awardType)) {
+          return;
+        }
+        const days = (history.tripFingerprint as TripFingerprint).pairingDays;
+        if (days === undefined) {
+          anyDays.push(history);
+          return;
+        }
+        const bucket = byDays.get(days);
+        if (bucket) bucket.push(history);
+        else byDays.set(days, [history]);
+      });
+      index = {
+        byDays,
+        anyDays,
+        order: new Map(historicalData.map((h, i) => [h, i])),
+      };
+      this.historyIndex.set(historicalData, index);
+    }
+    // A trip with unknown days only matches rows with unknown days, exactly
+    // as the old per-row check did.
+    const sameDays =
+      pairingDays === undefined ? [] : (index.byDays.get(pairingDays) ?? []);
+    if (index.anyDays.length === 0) return sameDays;
+    if (sameDays.length === 0) return index.anyDays;
+    // Keep original row order so equal-similarity ties sort the same way.
+    const order = index.order;
+    return [...sameDays, ...index.anyDays].sort(
+      (a, b) => order.get(a)! - order.get(b)!
+    );
   }
 
   /**

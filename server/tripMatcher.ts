@@ -67,6 +67,17 @@ export class TripMatcher {
    * - Credit: 15% (pay hours preference)
    * - Efficiency: 5% (credit per day preference)
    */
+  private static distinctCityCache = new WeakMap<TripFingerprint, string[]>();
+
+  private static distinctCities(trip: TripFingerprint): string[] {
+    let cities = this.distinctCityCache.get(trip);
+    if (!cities) {
+      cities = [...new Set(trip.layoverCities ?? [])];
+      this.distinctCityCache.set(trip, cities);
+    }
+    return cities;
+  }
+
   static calculateSimilarity(
     trip1: TripFingerprint,
     trip2: TripFingerprint
@@ -84,16 +95,19 @@ export class TripMatcher {
     if (trip1.layoverPattern === trip2.layoverPattern) {
       breakdown.layoverMatch = 100; // Exact match
     } else {
-      // Calculate partial match based on common cities
-      const cities1 = new Set(trip1.layoverCities);
-      const cities2 = new Set(trip2.layoverCities);
-      const intersection = new Set(
-        [...cities1].filter((city) => cities2.has(city))
-      );
-      const union = new Set([...cities1, ...cities2]);
+      // Jaccard overlap of distinct cities. Trips have a handful of cities,
+      // so plain arrays beat the four Sets this used to allocate; this runs
+      // for every history row against every pairing on each hold refresh.
+      const cities1 = this.distinctCities(trip1);
+      const cities2 = this.distinctCities(trip2);
+      let intersection = 0;
+      for (const city of cities1) {
+        if (cities2.includes(city)) intersection++;
+      }
+      const union = cities1.length + cities2.length - intersection;
 
-      if (union.size > 0) {
-        breakdown.layoverMatch = (intersection.size / union.size) * 100;
+      if (union > 0) {
+        breakdown.layoverMatch = (intersection / union) * 100;
       }
     }
 
