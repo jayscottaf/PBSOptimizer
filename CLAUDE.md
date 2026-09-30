@@ -112,6 +112,9 @@ LOG_HTTP=0               # Disable HTTP request logging (default: enabled)
 LOG_HOLD_DEBUG=1         # Enable hold probability calculation debugging
 ```
 
+### Database Driver (Vercel)
+`NEON_QUERY_VIA_FETCH=1` (off by default) sends non-transaction queries over Neon's experimental HTTP path instead of a WebSocket connection, trimming the connection handshake on cold starts. Transactions always use WebSockets. Remove the variable and redeploy to revert.
+
 ## Development Workflow
 
 ### User Preferences

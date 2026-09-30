@@ -7,8 +7,18 @@ import * as schema from '../shared/schema';
 
 // Configure for serverless environment
 if (process.env.VERCEL) {
-  // In Vercel, use native fetch instead of WebSocket
-  neonConfig.fetchConnectionCache = true;
+  // Vercel's Node 22 runtime has a global WebSocket, which the driver uses by
+  // default. (The fetchConnectionCache flag that used to sit here is ignored
+  // since driver 0.10 and never switched anything to HTTP.)
+  //
+  // Opt-in: NEON_QUERY_VIA_FETCH=1 sends plain Pool.query() calls over
+  // one-shot HTTP, skipping the WebSocket + Postgres handshake a cold
+  // instance pays on its first query. Transactions (db.transaction, used by
+  // Reasons import, access sessions, wide schedules) still get a WebSocket
+  // client. The driver marks this experimental, so it stays off unless set.
+  if (process.env.NEON_QUERY_VIA_FETCH === '1') {
+    neonConfig.poolQueryViaFetch = true;
+  }
 } else {
   // In local development, use WebSocket
   import('ws').then(ws => {
