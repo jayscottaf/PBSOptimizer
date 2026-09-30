@@ -11,6 +11,13 @@ import {
 } from './lib/queryClient';
 import { migrateOldCacheFormat, getCacheInfo } from './lib/offlineCache';
 import { addTestingUtilities } from './lib/offlineTestSuite';
+import { reloadOnceForStaleChunk } from './components/app-error-boundary';
+
+// Vite fires this when a lazy chunk's preload fails, typically because a
+// deploy replaced it while this page was open.
+window.addEventListener('vite:preloadError', event => {
+  if (navigator.onLine && reloadOnceForStaleChunk()) event.preventDefault();
+});
 // Development utilities - available in browser console
 if (import.meta.env.DEV) {
   (window as any).debugCache = {

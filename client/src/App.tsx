@@ -1,5 +1,6 @@
 import React from 'react';
 import { AccessGate } from '@/components/access-gate';
+import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { Switch, Route } from 'wouter';
 import { queryClient } from './lib/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -68,9 +69,11 @@ function App() {
         <TooltipProvider delayDuration={200} skipDelayDuration={0}>
           <OfflineBanner />
           <Toaster />
-          <AccessGate>
-            <Router />
-          </AccessGate>
+          <AppErrorBoundary>
+            <AccessGate>
+              <Router />
+            </AccessGate>
+          </AppErrorBoundary>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
