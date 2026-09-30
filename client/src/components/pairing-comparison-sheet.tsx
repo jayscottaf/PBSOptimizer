@@ -67,11 +67,13 @@ function ComparisonRow({
       : new Set<number>();
 
   return (
-    <div className="grid grid-cols-[minmax(9.5rem,0.7fr)_repeat(var(--comparison-count),minmax(14rem,1fr))] border-t border-border/70 first:border-t-0">
-      <div className="sticky left-0 z-10 flex min-h-16 flex-col justify-center border-r border-border/70 bg-background px-4 py-3 sm:px-5">
-        <span className="text-sm font-medium text-foreground">{label}</span>
+    <div className="grid grid-cols-[repeat(var(--comparison-count),minmax(0,1fr))] sm:grid-cols-[minmax(9.5rem,0.7fr)_repeat(var(--comparison-count),minmax(14rem,1fr))] border-t border-border/70 first:border-t-0">
+      <div className="col-span-full flex items-baseline gap-2 bg-muted/40 px-3 py-1.5 sm:sticky sm:left-0 sm:z-10 sm:col-span-1 sm:min-h-16 sm:flex-col sm:items-start sm:justify-center sm:gap-0 sm:border-r sm:border-border/70 sm:bg-background sm:px-5 sm:py-3">
+        <span className="text-xs font-semibold text-foreground sm:text-sm sm:font-medium">
+          {label}
+        </span>
         {detail && (
-          <span className="mt-0.5 text-xs leading-4 text-muted-foreground">
+          <span className="text-[11px] leading-4 text-muted-foreground sm:mt-0.5 sm:text-xs">
             {detail}
           </span>
         )}
@@ -83,7 +85,7 @@ function ComparisonRow({
           <div
             key={comparison.id}
             className={cn(
-              'flex min-h-16 items-center border-r border-border/70 px-4 py-3 last:border-r-0',
+              'flex items-center border-r border-border/70 px-3 py-2 text-sm last:border-r-0 sm:min-h-16 sm:px-4 sm:py-3 sm:text-base',
               highlighted && 'bg-primary/[0.055]'
             )}
           >
@@ -141,9 +143,11 @@ export function PairingComparisonSheet({
     [items]
   );
 
+  // The minimum width only applies from sm up; phones stack each metric's
+  // label above equal columns so every selected trip fits on screen.
   const comparisonStyle = {
     '--comparison-count': Math.max(comparisons.length, 1),
-    minWidth: `${152 + Math.max(comparisons.length, 1) * 224}px`,
+    '--comparison-min-width': `${152 + Math.max(comparisons.length, 1) * 224}px`,
   } as CSSProperties;
 
   return (
@@ -182,9 +186,12 @@ export function PairingComparisonSheet({
             </div>
           ) : (
             <div className="overflow-x-auto overscroll-x-contain">
-              <div style={comparisonStyle}>
-                <div className="grid grid-cols-[minmax(9.5rem,0.7fr)_repeat(var(--comparison-count),minmax(14rem,1fr))] border-b border-border/70 bg-muted/20">
-                  <div className="sticky left-0 z-10 flex items-end border-r border-border/70 bg-muted/95 px-4 py-4 backdrop-blur sm:px-5">
+              <div
+                style={comparisonStyle}
+                className="sm:min-w-[var(--comparison-min-width)]"
+              >
+                <div className="grid grid-cols-[repeat(var(--comparison-count),minmax(0,1fr))] sm:grid-cols-[minmax(9.5rem,0.7fr)_repeat(var(--comparison-count),minmax(14rem,1fr))] border-b border-border/70 bg-muted/20">
+                  <div className="sticky left-0 z-10 hidden items-end border-r border-border/70 bg-muted/95 px-4 py-4 backdrop-blur sm:flex sm:px-5">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Trip details
@@ -197,23 +204,25 @@ export function PairingComparisonSheet({
                   {items.map(({ pairing, comparison }) => (
                     <div
                       key={comparison.id}
-                      className="relative border-r border-border/70 p-4 last:border-r-0"
+                      className="relative min-w-0 border-r border-border/70 p-3 last:border-r-0 sm:p-4"
                     >
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="absolute right-2 top-2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                        className="absolute right-1 top-1 h-9 w-9 text-muted-foreground hover:text-foreground sm:right-2 sm:top-2 sm:h-8 sm:w-8"
                         onClick={() => onRemove(comparison.id)}
                         aria-label={`Remove pairing ${comparison.pairingNumber} from comparison`}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                       <div className="pr-8">
-                        <p className="text-base font-semibold tracking-tight text-foreground">
-                          Pairing {comparison.pairingNumber}
+                        <p className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
+                          <span className="hidden sm:inline">Pairing </span>
+                          <span className="sm:hidden">#</span>
+                          {comparison.pairingNumber}
                         </p>
-                        <p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">
+                        <p className="mt-1 line-clamp-2 min-h-8 break-words text-xs leading-4 text-muted-foreground sm:min-h-10 sm:text-sm sm:leading-5">
                           {comparison.route || 'Route details unavailable'}
                         </p>
                         <p className="mt-2 text-xs text-muted-foreground">
@@ -225,12 +234,13 @@ export function PairingComparisonSheet({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="mt-3 h-8 w-full"
+                        className="mt-3 min-h-10 w-full px-2 sm:h-8 sm:min-h-0"
                         onClick={() => onView(pairing)}
                         aria-label={`View details for pairing ${comparison.pairingNumber}`}
                       >
                         <Eye className="h-3.5 w-3.5" />
-                        View trip
+                        <span className="sm:hidden">View</span>
+                        <span className="hidden sm:inline">View trip</span>
                       </Button>
                     </div>
                   ))}
