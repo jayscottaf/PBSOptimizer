@@ -28,12 +28,9 @@ export function PairingComparisonBar({
       aria-live="polite"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto md:flex-wrap md:overflow-visible">
-        <div className="flex shrink-0 items-center gap-1.5 text-sm font-medium">
+        <div className="hidden shrink-0 items-center gap-1.5 text-sm font-medium sm:flex">
           <Columns3 className="h-4 w-4 text-primary" />
-          <span className="hidden sm:inline">Compare trips</span>
-          <span className="text-xs text-muted-foreground sm:hidden">
-            {pairings.length}/3
-          </span>
+          Compare trips
         </div>
         {pairings.map(pairing => (
           <Badge

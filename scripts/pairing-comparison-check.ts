@@ -123,6 +123,13 @@ assert(
 assert(missing.deadheads === null, 'uses null for invalid deadhead count');
 assert(missing.checkInStation === null, 'handles missing segments');
 assert(!missing.hasRedeye, 'handles missing redeye data safely');
+const nullHold = buildPairingComparison(
+  fixture({ id: 4, holdProbability: null } as unknown as Partial<Pairing>)
+);
+assert(
+  nullHold.holdProbability === null,
+  'a null hold estimate stays unknown instead of becoming 0%'
+);
 
 const turn = buildPairingComparison(fixture({ id: 4, layovers: [] }));
 assert(

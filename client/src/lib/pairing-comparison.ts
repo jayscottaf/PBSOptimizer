@@ -81,6 +81,9 @@ function asArray(value: unknown): unknown[] | null {
 }
 
 function finiteNonNegative(value: unknown): number | null {
+  // Number(null) and Number('') are 0, which turned a missing hold estimate
+  // into a red "0%" instead of "Unknown".
+  if (value === null || value === undefined || value === '') return null;
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
