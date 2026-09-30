@@ -1808,7 +1808,7 @@ export class DatabaseStorage implements IStorage {
       ? sql`AND upper(left(trim(month), 3)) = ${monthCode}`
       : sql``;
 
-    const typeMix = await db.execute(sql`
+    const typeMixQuery = db.execute(sql`
       SELECT year, month,
         count(DISTINCT pilot_seniority_number) AS pilots,
         count(*) AS total_prefs,
@@ -1836,7 +1836,7 @@ export class DatabaseStorage implements IStorage {
     // In BOS" is a pilot steering TOWARD it. Classifying on the leading verb
     // alone (as this did) filed every negated preference in the wrong
     // column. XOR of (is-award, is-negated) gives the true intent.
-    const layoverIntent = await db.execute(sql`
+    const layoverIntentQuery = db.execute(sql`
       SELECT kind, city, count(*) AS n FROM (
         SELECT
           CASE
@@ -1856,17 +1856,10 @@ export class DatabaseStorage implements IStorage {
       ) t
       GROUP BY kind, city ORDER BY n DESC
     `);
-    const intentRows = layoverIntent.rows as any[];
-    const topBy = (kind: string) =>
-      intentRows
-        .filter(r => r.kind === kind)
-        .map(r => ({ city: String(r.city), count: Number(r.n) }))
-        .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
-        .slice(0, 12);
 
     // Two phrasings of the same wish (later report time): Award...Check-In
     // Time > HH:MM and Avoid...Check-In Time < HH:MM — same threshold hour.
-    const earlyCheckIn = await db.execute(sql`
+    const earlyCheckInQuery = db.execute(sql`
       SELECT hour, sum(n) AS n FROM (
         SELECT (regexp_match(preference_text, 'Check-In Time > (\\d{2}):'))[1]::int AS hour, count(*) AS n
         FROM reasons_report_preferences
@@ -1881,7 +1874,7 @@ export class DatabaseStorage implements IStorage {
       GROUP BY hour ORDER BY hour
     `);
 
-    const checkInStations = await db.execute(sql`
+    const checkInStationsQuery = db.execute(sql`
       SELECT station,
         sum(CASE WHEN kind = 'award' THEN n ELSE 0 END) AS awarded,
         sum(CASE WHEN kind = 'avoid' THEN n ELSE 0 END) AS avoided
@@ -1903,7 +1896,7 @@ export class DatabaseStorage implements IStorage {
       ORDER BY sum(n) DESC LIMIT 10
     `);
 
-    const daysOff = await db.execute(sql`
+    const daysOffQuery = db.execute(sql`
       SELECT (regexp_match(preference_text, '(\\d+) Consecutive Days Off'))[1]::int AS days, count(*) AS n
       FROM reasons_report_preferences
       WHERE base = ${base} ${monthCond} AND preference_text ILIKE '%consecutive days off%' ${fleet}
@@ -1916,7 +1909,7 @@ export class DatabaseStorage implements IStorage {
     const supplyMonthCond = month
       ? sql`AND upper(left(trim(bp.month), 3)) = ${month.toUpperCase()}`
       : sql``;
-    const stationSupply = await db.execute(sql`
+    const stationSupplyQuery = db.execute(sql`
       SELECT upper(left(trim(bp.month), 3)) AS mon, bp.year AS yr,
         CASE upper(left(trim(bp.month), 3))
           WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 WHEN 'APR' THEN 4
@@ -1932,6 +1925,31 @@ export class DatabaseStorage implements IStorage {
       GROUP BY 1, 2, 3, 4
       ORDER BY bp.year DESC, mon_num DESC, n DESC
     `);
+    // The six queries are independent full scans of ~100k preference rows
+    // (plus one over pairings); run them concurrently instead of paying six
+    // sequential round-trips on every Trends load.
+    const [
+      typeMix,
+      layoverIntent,
+      earlyCheckIn,
+      checkInStations,
+      daysOff,
+      stationSupply,
+    ] = await Promise.all([
+      typeMixQuery,
+      layoverIntentQuery,
+      earlyCheckInQuery,
+      checkInStationsQuery,
+      daysOffQuery,
+      stationSupplyQuery,
+    ]);
+    const intentRows = layoverIntent.rows as any[];
+    const topBy = (kind: string) =>
+      intentRows
+        .filter(r => r.kind === kind)
+        .map(r => ({ city: String(r.city), count: Number(r.n) }))
+        .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
+        .slice(0, 12);
     const supplyByPeriod = new Map<
       string,
       {
