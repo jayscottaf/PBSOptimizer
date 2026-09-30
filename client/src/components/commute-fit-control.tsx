@@ -310,7 +310,8 @@ export function CommuteFitControl({
                   Show only trips that fit both ways
                 </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Hide trips that require an overnight on either end.
+                  Hides trips that need a hotel on either end, and trips
+                  without published flight times.
                 </p>
               </div>
               <Switch
@@ -338,7 +339,8 @@ export function CommuteFitControl({
               </span>
               {counts.unknown > 0 && (
                 <span className="text-warning">
-                  {counts.unknown} missing times
+                  {counts.unknown} without published times
+                  {value.onlyShowBothWays ? ' (hidden)' : ''}
                 </span>
               )}
             </div>

@@ -1,4 +1,10 @@
-import { CircleHelp, Hotel, PlaneLanding, PlaneTakeoff } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  CircleHelp,
+  Hotel,
+  PlaneLanding,
+  PlaneTakeoff,
+} from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import type { CommuteFitResult } from '@/lib/commute-fit';
@@ -11,19 +17,22 @@ interface CommuteFitBadgeProps {
 }
 
 const STATUS_DETAILS = {
+  // Icons: landing = flying in to base before report; takeoff = flying home
+  // after release. Each status gets its own icon so they read apart at a
+  // glance, not just by color.
   both: {
     label: 'Fits both ways',
-    icon: PlaneLanding,
+    icon: ArrowLeftRight,
     className: 'border-success/25 bg-success/10 text-success',
   },
   'commute-in-only': {
     label: 'Commute in only',
-    icon: PlaneTakeoff,
+    icon: PlaneLanding,
     className: 'border-info/25 bg-info/10 text-info',
   },
   'commute-home-only': {
     label: 'Commute home only',
-    icon: PlaneLanding,
+    icon: PlaneTakeoff,
     className: 'border-info/25 bg-info/10 text-info',
   },
   'overnight-needed': {

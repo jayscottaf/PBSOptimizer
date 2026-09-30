@@ -473,7 +473,7 @@ export function StatsPanel({
         {commutability && (
           <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg border border-border bg-muted/40 p-3 text-center">
             {[
-              ['Both ends', commutability.bothEndsPercent],
+              ['Both ways', commutability.bothEndsPercent],
               ['Commute in', commutability.startPercent],
               ['Commute home', commutability.endPercent],
             ].map(([label, value]) => (
