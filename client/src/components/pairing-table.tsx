@@ -235,9 +235,25 @@ function formatEffectiveDisplay(pairing: Pairing): string {
         .trim()
         .split(/\n|CHECK-IN|DAY\s+[A-Z]/)[0] || '';
 
-    const weekdayTokens = Array.from(
-      beforeEff.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)
-    ).map(m => m[1]);
+    // The list loads the compact dataset, which omits fullTextBlock, so use
+    // the parser's resolved start weekdays (0=Sun..6=Sat). They are also
+    // correct for "EXCPT FR SA SU" headers, whose raw tokens name the days
+    // the trip does NOT operate.
+    const DOW_TOKENS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    const operatingDows = (pairing as any).operatingDows as
+      | number[]
+      | null
+      | undefined;
+    const weekdayTokens =
+      Array.isArray(operatingDows) &&
+      operatingDows.length > 0 &&
+      operatingDows.length < 7
+        ? [1, 2, 3, 4, 5, 6, 0]
+            .filter(d => operatingDows.includes(d))
+            .map(d => DOW_TOKENS[d])
+        : Array.from(beforeEff.matchAll(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g)).map(
+            m => m[1]
+          );
     const weekdaySuffix =
       weekdayTokens.length > 0 ? ` ${weekdayTokens.join(',')}` : '';
 
