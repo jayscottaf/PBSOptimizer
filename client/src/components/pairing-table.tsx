@@ -1366,10 +1366,11 @@ function PairingTableImpl({
 
       {/* Pagination */}
       {safePairings.length > 0 && pagination && (
-        <div className="bg-card px-6 py-3 border-t border-border flex items-center justify-between">
-          <div className="flex-1 flex justify-between sm:hidden">
+        <div className="bg-card px-3 py-3 sm:px-6 border-t border-border flex items-center justify-between">
+          <div className="flex-1 flex items-center justify-between gap-2 sm:hidden">
             <Button
               variant="outline"
+              className="min-h-11"
               disabled={!pagination.hasPrev}
               onClick={() =>
                 onPageChange &&
@@ -1378,8 +1379,17 @@ function PairingTableImpl({
             >
               Previous
             </Button>
+            <p className="text-center text-xs leading-tight text-muted-foreground" aria-live="polite">
+              <span className="block font-medium text-foreground">
+                Page {pagination.page} of {Math.max(1, pagination.totalPages)}
+              </span>
+              {(pagination.page - 1) * pagination.limit + 1}–
+              {(pagination.page - 1) * pagination.limit + safePairings.length} of{' '}
+              {pagination.total}
+            </p>
             <Button
               variant="outline"
+              className="min-h-11"
               disabled={!pagination.hasNext}
               onClick={() =>
                 onPageChange && onPageChange((pagination.page || 1) + 1)

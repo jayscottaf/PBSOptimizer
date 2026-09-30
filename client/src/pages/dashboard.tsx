@@ -141,6 +141,15 @@ export default function Dashboard() {
   const [hideConflicts, setHideConflicts] = useState(false);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [pairingPage, setPairingPage] = useState(1);
+  const resultsCardRef = useRef<HTMLDivElement>(null);
+  const resultsScrollRef = useRef<HTMLDivElement>(null);
+  // Changing pages must bring the pilot back to the first result; otherwise
+  // they land near the bottom of the next page and silently skip trips.
+  const handlePairingPageChange = useCallback((page: number) => {
+    setPairingPage(page);
+    resultsScrollRef.current?.scrollTo({ top: 0 });
+    resultsCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, []);
 
   const queryClient = useQueryClient();
 
@@ -1540,7 +1549,9 @@ export default function Dashboard() {
                       the table keeps its own scroll while the page scrolls
                       the insight sections above it. */}
                     <div className="min-h-[420px] lg:h-[75vh]">
-                      <Card className="h-full flex flex-col border-0 shadow-none">
+                      <Card
+                        ref={resultsCardRef}
+                        className="h-full scroll-mt-3 flex flex-col border-0 shadow-none">
                         <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
                             <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -1596,7 +1607,10 @@ export default function Dashboard() {
                             </Button>
                           </div>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-auto p-0">
+                        <CardContent
+                          ref={resultsScrollRef}
+                          className="flex-1 overflow-auto p-0"
+                        >
                           {isUpdatingSeniority && (
                             <div className="absolute inset-0 bg-card bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
                               <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
@@ -1660,7 +1674,7 @@ export default function Dashboard() {
                               hasNext: pairingPage < pairingTotalPages,
                               hasPrev: pairingPage > 1,
                             }}
-                            onPageChange={setPairingPage}
+                            onPageChange={handlePairingPageChange}
                           />
                         </CardContent>
                       </Card>
