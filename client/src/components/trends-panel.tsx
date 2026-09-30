@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -43,9 +44,18 @@ interface TrendsResponse {
 }
 
 const MONTH_NAMES: Record<string, string> = {
-  JAN: 'January', FEB: 'February', MAR: 'March', APR: 'April',
-  MAY: 'May', JUN: 'June', JUL: 'July', AUG: 'August',
-  SEP: 'September', OCT: 'October', NOV: 'November', DEC: 'December',
+  JAN: 'January',
+  FEB: 'February',
+  MAR: 'March',
+  APR: 'April',
+  MAY: 'May',
+  JUN: 'June',
+  JUL: 'July',
+  AUG: 'August',
+  SEP: 'September',
+  OCT: 'October',
+  NOV: 'November',
+  DEC: 'December',
 };
 
 interface TypeMixPeriod {
@@ -218,21 +228,21 @@ function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
             {p.period}
           </span>
           <div className="flex-1 h-4 rounded overflow-hidden flex bg-muted">
-            {(['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const).map(
-              key => {
-                const widthPct = (p[key] / Math.max(1, p.totalPrefs)) * 100;
-                return widthPct > 0 ? (
-                  <div
-                    key={key}
-                    style={{
-                      width: `${widthPct}%`,
-                      backgroundColor: TYPE_COLORS[key],
-                    }}
-                    title={`${TYPE_LABELS[key]}: ${p[key]}`}
-                  />
-                ) : null;
-              }
-            )}
+            {(
+              ['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const
+            ).map(key => {
+              const widthPct = (p[key] / Math.max(1, p.totalPrefs)) * 100;
+              return widthPct > 0 ? (
+                <div
+                  key={key}
+                  style={{
+                    width: `${widthPct}%`,
+                    backgroundColor: TYPE_COLORS[key],
+                  }}
+                  title={`${TYPE_LABELS[key]}: ${p[key]}`}
+                />
+              ) : null;
+            })}
           </div>
           <span className="w-16 shrink-0 text-right text-muted-foreground">
             {p.avgPrefsPerPilot.toFixed(0)}/pilot
@@ -240,20 +250,20 @@ function TypeMixChart({ periods }: { periods: TypeMixPeriod[] }) {
         </div>
       ))}
       <div className="flex flex-wrap gap-4 mt-2">
-        {(['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const).map(
-          key => (
+        {(
+          ['award', 'avoid', 'preferOff', 'setCondition', 'other'] as const
+        ).map(key => (
+          <span
+            key={key}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
             <span
-              key={key}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
-            >
-              <span
-                className="inline-block w-3 h-3 rounded-sm"
-                style={{ backgroundColor: TYPE_COLORS[key] }}
-              />
-              {TYPE_LABELS[key]}
-            </span>
-          )
-        )}
+              className="inline-block w-3 h-3 rounded-sm"
+              style={{ backgroundColor: TYPE_COLORS[key] }}
+            />
+            {TYPE_LABELS[key]}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -420,7 +430,8 @@ function BoundaryChart({ boundaries }: { boundaries: HoldBoundary[] }) {
           </g>
         ))}
         {periods.map((p, i) =>
-          i % Math.ceil(periods.length / 9) === 0 || i === periods.length - 1 ? (
+          i % Math.ceil(periods.length / 9) === 0 ||
+          i === periods.length - 1 ? (
             <text
               key={p}
               x={x(i)}
@@ -562,6 +573,125 @@ const INSIGHT_STYLES: Record<
   info: { icon: Lightbulb, className: 'text-info' },
 };
 
+/**
+ * The pilot's own latest-bid outcomes. Rendered independently of the
+ * category-history state: a category with no composite history (or a failed
+ * trends request) must not hide results that loaded fine from their own
+ * report.
+ */
+function LatestBidExplained({
+  pilotOutcomes,
+}: {
+  pilotOutcomes?: PilotBidOutcomesResponse;
+}) {
+  const explainedOutcomes = (pilotOutcomes?.preferences ?? []).filter(
+    preference =>
+      preference.groupActive !== false &&
+      (preference.outcome !== 'Unknown' ||
+        preference.awardedPairingNumbers.length > 0)
+  );
+  const awardedCount = new Set(
+    explainedOutcomes.flatMap(preference => preference.awardedPairingNumbers)
+  ).size;
+  const lostToSeniorCount = explainedOutcomes.filter(preference =>
+    preference.outcome.startsWith('Awarded to senior')
+  ).length;
+  const honoredCount = explainedOutcomes.filter(
+    preference => preference.outcome === 'Honored'
+  ).length;
+  if (explainedOutcomes.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-xl">
+          <CircleCheck className="h-5 w-5 text-emerald-500" />
+          Your latest bid explained — {pilotOutcomes?.period}
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          {awardedCount} pairings awarded · {honoredCount} preferences honored ·{' '}
+          {lostToSeniorCount} lost to senior bidders
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {pilotOutcomes?.creditWindow ?? 'No credit window listed'} ·{' '}
+          {pilotOutcomes?.preAwards.length
+            ? `${pilotOutcomes.preAwards.length} ${pilotOutcomes.preAwards.length === 1 ? 'pre-award' : 'pre-awards'} already on the line`
+            : 'No pre-awards listed'}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {pilotOutcomes?.preAwards.map(preAward => {
+          const [label, start, end, credit] = preAward.split(' | ');
+          const details = [
+            start && end ? `${start} to ${end}` : start || end,
+            credit ? `${credit} credit` : undefined,
+          ].filter(Boolean);
+          return (
+            <div
+              key={preAward}
+              className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3 text-xs"
+            >
+              <span className="font-medium text-foreground">{label}</span>
+              {details.length > 0 && (
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {details.join(' · ')}
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {explainedOutcomes.map(preference => {
+          const isLoss = preference.outcome.startsWith('Awarded to senior');
+          const isHonored = preference.outcome === 'Honored';
+          return (
+            <div
+              key={`${preference.preferenceNumber}-${preference.preferenceText}`}
+              className="rounded-lg border border-border/70 p-3"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {preference.preferenceNumber}. {preference.preferenceText}
+                </p>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    isLoss
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      : isHonored
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {preference.outcome}
+                </span>
+              </div>
+              {(preference.awardedPairingNumbers.length > 0 ||
+                preference.matchingCount !== null ||
+                preference.seniorBidderCount !== null ||
+                preference.runningTotal) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {preference.awardedPairingNumbers.length > 0 &&
+                    `Awarded ${preference.awardedPairingNumbers.join(', ')}`}
+                  {preference.awardedPairingNumbers.length > 0 &&
+                    preference.matchingCount !== null &&
+                    ' · '}
+                  {preference.awardedCount !== null &&
+                    preference.matchingCount !== null &&
+                    `${preference.awardedCount} of ${preference.matchingCount} matches awarded`}
+                  {preference.seniorBidderCount !== null &&
+                    ` · ${preference.seniorBidderCount} went to senior bidders`}
+                  {preference.runningTotal &&
+                    ` · line total ${preference.runningTotal}`}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function TrendsPanel({
   seniorityPercentile,
   seniorityNumber,
@@ -582,16 +712,17 @@ export function TrendsPanel({
     ? `?base=${encodeURIComponent(String(base))}&aircraft=${encodeURIComponent(String(aircraft))}${month ? `&month=${month}` : ''}`
     : '';
 
-  const { data, isLoading, isError } = useQuery<TrendsResponse>({
-    queryKey: ['/api/trends', base, aircraft, month],
-    queryFn: async () => {
-      const res = await fetch(`/api/trends${categoryQuery}`);
-      if (!res.ok) throw new Error('Failed to load trends');
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    enabled: hasCategory,
-  });
+  const { data, isLoading, isError, refetch, isFetching } =
+    useQuery<TrendsResponse>({
+      queryKey: ['/api/trends', base, aircraft, month],
+      queryFn: async () => {
+        const res = await fetch(`/api/trends${categoryQuery}`);
+        if (!res.ok) throw new Error('Failed to load trends');
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000,
+      enabled: hasCategory,
+    });
   const { data: patterns } = useQuery<BidPatternsResponse>({
     queryKey: ['/api/bid-patterns', base, aircraft, month],
     queryFn: async () => {
@@ -601,7 +732,11 @@ export function TrendsPanel({
     },
     staleTime: 5 * 60 * 1000,
     enabled:
-      hasCategory && !isLoading && !isError && !!data && data.periods.length > 0,
+      hasCategory &&
+      !isLoading &&
+      !isError &&
+      !!data &&
+      data.periods.length > 0,
   });
   const { data: pilotOutcomes } = useQuery<PilotBidOutcomesResponse>({
     queryKey: ['/api/pilot-bid-outcomes', seniorityNumber, base, aircraft],
@@ -634,21 +769,48 @@ export function TrendsPanel({
       </div>
     );
   }
-  if (isError || !data || data.periods.length === 0) {
+  if (isError) {
+    return (
+      <div className="space-y-4 p-1">
+        <LatestBidExplained pilotOutcomes={pilotOutcomes} />
+        <div className="space-y-3 p-5 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">
+            Couldn&apos;t load award history for {base} {aircraft}
+          </p>
+          <p>
+            This is a connection problem, not missing data. Your uploaded
+            reports are still saved.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            disabled={isFetching}
+            onClick={() => refetch()}
+          >
+            {isFetching ? 'Retrying…' : 'Try again'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!data || data.periods.length === 0) {
     // Name the category. Award history is per base+fleet, so "no history"
     // for the 330 is a different statement from "no history at all" — and
     // showing another fleet's numbers here would be worse than showing none.
     return (
-      <div className="space-y-1 p-6 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">
-          No bid history imported for {base} {aircraft}
-        </p>
-        <p>
-          Hold estimates, contention and credit windows are built from
-          composite Reasons Reports for this exact category. Upload reports
-          for {base} {aircraft} to unlock them — history from another fleet
-          would not apply.
-        </p>
+      <div className="space-y-4 p-1">
+        <LatestBidExplained pilotOutcomes={pilotOutcomes} />
+        <div className="space-y-1 p-5 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">
+            No category award history imported for {base} {aircraft}
+          </p>
+          <p>
+            Hold estimates, contention and credit windows are built from
+            composite Reasons Reports for this exact category. Upload reports
+            for {base} {aircraft} to unlock them — history from another fleet
+            would not apply.
+          </p>
+        </div>
       </div>
     );
   }
@@ -661,111 +823,17 @@ export function TrendsPanel({
     seniorityPercentile !== null && seniorityPercentile !== undefined
       ? Number(seniorityPercentile)
       : undefined;
-  const insights = deriveInsights(data, Number.isNaN(userPct) ? undefined : userPct);
-  const explainedOutcomes = (pilotOutcomes?.preferences ?? []).filter(
-    preference =>
-      preference.groupActive !== false &&
-      (preference.outcome !== 'Unknown' ||
-        preference.awardedPairingNumbers.length > 0)
+  const insights = deriveInsights(
+    data,
+    Number.isNaN(userPct) ? undefined : userPct
   );
-  const awardedCount = new Set(
-    explainedOutcomes.flatMap(preference => preference.awardedPairingNumbers)
-  ).size;
-  const lostToSeniorCount = explainedOutcomes.filter(preference =>
-    preference.outcome.startsWith('Awarded to senior')
-  ).length;
-  const honoredCount = explainedOutcomes.filter(
-    preference => preference.outcome === 'Honored'
-  ).length;
   const compositionPeriods = data.periods.filter(
     period => period.regularPilots !== null && period.reservePilots !== null
   );
 
   return (
     <div className="space-y-4 p-1">
-      {explainedOutcomes.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <CircleCheck className="h-5 w-5 text-emerald-500" />
-              Your latest bid explained — {pilotOutcomes?.period}
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {awardedCount} pairings awarded · {honoredCount} preferences
-              honored · {lostToSeniorCount} lost to senior bidders
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {pilotOutcomes?.creditWindow ?? 'No credit window listed'} ·{' '}
-              {pilotOutcomes?.preAwards.length
-                ? `${pilotOutcomes.preAwards.length} pre-awards already on the line`
-                : 'No pre-awards listed'}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {pilotOutcomes?.preAwards.map(preAward => {
-              const [label, start, end, credit] = preAward.split(' | ');
-              return (
-                <div
-                  key={preAward}
-                  className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3 text-xs"
-                >
-                  <span className="font-medium text-foreground">{label}</span>
-                  <span className="text-muted-foreground">
-                    {' '}
-                    · {start} to {end} · {credit} credit
-                  </span>
-                </div>
-              );
-            })}
-            {explainedOutcomes.map(preference => {
-              const isLoss = preference.outcome.startsWith('Awarded to senior');
-              const isHonored = preference.outcome === 'Honored';
-              return (
-                <div
-                  key={`${preference.preferenceNumber}-${preference.preferenceText}`}
-                  className="rounded-lg border border-border/70 p-3"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {preference.preferenceNumber}. {preference.preferenceText}
-                    </p>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        isLoss
-                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                          : isHonored
-                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {preference.outcome}
-                    </span>
-                  </div>
-                  {(preference.awardedPairingNumbers.length > 0 ||
-                    preference.matchingCount !== null ||
-                    preference.seniorBidderCount !== null ||
-                    preference.runningTotal) && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {preference.awardedPairingNumbers.length > 0 &&
-                        `Awarded ${preference.awardedPairingNumbers.join(', ')}`}
-                      {preference.awardedPairingNumbers.length > 0 &&
-                        preference.matchingCount !== null &&
-                        ' · '}
-                      {preference.awardedCount !== null &&
-                        preference.matchingCount !== null &&
-                        `${preference.awardedCount} of ${preference.matchingCount} matches awarded`}
-                      {preference.seniorBidderCount !== null &&
-                        ` · ${preference.seniorBidderCount} went to senior bidders`}
-                      {preference.runningTotal &&
-                        ` · line total ${preference.runningTotal}`}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
+      <LatestBidExplained pilotOutcomes={pilotOutcomes} />
       {insights.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {insights.map((insight, i) => {
@@ -930,8 +998,8 @@ export function TrendsPanel({
                 Bid patterns — what pilots actually ask for
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Mined from preference text across every imported period —
-                what pilots bid, not just what they got.
+                Mined from preference text across every imported period — what
+                pilots bid, not just what they got.
               </p>
             </CardHeader>
           </Card>
@@ -942,8 +1010,8 @@ export function TrendsPanel({
                 Preference mix &amp; bid complexity
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Share of each preference type per bid, and the average number
-                of preferences per pilot (right column) — how much pilots are
+                Share of each preference type per bid, and the average number of
+                preferences per pilot (right column) — how much pilots are
                 bidding has climbed sharply over time.
               </p>
             </CardHeader>
@@ -985,10 +1053,10 @@ export function TrendsPanel({
                   Check-in station mix
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Share of each month&apos;s pairings that begin at each
-                  station — what the base actually offers, from the parsed bid
-                  packages. Pairs with the preference data below, which is what
-                  pilots asked for.
+                  Share of each month&apos;s pairings that begin at each station
+                  — what the base actually offers, from the parsed bid packages.
+                  Pairs with the preference data below, which is what pilots
+                  asked for.
                 </p>
               </CardHeader>
               <CardContent>
@@ -1003,9 +1071,9 @@ export function TrendsPanel({
                 Check-in time &amp; station preferences
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                What hour pilots want to start after (combining Award
-                "Check-In Time &gt;" and Avoid "Check-In Time &lt;" bids), and
-                which report station they favor or avoid.
+                What hour pilots want to start after (combining Award "Check-In
+                Time &gt;" and Avoid "Check-In Time &lt;" bids), and which
+                report station they favor or avoid.
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
