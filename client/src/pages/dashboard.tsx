@@ -36,6 +36,8 @@ import {
   Monitor,
   ClipboardList,
   TrendingUp,
+  CircleCheck,
+  CloudDownload,
 } from 'lucide-react';
 import { FileUpload } from '@/components/ui/file-upload';
 import { StatsPanel } from '@/components/stats-panel';
@@ -1588,17 +1590,38 @@ export default function Dashboard() {
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              className="text-xs px-2 py-1 rounded border text-muted-foreground"
+                            {/* Status and action are separate: the old single
+                              button read like a label ("Available offline:
+                              Yes") but refetched everything when tapped. */}
+                            {isFullCacheReady && !isPrefetching && (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-success/25 bg-success/10 font-medium text-success"
+                              >
+                                <CircleCheck className="h-3 w-3" aria-hidden="true" />
+                                Saved for offline
+                              </Badge>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="min-h-11 gap-1.5 md:min-h-9"
                               disabled={!bidPackageId || isPrefetching}
                               onClick={() => refetchPairings()}
                             >
+                              {isPrefetching ? (
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              ) : isFullCacheReady ? (
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              ) : (
+                                <CloudDownload className="h-3.5 w-3.5" />
+                              )}
                               {isPrefetching
                                 ? 'Loading pairings…'
                                 : isFullCacheReady
-                                  ? 'Available offline: Yes'
-                                  : 'Save for offline use'}
-                            </button>
+                                  ? 'Refresh data'
+                                  : 'Save for offline'}
+                            </Button>
                             {isUpdatingSeniority && (
                               <span className="flex items-center text-orange-600 text-sm">
                                 <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
@@ -1607,7 +1630,7 @@ export default function Dashboard() {
                             )}
                             <Button
                               variant="link"
-                              className="min-h-9 text-primary font-medium"
+                              className="min-h-11 text-primary font-medium md:min-h-9"
                               disabled={!filteredDisplayPairings.length}
                               onClick={() =>
                                 downloadText(
