@@ -187,3 +187,20 @@ div[class*='offline'][style*='background'] {
     }
   }
 }
+
+/* Outside @layer base on purpose: the base-layer rule above loses to any
+   text-sm utility on an input, and iOS Safari zooms the page when a field
+   under 16px is focused. The :not() arguments raise specificity above a
+   single utility class. */
+@media (pointer: coarse) {
+  :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
+    font-size: 16px;
+  }
+}
+
+/* viewport-fit=cover lets content reach the screen edges; keep it clear of
+   the notch in landscape. Bottom insets are handled by the fixed nav. */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
