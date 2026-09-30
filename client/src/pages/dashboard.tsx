@@ -747,12 +747,6 @@ export default function Dashboard() {
     results: commuteFitResults,
     counts: commuteFitCounts,
   } = useCommuteFit(pairings);
-  const comparedPairings = useMemo(() => {
-    const byId = new Map(pairings.map((pairing: any) => [pairing.id, pairing]));
-    return [...comparePairingIds]
-      .map(id => byId.get(id))
-      .filter((pairing): pairing is any => Boolean(pairing));
-  }, [comparePairingIds, pairings]);
   const hasReasonsEvidence = useMemo(
     () =>
       pairings.length > 0 &&
@@ -870,6 +864,29 @@ export default function Dashboard() {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
     }
+  );
+  const comparedPairings = useMemo(() => {
+    // Favorites can be compared too, so look them up alongside the package.
+    const byId = new Map(
+      [...favorites, ...pairings].map((pairing: any) => [pairing.id, pairing])
+    );
+    return [...comparePairingIds]
+      .map(id => byId.get(id))
+      .filter((pairing): pairing is any => Boolean(pairing));
+  }, [comparePairingIds, pairings, favorites]);
+  const comparisonBar = (
+    <PairingComparisonBar
+      pairings={comparedPairings}
+      onRemove={id =>
+        updateComparedPairings(current => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        })
+      }
+      onClear={() => updateComparedPairings(() => new Set())}
+      onCompare={() => setIsComparisonOpen(true)}
+    />
   );
 
   const handleDeleteFavorite = useCallback(
@@ -1442,7 +1459,8 @@ export default function Dashboard() {
             className={cn(
               'h-full p-3 sm:p-6 md:pb-6',
               // Leave room for the compare tray pinned above the mobile nav.
-              activeTab === 'dashboard' && comparedPairings.length > 0
+              (activeTab === 'dashboard' || activeTab === 'favorites') &&
+                comparedPairings.length > 0
                 ? 'pb-36'
                 : 'pb-20'
             )}
@@ -1532,18 +1550,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <PairingComparisonBar
-                      pairings={comparedPairings}
-                      onRemove={id =>
-                        updateComparedPairings(current => {
-                          const next = new Set(current);
-                          next.delete(id);
-                          return next;
-                        })
-                      }
-                      onClear={() => updateComparedPairings(() => new Set())}
-                      onCompare={() => setIsComparisonOpen(true)}
-                    />
+                    {comparisonBar}
 
                     {/* Pairing Results Section — fixed viewport-height panel so
                       the table keeps its own scroll while the page scrolls
@@ -1752,6 +1759,7 @@ export default function Dashboard() {
                         {favorites.length} favorite pairings
                       </span>
                     </CardHeader>
+                    {favorites.length > 0 && comparisonBar}
                     <CardContent className="flex-1 overflow-auto p-0">
                       {favorites.length > 0 ? (
                         <PairingTable
@@ -1768,6 +1776,13 @@ export default function Dashboard() {
                           conflicts={conflictMap}
                           favoritePairingIds={favoritePairingIds}
                           onToggleFavorite={handleToggleFavorite}
+                          comparePairingIds={comparePairingIds}
+                          onToggleCompare={handleToggleCompare}
+                          commuteFits={
+                            commutePreferences.enabled
+                              ? commuteFitResults
+                              : undefined
+                          }
                         />
                       ) : (
                         <div className="text-center py-8">

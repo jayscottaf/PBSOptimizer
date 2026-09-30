@@ -579,7 +579,7 @@ function PairingTableImpl({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-7 min-h-11 gap-1 px-3 text-xs text-muted-foreground hover:text-foreground md:min-h-0"
         >
           <Info className="h-3.5 w-3.5" />
           Legend
@@ -647,6 +647,22 @@ function PairingTableImpl({
             </dt>
             <dd className="text-muted-foreground">
               Conflicts with an event on your calendar
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">
+              <Columns3 className="inline h-3.5 w-3.5 text-primary" />
+            </dt>
+            <dd className="text-muted-foreground">
+              Tap to add a pairing to Compare (up to 3), then open the
+              comparison from the tray
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 font-medium">Commute</dt>
+            <dd className="text-muted-foreground">
+              With Commute fit on, each trip shows whether published flights
+              get you in before check-in and home after release
             </dd>
           </div>
         </dl>
