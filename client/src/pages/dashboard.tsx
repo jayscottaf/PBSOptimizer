@@ -150,7 +150,10 @@ export default function Dashboard() {
   const handlePairingPageChange = useCallback((page: number) => {
     setPairingPage(page);
     resultsScrollRef.current?.scrollTo({ top: 0 });
-    resultsCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    resultsCardRef.current?.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth',
+    });
   }, []);
 
   const queryClient = useQueryClient();
@@ -1311,10 +1314,14 @@ export default function Dashboard() {
     ]);
     // These rows sit in the insights section away from the list, so show
     // the pilot where the filter landed.
-    resultsCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    resultsCardRef.current?.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth',
+    });
     toast({
       title: `Showing ${days}-day trips`,
-      description: 'Remove the Trip Length chip above the list to see all trips.',
+      description:
+        'Remove the Trip Length chip above the list to see all trips.',
     });
   };
 
@@ -1567,7 +1574,8 @@ export default function Dashboard() {
                     <div className="min-h-[420px] lg:h-[75vh]">
                       <Card
                         ref={resultsCardRef}
-                        className="relative h-full scroll-mt-3 flex flex-col border-0 shadow-none">
+                        className="relative h-full scroll-mt-3 flex flex-col border-0 shadow-none"
+                      >
                         <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
                             <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -1598,7 +1606,10 @@ export default function Dashboard() {
                                 variant="outline"
                                 className="gap-1 border-success/25 bg-success/10 font-medium text-success"
                               >
-                                <CircleCheck className="h-3 w-3" aria-hidden="true" />
+                                <CircleCheck
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
                                 Saved for offline
                               </Badge>
                             )}
@@ -2044,7 +2055,10 @@ export default function Dashboard() {
                   <div className="text-sm text-muted-foreground">Loading…</div>
                 }
               >
-                <DataManagementPanel />
+                <DataManagementPanel
+                  currentBidPackageId={bidPackageId}
+                  onSelectPackage={setSelectedBidPackageId}
+                />
               </Suspense>
             </TabsContent>
           </Tabs>
