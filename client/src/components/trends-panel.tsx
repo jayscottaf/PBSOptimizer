@@ -1,3 +1,7 @@
+import {
+  selectionImpact,
+  type OutcomeMetrics,
+} from '@shared/report-selection-impact';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,19 +101,17 @@ interface PilotBidOutcomesResponse {
   period: string | null;
   creditWindow: string | null;
   preAwards: string[];
-  preferences: Array<{
-    preferenceNumber: number;
-    preferenceText: string;
-    outcome: string;
-    outcomeDetail: string | null;
-    awardedPairingNumbers: string[];
-    bidGroup?: string;
-    groupActive?: boolean;
-    awardedCount: number | null;
-    matchingCount: number | null;
-    runningTotal: string | null;
-    seniorBidderCount: number | null;
-  }>;
+  preferences: Array<
+    {
+      preferenceNumber: number;
+      preferenceText: string;
+      outcome: string;
+      outcomeDetail: string | null;
+      awardedPairingNumbers: string[];
+      bidGroup?: string;
+      groupActive?: boolean;
+    } & OutcomeMetrics
+  >;
 }
 
 // Stable colors per station so a station keeps its color across periods.
@@ -588,7 +590,9 @@ function LatestBidExplained({
     preference =>
       preference.groupActive !== false &&
       (preference.outcome !== 'Unknown' ||
-        preference.awardedPairingNumbers.length > 0)
+        preference.awardedPairingNumbers.length > 0 ||
+        (preference.automaticFallback !== null &&
+          preference.automaticFallback !== undefined))
   );
   const awardedCount = new Set(
     explainedOutcomes.flatMap(preference => preference.awardedPairingNumbers)
@@ -610,7 +614,7 @@ function LatestBidExplained({
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           {awardedCount} pairings awarded · {honoredCount} preferences honored ·{' '}
-          {lostToSeniorCount} lost to senior bidders
+          {lostToSeniorCount} bid lines affected by senior bidders
         </p>
         <p className="text-xs text-muted-foreground">
           {pilotOutcomes?.creditWindow ?? 'No credit window listed'} ·{' '}
@@ -620,6 +624,11 @@ function LatestBidExplained({
         </p>
       </CardHeader>
       <CardContent className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Trips excluded by your choices are reported separately from seniority
+          losses. Counts use the largest reported candidate pool for each
+          choice; pools may overlap, so do not add them together.
+        </p>
         {pilotOutcomes?.preAwards.map(preAward => {
           const [label, start, end, credit] = preAward.split(' | ');
           const details = [
@@ -642,6 +651,11 @@ function LatestBidExplained({
           );
         })}
         {explainedOutcomes.map(preference => {
+          const impact = selectionImpact(preference, explainedOutcomes);
+          const isRestriction =
+            /^(Avoid Pairings|Prefer Off|Set Condition)/i.test(
+              preference.preferenceText
+            );
           const isLoss = preference.outcome.startsWith('Awarded to senior');
           const isHonored = preference.outcome === 'Honored';
           return (
@@ -665,6 +679,13 @@ function LatestBidExplained({
                   {preference.outcome}
                 </span>
               </div>
+              {isRestriction && (
+                <p className="mt-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+                  {impact
+                    ? `${impact.count} trips excluded by this choice${impact.matchingCount !== null ? ` · ${impact.matchingCount} candidates in that pool` : ''}`
+                    : 'Exclusion count not reported'}
+                </p>
+              )}
               {(preference.awardedPairingNumbers.length > 0 ||
                 preference.matchingCount !== null ||
                 preference.seniorBidderCount !== null ||
@@ -683,6 +704,40 @@ function LatestBidExplained({
                   {preference.runningTotal &&
                     ` · line total ${preference.runningTotal}`}
                 </p>
+              )}
+              {(preference.exclusions ?? []).map(exclusion => (
+                <p
+                  key={`${exclusion.reason}-${exclusion.bidNumber}`}
+                  className="mt-1 text-xs text-amber-600 dark:text-amber-400"
+                >
+                  {exclusion.count} trips excluded by choice #
+                  {exclusion.bidNumber}
+                </p>
+              ))}
+              {preference.automaticFallback && (
+                <div className="mt-3 border-t border-border/70 pt-2 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    Automatic Award Pairings fallback
+                  </p>
+                  <p>
+                    {preference.automaticFallback.matchingCount ?? 'Unknown'}{' '}
+                    candidates ·{' '}
+                    {preference.automaticFallback.seniorBidderCount ??
+                      'Unknown'}{' '}
+                    went to senior bidders
+                  </p>
+                  {(preference.automaticFallback.exclusions ?? []).map(
+                    exclusion => (
+                      <p
+                        key={`${exclusion.reason}-${exclusion.bidNumber}`}
+                        className="mt-1 text-amber-600 dark:text-amber-400"
+                      >
+                        {exclusion.count} trips excluded by choice #
+                        {exclusion.bidNumber}
+                      </p>
+                    )
+                  )}
+                </div>
               )}
             </div>
           );

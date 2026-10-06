@@ -25,7 +25,7 @@ test('latest pilot outcomes preserve active group evidence', async () => {
           '["Window 062:00-082:00, Threshold 082:00", "Pre-Award SVAC | 2026-09-30 00:00 | 2026-10-05 23:59 | 020:00", "Bid Group 2: Pairing Bid Group"]',
           'OCT', 2026, 14985, 'NYC', '220-B'),
         (17, 'Award Monday trips', 'Awarded to senior bidder',
-          '11; (1 Awarded, 18 Matching, Running total: 012:43)', '["7900"]',
+          '11; Filtered by bid number 12: 6; (1 Awarded, 18 Matching, Running total: 012:43)', '["7900"]',
           '["Bid Group 2: Pairing Bid Group"]',
           'OCT', 2026, 14985, 'NYC', '220-B')`);
       db.execute = tx.execute.bind(tx) as typeof db.execute;
@@ -45,6 +45,10 @@ test('latest pilot outcomes preserve active group evidence', async () => {
         [false, true, true]
       );
       assert.deepEqual(result.preferences[2].awardedPairingNumbers, ['7900']);
+      assert.deepEqual(result.preferences[2].exclusions, [
+        { bidNumber: 12, count: 6, reason: 'filtered' },
+      ]);
+      assert.equal(result.preferences[2].automaticFallback, null);
       assert.deepEqual(
         {
           awarded: result.preferences[2].awardedCount,

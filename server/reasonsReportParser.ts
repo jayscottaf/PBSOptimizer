@@ -241,6 +241,7 @@ export class ReasonsReportParser {
 
     const preferences: ParsedPreferenceReason[] = [];
     let current: ParsedPreferenceReason | null = null;
+    let inAutomaticFallback = false;
     // Identity of the pilot section we're inside (composite reports); stays
     // null for single-pilot exports with no section headers.
     let pilotSeniorityNumber: number | null = null;
@@ -258,6 +259,7 @@ export class ReasonsReportParser {
         preferences.push(current);
         current = null;
       }
+      inAutomaticFallback = false;
     };
 
     for (const line of lines) {
@@ -335,6 +337,26 @@ export class ReasonsReportParser {
       }
       if (!current) continue;
 
+      // The unnumbered final Award is a separate candidate pool. Keep its
+      // reasons without mixing its statistics into the preceding bid line.
+      if (line === 'Award Pairings') {
+        inAutomaticFallback = true;
+        current.outcomeDetail = `${current.outcomeDetail ?? ''}\nAutomatic Award Pairings:\n`;
+        continue;
+      }
+      if (inAutomaticFallback) {
+        const fallbackAward = line.match(AWARD_EVENT_LINE);
+        if (fallbackAward) current.awardedPairingNumbers.push(fallbackAward[1]);
+        current.outcomeDetail += `${line}\n`;
+        continue;
+      }
+
+      // Continuation conditions belong to the same numbered selection.
+      if (/^If\s/.test(line)) {
+        current.preferenceText += ` ${line}`;
+        continue;
+      }
+
       // Award events produced by this preference (PBSEvent lines)
       const awardMatch = line.match(AWARD_EVENT_LINE);
       if (awardMatch) {
@@ -351,13 +373,22 @@ export class ReasonsReportParser {
       }
 
       const reason = REASON_PHRASES.find(phrase =>
-        line.toLowerCase().includes(phrase.toLowerCase())
+        line.toLowerCase().startsWith(phrase.toLowerCase())
       );
       if (reason && current.outcome === 'Unknown') {
         current.outcome = reason;
         const idx = line.toLowerCase().indexOf(reason.toLowerCase());
         const detail = line.slice(idx + reason.length).replace(/^[:\s-]+/, '');
         current.outcomeDetail = detail.length > 0 ? detail : null;
+      } else if (
+        reason ||
+        /^(?:Violates bid number|Not Enough Rest Before Or After Pairing)/i.test(
+          line
+        )
+      ) {
+        current.outcomeDetail = current.outcomeDetail
+          ? `${current.outcomeDetail}; ${line}`
+          : line;
       }
     }
     finalize();

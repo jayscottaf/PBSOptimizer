@@ -42,6 +42,7 @@ import {
 import { percentileWithin } from './lib/empiricalHold';
 import { pilotRosterCtes } from './lib/pilot-roster';
 import { markActiveBidGroups } from './lib/bid-groups';
+import type { OutcomeMetrics } from '../shared/report-selection-impact';
 import { parseOutcomeMetrics } from './lib/outcome-metrics';
 import { parseCategoryStanding } from './lib/category-standing';
 import { parseAircraftCode, normalizedAircraftSqlExpr } from './lib/aircraft';
@@ -331,19 +332,17 @@ export interface IStorage {
     period: string | null;
     creditWindow: string | null;
     preAwards: string[];
-    preferences: Array<{
-      preferenceNumber: number;
-      preferenceText: string;
-      outcome: string;
-      outcomeDetail: string | null;
-      awardedPairingNumbers: string[];
-      bidGroup?: string;
-      groupActive?: boolean;
-      awardedCount: number | null;
-      matchingCount: number | null;
-      runningTotal: string | null;
-      seniorBidderCount: number | null;
-    }>;
+    preferences: Array<
+      {
+        preferenceNumber: number;
+        preferenceText: string;
+        outcome: string;
+        outcomeDetail: string | null;
+        awardedPairingNumbers: string[];
+        bidGroup?: string;
+        groupActive?: boolean;
+      } & OutcomeMetrics
+    >;
   }>;
 }
 

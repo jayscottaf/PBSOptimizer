@@ -68,3 +68,44 @@ test('preserves pre-awards with dates and credit', () => {
     'Pre-Award 7762 | 2026-09-25 12:55 | 2026-09-25 20:52 | 000:00',
   ]);
 });
+
+test('preserves all exclusion reasons and separates the automatic fallback pool', () => {
+  const pane = ReasonsReportParser.parseReasonsPane(`<body>
+    Seniority 14985 Category NYC-220-B MERGL synthetic
+    11. Pairing Bid Group
+    12. Avoid Pairings If Pairing Check-In Station EWR
+    Honored
+    20. Award Pairings If Departing On Monday
+    If Pairing Length = 4 days
+    Awarded to senior bidder: 8
+    Item overlaps with another: 1
+    Filtered by bid number 12: 2
+    (0 Awarded, 11 Matching, Running total: 062:59)
+    Award Pairings
+    Awarded to senior bidder: 220
+    Violates bid number 13: 63
+    Filtered by bid number 12: 64
+    (0 Awarded, 449 Matching, Running total: 062:59)
+    21. Pairing Bid Group
+    22. Prefer Off Saturday, Sunday
+    Honored
+  </body>`);
+  const row = pane.preferences.find(p => p.preferenceNumber === 20)!;
+  assert.match(row.preferenceText, /If Pairing Length = 4 days$/);
+  assert.match(row.outcomeDetail!, /Item overlaps with another: 1/);
+  assert.match(row.outcomeDetail!, /Filtered by bid number 12: 2/);
+  assert.match(row.outcomeDetail!, /\nAutomatic Award Pairings:\n/);
+  assert.match(row.outcomeDetail!, /Violates bid number 13: 63/);
+  assert.equal(
+    pane.preferences.find(p => p.preferenceNumber === 22)?.outcomeDetail,
+    null
+  );
+});
+
+test('does not classify Not honored as Honored', () => {
+  const pane = ReasonsReportParser.parseReasonsPane(`<body>
+    2. Prefer Off Saturday, Sunday
+    Not honored
+  </body>`);
+  assert.equal(pane.preferences[0].outcome, 'Not honored');
+});
