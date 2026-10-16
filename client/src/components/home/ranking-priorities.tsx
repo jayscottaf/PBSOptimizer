@@ -39,12 +39,18 @@ export function RankingPriorities({ userId }: { userId?: number }) {
       ]);
     },
   });
-  const goal = draft?.rankingGoal ?? 'balanced';
+  const goal = draft?.rankingGoal ?? 'existing';
   return (
     <details className="mb-4 rounded-lg border bg-muted/20 p-3">
       <summary className="cursor-pointer text-sm font-medium">
         My priorities ·{' '}
-        {recommendationGoals[data?.weights.rankingGoal ?? 'balanced']}
+        {data?.weights.rankingGoal
+          ? recommendationGoals[data.weights.rankingGoal]
+          : data?.source === 'learned'
+            ? 'From bid history'
+            : data?.source === 'manual' || data?.source === 'mixed'
+              ? 'Saved credit/QoL balance'
+              : 'General defaults'}
       </summary>
       <p className="my-3 text-sm text-muted-foreground">
         {data?.source === 'learned' || data?.source === 'mixed'
@@ -74,16 +80,22 @@ export function RankingPriorities({ userId }: { userId?: number }) {
                 save.reset();
                 setDraft({
                   ...draft,
-                  rankingGoal: e.target.value as RecommendationGoal,
+                  rankingGoal:
+                    e.target.value === 'existing'
+                      ? undefined
+                      : (e.target.value as RecommendationGoal),
                   creditLeaning:
-                    e.target.value === 'qol'
-                      ? -1
-                      : e.target.value === 'credit'
-                        ? 1
-                        : 0,
+                    e.target.value === 'existing'
+                      ? (data?.weights.creditLeaning ?? 0)
+                      : e.target.value === 'qol'
+                        ? -1
+                        : e.target.value === 'credit'
+                          ? 1
+                          : 0,
                 });
               }}
             >
+              <option value="existing">Existing credit/QoL balance</option>
               {Object.entries(recommendationGoals).map(([key, label]) => (
                 <option key={key} value={key}>
                   {label}
@@ -119,7 +131,13 @@ export function RankingPriorities({ userId }: { userId?: number }) {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Selected lengths are ranked in the order you select them.
+              Priority order:{' '}
+              {draft.preferredTripLengths.length
+                ? draft.preferredTripLengths
+                    .map(days => `${days}-day`)
+                    .join(' → ')
+                : 'Any trip length'}
+              . Uncheck and reselect to change the order.
             </p>
           </fieldset>
           <label className="flex min-h-10 items-center gap-2 text-sm">
