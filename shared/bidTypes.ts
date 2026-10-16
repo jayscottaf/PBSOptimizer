@@ -135,6 +135,8 @@ export interface BidPreference {
  * and/or edited manually. Never seeded with another pilot's style.
  */
 export interface BidProfileWeights {
+  /** Explicit ranking goal; absent preserves the learned credit/QoL balance. */
+  rankingGoal?: import('./recommendation-goals').RecommendationGoal;
   /** -1 (pure quality-of-life) .. +1 (pure credit maximizer). Derived
    * from credit-window choices and high-credit award frequency. */
   creditLeaning: number;

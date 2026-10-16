@@ -167,6 +167,11 @@ export function scorePairings(
   const cMin = Math.min(...cpds);
   const cMax = Math.max(...cpds);
   const span = cMax - cMin || 1;
+  const ratios = ps
+    .filter(p => p.blockHours > 0)
+    .map(p => p.creditHours / p.blockHours);
+  const ratioMin = ratios.length ? Math.min(...ratios) : 0;
+  const ratioSpan = (ratios.length ? Math.max(...ratios) : 0) - ratioMin || 1;
   const lengthRank = new Map<number, number>();
   profile.preferredTripLengths.forEach((len, i) =>
     lengthRank.set(len, profile.preferredTripLengths.length - i)
@@ -176,7 +181,8 @@ export function scorePairings(
   return ps
     .map(p => {
       const reasons: string[] = [];
-      const creditNorm = (p.creditHours / Math.max(1, p.pairingDays) - cMin) / span;
+      const creditNorm =
+        (p.creditHours / Math.max(1, p.pairingDays) - cMin) / span;
 
       let qol = 0.5;
       const liked = p.layoverCities.filter(c =>
@@ -213,7 +219,28 @@ export function scorePairings(
 
       // creditLeaning -1..1 → credit weight 0..1
       const w = (profile.creditLeaning + 1) / 2;
-      const score = w * creditNorm + (1 - w) * qolNorm;
+      const efficiencyNorm =
+        p.blockHours > 0
+          ? (p.creditHours / p.blockHours - ratioMin) / ratioSpan
+          : 0;
+      const score =
+        profile.rankingGoal === 'efficiency'
+          ? 0.8 * efficiencyNorm + 0.2 * qolNorm
+          : profile.rankingGoal === 'credit'
+            ? 0.85 * creditNorm + 0.15 * qolNorm
+            : profile.rankingGoal === 'qol'
+              ? 0.9 * qolNorm + 0.1 * creditNorm
+              : w * creditNorm + (1 - w) * qolNorm;
+      if (profile.rankingGoal === 'efficiency')
+        reasons.unshift(
+          p.blockHours > 0
+            ? `${(p.creditHours / p.blockHours).toFixed(2)} credit / block ratio`
+            : 'Block time unavailable'
+        );
+      if (profile.rankingGoal === 'credit')
+        reasons.unshift(
+          `${(p.creditHours / Math.max(1, p.pairingDays)).toFixed(1)} credit hours per day`
+        );
       return {
         pairingNumber: p.pairingNumber,
         score,
@@ -510,8 +537,7 @@ export function optimizeBid(
               ? legacySpecs(shortLadder.length + 1)
               : deepSpecs();
 
-  const usedDeep =
-    depth === 'deep' || (depth === 'auto' && completion < 0.3);
+  const usedDeep = depth === 'deep' || (depth === 'auto' && completion < 0.3);
   rationale.push(
     `Estimated line-completion likelihood at this seniority: ${(completion * 100).toFixed(0)}% → ${specs.length} bid group${specs.length > 1 ? 's' : ''} in the cascade (depth: ${depth}${usedDeep ? ', extended relaxation ladder' : ''})`
   );

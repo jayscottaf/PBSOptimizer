@@ -1,3 +1,4 @@
+import { RankingPriorities } from './ranking-priorities';
 import { decimalHoursToMinutes, formatDuration } from '@shared/durations';
 import { Sparkles, ArrowRight, ClipboardList } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +71,7 @@ export function TopPicks({
         </Button>
       </CardHeader>
       <CardContent className="pt-0">
+        <RankingPriorities userId={userId} />
         {isError ? (
           <p className="text-sm text-muted-foreground">
             Recommendations are unavailable right now. You can still browse all
@@ -142,8 +144,8 @@ export function TopPicks({
             </div>
             {data?.profileSource === 'neutral' && (
               <p className="text-caption mt-3">
-                Using a general starting profile. Learn your preferences in Bid
-                Builder from your bid history for personal picks.
+                Using general defaults. Choose My priorities above, or learn
+                your preferences from your history in Build a bid.
               </p>
             )}
           </>
