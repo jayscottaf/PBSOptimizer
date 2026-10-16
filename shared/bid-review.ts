@@ -36,3 +36,13 @@ export interface BidReviewResult {
   }[];
   limitations: string[];
 }
+
+export interface SavedReasonsReport {
+  id: string;
+  month: string;
+  year: number;
+  base: string;
+  aircraft: string;
+  awardCount: number;
+  preferenceCount: number;
+}

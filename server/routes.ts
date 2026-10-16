@@ -1,3 +1,4 @@
+import { reviewBanners } from './lib/stored-bid-review';
 import { registerBidReviewRoutes } from './routes/bid-review';
 import { decodeReasonsUpload } from './lib/decode-reasons-upload';
 import { categorySeniorityInput } from '../shared/category-seniority';
@@ -1355,13 +1356,7 @@ export async function registerRoutes(app: Express) {
             outcome: pref.outcome,
             outcomeDetail: pref.outcomeDetail,
             awardedPairingNumbers: pref.awardedPairingNumbers,
-            reportBanners: [
-              ...pane.banners,
-              ...(pref.windowInfo ? [pref.windowInfo] : []),
-              ...(pref.standingInfo ? [pref.standingInfo] : []),
-              ...(pref.bidGroupInfo ? [pref.bidGroupInfo] : []),
-              ...pref.preAwardInfo,
-            ],
+            reportBanners: reviewBanners(pref, pane.banners),
           })),
         });
         // Invalidation happens only after the complete transaction commits.

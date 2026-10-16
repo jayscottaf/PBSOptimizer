@@ -1,3 +1,4 @@
+import type { SavedReasonsReport } from '../shared/bid-review';
 import { getAnalysisSeniority } from './lib/category-seniority';
 import { printedDurationMinutesSql } from './lib/duration-sql';
 import { hashPin, verifyPin } from './lib/access-control';
@@ -171,6 +172,12 @@ export interface IStorage {
   // Bid History operations
   createBidHistory(bidHistory: InsertBidHistory): Promise<BidHistory>;
   getBidHistoryForPairing(pairingNumber: string): Promise<BidHistory[]>;
+
+  getBidReviewReports(): Promise<SavedReasonsReport[]>;
+  getStoredBidReviewReport(report: SavedReasonsReport): Promise<{
+    preferences: ReasonsReportPreference[];
+    awards: BidHistory[];
+  }>;
 
   // Reasons Report per-preference outcomes
   createReasonsReportPreferences(
@@ -2003,6 +2010,92 @@ export class DatabaseStorage implements IStorage {
         count: Number(r.n),
       })),
     };
+  }
+
+  async getBidReviewReports(
+    database: Pick<typeof db, 'execute'> = db
+  ): Promise<SavedReasonsReport[]> {
+    // Include preference-only (e.g. reserve) and awards-only legacy reports.
+    const result = await database.execute(sql`
+      SELECT month, year, base, aircraft,
+        sum(awards)::int AS awards, sum(preferences)::int AS preferences
+      FROM (
+        SELECT month, year, base, aircraft, count(*) AS awards, 0 AS preferences
+        FROM bid_history GROUP BY month, year, base, aircraft
+        UNION ALL
+        SELECT month, year, base, aircraft, 0 AS awards, count(*) AS preferences
+        FROM reasons_report_preferences GROUP BY month, year, base, aircraft
+      ) reports GROUP BY month, year, base, aircraft
+    `);
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+    return (result.rows as any[])
+      .map(row => ({
+        id: JSON.stringify([
+          Number(row.year),
+          row.month,
+          row.base,
+          row.aircraft,
+        ]),
+        month: String(row.month),
+        year: Number(row.year),
+        base: String(row.base),
+        aircraft: String(row.aircraft),
+        awardCount: Number(row.awards),
+        preferenceCount: Number(row.preferences),
+      }))
+      .sort(
+        (a, b) =>
+          b.year - a.year ||
+          months.indexOf(b.month.toUpperCase().slice(0, 3)) -
+            months.indexOf(a.month.toUpperCase().slice(0, 3)) ||
+          a.base.localeCompare(b.base) ||
+          a.aircraft.localeCompare(b.aircraft)
+      );
+  }
+
+  async getStoredBidReviewReport(
+    report: SavedReasonsReport,
+    database: Pick<typeof db, 'select'> = db
+  ) {
+    const [preferences, awards] = await Promise.all([
+      database
+        .select()
+        .from(reasonsReportPreferences)
+        .where(
+          and(
+            eq(reasonsReportPreferences.month, report.month),
+            eq(reasonsReportPreferences.year, report.year),
+            eq(reasonsReportPreferences.base, report.base),
+            eq(reasonsReportPreferences.aircraft, report.aircraft)
+          )
+        )
+        .orderBy(asc(reasonsReportPreferences.preferenceNumber)),
+      database
+        .select()
+        .from(bidHistory)
+        .where(
+          and(
+            eq(bidHistory.month, report.month),
+            eq(bidHistory.year, report.year),
+            eq(bidHistory.base, report.base),
+            eq(bidHistory.aircraft, report.aircraft)
+          )
+        ),
+    ]);
+    return { preferences, awards };
   }
 
   async getReasonsReportPreferences(filter?: {

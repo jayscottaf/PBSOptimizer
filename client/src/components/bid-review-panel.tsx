@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
   BidDocument,
   BidReviewResult,
   ReviewFinding,
+  SavedReasonsReport,
 } from '@shared/bid-review';
 import { prepareReasonsUpload } from '@/lib/prepare-reasons-upload';
 import { MAX_REASONS_TRANSFER_BYTES } from '@shared/reasons-upload';
@@ -33,6 +34,14 @@ export function BidReviewPanel({
   );
   const pdfInput = useRef<HTMLInputElement>(null);
   const reportInput = useRef<HTMLInputElement>(null);
+  const [savedReport, setSavedReport] = useState('');
+  const [reportSource, setReportSource] = useState<'saved' | 'upload'>('saved');
+  const savedReports = useQuery<SavedReasonsReport[]>({
+    queryKey: ['/api/bid/review/reports'],
+    enabled: mode === 'results',
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
   const [confirmation, setConfirmation] = useState<File>();
   const [report, setReport] = useState<File>();
   const [bidText, setBidText] = useState(initialBidText ?? '');
@@ -41,7 +50,7 @@ export function BidReviewPanel({
   const review = useMutation<ReviewResponse, Error>({
     mutationFn: async () => {
       const form =
-        mode === 'results' && report
+        mode === 'results' && reportSource === 'upload' && report
           ? await prepareReasonsUpload(report)
           : new FormData();
       const transferSize =
@@ -51,6 +60,8 @@ export function BidReviewPanel({
           'The combined upload is too large. Use a smaller confirmation PDF, or review the Reasons Report without a PDF.'
         );
       if (confirmation) form.append('bidConfirmation', confirmation);
+      if (mode === 'results' && reportSource === 'saved')
+        form.append('savedReport', savedReport);
       form.append('mode', mode);
       form.append('bidText', bidText);
       form.append('seniorityNumber', pilot);
@@ -141,22 +152,114 @@ export function BidReviewPanel({
         </CardHeader>
         <CardContent className="space-y-4">
           {mode === 'results' && (
-            <label className="block text-sm font-medium">
-              Reasons Report HTML (required)
-              <Input
-                disabled={review.isPending}
-                type="file"
-                className="mt-2 h-auto py-3"
-                accept=".htm,.html"
-                ref={reportInput}
-                onChange={e => {
-                  setReport(e.target.files?.[0]);
-                  setPilot(String(seniorityNumber ?? ''));
-                  setPilotSelected(false);
-                  reset();
-                }}
-              />
-            </label>
+            <div className="space-y-3">
+              <div
+                className="flex flex-wrap gap-2"
+                aria-label="Reasons Report source"
+              >
+                <Button
+                  variant={reportSource === 'saved' ? 'default' : 'outline'}
+                  disabled={review.isPending}
+                  aria-pressed={reportSource === 'saved'}
+                  onClick={() => {
+                    setReportSource('saved');
+                    setPilotSelected(false);
+                    reset();
+                  }}
+                >
+                  Use saved report
+                </Button>
+                <Button
+                  variant={reportSource === 'upload' ? 'default' : 'outline'}
+                  disabled={review.isPending}
+                  aria-pressed={reportSource === 'upload'}
+                  onClick={() => {
+                    setReportSource('upload');
+                    setPilotSelected(false);
+                    reset();
+                  }}
+                >
+                  Upload another report
+                </Button>
+              </div>
+              {reportSource === 'saved' ? (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Saved Reasons Report
+                    <select
+                      aria-label="Saved Reasons Report"
+                      className="mt-2 min-h-11 w-full rounded-md border bg-background px-3 py-2"
+                      disabled={review.isPending || savedReports.isPending}
+                      value={savedReport}
+                      onChange={e => {
+                        setSavedReport(e.target.value);
+                        setPilot(String(seniorityNumber ?? ''));
+                        setPilotSelected(false);
+                        reset();
+                      }}
+                    >
+                      <option value="">
+                        {savedReports.isPending
+                          ? 'Loading saved reports…'
+                          : 'Select a period and category'}
+                      </option>
+                      {savedReports.data?.map(r => (
+                        <option
+                          key={r.id}
+                          value={r.id}
+                          disabled={!r.preferenceCount}
+                        >
+                          {r.month} {r.year} · {r.base} {r.aircraft} ·{' '}
+                          {r.awardCount} awards
+                          {!r.preferenceCount
+                            ? ' · awards only; original needed'
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {savedReports.isError ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      Could not load saved reports.{' '}
+                      <button
+                        className="underline"
+                        onClick={() => savedReports.refetch()}
+                      >
+                        Retry
+                      </button>{' '}
+                      or upload the report.
+                    </p>
+                  ) : !savedReports.isPending && !savedReports.data?.length ? (
+                    <p className="text-sm text-muted-foreground">
+                      No saved Reasons Reports yet. Choose Upload another report
+                      to review a file.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Uses the choices and awards already imported in Data &
+                      uploads. Your current bid package stays the same.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <label className="block text-sm font-medium">
+                  Reasons Report HTML (required)
+                  <Input
+                    disabled={review.isPending}
+                    type="file"
+                    className="mt-2 h-auto py-3"
+                    accept=".htm,.html"
+                    ref={reportInput}
+                    onChange={e => {
+                      setReport(e.target.files?.[0]);
+                      setPilot(String(seniorityNumber ?? ''));
+                      setPilotSelected(false);
+                      reset();
+                    }}
+                  />
+                </label>
+              )}
+            </div>
           )}
           <label className="block text-sm font-medium">
             Bid confirmation PDF {mode === 'results' ? '(optional)' : ''}
@@ -216,9 +319,10 @@ export function BidReviewPanel({
               </select>
             </label>
           )}
-          {(confirmation || (mode === 'results' && report)) && (
+          {(confirmation ||
+            (mode === 'results' && reportSource === 'upload' && report)) && (
             <div className="space-y-2 rounded-lg bg-muted/20 p-3 text-xs text-muted-foreground">
-              {mode === 'results' && report && (
+              {mode === 'results' && reportSource === 'upload' && report && (
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 break-all">
                     Report in use: {report.name}
@@ -262,7 +366,12 @@ export function BidReviewPanel({
             disabled={
               review.isPending ||
               (mode === 'results'
-                ? !report
+                ? reportSource === 'saved'
+                  ? !savedReport ||
+                    !savedReports.data?.some(
+                      r => r.id === savedReport && r.preferenceCount > 0
+                    )
+                  : !report
                 : !confirmation && !bidText.trim()) ||
               (review.data?.needsPilotSelection && !pilotSelected)
             }

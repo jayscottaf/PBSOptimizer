@@ -1,5 +1,11 @@
 import type { Express } from 'express';
 import multer from 'multer';
+import { restoreBidReview } from '../lib/stored-bid-review';
+import type {
+  ParsedPreferenceReason,
+  PairingAward,
+  ReasonsReportMetadata,
+} from '../reasonsReportParser';
 import { ReasonsReportParser } from '../reasonsReportParser';
 import { decodeReasonsUpload } from '../lib/decode-reasons-upload';
 import {
@@ -34,6 +40,17 @@ const upload = multer({
 ]);
 
 export function registerBidReviewRoutes(app: Express) {
+  app.get('/api/bid/review/reports', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      res.json(await storage.getBidReviewReports());
+    } catch {
+      res.status(500).json({
+        message:
+          'Could not load saved Reasons Reports. Retry or upload a report below.',
+      });
+    }
+  });
   app.post('/api/bid/review', (req, res) => {
     upload(req, res, async error => {
       res.set('Cache-Control', 'no-store');
@@ -65,25 +82,61 @@ export function registerBidReviewRoutes(app: Express) {
             });
           return res.json({ review: reviewBefore(document), document });
         }
-        if (!report)
-          return res.status(400).json({
-            message:
-              'Upload the Reasons Report for the period you want to review.',
-          });
-        const html = await decodeReasonsUpload(
-          report.buffer,
-          report.originalname
-        );
-        const metadata = ReasonsReportParser.extractMetadata(html);
-        if (!metadata)
-          return res.status(400).json({
-            message:
-              'Could not identify the Reasons Report category and period.',
-          });
-        const pane = ReasonsReportParser.parseReasonsPane(html);
+        let metadata: ReasonsReportMetadata;
+        let allPreferences: ParsedPreferenceReason[];
+        let allAwards: PairingAward[];
+        let html: string | undefined;
+        let legacyRecords: ReturnType<typeof restoreBidReview> | undefined;
+        if (req.body.savedReport) {
+          if (report)
+            return res.status(400).json({
+              message:
+                'Choose a saved report or upload a new report, not both.',
+            });
+          const saved = (await storage.getBidReviewReports()).find(
+            r => r.id === req.body.savedReport
+          );
+          if (!saved)
+            return res.status(404).json({
+              message:
+                'This saved report is no longer available. Refresh the list or upload it again.',
+            });
+          const records = await storage.getStoredBidReviewReport(saved);
+          if (!records.preferences.length)
+            return res.status(400).json({
+              message:
+                'This older import contains awards only. Upload the original Reasons Report once to review its bid choices.',
+            });
+          metadata = {
+            base: saved.base,
+            aircraft: saved.aircraft,
+            month: saved.month.toUpperCase().slice(0, 3),
+            year: saved.year,
+          };
+          legacyRecords = restoreBidReview(records.preferences, records.awards);
+          allPreferences = legacyRecords.preferences;
+          allAwards = legacyRecords.awards;
+        } else {
+          if (!report)
+            return res.status(400).json({
+              message:
+                'Select a saved Reasons Report or upload one for the period you want to review.',
+            });
+          html = await decodeReasonsUpload(report.buffer, report.originalname);
+          const parsedMetadata = ReasonsReportParser.extractMetadata(html);
+          if (!parsedMetadata)
+            return res.status(400).json({
+              message:
+                'Could not identify the Reasons Report category and period.',
+            });
+          metadata = parsedMetadata;
+          allPreferences =
+            ReasonsReportParser.parseReasonsPane(html).preferences;
+          allAwards = []; // Parse the award table after resolving the pilot.
+        }
         const pilots = [
           ...new Map(
-            pane.preferences
+            allPreferences
               .filter(p => p.pilotSeniorityNumber)
               .map(p => [
                 p.pilotSeniorityNumber!,
@@ -115,7 +168,7 @@ export function registerBidReviewRoutes(app: Express) {
           const employee = profile?.employeeNumber?.replace(/^0+/, '');
           if (employee)
             seniority =
-              pane.preferences.find(
+              allPreferences.find(
                 p => p.pilotEmployeeNumber?.replace(/^0+/, '') === employee
               )?.pilotSeniorityNumber ?? undefined;
         }
@@ -125,16 +178,34 @@ export function registerBidReviewRoutes(app: Express) {
             period: `${metadata.month} ${metadata.year}`,
             needsPilotSelection: true,
           });
-        const preferences = pane.preferences.filter(
+        const preferences = allPreferences.filter(
           p => p.pilotSeniorityNumber === seniority
         );
-        const awards = (
-          await ReasonsReportParser.parseReasonsReportFromContent(html)
-        ).filter(p => p.seniorityNumber === seniority);
-        return res.json({
-          review: reviewResults({ metadata, preferences, awards, document }),
+        if (html)
+          allAwards =
+            await ReasonsReportParser.parseReasonsReportFromContent(html);
+        const awards = allAwards.filter(p => p.seniorityNumber === seniority);
+        const review = reviewResults({
+          metadata,
+          preferences,
+          awards,
           document,
         });
+        if (legacyRecords && preferences.some(p => !p.bidGroupInfo)) {
+          review.groups = [];
+          const groupSummary = review.summary.find(
+            s => s.label === 'Awarded group'
+          );
+          if (groupSummary) groupSummary.value = 'Not retained';
+          review.limitations.unshift(
+            'This import did not retain all bid-group assignments. Group numbers and which later groups were reached are not inferred.'
+          );
+        }
+        if (legacyRecords?.legacyPilots.has(seniority))
+          review.limitations.unshift(
+            'This review uses saved imported choices and awards. Older imports did not retain per-pilot report flags or group-limit messages. Upload the original report for those details; their absence is not evidence they did not occur.'
+          );
+        return res.json({ review, document });
       } catch (error) {
         console.warn(
           'Bid review failed:',
