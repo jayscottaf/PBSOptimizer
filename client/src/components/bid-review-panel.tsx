@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type {
   BidDocument,
@@ -31,6 +31,8 @@ export function BidReviewPanel({
   const [mode, setMode] = useState<'results' | 'before'>(
     initialBidText ? 'before' : 'results'
   );
+  const pdfInput = useRef<HTMLInputElement>(null);
+  const reportInput = useRef<HTMLInputElement>(null);
   const [confirmation, setConfirmation] = useState<File>();
   const [report, setReport] = useState<File>();
   const [bidText, setBidText] = useState(initialBidText ?? '');
@@ -56,6 +58,10 @@ export function BidReviewPanel({
       const res = await fetch('/api/bid/review', {
         method: 'POST',
         body: form,
+      }).catch(() => {
+        throw new Error(
+          'Could not send these files. Check your connection and ensure cloud files have finished downloading, then choose them again.'
+        );
       });
       const data = await res.json().catch(() => ({
         message: 'Could not read the review response. Please retry.',
@@ -142,6 +148,7 @@ export function BidReviewPanel({
                 type="file"
                 className="mt-2 h-auto py-3"
                 accept=".htm,.html"
+                ref={reportInput}
                 onChange={e => {
                   setReport(e.target.files?.[0]);
                   setPilot(String(seniorityNumber ?? ''));
@@ -158,6 +165,7 @@ export function BidReviewPanel({
               type="file"
               className="mt-2 h-auto py-3"
               accept=".pdf"
+              ref={pdfInput}
               onChange={e => {
                 setConfirmation(e.target.files?.[0]);
                 reset();
@@ -207,6 +215,48 @@ export function BidReviewPanel({
                 ))}
               </select>
             </label>
+          )}
+          {(confirmation || (mode === 'results' && report)) && (
+            <div className="space-y-2 rounded-lg bg-muted/20 p-3 text-xs text-muted-foreground">
+              {mode === 'results' && report && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 break-all">
+                    Report in use: {report.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={review.isPending}
+                    onClick={() => {
+                      setReport(undefined);
+                      if (reportInput.current) reportInput.current.value = '';
+                      reset();
+                    }}
+                  >
+                    Remove report
+                  </Button>
+                </div>
+              )}
+              {confirmation && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 break-all">
+                    Bid copy in use: {confirmation.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={review.isPending}
+                    onClick={() => {
+                      setConfirmation(undefined);
+                      if (pdfInput.current) pdfInput.current.value = '';
+                      reset();
+                    }}
+                  >
+                    Remove bid copy
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
           <Button
             disabled={
