@@ -37,11 +37,11 @@ export function AppHeader({ activeTab, onUpload, onOpenAI }: AppHeaderProps) {
           size="sm"
           onClick={onUpload}
           className="gap-1.5 min-h-11 min-w-11 sm:min-h-9"
-          aria-label="Upload package"
+          aria-label="Data & uploads"
           data-testid="header-upload"
         >
           <CloudUpload className="h-4 w-4" />
-          <span className="hidden sm:inline">Upload package</span>
+          <span className="hidden sm:inline">Data & uploads</span>
         </Button>
         <NetworkStatus />
       </div>

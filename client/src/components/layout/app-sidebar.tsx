@@ -1,5 +1,7 @@
 import {
   Plane,
+  Search,
+  FileCheck2,
   Home,
   Star,
   Calendar,
@@ -33,9 +35,11 @@ import { PackageSwitcher } from '@/components/layout/package-switcher';
 
 export const NAV_ITEMS = [
   { value: 'dashboard', label: 'Home', icon: Home },
-  { value: 'favorites', label: 'Favorites', icon: Star },
+  { value: 'explore', label: 'Explore trips', icon: Search },
+  { value: 'bidBuilder', label: 'Build a bid', icon: ClipboardList },
+  { value: 'bidReview', label: 'Bid Review', icon: FileCheck2 },
+  { value: 'favorites', label: 'Saved trips', icon: Star },
   { value: 'calendar', label: 'Calendar', icon: Calendar },
-  { value: 'bidBuilder', label: 'Bid Builder', icon: ClipboardList },
   { value: 'trends', label: 'Trends', icon: TrendingUp },
 ] as const;
 
@@ -112,8 +116,11 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV_ITEMS.map(item => (
-                <SidebarMenuItem key={item.value}>
+              {NAV_ITEMS.map((item, index) => (
+                <SidebarMenuItem
+                  key={item.value}
+                  className={index === 4 ? 'mt-4 border-t pt-4' : undefined}
+                >
                   <SidebarMenuButton
                     tooltip={item.label}
                     isActive={activeTab === item.value}

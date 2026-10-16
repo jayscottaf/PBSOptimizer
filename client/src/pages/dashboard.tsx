@@ -87,6 +87,11 @@ const DataManagementPanel = lazy(() =>
 const BidBuilder = lazy(() =>
   import('@/components/bid-builder').then(m => ({ default: m.BidBuilder }))
 );
+const BidReviewPanel = lazy(() =>
+  import('@/components/bid-review-panel').then(m => ({
+    default: m.BidReviewPanel,
+  }))
+);
 const TrendsPanel = lazy(() =>
   import('@/components/trends-panel').then(m => ({ default: m.TrendsPanel }))
 );
@@ -138,6 +143,7 @@ export default function Dashboard() {
     Array<{ key: string; label: string; value: any }>
   >([]);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [reviewDraft, setReviewDraft] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showQuickStats, setShowQuickStats] = useState(false);
   const [hideConflicts, setHideConflicts] = useState(false);
@@ -1475,7 +1481,7 @@ export default function Dashboard() {
             className={cn(
               'h-full p-3 sm:p-6 md:pb-6',
               // Leave room for the compare tray pinned above the mobile nav.
-              (activeTab === 'dashboard' || activeTab === 'favorites') &&
+              (activeTab === 'explore' || activeTab === 'favorites') &&
                 comparedPairings.length > 0
                 ? 'pb-36'
                 : 'pb-20'
@@ -1488,18 +1494,77 @@ export default function Dashboard() {
             >
               <TabsContent value="dashboard" className="flex-1 overflow-auto">
                 <div className="mx-auto w-full max-w-[1600px] space-y-4">
+                  {bidPackageId ? (
+                    <MonthlyWorkspaceHeader
+                      bidPackage={latestBidPackage}
+                      seniorityNumber={currentUser?.seniorityNumber}
+                      seniorityPercentile={viewedPercentile}
+                      position={viewedCategory.position}
+                      pairingCount={pairings.length}
+                      hasReasonsEvidence={hasReasonsEvidence}
+                      onBuildBid={() => setActiveTab('bidBuilder')}
+                      onUpload={() => setShowUploadModal(true)}
+                    />
+                  ) : (
+                    <div className="rounded-xl border bg-card p-6">
+                      <h2 className="text-xl font-semibold">
+                        Start your monthly workspace
+                      </h2>
+                      <p className="my-3 text-sm text-muted-foreground">
+                        Add a bid package to explore trips and build a draft.
+                        You can review your own bid documents at any time.
+                      </p>
+                      <Button onClick={() => setShowUploadModal(true)}>
+                        Add a bid package
+                      </Button>
+                    </div>
+                  )}
+                  <section
+                    className="grid grid-cols-3 gap-2 sm:gap-3"
+                    aria-label="Monthly bidding steps"
+                  >
+                    {[
+                      {
+                        tab: 'explore',
+                        title: '1. Explore trips',
+                        detail:
+                          'Filter, compare and save the trips that fit your priorities.',
+                      },
+                      {
+                        tab: 'bidBuilder',
+                        title: '2. Build your bid',
+                        detail:
+                          'Create a draft and simulate it against this month’s package.',
+                      },
+                      {
+                        tab: 'bidReview',
+                        title: '3. Review & learn',
+                        detail:
+                          'Check the final bid, then understand your actual award.',
+                      },
+                    ].map(step => (
+                      <button
+                        key={step.tab}
+                        onClick={() => setActiveTab(step.tab)}
+                        className="rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/50 sm:p-4"
+                      >
+                        <span className="text-sm font-semibold">
+                          {step.title}
+                        </span>
+                        <p className="mt-1 hidden text-sm text-muted-foreground md:block">
+                          {step.detail}
+                        </p>
+                      </button>
+                    ))}
+                  </section>
+                  <p className="text-sm text-muted-foreground">
+                    Start by choosing <strong>My priorities</strong> below. Use{' '}
+                    <strong>Data & uploads</strong> to add packages and history;
+                    use <strong>Bid Review</strong> to check your own bid
+                    documents.
+                  </p>
                   {bidPackageId && (
                     <>
-                      <MonthlyWorkspaceHeader
-                        bidPackage={latestBidPackage}
-                        seniorityNumber={currentUser?.seniorityNumber}
-                        seniorityPercentile={viewedPercentile}
-                        position={viewedCategory.position}
-                        pairingCount={pairings.length}
-                        hasReasonsEvidence={hasReasonsEvidence}
-                        onBuildBid={() => setActiveTab('bidBuilder')}
-                        onUpload={() => setShowUploadModal(true)}
-                      />
                       {viewedSeniorityQuery.data?.cached && (
                         <p className="text-sm text-muted-foreground">
                           Using the saved offline seniority for this category.
@@ -1538,7 +1603,19 @@ export default function Dashboard() {
                       />
                     </>
                   )}
-
+                </div>
+              </TabsContent>
+              <TabsContent value="explore" className="flex-1 overflow-auto">
+                <div className="mx-auto w-full max-w-[1600px] space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Explore trips</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {latestBidPackage
+                        ? `${latestBidPackage.month} ${latestBidPackage.year} · ${latestBidPackage.base} ${latestBidPackage.aircraft}`
+                        : 'Upload a bid package to get started.'}{' '}
+                      · Filter, compare and save your shortlist.
+                    </p>
+                  </div>
                   {/* Browse pairings: filters + table */}
                   <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
                     <div className="w-full bg-card border-b p-3 sm:p-4">
@@ -1888,10 +1965,32 @@ export default function Dashboard() {
                     bidPackageId={bidPackageId}
                     userId={currentUser?.id}
                     position={viewedCategory.position}
+                    onReviewDraft={text => {
+                      setReviewDraft(text);
+                      setActiveTab('bidReview');
+                    }}
                   />
                 </Suspense>
               </TabsContent>
 
+              <TabsContent
+                value="bidReview"
+                className="flex-1 overflow-auto p-1"
+              >
+                <Suspense
+                  fallback={
+                    <p className="text-sm text-muted-foreground">
+                      Loading review…
+                    </p>
+                  }
+                >
+                  <BidReviewPanel
+                    initialBidText={reviewDraft}
+                    seniorityNumber={currentUser?.seniorityNumber}
+                    onBuildBid={() => setActiveTab('bidBuilder')}
+                  />
+                </Suspense>
+              </TabsContent>
               <TabsContent
                 value="trends"
                 className="flex-1 overflow-auto p-1 space-y-4"

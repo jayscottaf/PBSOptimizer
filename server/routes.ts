@@ -1,3 +1,4 @@
+import { registerBidReviewRoutes } from './routes/bid-review';
 import { decodeReasonsUpload } from './lib/decode-reasons-upload';
 import { categorySeniorityInput } from '../shared/category-seniority';
 import {
@@ -393,6 +394,8 @@ export async function registerRoutes(app: Express) {
       next(error);
     }
   });
+  registerBidReviewRoutes(app);
+
   // Health check endpoint (enhanced for PWA Stage 7)
   app.head('/api/health', (req, res) => {
     res.status(200).end();

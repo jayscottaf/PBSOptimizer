@@ -586,12 +586,14 @@ interface BidBuilderProps {
   bidPackageId?: number;
   userId?: number;
   position?: 'A' | 'B';
+  onReviewDraft?: (text: string) => void;
 }
 
 export function BidBuilder({
   bidPackageId,
   userId,
   position,
+  onReviewDraft,
 }: BidBuilderProps) {
   const { toast } = useToast();
   const [bid, setBid] = useState<DraftBid>(loadDraft);
@@ -2114,6 +2116,25 @@ export function BidBuilder({
             </Button>
           </div>
 
+          {onReviewDraft && (
+            <Button
+              variant="outline"
+              disabled={preferenceCount === 0 || exportMutation.isPending}
+              onClick={async () => {
+                try {
+                  const output = await api.exportBid(bid);
+                  onReviewDraft(output.text);
+                } catch {
+                  toast({
+                    title: 'Could not prepare the draft for review',
+                    variant: 'destructive',
+                  });
+                }
+              }}
+            >
+              Check this draft
+            </Button>
+          )}
           {!simulation && !exported && (
             <Card className="border-dashed">
               <CardContent className="flex items-start gap-3 py-6 text-sm text-muted-foreground">

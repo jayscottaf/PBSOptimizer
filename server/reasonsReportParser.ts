@@ -49,6 +49,7 @@ export interface ParsedPreferenceReason {
   outcome: string;
   outcomeDetail: string | null;
   awardedPairingNumbers: string[];
+  automaticAwardedPairingNumbers?: string[];
   // Composite reports contain one Reasons section per pilot; these carry the
   // section's identity so outcomes can be attributed. Null for single-pilot
   // exports that have no section headers.
@@ -61,6 +62,8 @@ export interface ParsedPreferenceReason {
   standingInfo: string | null;
   bidGroupInfo: string | null;
   preAwardInfo: string[];
+  pilotBanners?: string[];
+  groupStatuses?: string[];
 }
 
 export interface ParsedReasonsPane {
@@ -252,6 +255,8 @@ export class ReasonsReportParser {
     let bidGroupInfo: string | null = null;
     let bidGroupNumber = 0;
     let preAwardInfo: string[] = [];
+    let pilotBanners: string[] = [];
+    let groupStatuses: string[] = [];
     let collectingPreAwards = false;
 
     const finalize = () => {
@@ -274,9 +279,20 @@ export class ReasonsReportParser {
         bidGroupInfo = null;
         bidGroupNumber = 0;
         preAwardInfo = [];
+        pilotBanners = [];
+        groupStatuses = [];
         collectingPreAwards = false;
         continue;
       }
+
+      if (BANNER_PATTERNS.some(pattern => pattern.test(line)))
+        pilotBanners.push(line);
+      if (
+        /^(Max Reduced Regular Lines Reached|Maximum .+bidders Reached)/i.test(
+          line
+        )
+      )
+        groupStatuses.push(line);
 
       if (line === 'Pre-Awards') {
         collectingPreAwards = true;
@@ -310,6 +326,7 @@ export class ReasonsReportParser {
 
       const bidGroupMatch = line.match(BID_GROUP_LINE);
       if (bidGroupMatch) {
+        groupStatuses = [];
         bidGroupNumber += 1;
         bidGroupInfo =
           `Bid Group ${bidGroupNumber}: ${bidGroupMatch[1]}${bidGroupMatch[2]}`.trim();
@@ -325,6 +342,7 @@ export class ReasonsReportParser {
           outcome: 'Unknown',
           outcomeDetail: null,
           awardedPairingNumbers: [],
+          automaticAwardedPairingNumbers: [],
           pilotSeniorityNumber,
           pilotEmployeeNumber,
           pilotName,
@@ -332,6 +350,8 @@ export class ReasonsReportParser {
           standingInfo,
           bidGroupInfo,
           preAwardInfo: [...preAwardInfo],
+          pilotBanners: [...pilotBanners],
+          groupStatuses,
         };
         continue;
       }
@@ -346,7 +366,10 @@ export class ReasonsReportParser {
       }
       if (inAutomaticFallback) {
         const fallbackAward = line.match(AWARD_EVENT_LINE);
-        if (fallbackAward) current.awardedPairingNumbers.push(fallbackAward[1]);
+        if (fallbackAward) {
+          current.awardedPairingNumbers.push(fallbackAward[1]);
+          current.automaticAwardedPairingNumbers?.push(fallbackAward[1]);
+        }
         current.outcomeDetail += `${line}\n`;
         continue;
       }
