@@ -5,44 +5,39 @@
  * expressions, and parameterizes scalar values (no literal interpolation).
  */
 
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { buildHoldProbabilityBulkUpdate } from '../holdProbabilityUpdate';
 
-describe('buildHoldProbabilityBulkUpdate', () => {
-  it('returns null for empty input', () => {
-    expect(buildHoldProbabilityBulkUpdate([])).toBeNull();
-  });
+const render = (statement: SQL) => new PgDialect().sqlToQuery(statement);
 
-  it('produces a single UPDATE with both CASE branches and an IN list', () => {
-    const stmt = buildHoldProbabilityBulkUpdate([
-      { id: 1, holdProbability: 87, reasoning: ['weekend off'] },
-      { id: 2, holdProbability: 42, reasoning: ['low credit'] },
-      { id: 3, holdProbability: 10 },
-    ]);
+test('returns null for empty input', () => {
+  assert.equal(buildHoldProbabilityBulkUpdate([]), null);
+});
 
-    expect(stmt).not.toBeNull();
-    const { sql, params } = (
-      stmt as { toSQL: () => { sql: string; params: unknown[] } }
-    ).toSQL();
+test('produces a single UPDATE with both CASE branches and an IN list', () => {
+  const statement = buildHoldProbabilityBulkUpdate([
+    { id: 1, holdProbability: 87, reasoning: ['weekend off'] },
+    { id: 2, holdProbability: 42, reasoning: ['low credit'] },
+    { id: 3, holdProbability: 10 },
+  ]);
+  assert.ok(statement);
+  const { sql, params } = render(statement);
 
-    expect(sql).toMatch(/UPDATE pairings/);
-    expect(sql).toMatch(/hold_probability = CASE id/);
-    expect(sql).toMatch(/hold_probability_reasoning = CASE id/);
-    expect(sql).toMatch(/WHERE id IN/);
-    // Row with no reasoning should preserve the existing column value.
-    expect(sql).toMatch(/THEN hold_probability_reasoning/);
+  assert.match(sql, /UPDATE pairings/);
+  assert.match(sql, /hold_probability = CASE id/);
+  assert.match(sql, /hold_probability_reasoning = CASE id/);
+  assert.match(sql, /WHERE id IN/);
+  // Row with no reasoning should preserve the existing column value.
+  assert.match(sql, /THEN hold_probability_reasoning/);
+  // Values are bound parameters, never interpolated into the SQL text.
+  assert.doesNotMatch(sql, /weekend off|low credit/);
 
-    // Each id appears in both CASE arms and once in the IN list = 3 occurrences.
-    expect(params).toEqual(
-      expect.arrayContaining([
-        1,
-        87,
-        '["weekend off"]',
-        2,
-        42,
-        '["low credit"]',
-        3,
-        10,
-      ])
-    );
-  });
+  for (const value of [1, 87, '["weekend off"]', 2, 42, '["low credit"]', 3, 10]) {
+    assert.ok(params.includes(value), `missing parameter ${String(value)}`);
+  }
+  // Each id is bound in both CASE arms and once in the IN list.
+  assert.equal(params.filter(param => param === 3).length, 3);
 });

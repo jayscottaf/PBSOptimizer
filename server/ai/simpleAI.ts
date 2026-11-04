@@ -11,9 +11,14 @@ import { buildStrategyContext } from './reasonsMiner';
 import { COACH_TOOL_DEFINITIONS, executeCoachTool } from './coachTools';
 import { monthNameToNumber } from '../lib/bidSimulator';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Created on first use: the SDK throws when the key is missing, and doing
+// that at import crashed the whole server (and every route test) even when
+// no AI request was ever made.
+let openaiClient: OpenAI | undefined;
+function getOpenAI(): OpenAI {
+  openaiClient ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openaiClient;
+}
 
 export interface SimpleAIQuery {
   message: string;
@@ -229,7 +234,7 @@ export class SimpleAI {
       let rawResponse = 'No response generated';
 
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        const completion = await openai.chat.completions.create({
+        const completion = await getOpenAI().chat.completions.create({
           model: 'gpt-4.1',
           temperature: 0.7,
           max_completion_tokens: 2000,

@@ -12,6 +12,7 @@ import {
 import { categorySeniorityInput } from '../../shared/category-seniority';
 import { categoryKey, analysisCategory } from '../../shared/category-key';
 import { publicUser } from '../lib/access-control';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
@@ -41,7 +42,7 @@ test('latest category roster is chronological, deduplicated and supports seniori
   );
 });
 
-test('category lookup separates fleet, base and seat in PostgreSQL without changing real reports', async () => {
+test('category lookup separates fleet, base and seat in PostgreSQL without changing real reports', requiresDatabase, async () => {
   await db.transaction(async tx => {
     await tx.execute(sql`CREATE TEMP TABLE reasons_report_preferences (
       month text, year integer, base text, aircraft text, pilot_seniority_number integer,
@@ -179,7 +180,7 @@ test('profile inputs reject malformed numbers and seat, and linked profiles reco
   });
 });
 
-test('profile save derives its percentage server-side and preserves the selected position', async () => {
+test('profile save derives its percentage server-side and preserves the selected position', requiresDatabase, async () => {
   const { default: express } = await import('express');
   const { storage } = await import('../storage');
   const { registerRoutes } = await import('../routes');

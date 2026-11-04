@@ -8,6 +8,7 @@ import { restoreBidReview, reviewBanners } from '../lib/stored-bid-review';
 import { ReasonsReportParser } from '../reasonsReportParser';
 import { reviewResults } from '../lib/bid-review';
 import { bidHistory, reasonsReportPreferences } from '../../shared/schema';
+import { requiresDatabase } from './helpers/requires-database';
 after(cleanup);
 const metadata = { month: 'NOV', year: 2026, base: 'TEST', aircraft: '220-B' };
 const pane = ReasonsReportParser.parseReasonsPane(`<body>
@@ -93,7 +94,7 @@ test('older report-wide flags never become personal flags and fallback events st
   assert.ok(!result.findings.some(f => f.title === 'PBS used Denial Mode'));
   assert.equal(result.awards[1].source, 'Automatic fallback');
 });
-test('saved report SQL lists reserve/legacy reports, sorts months and isolates exact category and year', async () => {
+test('saved report SQL lists reserve/legacy reports, sorts months and isolates exact category and year', requiresDatabase, async () => {
   await db.transaction(async tx => {
     for (const name of ['bid_history', 'reasons_report_preferences']) {
       await tx.execute(

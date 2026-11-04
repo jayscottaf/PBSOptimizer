@@ -37,6 +37,8 @@ npm run db:push          # Push schema changes to database (uses drizzle-kit)
 
 ### Code Quality
 ```bash
+npm test                 # All tests (node:test + check scripts); no database needed
+npm run test:db          # Also runs DB-backed tests against DATABASE_URL (use a dev DB)
 npm run check            # TypeScript type checking
 npm run lint             # Run ESLint
 npm run lint:fix         # Fix ESLint errors automatically

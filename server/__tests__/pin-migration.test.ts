@@ -6,10 +6,11 @@ import { db, cleanup } from '../db';
 import { migratePinHashes } from '../lib/pin-migration';
 import { verifyPin } from '../lib/access-control';
 import { users } from '../../shared/schema';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
-test('PIN migration preserves credentials, hashes plaintext, and is repeatable', async () => {
+test('PIN migration preserves credentials, hashes plaintext, and is repeatable', requiresDatabase, async () => {
   await db.transaction(async tx => {
     await tx.execute(
       sql`CREATE TEMP TABLE users (LIKE public.users INCLUDING DEFAULTS) ON COMMIT DROP`

@@ -4,9 +4,10 @@ import { after, test } from 'node:test';
 import { sql } from 'drizzle-orm';
 import { db, cleanup } from '../db';
 import { createAccessSessions } from '../lib/access-sessions';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
-test('database shares attempt budgets and expires sessions', async () => {
+test('database shares attempt budgets and expires sessions', requiresDatabase, async () => {
   await db.transaction(async tx => {
     await tx.execute(sql`SET LOCAL search_path TO pg_temp, public`);
     await tx.execute(

@@ -1,8 +1,13 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Created on first use: the SDK throws when the key is missing, and doing
+// that at import crashed the whole server (and every route test) even when
+// no AI request was ever made.
+let openaiClient: OpenAI | undefined;
+function getOpenAI(): OpenAI {
+  openaiClient ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openaiClient;
+}
 
 export class OpenAIAssistantService {
   /**
@@ -18,7 +23,7 @@ export class OpenAIAssistantService {
       }
 
       // Use chat completion instead of Assistant API
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: 'gpt-4.1',
         messages: [
           {

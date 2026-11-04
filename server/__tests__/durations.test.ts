@@ -11,6 +11,7 @@ import {
 } from '../../shared/durations';
 import { printedDurationMinutesSql } from '../lib/duration-sql';
 import { ReasonsReportParser } from '../reasonsReportParser';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
@@ -38,7 +39,7 @@ test('printed durations and explicit decimal hours have distinct minute-accurate
   assert.equal(fingerprint.efficiencyBucket, 18.5);
 });
 
-test('PostgreSQL filtering/sorting uses the same minutes as client filtering', async () => {
+test('PostgreSQL filtering/sorting uses the same minutes as client filtering', requiresDatabase, async () => {
   const values = ['10.30', '10:30', '10', '10.60', '', ' 100.53 '];
   const expr = printedDurationMinutesSql(sql`duration`);
   const result = await db.execute(

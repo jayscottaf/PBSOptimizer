@@ -6,10 +6,11 @@ import { cleanup } from '../db';
 import { storage } from '../storage';
 import { SimpleAI, type SimpleAIQuery } from '../ai/simpleAI';
 import { registerRoutes } from '../routes';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
-test('coach requests without userId receive the canonical profile and current seniority', async () => {
+test('coach requests without userId receive the canonical profile and current seniority', requiresDatabase, async () => {
   mock.method(storage, 'getPrimaryUser', async () => ({
     id: 7,
     seniorityPercentile: 0,

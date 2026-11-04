@@ -24,9 +24,10 @@
 - Keep modules cohesive; avoid cross-layer imports (client↔server) except via `shared/`.
 
 ## Testing Guidelines
-- No dedicated runner configured. Prefer fast, co-located tests `*.test.ts[x]` if adding.
-- Focus on server route handlers, shared schema validation, and critical hooks/components.
-- Always run `npm run check`, `lint`, and manual smoke tests via `npm run dev`.
+- `npm test` runs every `*.test.ts[x]` under `server/`, `client/` and `shared/` with Node's built-in runner (`node:test` + tsx), then the `scripts/*-check.ts` suites. It never connects to a database.
+- Tests that run real SQL take the `requiresDatabase` option (`server/__tests__/helpers/requires-database.ts`); `npm test` reports them as skipped. `npm run test:db` runs them against `DATABASE_URL` from `.env`; point that at a development database, never production.
+- Write new tests with `node:test` and `node:assert/strict` (not Jest/Vitest globals). Focus on server route handlers, shared schema validation, and critical hooks/components.
+- Before committing, run `npm run check`, `npm run lint` and `npm test`; smoke-test UI changes via `npm run dev`.
 
 ## Commit & Pull Request Guidelines
 - Commits: imperative, concise, single-scope (e.g., "Fix profile modal validation").

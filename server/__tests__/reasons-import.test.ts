@@ -8,6 +8,7 @@ import { persistReasonsImport } from '../lib/reasons-import';
 import { bidHistory, reasonsReportPreferences } from '../../shared/schema';
 import { storage } from '../storage';
 import { registerRoutes } from '../routes';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
@@ -83,7 +84,7 @@ const preference = (preferenceText: string) => ({
   outcome: 'Honored',
 });
 
-test('imports roll back earlier batches and preference deletion; counts describe committed rows', async () => {
+test('imports roll back earlier batches and preference deletion; counts describe committed rows', requiresDatabase, async () => {
   // Session-local tables shadow application tables. Their identity sequences
   // are local too; public records and public sequences are never changed.
   await db.transaction(async tx => {

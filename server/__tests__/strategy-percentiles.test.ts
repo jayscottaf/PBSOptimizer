@@ -5,11 +5,12 @@ import { sql } from 'drizzle-orm';
 import { db, cleanup } from '../db';
 import { pilotRosterCtes } from '../lib/pilot-roster';
 import { percentileWithin } from '../lib/empiricalHold';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
 // Read-only VALUES fixture: does not read or change application records.
-test('preference counts cannot change pilot rank and SQL agrees with hold evidence', async () => {
+test('preference counts cannot change pilot rank and SQL agrees with hold evidence', requiresDatabase, async () => {
   const ranks = pilotRosterCtes(sql`fixture`, sql``);
   const result = await db.execute(sql`
     WITH fixture AS (

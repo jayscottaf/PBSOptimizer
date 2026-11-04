@@ -4,10 +4,11 @@ import { after, test } from 'node:test';
 import { sql } from 'drizzle-orm';
 import { cleanup, db } from '../db';
 import { storage } from '../storage';
+import { requiresDatabase } from './helpers/requires-database';
 
 after(cleanup);
 
-test('latest pilot outcomes preserve active group evidence', async () => {
+test('latest pilot outcomes preserve active group evidence', requiresDatabase, async () => {
   const originalExecute = db.execute;
   try {
     await db.transaction(async tx => {
