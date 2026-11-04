@@ -14,6 +14,7 @@ import type { InsertPairing } from '../shared/schema';
 import { samplePdfText } from './samplePdfText';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { extractBaseAndAircraft } from './lib/packageHeader';
+import { columnAwarePageRender } from './lib/column-page-text';
 import {
   parseEffectiveRangeText,
   parseOperatingDays,
@@ -1137,7 +1138,12 @@ export class PDFParser {
       // for tsx/ESM conflicts; on Vercel the serverless runtime can't shell out to
       // a separate .cjs file that isn't bundled with the function.
       const buffer = fs.readFileSync(filePath);
-      const data = await pdfParse(buffer);
+      // Read by page coordinates, not content-stream order: pairing pages
+      // are two columns, and a PDF that stores text row by row would
+      // otherwise interleave them line by line.
+      const data = await pdfParse(buffer, {
+        pagerender: columnAwarePageRender,
+      });
       console.log(
         `PDF parsed successfully: ${data.text.length} characters extracted`
       );
