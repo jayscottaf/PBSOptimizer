@@ -10,6 +10,11 @@ interface UploadResult {
     month: string;
     year: number;
   };
+  /** Trips the parser could not read cleanly (see pairing-parse-checks). */
+  parseReport?: {
+    pairingsParsed: number;
+    warnings: Array<{ pairingNumber: string; message: string }>;
+  };
 }
 
 interface FileUploadProps {
@@ -74,10 +79,39 @@ export function FileUpload({ onUpload }: FileUploadProps) {
         aircraft: 'PENDING',
       });
 
-      toast({
-        title: 'Upload successful',
-        description: 'Bid package processed. Earlier versions and their saved work are preserved.',
-      });
+      const warnings: NonNullable<UploadResult['parseReport']>['warnings'] =
+        (result as UploadResult)?.parseReport?.warnings ?? [];
+      const tripsToReview = new Set(warnings.map(w => w.pairingNumber));
+      if (warnings.length > 0) {
+        // Stays until dismissed: these trips were stored without guessing,
+        // so the pilot needs to know which ones to check against the PDF.
+        toast({
+          title: `Uploaded — ${tripsToReview.size} ${tripsToReview.size === 1 ? 'trip needs' : 'trips need'} review`,
+          description: (
+            <div className="space-y-1 text-xs">
+              {warnings.slice(0, 4).map((w, i) => (
+                <p key={i}>
+                  <span className="font-medium">#{w.pairingNumber}</span>{' '}
+                  {w.message}
+                </p>
+              ))}
+              {warnings.length > 4 && (
+                <p>and {warnings.length - 4} more. Check these trips against the PDF.</p>
+              )}
+            </div>
+          ),
+          duration: Infinity,
+        });
+      } else {
+        toast({
+          title: 'Upload successful',
+          description: `Bid package processed${
+            (result as UploadResult)?.parseReport
+              ? `: ${(result as UploadResult).parseReport!.pairingsParsed} trips read cleanly`
+              : ''
+          }. Earlier versions and their saved work are preserved.`,
+        });
+      }
 
       // Wait a moment for processing to begin, then trigger refresh
       setTimeout(() => {

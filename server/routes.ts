@@ -12,7 +12,7 @@ import { createServer, type Server } from 'http';
 import { storage } from './storage';
 import { accessControl, publicUser } from './lib/access-control';
 import { seedDatabase } from './seedData';
-import { pdfParser } from './pdfParser';
+import { pdfParser, type ParseReport } from './pdfParser';
 import {
   db,
   reconnectDatabase,
@@ -952,8 +952,9 @@ export async function registerRoutes(app: Express) {
         // Parse file synchronously so processing completes before the serverless
         // function terminates. On Vercel, the runtime is killed once the response
         // is sent — background .then() chains never execute.
+        let parseReport: ParseReport | undefined;
         try {
-          await pdfParser.parseFile(
+          parseReport = await pdfParser.parseFile(
             req.file.buffer,
             bidPackage.id,
             req.file.mimetype
@@ -1089,6 +1090,7 @@ export async function registerRoutes(app: Express) {
         res.json({
           success: true,
           bidPackage,
+          parseReport,
           message:
             'Bid package processed. Earlier versions and their saved work are preserved.',
         });

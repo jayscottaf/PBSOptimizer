@@ -16,6 +16,10 @@ import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { extractBaseAndAircraft } from './lib/packageHeader';
 import { columnAwarePageRender } from './lib/column-page-text';
 import {
+  checkParsedPairing,
+  type PairingParseWarning,
+} from './lib/pairing-parse-checks';
+import {
   parseEffectiveRangeText,
   parseOperatingDays,
 } from '../shared/operatingDays';
@@ -82,6 +86,15 @@ interface ParsedPairing {
   operatingDows?: number[] | null;
   /** Dates the trip skips, as printed ("AUG 13"). */
   exceptDates?: string[];
+  /** Problems found while parsing (see lib/pairing-parse-checks). */
+  parseWarnings?: string[];
+}
+
+/** What an upload's parse found, returned to the uploader. */
+export interface ParseReport {
+  pairingsParsed: number;
+  /** Trips that need review, one entry per problem. */
+  warnings: PairingParseWarning[];
 }
 
 export class PDFParser {
@@ -556,7 +569,7 @@ export class PDFParser {
 
   private parsePairingBlock(
     block: string,
-    bidPackageDate: string | null
+    _bidPackageDate: string | null
   ): ParsedPairing | null {
     const lines = block.split('\n');
     if (lines.length < 2) {
@@ -611,7 +624,7 @@ export class PDFParser {
       // Day starter: "A DH 2895 EWR 1432 MSP 1629 2.57" or "B    2974    ATL 0735 IAD 0919 1.44"
       // Handle asterisks before/after airports: "D 2572 *SAN 1525 SEA 1840 3.15" or "A 1188 LGA 0715 ORD 0851* 2.36"
       const dayFlightMatch = line.match(
-        /^([A-J])\s*(?:DH\s+)?(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
+        /^([A-N])\s*(?:DH\s+)?(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{1,2}\.\d{2})/
       );
 
       if (dayFlightMatch) {
@@ -653,7 +666,7 @@ export class PDFParser {
 
           // Stop if we encounter another day letter or important keywords
           if (
-            nextLine.match(/^[A-J]\s/) ||
+            nextLine.match(/^[A-N]\s/) ||
             nextLine.includes('TOTAL') ||
             nextLine.includes('TAFB') ||
             nextLine === ''
@@ -800,7 +813,7 @@ export class PDFParser {
       // Pattern 2: Day letters that start new days: "D      2275    PDX 0715  SEA 0813   .58" or "D 2572 *SAN 1525 SEA 1840 3.15"
       // Handle both ".58" and "0.58" formats, and asterisks before airports
       const dayStartMatch = line.match(
-        /^([A-J])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{2})/
+        /^([A-N])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})(?:\*)?\s+(\d{0,2}\.?\d{2})/
       );
       if (dayStartMatch) {
         currentDay = dayStartMatch[1];
@@ -837,7 +850,7 @@ export class PDFParser {
 
       // Pattern 3: Single day flight at start of line: "E       454    DFW 0710  JFK 1200  3.50" or with asterisks
       const singleDayFlight = line.match(
-        /^([A-J])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
+        /^([A-N])\s+(\d{3,4})\s+\*?([A-Z]{3})\s+(\d{4})\s+\*?([A-Z]{3})\s+(\d{4})\s+(\d{1,2}\.\d{2})/
       );
       if (singleDayFlight && !dayStartMatch) {
         // Avoid duplicate processing
@@ -953,69 +966,17 @@ export class PDFParser {
     // Generate route from flight segments
     const route = this.parseRoute(flightSegments);
 
-    // If no effective dates found, try to infer from bid package date
-    if (!effectiveDates) {
-      if (bidPackageDate) {
-        // Convert bid package date to the expected format
-        // Example: "September 2025" -> "SEP01-SEP30"
-        const monthMatch = bidPackageDate.match(
-          /(January|February|March|April|May|June|July|August|September|October|November|December|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i
-        );
-        if (monthMatch) {
-          const month = monthMatch[1].toUpperCase();
-          const yearMatch = bidPackageDate.match(/\d{4}/);
-          const year = yearMatch ? yearMatch[0] : '2025';
+    // No EFFECTIVE range: leave it empty and report it (checkParsedPairing)
+    // rather than guess. The old fallback assigned a hard-coded "SEP01-SEP30",
+    // so the trip looked like it flew every day of a month it may not be in.
 
-          // Convert full month names to abbreviations
-          const monthMap: { [key: string]: string } = {
-            JANUARY: 'JAN',
-            FEBRUARY: 'FEB',
-            MARCH: 'MAR',
-            APRIL: 'APR',
-            MAY: 'MAY',
-            JUNE: 'JUN',
-            JULY: 'JUL',
-            AUGUST: 'AUG',
-            SEPTEMBER: 'SEP',
-            OCTOBER: 'OCT',
-            NOVEMBER: 'NOV',
-            DECEMBER: 'DEC',
-          };
-
-          const monthAbbr = monthMap[month] || month;
-          effectiveDates = `${monthAbbr}01-${monthAbbr}30`;
-          console.log(
-            `Formatted bid package date as effective dates: ${effectiveDates}`
-          );
-        } else {
-          effectiveDates = bidPackageDate;
-        }
-      } else {
-        // Try to extract from any line containing month abbreviations
-        const monthPattern =
-          /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}(?:-\w+)?\b/i;
-        const monthMatch = block.match(monthPattern);
-        if (monthMatch) {
-          effectiveDates = monthMatch[0];
-          console.log(
-            `Inferred effective dates from month pattern: ${effectiveDates}`
-          );
-        } else {
-          // Default to September if no dates found (current bid package)
-          effectiveDates = 'SEP01-SEP30';
-          console.log(
-            'Defaulting effective dates to SEP01-SEP30 as bid package date could not be extracted.'
-          );
-        }
-      }
-    }
     // Calculate pairing days based on the last (highest) day letter
     // This handles cases where there are long overnight layovers without flights
     // For example: A->C (skipping B due to long layover) should be 3 days, not 2
     let pairingDays = 1; // Default to 1 day minimum
     // Find all day letters mentioned in the full text block
     const dayPatternMatches = block.match(
-      /^([A-J])\s+(?:DH\s+)?\*?\d{3,4}\s/gm
+      /^([A-N])\s+(?:DH\s+)?\*?\d{3,4}\s/gm
     );
     if (dayPatternMatches) {
       const allDayLetters = dayPatternMatches.map(match =>
@@ -1079,9 +1040,18 @@ export class PDFParser {
       return null;
     }
 
+    const parseWarnings = checkParsedPairing(block, {
+      effectiveDates,
+      pairingDays,
+      operatingDows,
+      exceptDates,
+      layoversFound: uniqueLayovers.length,
+    });
+
     const pairing: ParsedPairing = {
       pairingNumber,
       effectiveDates,
+      parseWarnings,
       operatingDows,
       exceptDates,
       route,
@@ -1161,7 +1131,7 @@ export class PDFParser {
     bidPackageId: number,
     mimeType: string,
     userSeniorityPercentile: number = 50
-  ): Promise<void> {
+  ): Promise<ParseReport> {
     let tempFilePath: string | null = null;
     try {
       console.log(`Starting file parsing for bid package ${bidPackageId}`);
@@ -1315,13 +1285,36 @@ export class PDFParser {
       console.log(`Found ${pairingBlocks.length} pairing blocks`);
 
       const parsedPairings: ParsedPairing[] = [];
+      const parseWarnings: PairingParseWarning[] = [];
 
       // Parse each pairing block
       for (const block of pairingBlocks) {
         const pairing = this.parsePairingBlock(block, null);
         if (pairing) {
           parsedPairings.push(pairing);
+          for (const message of pairing.parseWarnings ?? []) {
+            parseWarnings.push({ pairingNumber: pairing.pairingNumber, message });
+          }
+        } else if (
+          /^[A-N]\s+(?:DH\s+)?\*?\d{3,4}\s/m.test(block) &&
+          // "TOTALS---" is the guide's printed example rotation (#R523,
+          // see parsePairingBlock), not a trip in the package.
+          !/TOTALS-{3}/.test(block)
+        ) {
+          // Has flight rows but was rejected (no readable credit): a real
+          // trip that would otherwise vanish from the package silently.
+          const number = block.match(/^#([A-Z]?\d{3,5})/)?.[1] ?? '?';
+          parseWarnings.push({
+            pairingNumber: number,
+            message:
+              'Skipped: the trip has flights but no TOTAL CREDIT line could be read.',
+          });
         }
+      }
+      for (const warning of parseWarnings) {
+        console.warn(
+          `Bid package ${bidPackageId} pairing #${warning.pairingNumber}: ${warning.message}`
+        );
       }
 
       console.log(
@@ -1417,6 +1410,7 @@ export class PDFParser {
       await storage.updateBidPackageStatus(bidPackageId, 'completed');
 
       console.log(`File parsing completed for bid package ${bidPackageId}`);
+      return { pairingsParsed: parsedPairings.length, warnings: parseWarnings };
     } catch (error) {
       console.error('Error parsing file:', error);
       await storage.updateBidPackageStatus(bidPackageId, 'failed');
@@ -1448,7 +1442,7 @@ export class PDFParser {
     filePath: string,
     bidPackageId: number,
     userSeniorityPercentile: number = 50
-  ): Promise<void> {
+  ): Promise<ParseReport> {
     return this.parseFile(
       filePath,
       bidPackageId,
