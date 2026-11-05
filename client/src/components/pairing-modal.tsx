@@ -96,20 +96,24 @@ export function PairingModal({
     staleTime: 15 * 60 * 1000,
   });
 
-  // Get the latest completed bid package year
-  const bidPackageYear = (() => {
-    if (!bidPackages || bidPackages.length === 0) {
-      return new Date().getFullYear();
-    }
-    const packagesArray = (bidPackages as any[]).slice();
+  // The pairing's own bid package anchors its dates (a favorite can belong
+  // to an older package than the newest upload). Falls back to the most
+  // recent completed package, then the current year.
+  const { bidPackageYear, bidPackageMonth } = (() => {
+    const packagesArray = ((bidPackages as any[]) || []).slice();
+    const own = packagesArray.find(
+      (pkg: any) => pkg.id === (pairing as any)?.bidPackageId
+    );
     packagesArray.sort(
       (a, b) =>
         new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
     );
-    const mostRecentCompleted = packagesArray.find(
-      (pkg: any) => pkg.status === 'completed'
-    );
-    return mostRecentCompleted?.year || new Date().getFullYear();
+    const source =
+      own ?? packagesArray.find((pkg: any) => pkg.status === 'completed');
+    return {
+      bidPackageYear: (source?.year as number) || new Date().getFullYear(),
+      bidPackageMonth: (source?.month as string | undefined) ?? null,
+    };
   })();
 
   // Check if this pairing is already in user's favorites
@@ -635,56 +639,10 @@ export function PairingModal({
                   return;
                 }
 
-                // Extract effective dates from fullTextBlock if available
-                let effectiveDates = pairing.effectiveDates || '';
+                // Stored operating days (weekdays + EXCEPT dates) are
+                // authoritative; see shared/operatingDates.ts.
+                const effectiveDates = pairing.effectiveDates || '';
                 const pairingDays = pairing.pairingDays || 1;
-
-                if (pairing.fullTextBlock) {
-                  // Multi-pass parsing to capture all exception types
-                  let dateRange = '';
-                  let dayOfWeekExceptions = '';
-                  let specificDateExceptions = '';
-
-                  // Extract the base date range
-                  const effectiveMatch = pairing.fullTextBlock.match(
-                    /EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i
-                  );
-                  if (effectiveMatch) {
-                    dateRange = effectiveMatch[1].trim();
-                  }
-
-                  // Extract day-of-week exceptions (can appear as "EXCPT MO SA SU" before EFFECTIVE)
-                  const dayOfWeekMatch = pairing.fullTextBlock.match(
-                    /(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i
-                  );
-                  if (dayOfWeekMatch) {
-                    dayOfWeekExceptions = dayOfWeekMatch[1].trim();
-                  }
-
-                  // Extract specific date exceptions (can appear anywhere in fullTextBlock as "EXCEPT OCT 16 OCT 21")
-                  const specificDateMatch = pairing.fullTextBlock.match(
-                    /EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i
-                  );
-                  if (specificDateMatch) {
-                    specificDateExceptions = specificDateMatch[1].trim();
-                  }
-
-                  // Combine all parts
-                  if (dateRange) {
-                    effectiveDates = dateRange;
-                    if (dayOfWeekExceptions || specificDateExceptions) {
-                      const allExceptions = [
-                        dayOfWeekExceptions,
-                        specificDateExceptions,
-                      ]
-                        .filter(Boolean)
-                        .join(' ');
-                      effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
-                    }
-                  }
-                }
-
-                console.log('Parsing effective dates:', effectiveDates);
 
                 // Use the utility function to calculate all valid start dates
                 const possibleStartDates = calculateValidStartDates(
@@ -694,7 +652,8 @@ export function PairingModal({
                   {
                     operatingDows: (pairing as any).operatingDows,
                     exceptDates: (pairing as any).exceptDates,
-                  }
+                  },
+                  bidPackageMonth
                 );
 
                 console.log(

@@ -54,6 +54,8 @@ interface PairingTableProps {
   showAddToCalendar?: boolean;
   currentUser?: any;
   bidPackageYear?: number;
+  /** Bid package month (name or 1-12); anchors ranges crossing New Year. */
+  bidPackageMonth?: string | number | null;
   pagination?: {
     page: number;
     limit: number;
@@ -347,6 +349,7 @@ function PairingTableImpl({
   showAddToCalendar = false,
   currentUser,
   bidPackageYear,
+  bidPackageMonth,
   pagination,
   onPageChange,
   conflicts = new Map(),
@@ -438,48 +441,9 @@ function PairingTableImpl({
     try {
       const year = bidPackageYear || new Date().getFullYear();
 
-      // Extract the full EFFECTIVE date range (incl. day-of-week and
-      // specific-date EXCEPT exclusions) from the full pairing text, same as
-      // the pairing detail modal — using pairing.effectiveDates alone misses
-      // exceptions and this table has no bid-package-year context of its own.
-      let effectiveDates = pairing.effectiveDates || '';
-      if (pairing.fullTextBlock) {
-        let dateRange = '';
-        let dayOfWeekExceptions = '';
-        let specificDateExceptions = '';
-
-        const effectiveMatch = pairing.fullTextBlock.match(
-          /EFFECTIVE\s+([A-Z]{3}\d{1,2}(?:-[A-Z]{3}\.?\s*\d{1,2})?)/i
-        );
-        if (effectiveMatch) {
-          dateRange = effectiveMatch[1].trim();
-        }
-
-        const dayOfWeekMatch = pairing.fullTextBlock.match(
-          /(?:EXCPT|EXCEPT)\s+([A-Z]{2}(?:\s+[A-Z]{2})*)\s+EFFECTIVE/i
-        );
-        if (dayOfWeekMatch) {
-          dayOfWeekExceptions = dayOfWeekMatch[1].trim();
-        }
-
-        const specificDateMatch = pairing.fullTextBlock.match(
-          /EXCEPT\s+((?:[A-Z]{3}\s+\d{1,2}\s*)+)/i
-        );
-        if (specificDateMatch) {
-          specificDateExceptions = specificDateMatch[1].trim();
-        }
-
-        if (dateRange) {
-          effectiveDates = dateRange;
-          if (dayOfWeekExceptions || specificDateExceptions) {
-            const allExceptions = [dayOfWeekExceptions, specificDateExceptions]
-              .filter(Boolean)
-              .join(' ');
-            effectiveDates = `${dateRange} EXCEPT ${allExceptions}`;
-          }
-        }
-      }
-
+      // Stored operating days (weekdays + EXCEPT dates) are authoritative;
+      // the list no longer receives the raw PDF text this used to re-parse.
+      const effectiveDates = pairing.effectiveDates || '';
       const pairingDays = pairing.pairingDays || 1;
       const possibleStartDates = calculateValidStartDates(
         effectiveDates,
@@ -488,7 +452,8 @@ function PairingTableImpl({
         {
           operatingDows: (pairing as any).operatingDows,
           exceptDates: (pairing as any).exceptDates,
-        }
+        },
+        bidPackageMonth
       );
 
       if (possibleStartDates.length === 0) {

@@ -6,7 +6,9 @@ import type { Pairing, SearchFilters } from './api';
 export function filterPairings<T extends Pairing>(
   pairings: T[],
   filters: SearchFilters,
-  packageYear: number
+  packageYear: number,
+  /** Bid package month (name or 1-12); anchors ranges that cross New Year. */
+  packageMonth?: string | number | null
 ): T[] {
   return pairings.filter(pairing => {
     // Credit hours filter
@@ -259,7 +261,8 @@ export function filterPairings<T extends Pairing>(
           {
             operatingDows: (pairing as any).operatingDows,
             exceptDates: (pairing as any).exceptDates,
-          }
+          },
+          packageMonth
         );
 
         if (hasConflict) {

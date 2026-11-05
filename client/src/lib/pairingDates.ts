@@ -1,231 +1,63 @@
 /**
- * Utility functions for parsing pairing effective dates and calculating valid start dates
+ * Client-side access to a pairing's departure dates. The expansion itself
+ * lives in shared/operatingDates.ts so the browser and the server simulator
+ * resolve exactly the same dates.
  */
-
-declare global {
-  interface Window {
-    __rangePairingLogCount?: number;
-  }
-}
-
-const MONTH_MAP: { [key: string]: number } = {
-  JAN: 0,
-  FEB: 1,
-  MAR: 2,
-  APR: 3,
-  MAY: 4,
-  JUN: 5,
-  JUL: 6,
-  AUG: 7,
-  SEP: 8,
-  OCT: 9,
-  NOV: 10,
-  DEC: 11,
-};
-
-const DAY_OF_WEEK_MAP: { [key: string]: number } = {
-  SU: 0, // Sunday
-  MO: 1, // Monday
-  TU: 2, // Tuesday
-  WE: 3, // Wednesday
-  TH: 4, // Thursday
-  FR: 5, // Friday
-  SA: 6, // Saturday
-};
-
-interface ParsedEffectiveDates {
-  type: 'single' | 'range';
-  startDate: Date;
-  endDate?: Date;
-  excludedDaysOfWeek: number[]; // 0-6 (Sun-Sat)
-  excludedDates: Date[];
-}
+import {
+  expandOperatingDays,
+  periodMonthNumber,
+} from '../../../shared/operatingDates';
 
 /**
- * Parse effective dates string (e.g., "OCT12 ONLY" or "OCT14-OCT.29 EXCEPT MO SA SU EXCEPT OCT 16 OCT 21 OCT 28")
- */
-export function parseEffectiveDates(
-  effectiveDates: string,
-  year: number
-): ParsedEffectiveDates | null {
-  if (!effectiveDates) {
-    return null;
-  }
-
-  const result: ParsedEffectiveDates = {
-    type: 'single',
-    startDate: new Date(),
-    excludedDaysOfWeek: [],
-    excludedDates: [],
-  };
-
-  // Check if it's a range (contains hyphen)
-  // Handle formats like "OCT14-OCT.29", "OCT14-OCT. 29", "OCT14-OCT29"
-  const rangeMatch = effectiveDates.match(
-    /([A-Z]{3})(\d{1,2})\s*-\s*([A-Z]{3})[.\s]*(\d{1,2})/
-  );
-
-  if (rangeMatch) {
-    // Range format: OCT14-OCT.29 or OCT14-OCT. 29
-    result.type = 'range';
-    const startMonth = MONTH_MAP[rangeMatch[1]];
-    const startDay = parseInt(rangeMatch[2]);
-    const endMonth = MONTH_MAP[rangeMatch[3]];
-    const endDay = parseInt(rangeMatch[4]);
-
-    if (startMonth === undefined || endMonth === undefined) {
-      return null;
-    }
-
-    result.startDate = new Date(year, startMonth, startDay);
-    result.endDate = new Date(year, endMonth, endDay);
-  } else {
-    // Single date format: OCT12 ONLY or just OCT12
-    const singleMatch = effectiveDates.match(/([A-Z]{3})(\d{1,2})/);
-    if (!singleMatch) {
-      return null;
-    }
-
-    const month = MONTH_MAP[singleMatch[1]];
-    const day = parseInt(singleMatch[2]);
-
-    if (month === undefined) {
-      return null;
-    }
-
-    result.startDate = new Date(year, month, day);
-  }
-
-  // Parse EXCEPT clauses
-  const exceptParts = effectiveDates.split('EXCEPT');
-
-  for (let i = 1; i < exceptParts.length; i++) {
-    const part = exceptParts[i].trim();
-
-    // Check for day-of-week exclusions (MO, SA, SU, etc.)
-    const dayOfWeekMatches = part.match(/\b(SU|MO|TU|WE|TH|FR|SA)\b/g);
-    if (dayOfWeekMatches) {
-      dayOfWeekMatches.forEach(dow => {
-        const dayNum = DAY_OF_WEEK_MAP[dow];
-        if (dayNum !== undefined && !result.excludedDaysOfWeek.includes(dayNum)) {
-          result.excludedDaysOfWeek.push(dayNum);
-        }
-      });
-    }
-
-    // Check for specific date exclusions (OCT 16 OCT 21 OCT 28)
-    const dateMatches = part.match(/([A-Z]{3})\s+(\d{1,2})/g);
-    if (dateMatches) {
-      dateMatches.forEach(dateStr => {
-        const match = dateStr.match(/([A-Z]{3})\s+(\d{1,2})/);
-        if (match) {
-          const month = MONTH_MAP[match[1]];
-          const day = parseInt(match[2]);
-          if (month !== undefined) {
-            result.excludedDates.push(new Date(year, month, day));
-          }
-        }
-      });
-    }
-  }
-
-  return result;
-}
-
-/**
- * Calculate all valid start dates for a pairing based on its effective dates
- */
-/**
- * Operating-day facts as stored on the pairing row. When present these are
- * authoritative — the server resolved them from the package header, which
- * carries a dialect this file's text parsing cannot express (`TU TH SA`
- * means "only these weekdays", where the text path only understands
- * exclusions). Falls back to text parsing when absent.
+ * Operating-day facts as stored on the pairing row (resolved by the server
+ * from the package header).
  */
 export interface StoredOperatingDays {
   operatingDows?: number[] | null;
   exceptDates?: string[] | null;
 }
 
-const MONTH_TOKENS: Record<string, number> = {
-  JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
-  JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
-};
+const MS_PER_DAY = 86_400_000;
 
-/** "AUG 13" -> a Date in `year`; null when unparseable. */
-function storedExceptToDate(token: string, year: number): Date | null {
-  const m = String(token ?? '')
-    .toUpperCase()
-    .match(/([A-Z]{3})\.?\s*(\d{1,2})/);
-  if (!m || !(m[1] in MONTH_TOKENS)) {
-    return null;
-  }
-  return new Date(year, MONTH_TOKENS[m[1]], parseInt(m[2], 10));
+/** Epoch day -> local-midnight Date, matching the calendar UI's dates. */
+function localDateOfEpochDay(day: number): Date {
+  const utc = new Date(day * MS_PER_DAY);
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
 }
 
+/**
+ * Every date the pairing departs on.
+ *
+ * `periodMonth` (the bid package's month, name or 1-12) anchors ranges that
+ * cross New Year: a "DEC28-JAN02" trip in a January package started the
+ * previous December. Without it the range's own first month is the anchor,
+ * which is right for every range that stays inside one year.
+ */
 export function calculateValidStartDates(
   effectiveDates: string,
   year: number,
-  pairingDays: number,
-  stored?: StoredOperatingDays
+  _pairingDays: number,
+  stored?: StoredOperatingDays,
+  periodMonth?: string | number | null
 ): Date[] {
-  const parsed = parseEffectiveDates(effectiveDates, year);
-  if (!parsed) {
+  const month =
+    typeof periodMonth === 'number'
+      ? periodMonth
+      : (periodMonthNumber(periodMonth) ??
+        periodMonthNumber(
+          String(effectiveDates ?? '').match(/[A-Z]{3}/i)?.[0]
+        ));
+  if (!month) {
     return [];
   }
-
-  // Prefer the server-resolved allow-list when we have it.
-  const allowedDows =
-    Array.isArray(stored?.operatingDows) && stored!.operatingDows!.length > 0
-      ? new Set(stored!.operatingDows!)
-      : null;
-  if (allowedDows) {
-    for (const token of stored?.exceptDates ?? []) {
-      const d = storedExceptToDate(token, year);
-      if (d) {
-        parsed.excludedDates.push(d);
-      }
-    }
-  }
-
-  const validDates: Date[] = [];
-
-  if (parsed.type === 'single') {
-    // Single date pairing
-    validDates.push(parsed.startDate);
-  } else if (parsed.type === 'range' && parsed.endDate) {
-    // Range pairing - iterate through all dates in range
-    const current = new Date(parsed.startDate);
-    const end = new Date(parsed.endDate);
-
-    while (current <= end) {
-      const currentDay = current.getDay();
-
-      // Allow-list wins when present; otherwise fall back to exclusions.
-      const dowOk = allowedDows
-        ? allowedDows.has(currentDay)
-        : !parsed.excludedDaysOfWeek.includes(currentDay);
-      if (dowOk) {
-        // Check if this specific date is excluded
-        const isDateExcluded = parsed.excludedDates.some(excludedDate => {
-          return (
-            excludedDate.getFullYear() === current.getFullYear() &&
-            excludedDate.getMonth() === current.getMonth() &&
-            excludedDate.getDate() === current.getDate()
-          );
-        });
-
-        if (!isDateExcluded) {
-          validDates.push(new Date(current));
-        }
-      }
-
-      // Move to next day
-      current.setDate(current.getDate() + 1);
-    }
-  }
-
-  return validDates;
+  return expandOperatingDays(
+    {
+      effectiveDates,
+      operatingDows: stored?.operatingDows ?? null,
+      exceptDates: stored?.exceptDates ?? null,
+    },
+    { month, year }
+  ).map(localDateOfEpochDay);
 }
 
 /**
@@ -253,13 +85,15 @@ export function pairingConflictsWithDaysOff(
   year: number,
   pairingDays: number,
   preferredDaysOff: Date[],
-  stored?: StoredOperatingDays
+  stored?: StoredOperatingDays,
+  periodMonth?: string | number | null
 ): boolean {
   const validStartDates = calculateValidStartDates(
     effectiveDates,
     year,
     pairingDays,
-    stored
+    stored,
+    periodMonth
   );
 
   const normalizeDate = (date: Date) => {
@@ -269,8 +103,6 @@ export function pairingConflictsWithDaysOff(
   };
 
   const daysOffTimestamps = preferredDaysOff.map(normalizeDate);
-
-
 
   // Check if ANY valid start date would result in the pairing covering a day off
   for (const startDate of validStartDates) {

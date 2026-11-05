@@ -1335,7 +1335,8 @@ export default function Dashboard() {
     const filtered = filterPairings(
       pairings,
       debouncedFilters,
-      latestBidPackage?.year || new Date().getFullYear()
+      latestBidPackage?.year || new Date().getFullYear(),
+      latestBidPackage?.month
     );
     return filtered.sort((a, b) =>
       comparePairings(a, b, sortColumn, sortDirection)
@@ -1344,6 +1345,7 @@ export default function Dashboard() {
     pairings,
     debouncedFilters,
     latestBidPackage?.year,
+    latestBidPackage?.month,
     sortColumn,
     sortDirection,
     comparePairings,
@@ -1363,7 +1365,8 @@ export default function Dashboard() {
       return detectConflicts(
         displayPairings,
         calendarEventsData,
-        latestBidPackage.year
+        latestBidPackage.year,
+        latestBidPackage.month
       );
     }
     return new Map();
@@ -1891,6 +1894,7 @@ export default function Dashboard() {
                           showAddToCalendar={true}
                           currentUser={currentUser}
                           bidPackageYear={latestBidPackage?.year}
+                          bidPackageMonth={latestBidPackage?.month}
                           conflicts={conflictMap}
                           favoritePairingIds={favoritePairingIds}
                           onToggleFavorite={handleToggleFavorite}

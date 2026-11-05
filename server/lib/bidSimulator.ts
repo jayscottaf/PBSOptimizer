@@ -23,7 +23,11 @@ import type {
   SimulationResult,
 } from '../../shared/bidTypes';
 import { constructPatternLine } from './lineConstructor';
-import { parseMonthDayToken } from '../../shared/operatingDays';
+import {
+  dowOfEpochDay,
+  epochDay,
+  expandOperatingDays,
+} from '../../shared/operatingDates';
 import type { CarryOutCreditAllocation } from '../../shared/bid-package-parameters';
 
 export interface SimulatorOptions {
@@ -105,17 +109,6 @@ export function monthNameToNumber(name: unknown): number | null {
   return key in MONTH_TOKENS ? MONTH_TOKENS[key] : null;
 }
 
-/** UTC epoch-day for a calendar date (avoids TZ drift). */
-function epochDay(year: number, month: number, day: number): number {
-  return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
-}
-
-/** 0=Sunday .. 6=Saturday for an epoch day. */
-function dowOfEpochDay(day: number): number {
-  // 1970-01-01 was a Thursday (4).
-  return (((day + 4) % 7) + 7) % 7;
-}
-
 const DOW_NAME_TO_NUM: Record<string, number> = {
   Sunday: 0,
   Monday: 1,
@@ -127,77 +120,32 @@ const DOW_NAME_TO_NUM: Record<string, number> = {
 };
 
 /**
- * Enumerate a pairing's operating instances. The effective range spans
- * departure dates; a range that starts in a month before the bid period's
- * month (e.g. "DEC28-JAN02" for a January package) belongs partly to the
- * previous year. We anchor each token to the bid-period year, shifting
- * across the year boundary when the token month is far "ahead of" the
- * period month (e.g. DEC tokens for a JAN package = previous year).
+ * A pairing's operating instances in the bid period. Dates come from the
+ * shared expansion every other consumer uses (shared/operatingDates.ts),
+ * so the simulator, stats and the client calendar cannot disagree.
  */
 function enumerateInstances(
-  start: { month: number; day: number } | null,
-  end: { month: number; day: number } | null,
+  p: any,
   pairingDays: number,
   periodMonth: number,
-  periodYear: number,
-  operatingDows?: number[] | null,
-  exceptDates?: string[] | null
+  periodYear: number
 ): { startDay: number; endDay: number; startDow: number }[] {
-  if (!start) return [];
-  const anchor = (t: { month: number; day: number }): number => {
-    let year = periodYear;
-    const diff = t.month - periodMonth;
-    if (diff > 6) year -= 1; // e.g. DEC token in a JAN package
-    if (diff < -6) year += 1; // e.g. JAN token in a DEC package
-    return epochDay(year, t.month, t.day);
-  };
-  const s = anchor(start);
-  const e = end ? anchor(end) : s;
-  const last = Math.max(s, e);
-
-  // A trip does not operate every day of its effective range: the header
-  // names the weekdays it flies ("TU TH SA") and a separate clause lists
-  // dates it skips ("EXCEPT AUG 13 AUG 15"). Without both, a Tue/Thu/Sat
-  // trip looks schedulable on any of its ~19 range days, which makes Prefer
-  // Off falsely survive and lets the line constructor place trips on dates
-  // they never fly.
-  const allowed =
-    Array.isArray(operatingDows) && operatingDows.length > 0
-      ? new Set(operatingDows)
-      : null;
-  const skipped = new Set<number>();
-  for (const token of exceptDates ?? []) {
-    const md = parseMonthDayToken(token);
-    if (md) {
-      skipped.add(anchor(md));
-    }
-  }
-
-  const build = (applyDowFilter: boolean) => {
-    const out: { startDay: number; endDay: number; startDow: number }[] = [];
-    // Ranges are at most a bid period plus carry; cap defensively.
-    for (let d = s; d <= last && out.length < 62; d++) {
-      const dow = dowOfEpochDay(d);
-      if (applyDowFilter && allowed && !allowed.has(dow)) {
-        continue;
-      }
-      if (skipped.has(d)) {
-        continue;
-      }
-      out.push({
-        startDay: d,
-        endDay: d + Math.max(0, pairingDays - 1),
-        startDow: dow,
-      });
-    }
-    return out;
-  };
-
-  const filtered = build(true);
-  // Guard against a bad year anchor silently deleting a pairing: if the
-  // weekday filter leaves nothing at all, the anchor and the printed
-  // weekdays disagree, so trust the range rather than drop the trip.
-  return filtered.length > 0 ? filtered : build(false);
+  return expandOperatingDays(
+    {
+      effectiveDates: p.effectiveDates,
+      operatingDows: Array.isArray(p.operatingDows)
+        ? (p.operatingDows as number[])
+        : null,
+      exceptDates: Array.isArray(p.exceptDates)
+        ? (p.exceptDates as string[])
+        : null,
+    },
+    { month: periodMonth, year: periodYear }
+  ).map(day => ({
+    startDay: day,
+    endDay: day + Math.max(0, pairingDays - 1),
+    startDow: dowOfEpochDay(day),
+  }));
 }
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -330,15 +278,7 @@ function toSimPairing(
   );
   const instances =
     periodMonth !== undefined && periodYear !== undefined
-      ? enumerateInstances(
-          start,
-          end,
-          days,
-          periodMonth,
-          periodYear,
-          Array.isArray(p.operatingDows) ? (p.operatingDows as number[]) : null,
-          Array.isArray(p.exceptDates) ? (p.exceptDates as string[]) : null
-        ).map(instance => {
+      ? enumerateInstances(p, days, periodMonth, periodYear).map(instance => {
           const date = new Date(instance.startDay * MS_PER_DAY);
           const key = `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')}`;
           const allocatedCredit = allocationsByDate.get(key);
@@ -630,19 +570,11 @@ export function countOperatingInstances(
   periodMonth: number,
   periodYear: number
 ): number {
-  const { start, end } = parseEffectiveDates(rawPairing.effectiveDates);
   return enumerateInstances(
-    start,
-    end,
+    rawPairing,
     Number(rawPairing.pairingDays) || 1,
     periodMonth,
-    periodYear,
-    Array.isArray(rawPairing.operatingDows)
-      ? (rawPairing.operatingDows as number[])
-      : null,
-    Array.isArray(rawPairing.exceptDates)
-      ? (rawPairing.exceptDates as string[])
-      : null
+    periodYear
   ).length;
 }
 
