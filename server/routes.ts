@@ -180,7 +180,8 @@ async function recalculateHoldProbabilitiesOptimized(
             seniorityPercentile,
             historicalData,
             bidPackage.month,
-            rosters
+            rosters,
+            bidPackage.year
           );
       } else {
         // Fall back to estimate-based calculation with location data

@@ -1,7 +1,11 @@
 import { bidHistory } from '../shared/schema';
 import { ReasonsReportParser, type TripFingerprint } from './reasonsReportParser';
 import { TripMatcher } from './tripMatcher';
-import { computeEmpiricalHold, type RosterMap } from './lib/empiricalHold';
+import {
+  computeEmpiricalHold,
+  describeEvidenceAge,
+  type RosterMap,
+} from './lib/empiricalHold';
 import {
   calculateLayoverDesirability,
   getLocationCompetitionAdjustment,
@@ -96,7 +100,8 @@ export class HoldProbabilityCalculator {
     seniorityPercentile: number,
     historicalData: (typeof bidHistory.$inferSelect)[],
     bidMonth?: string,
-    rosters?: RosterMap
+    rosters?: RosterMap,
+    bidYear?: number
   ): HoldProbabilityResult {
     // Find matches against the pre-fetched historical data. The empirical
     // path wants the full evidence set, not just the top 10.
@@ -118,6 +123,7 @@ export class HoldProbabilityCalculator {
         matches: historicalMatches,
         rosters,
         bidMonth,
+        bidYear,
       });
       if (empirical) {
         return {
@@ -134,7 +140,8 @@ export class HoldProbabilityCalculator {
         seniorityNumber,
         seniorityPercentile,
         historicalMatches,
-        pairing
+        pairing,
+        { month: bidMonth, year: bidYear }
       );
     } else {
       // Fall back to estimate-based calculation with location data
@@ -370,9 +377,22 @@ export class HoldProbabilityCalculator {
     seniorityNumber: number,
     seniorityPercentile: number,
     matches: HistoricalMatch[],
-    pairing: any
+    pairing: any,
+    bid?: { month?: string | null; year?: number | null }
   ): HoldProbabilityResult {
     const reasoning: string[] = [];
+    const ageNote = (used: HistoricalMatch[]) => {
+      const age = describeEvidenceAge(used, bid);
+      return age ? `, ${age.text}` : '';
+    };
+    const staleNote = (used: HistoricalMatch[]) => {
+      const age = describeEvidenceAge(used, bid);
+      if (age?.stale) {
+        reasoning.push(
+          `   ⚠️ The newest similar award is ${age.monthsOld} months old, so seniority boundaries may have moved since`
+        );
+      }
+    };
 
     // Get the best matches (highest similarity)
     const bestMatches = matches.filter(m => m.similarity >= 70);
@@ -391,7 +411,7 @@ export class HoldProbabilityCalculator {
       );
 
       reasoning.push(
-        `📊 Found ${bestMatches.length} similar trip(s) from past months (${bestMatches[0].similarity}% match)`
+        `📊 Found ${bestMatches.length} similar trip(s) from past months (${bestMatches[0].similarity}% match)${ageNote(bestMatches)}`
       );
       reasoning.push(
         `   Historical range: ${mostSeniorHolder} - ${mostJuniorHolder} (avg: ${Math.round(avgJuniorHolder)})`
@@ -432,8 +452,10 @@ export class HoldProbabilityCalculator {
         );
       }
 
-      // Adjust for confidence
-      if (bestMatches[0].confidence === 'exact') {
+      // Adjust for confidence (stale evidence replaces the confidence claim)
+      if (describeEvidenceAge(bestMatches, bid)?.stale) {
+        staleNote(bestMatches);
+      } else if (bestMatches[0].confidence === 'exact') {
         reasoning.push(
           `   🎯 Exact match confidence: prediction is highly accurate`
         );
@@ -450,7 +472,7 @@ export class HoldProbabilityCalculator {
         allMatches.length;
 
       reasoning.push(
-        `📊 Found ${allMatches.length} somewhat similar trip(s) (${allMatches[0].similarity}% match)`
+        `📊 Found ${allMatches.length} somewhat similar trip(s) (${allMatches[0].similarity}% match)${ageNote(allMatches)}`
       );
       reasoning.push(
         `   Average junior holder: ${Math.round(avgJuniorHolder)}`
@@ -476,6 +498,7 @@ export class HoldProbabilityCalculator {
       reasoning.push(
         `   ⚠️ Medium confidence: less certain due to lower similarity`
       );
+      staleNote(allMatches);
 
       const label = this.getProbabilityLabel(probability);
       return { probability, label, reasoning };

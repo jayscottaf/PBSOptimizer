@@ -83,13 +83,60 @@ function ordinal(n: number): string {
   }
 }
 
+/** Evidence older than this, relative to the package, is flagged stale. */
+export const STALE_EVIDENCE_MONTHS = 12;
+
+function monthIndex(
+  month: string | null | undefined,
+  year: number
+): number | null {
+  const m = normalizeMonth3(month ?? null);
+  const i = m ? MONTH_3.indexOf(m) : -1;
+  return i >= 0 && Number.isFinite(year) ? year * 12 + i : null;
+}
+
+/**
+ * How recent a set of award evidence is, relative to the package being bid:
+ * hold estimates built only on old periods can miss seniority boundaries
+ * that have since moved, so the age is part of the explanation.
+ */
+export function describeEvidenceAge(
+  periods: Array<{ month: string; year: number }>,
+  bid?: { month?: string | null; year?: number | null }
+): { text: string; monthsOld: number | null; stale: boolean } | null {
+  let newest: number | null = null;
+  for (const period of periods) {
+    const index = monthIndex(period.month, period.year);
+    if (index !== null && (newest === null || index > newest)) newest = index;
+  }
+  if (newest === null) return null;
+  const label = `${MONTH_3[newest % 12]} ${Math.floor(newest / 12)}`;
+  const bidIndex =
+    bid?.year !== undefined && bid?.year !== null
+      ? monthIndex(bid.month, bid.year)
+      : null;
+  const monthsOld = bidIndex === null ? null : bidIndex - newest;
+  let text = `newest ${label}`;
+  if (monthsOld !== null && monthsOld > 0) {
+    text += ` (${monthsOld} month${monthsOld === 1 ? '' : 's'} before this package)`;
+  } else if (monthsOld === 0) {
+    text += " (this package's own period)";
+  }
+  return {
+    text,
+    monthsOld,
+    stale: monthsOld !== null && monthsOld > STALE_EVIDENCE_MONTHS,
+  };
+}
+
 export function computeEmpiricalHold(params: {
   userPercentile: number; // 0-100, lower = more senior
   matches: EmpiricalMatch[];
   rosters: RosterMap;
   bidMonth?: string | null; // month of the package being bid, for seasonal note
+  bidYear?: number | null; // year of the package being bid, for evidence age
 }): EmpiricalHoldResult | null {
-  const { userPercentile, matches, rosters, bidMonth } = params;
+  const { userPercentile, matches, rosters, bidMonth, bidYear } = params;
 
   // Junior-most holder percentile per period, from sufficiently similar awards
   const juniorMostByPeriod = new Map<string, number>();
@@ -124,8 +171,15 @@ export function computeEmpiricalHold(params: {
     sortedBounds[Math.floor((sortedBounds.length - 1) / 2)];
 
   const yearsSpanned = new Set(periods.map(([k]) => k.split('-')[1]));
+  const age = describeEvidenceAge(
+    periods.map(([k]) => {
+      const [month, year] = k.split('-');
+      return { month, year: Number(year) };
+    }),
+    { month: bidMonth, year: bidYear }
+  );
   const reasoning: string[] = [
-    `📊 Award evidence from ${periods.length} bid period(s) across ${yearsSpanned.size} year(s)`,
+    `📊 Award evidence from ${periods.length} bid period(s) across ${yearsSpanned.size} year(s)${age ? `, ${age.text}` : ''}`,
     `   Trips like this went as junior as the ${ordinal(minB)}-${ordinal(maxB)} percentile (median ${ordinal(median)})`,
     `   Your position (${ordinal(userPercentile)} percentile) was senior enough in ${wins} of ${periods.length} period(s)`,
   ];
@@ -144,7 +198,11 @@ export function computeEmpiricalHold(params: {
     }
   }
 
-  if (periods.length < 6) {
+  if (age?.stale) {
+    reasoning.push(
+      `   ⚠️ Lower confidence: the newest evidence is ${age.monthsOld} months old, so seniority boundaries may have moved since`
+    );
+  } else if (periods.length < 6) {
     reasoning.push(
       `   ⚠️ Moderate confidence (${periods.length} periods of evidence)`
     );

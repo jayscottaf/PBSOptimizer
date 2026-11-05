@@ -17,7 +17,9 @@ export function personalizeHoldProbabilities<T extends HoldPairing>(
   context: {
     user?: Pick<User, 'seniorityNumber' | 'seniorityPercentile'>;
     percentile?: number;
-    bidPackage: Pick<BidPackage, 'month' | 'base' | 'aircraft'>;
+    bidPackage: Pick<BidPackage, 'month' | 'base' | 'aircraft'> & {
+      year?: number;
+    };
     history: BidHistory[];
     rosters: Map<string, number[]>;
     frequencies: Map<string, number>;
@@ -37,7 +39,8 @@ export function personalizeHoldProbabilities<T extends HoldPairing>(
             percentile,
             context.history,
             context.bidPackage.month,
-            context.rosters
+            context.rosters,
+            context.bidPackage.year
           )
         : HoldProbabilityCalculator.calculateHoldProbability({
             seniorityPercentile: percentile,
