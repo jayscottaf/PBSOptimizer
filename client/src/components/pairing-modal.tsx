@@ -23,7 +23,11 @@ import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
-import { calculateValidStartDates } from '@/lib/pairingDates';
+import {
+  calculateValidStartDates,
+  departureDates,
+  formatDepartureDates,
+} from '@/lib/pairingDates';
 import {
   calculateDutyStartTime,
   calculateDutyEndTime,
@@ -274,10 +278,52 @@ export function PairingModal({
               </div>
             ))}
           </dl>
-          <p className="text-sm">
-            <span className="text-muted-foreground">Operating dates:</span>{' '}
-            {pairing.effectiveDates || 'See original report'}
-          </p>
+          {(() => {
+            const departures = departureDates(
+              pairing.effectiveDates || '',
+              bidPackageYear,
+              {
+                operatingDows: (pairing as any).operatingDows,
+                exceptDates: (pairing as any).exceptDates,
+              },
+              bidPackageMonth
+            );
+            const dows = (pairing as any).operatingDows as
+              | number[]
+              | null
+              | undefined;
+            const excepts = ((pairing as any).exceptDates ?? []) as string[];
+            // What the PDF printed, so the pilot can check the dates above.
+            const printed = [
+              pairing.effectiveDates,
+              Array.isArray(dows) && dows.length > 0 && dows.length < 7
+                ? [1, 2, 3, 4, 5, 6, 0]
+                    .filter(d => dows.includes(d))
+                    .map(d => ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][d])
+                    .join(' ')
+                : null,
+              excepts.length > 0 ? `except ${excepts.join(', ')}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <div className="text-sm">
+                <p>
+                  <span className="text-muted-foreground">
+                    {departures.length === 1 ? 'Departs:' : 'Departures:'}
+                  </span>{' '}
+                  {departures.length > 0
+                    ? `${departures.length > 1 ? `${departures.length} dates: ` : ''}${formatDepartureDates(departures)}`
+                    : pairing.effectiveDates || 'See original report'}
+                </p>
+                {printed && departures.length > 0 && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Printed: {printed}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           {(pairing.holdProbabilityReasoning?.length ?? 0) > 0 && (
             <details className="rounded-lg border px-3 py-2 text-sm">
               <summary className="cursor-pointer font-medium">

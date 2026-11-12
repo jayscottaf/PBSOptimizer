@@ -36,7 +36,11 @@ import { api } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import type { ConflictInfo } from '@/lib/conflictDetection';
-import { calculateValidStartDates } from '@/lib/pairingDates';
+import {
+  calculateValidStartDates,
+  departureDates,
+  formatDepartureDates,
+} from '@/lib/pairingDates';
 import { maxLayoverMinutes, formatLayoverMinutes } from '@/lib/layover';
 import {
   calculateDutyStartTime,
@@ -550,12 +554,28 @@ function PairingTableImpl({
   // needless operations whenever anything in the parent re-rendered.
   const rowDisplay = useMemo(
     () =>
-      safePairings.map(p => ({
-        route: formatRouteDisplay(p),
-        effective: formatEffectiveDisplay(p),
-        layover: formatLayoverMinutes(maxLayoverMinutes(p)),
-      })),
-    [safePairings]
+      safePairings.map(p => {
+        // A trip that departs several times lists every departure; the
+        // printed range's endpoints ("AUG15, AUG29") read as two dates.
+        const departures = departureDates(
+          p.effectiveDates || '',
+          bidPackageYear || new Date().getFullYear(),
+          {
+            operatingDows: (p as any).operatingDows,
+            exceptDates: (p as any).exceptDates,
+          },
+          bidPackageMonth
+        );
+        return {
+          route: formatRouteDisplay(p),
+          effective:
+            departures.length > 1
+              ? `${departures.length} dates: ${formatDepartureDates(departures)}`
+              : formatEffectiveDisplay(p),
+          layover: formatLayoverMinutes(maxLayoverMinutes(p)),
+        };
+      }),
+    [safePairings, bidPackageYear, bidPackageMonth]
   );
 
   const legend = (

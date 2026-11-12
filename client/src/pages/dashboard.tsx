@@ -1770,6 +1770,8 @@ export default function Dashboard() {
                           )}
                           <PairingTable
                             pairings={pagedDisplayPairings || EMPTY_ARRAY}
+                            bidPackageYear={latestBidPackage?.year}
+                            bidPackageMonth={latestBidPackage?.month}
                             onSort={handleSort}
                             sortColumn={sortColumn || ''}
                             sortDirection={sortDirection}
