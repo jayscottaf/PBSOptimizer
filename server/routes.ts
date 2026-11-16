@@ -38,6 +38,7 @@ import {
   users,
   userFavorites,
   userCalendarEvents,
+  CALENDAR_ENTRY_KINDS,
 } from '../shared/schema';
 import { HoldProbabilityCalculator } from './holdProbabilityCalculator';
 import { buildHoldProbabilityBulkUpdate } from './holdProbabilityUpdate';
@@ -59,7 +60,15 @@ import { exportBid } from './lib/bidExporter';
 import { parseAircraftCode } from './lib/aircraft';
 import type { DraftBid } from '../shared/bidTypes';
 import { findBidCategoryParameters } from '../shared/bid-package-parameters';
-import { parseWideSchedulePdf } from './wideScheduleParser';
+import {
+  parseWideSchedulePdf,
+  type WideScheduleEvent,
+} from './wideScheduleParser';
+import { buildLineCalendarItems } from './lib/wide-line-calendar';
+import {
+  expandOperatingDates,
+  periodMonthNumber,
+} from '../shared/operatingDates';
 import { buildWideScheduleValidation } from './lib/wide-schedule-validation';
 import * as fs from 'fs/promises';
 
@@ -78,6 +87,8 @@ type ApiErrorCode =
   | 'INVALID_EXPORT_REQUEST'
   | 'INVALID_QUERY'
   | 'BID_OUTCOMES_FAILED'
+  | 'INVALID_INPUT'
+  | 'CALENDAR_FAILED'
   | 'NOT_FOUND';
 
 function sendApiError(
@@ -830,6 +841,129 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  /**
+   * One pilot's line from a stored wide schedule, as calendar items with
+   * trips linked to the matching bid-package pairing (by number and
+   * departure date) when that package has been uploaded.
+   */
+  const wideLineForCalendar = async (
+    category: {
+      month: string;
+      year: number;
+      base: string;
+      aircraft: string;
+      position: 'A' | 'B';
+    },
+    seniority: number
+  ) => {
+    const lines = await storage.getWideScheduleLines(category);
+    const line = lines.find(candidate => candidate.pilotSeniority === seniority);
+    if (!line) return null;
+    const events = (Array.isArray(line.events) ? line.events : []) as WideScheduleEvent[];
+    const monthNumber = periodMonthNumber(category.month);
+    if (!monthNumber) return null;
+
+    const fleet = parseAircraftCode(category.aircraft).baseType;
+    const bidPackage = (await storage.getBidPackages())
+      .filter(
+        pkg =>
+          pkg.status === 'completed' &&
+          pkg.year === category.year &&
+          periodMonthNumber(pkg.month) === monthNumber &&
+          pkg.base === category.base &&
+          parseAircraftCode(pkg.aircraft).baseType === fleet
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      )[0];
+    const codes = [
+      ...new Set(
+        events.filter(event => event.type === 'pairing').map(event => event.code)
+      ),
+    ];
+    const candidates =
+      bidPackage && codes.length > 0
+        ? await db
+            .select({
+              id: pairings.id,
+              pairingNumber: pairings.pairingNumber,
+              effectiveDates: pairings.effectiveDates,
+              operatingDows: pairings.operatingDows,
+              exceptDates: pairings.exceptDates,
+            })
+            .from(pairings)
+            .where(
+              and(
+                eq(pairings.bidPackageId, bidPackage.id),
+                inArray(pairings.pairingNumber, codes)
+              )
+            )
+        : [];
+    const resolvePairingId = (code: string, day: number) => {
+      const iso = `${category.year}-${String(monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const sameNumber = candidates.filter(c => c.pairingNumber === code);
+      const departingThatDay = sameNumber.find(c =>
+        expandOperatingDates(
+          {
+            effectiveDates: c.effectiveDates,
+            operatingDows: c.operatingDows as number[] | null,
+            exceptDates: c.exceptDates as string[] | null,
+          },
+          { month: monthNumber, year: category.year }
+        ).includes(iso)
+      );
+      return departingThatDay?.id ?? (sameNumber.length === 1 ? sameNumber[0].id : null);
+    };
+    return {
+      month: category.month,
+      year: category.year,
+      monthNumber,
+      category: `${category.base} ${category.aircraft}${category.position}`,
+      seniority,
+      bidPackageFound: Boolean(bidPackage),
+      items: buildLineCalendarItems(events, resolvePairingId),
+    };
+  };
+
+  // A pilot's own line from an uploaded wide schedule, for the calendar.
+  app.get('/api/wide-schedules/line', async (req, res) => {
+    const month = String(req.query.month ?? '').toUpperCase();
+    const year = Number(req.query.year);
+    const base = String(req.query.base ?? '').toUpperCase();
+    const aircraft = String(req.query.aircraft ?? '').toUpperCase();
+    const position = String(req.query.position ?? '').toUpperCase();
+    const seniority = Number(req.query.seniority);
+    if (
+      !/^[A-Z]{3}$/.test(month) ||
+      !Number.isInteger(year) ||
+      !base ||
+      !aircraft ||
+      (position !== 'A' && position !== 'B') ||
+      !Number.isInteger(seniority)
+    ) {
+      return sendApiError(res, 400, 'Invalid line request.', 'INVALID_INPUT');
+    }
+    try {
+      const line = await wideLineForCalendar(
+        { month, year, base, aircraft, position },
+        seniority
+      );
+      if (!line) {
+        return sendApiError(
+          res,
+          404,
+          `No line for seniority ${seniority} on the ${base} ${aircraft}${position} ${month} ${year} wide schedule.`,
+          'NOT_FOUND'
+        );
+      }
+      res.json(line);
+    } catch (error) {
+      console.error('Wide line lookup failed:', error);
+      return sendApiError(res, 500, 'Failed to read the wide schedule line.', 'CALENDAR_FAILED');
+    }
+  });
+
   app.post(
     '/api/wide-schedules/upload',
     handleMulterUpload(upload.single('wideSchedule')),
@@ -879,10 +1013,34 @@ export async function registerRoutes(app: Express) {
             events: line.events,
           }))
         );
+        // The pilot's own line (by profile seniority), so the upload can
+        // offer to put training, reserve and trips on the calendar.
+        let yourLine = null;
+        try {
+          const user = await storage.getPrimaryUser();
+          if (user?.seniorityNumber) {
+            yourLine = await wideLineForCalendar(
+              {
+                month: parsed.month,
+                year: parsed.year,
+                base: parsed.base,
+                aircraft: parsed.aircraft,
+                position: parsed.position,
+              },
+              user.seniorityNumber
+            );
+          }
+        } catch (error) {
+          console.warn('Could not prepare the uploader line:', error);
+        }
         res.json({
           category: `${parsed.base} ${parsed.aircraft}${parsed.position}`,
+          base: parsed.base,
+          aircraft: parsed.aircraft,
+          position: parsed.position,
           month: parsed.month,
           year: parsed.year,
+          yourLine,
           linesStored: stored.length,
           regularLines: stored.filter(line => line.lineType === 'regular')
             .length,
@@ -2849,6 +3007,56 @@ export async function registerRoutes(app: Express) {
   });
 
   // Remove pairing from calendar
+  // Calendar entries that are not bid-package trips (training, reserve,
+  // vacation, manual events). Trips keep using POST /api/calendar.
+  const calendarEntrySchema = z.object({
+    userId: z.coerce.number().int().positive(),
+    kind: z.enum(CALENDAR_ENTRY_KINDS),
+    title: z.string().trim().min(1).max(80),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    creditHours: z.coerce.number().min(0).max(999).nullable().optional(),
+    notes: z.string().max(500).nullable().optional(),
+  });
+  app.post('/api/calendar/entries', async (req, res) => {
+    const parsed = calendarEntrySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendApiError(res, 400, 'Invalid calendar entry.', 'INVALID_INPUT');
+    }
+    if (parsed.data.endDate < parsed.data.startDate) {
+      return sendApiError(
+        res,
+        400,
+        'The end must be after the start.',
+        'INVALID_INPUT'
+      );
+    }
+    try {
+      res.json(await storage.addCalendarActivity(parsed.data));
+    } catch (error) {
+      console.error('Error adding calendar entry:', error);
+      return sendApiError(res, 500, 'Failed to add calendar entry.', 'CALENDAR_FAILED');
+    }
+  });
+
+  app.delete('/api/calendar/entries/:eventId', async (req, res) => {
+    const eventId = Number(req.params.eventId);
+    const userId = Number(req.query.userId);
+    if (!Number.isInteger(eventId) || !Number.isInteger(userId)) {
+      return sendApiError(res, 400, 'Invalid calendar entry.', 'INVALID_INPUT');
+    }
+    try {
+      const removed = await storage.removeCalendarEntry(userId, eventId);
+      if (!removed) {
+        return sendApiError(res, 404, 'Calendar entry not found.', 'NOT_FOUND');
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing calendar entry:', error);
+      return sendApiError(res, 500, 'Failed to remove calendar entry.', 'CALENDAR_FAILED');
+    }
+  });
+
   app.delete('/api/calendar', async (req, res) => {
     try {
       const { userId, pairingId, eventId } = req.body;
@@ -3222,6 +3430,9 @@ export async function registerRoutes(app: Express) {
           id: userCalendarEvents.id,
           userId: userCalendarEvents.userId,
           pairingId: userCalendarEvents.pairingId,
+          kind: userCalendarEvents.kind,
+          title: userCalendarEvents.title,
+          creditHours: userCalendarEvents.creditHours,
           startDate: userCalendarEvents.startDate,
           endDate: userCalendarEvents.endDate,
           notes: userCalendarEvents.notes,

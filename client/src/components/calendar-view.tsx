@@ -27,11 +27,20 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { PairingModal } from './pairing-modal';
+import { AddCalendarEventDialog } from './add-calendar-event-dialog';
+import { api } from '@/lib/api';
+import { CALENDAR_KIND_LABELS } from '@/lib/line-calendar';
+import { CALENDAR_KIND_STYLES } from '@/lib/calendar-kinds';
+import type { CalendarEntryKind } from '@shared/schema';
 
 type CalendarEvent = {
   id: number;
   userId: number;
-  pairingId: number;
+  /** Null for training, reserve, vacation and manual entries. */
+  pairingId: number | null;
+  kind?: CalendarEntryKind;
+  title?: string | null;
+  creditHours?: string | null;
   startDate: string;
   endDate: string;
   notes?: string;
@@ -53,8 +62,22 @@ type CalendarEvent = {
       arrival?: string;
       arrivalTime?: string;
     }> | null;
-  };
+  } | null;
 };
+
+/** Credit of an entry: the trip's, or an activity's own (training pays). */
+const entryCredit = (event: CalendarEvent) =>
+  parseFloat(
+    String(event.pairing ? event.pairing.creditHours : (event.creditHours ?? 0))
+  ) || 0;
+
+/** Calendar days an entry occupies (trips use their pairing length). */
+const entryDays = (event: CalendarEvent) =>
+  event.pairing?.pairingDays ??
+  differenceInDays(
+    startOfDay(new Date(event.endDate)),
+    startOfDay(new Date(event.startDate))
+  ) + 1;
 
 type CalendarViewProps = {
   userId: number;
@@ -312,29 +335,15 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
   // Remove from calendar mutation
   const removeFromCalendarMutation = useMutation({
+    // Removes just this entry: a trip may be on the calendar on other dates,
+    // and training/reserve/vacation entries have no pairing at all.
     mutationFn: async ({
       userId,
-      pairingId,
       eventId,
     }: {
       userId: number;
-      pairingId: number;
       eventId: number;
-    }) => {
-      // eventId: remove only this departure; the trip may be on the
-      // calendar on other dates too.
-      const response = await fetch(
-        `/api/users/${userId}/calendar/${pairingId}?eventId=${eventId}`,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-      if (!response.ok) {
-        throw new Error('Failed to remove from calendar');
-      }
-      return response.json();
-    },
+    }) => api.removeCalendarEntry(userId, eventId),
     onSuccess: () => {
       // Invalidate both the calendar view query and the dashboard calendar query
       queryClient.invalidateQueries({
@@ -347,12 +356,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
       });
       // Also invalidate the dashboard's calendar events query to recalculate conflicts
       queryClient.invalidateQueries({ queryKey: ['calendarEvents', userId] });
-      toast({ title: 'Success', description: 'Pairing removed from calendar' });
+      toast({ title: 'Removed from calendar' });
     },
     onError: () => {
       toast({
         title: 'Error',
-        description: 'Failed to remove pairing from calendar',
+        description: 'Failed to remove the calendar entry',
         variant: 'destructive',
       });
     },
@@ -366,7 +375,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   // overnights). Fall back to scanning the route string when layovers are
   // missing (older rows or 1-day turns with no overnight).
   const getPairingLabel = (
-    pairing: CalendarEvent['pairing']
+    pairing: NonNullable<CalendarEvent['pairing']>
   ): string => {
     const layoverCities = (pairing.layovers ?? [])
       .map(l => (l?.city || '').toUpperCase())
@@ -463,8 +472,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     });
   };
 
-  const handleRemoveFromCalendar = (pairingId: number, eventId: number) => {
-    removeFromCalendarMutation.mutate({ userId, pairingId, eventId });
+  const handleRemoveFromCalendar = (eventId: number) => {
+    removeFromCalendarMutation.mutate({ userId, eventId });
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -474,11 +483,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   };
 
   // Calculate stats
-  const totalCreditHours = events.reduce((sum, event) => {
-    return (
-      sum + (parseFloat(event.pairing?.creditHours?.toString() || '0') || 0)
-    );
-  }, 0);
+  const totalCreditHours = events.reduce(
+    (sum, event) => sum + entryCredit(event),
+    0
+  );
 
   const totalBlockHours = events.reduce((sum, event) => {
     return (
@@ -487,9 +495,11 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
   }, 0);
 
   // Calculate total working days and days off
-  const totalWorkingDays = events.reduce((sum, event) => {
-    return sum + (event.pairing?.pairingDays || 0);
-  }, 0);
+  // Training and reserve are duty days too; vacation is time off.
+  const totalWorkingDays = events.reduce(
+    (sum, event) => (event.kind === 'vacation' ? sum : sum + entryDays(event)),
+    0
+  );
 
   // Calculate days off against the actual bid period length, not the
   // calendar month — Delta bid periods routinely span month boundaries
@@ -581,8 +591,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
         </Card>
       )}
       {/* Navigation Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
             size="sm"
@@ -591,7 +601,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-center min-w-[200px]">
+          <div className="min-w-0 text-center sm:min-w-[200px]">
             <h2 className="text-2xl font-bold">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
@@ -610,6 +620,14 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+        <AddCalendarEventDialog
+          userId={userId}
+          defaultDate={currentDate}
+          onAdded={() => {
+            queryClient.invalidateQueries({ queryKey: ['calendar'] });
+            queryClient.invalidateQueries({ queryKey: ['calendarEvents'] });
+          }}
+        />
         {crewRestViolations.length > 0 && (
           <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-2 rounded">
             <AlertTriangle className="h-4 w-4" />
@@ -721,7 +739,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       // B missing. Walk every letter from first to last
                       // present and carry the previous endpoint forward
                       // when a day has no flights (still in same city).
-                      const segments = event.pairing.flightSegments ?? [];
+                      const segments = event.pairing?.flightSegments ?? [];
                       const grouped = segments.reduce<Record<string, typeof segments>>(
                         (acc, seg) => {
                           const d = (seg?.date || 'A').toUpperCase();
@@ -730,7 +748,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                         },
                         {}
                       );
-                      const dayOrder = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+                      const dayOrder = 'ABCDEFGHIJKLMN'.split('');
                       const presentLetters = dayOrder.filter(d => grouped[d]);
                       const firstIdx = presentLetters.length
                         ? dayOrder.indexOf(presentLetters[0])
@@ -754,10 +772,16 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       // Fallback for older rows without flightSegments: use
                       // the last 3-letter airport code from the route string.
                       const routeAirports =
-                        (event.pairing.route || '').match(/\b[A-Z]{3}\b/g) ?? [];
+                        (event.pairing?.route || '').match(/\b[A-Z]{3}\b/g) ?? [];
                       const finalDestination =
                         routeAirports[routeAirports.length - 1] || '';
-                      const tripDays = event.pairing.pairingDays ?? span;
+                      const tripDays = event.pairing?.pairingDays ?? span;
+                      const kind: CalendarEntryKind = event.pairing
+                        ? 'pairing'
+                        : (event.kind ?? 'other');
+                      const label = event.pairing
+                        ? event.pairing.pairingNumber
+                        : event.title || CALENDAR_KIND_LABELS[kind];
 
                       const dayLabels = Array.from({ length: span }, (_, i) => {
                         const tripDayIdx = dayOffset + i;
@@ -774,8 +798,12 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                       return (
                         <div
                           key={event.id}
-                          className={`absolute pointer-events-auto group cursor-pointer ${
-                            isViolation ? 'bg-red-500' : 'bg-blue-600'
+                          className={`absolute pointer-events-auto group ${
+                            event.pairingId ? 'cursor-pointer' : ''
+                          } ${
+                            isViolation
+                              ? 'bg-red-500'
+                              : CALENDAR_KIND_STYLES[kind].bar
                           }`}
                           style={{
                             left: `${leftOffset}%`,
@@ -783,25 +811,33 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             top: `${topOffset}px`,
                             height: '24px',
                           }}
-                          onClick={() => setOpenPairingId(event.pairingId)}
+                          onClick={() =>
+                            event.pairingId && setOpenPairingId(event.pairingId)
+                          }
                         >
                           {/* Pairing number floats at the top-left so it doesn't
                               steal space from the day-aligned layover segments. */}
                           <span className="absolute top-0 left-1 text-[10px] font-bold leading-none text-white">
-                            {event.pairing.pairingNumber}
+                            {event.pairing ? label : ''}
                           </span>
 
-                          {/* One equal-width segment per visible day; each shows
-                              that day's overnight city (or home base on day N). */}
+                          {/* Trips: one segment per visible day showing that
+                              day's overnight city. Other entries: their title. */}
                           <div className="flex h-full text-white text-xs">
-                            {dayLabels.map((label, i) => (
-                              <div
-                                key={i}
-                                className="flex-1 flex items-center justify-center px-1 truncate border-r border-blue-400/40 last:border-r-0"
-                              >
+                            {event.pairing ? (
+                              dayLabels.map((dayLabel, i) => (
+                                <div
+                                  key={i}
+                                  className="flex-1 flex items-center justify-center px-1 truncate border-r border-blue-400/40 last:border-r-0"
+                                >
+                                  {dayLabel}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="flex flex-1 items-center justify-center truncate px-5 font-medium">
                                 {label}
                               </div>
-                            ))}
+                            )}
                           </div>
 
                           <Button
@@ -811,10 +847,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             className="absolute top-0 right-0 h-5 w-5 p-0 hover:bg-red-100"
                             onClick={e => {
                               e.stopPropagation();
-                              handleRemoveFromCalendar(
-                                event.pairingId,
-                                event.id
-                              );
+                              handleRemoveFromCalendar(event.id);
                             }}
                             disabled={removeFromCalendarMutation.isPending}
                           >
@@ -823,8 +856,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
 
                           {/* Tooltip on hover */}
                           <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                            {event.pairing.pairingNumber}:{' '}
-                            {event.pairing.creditHours} credit hrs
+                            {event.pairing ? '' : `${CALENDAR_KIND_LABELS[kind]} `}
+                            {label}
+                            {entryCredit(event) > 0 &&
+                              `: ${entryCredit(event)} credit hrs`}
                             {isViolation && (
                               <div className="text-red-300">
                                 ⚠️ FAA Rest Violation
@@ -872,7 +907,7 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-foreground">
-                      {events.length}
+                      {events.filter(event => event.pairing || event.kind === 'pairing').length}
                     </div>
                   </div>
                 </div>

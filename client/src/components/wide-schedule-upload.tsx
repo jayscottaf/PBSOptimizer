@@ -3,15 +3,21 @@ import { FileSpreadsheet, LoaderCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { MyLineCalendar } from '@/components/my-line-calendar';
 
 interface Props {
   onUploadSuccess?: () => void;
+  /** Profile user, for putting the uploader's own line on the calendar. */
+  userId?: number;
 }
 
-export function WideScheduleUpload({ onUploadSuccess }: Props) {
+type UploadResult = Awaited<ReturnType<typeof api.uploadWideSchedule>>;
+
+export function WideScheduleUpload({ onUploadSuccess, userId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [lastUpload, setLastUpload] = useState<UploadResult | null>(null);
   const { toast } = useToast();
 
   const upload = async (file?: File) => {
@@ -27,6 +33,7 @@ export function WideScheduleUpload({ onUploadSuccess }: Props) {
     setUploading(true);
     try {
       const result = await api.uploadWideSchedule(file);
+      setLastUpload(result);
       toast({
         title: 'Wide schedule imported',
         description: `${result.linesStored} anonymized ${result.category} lines stored for ${result.month} ${result.year}.`,
@@ -46,45 +53,56 @@ export function WideScheduleUpload({ onUploadSuccess }: Props) {
   };
 
   return (
-    <div
-      className={`cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-        dragging ? 'border-primary bg-primary/5' : 'hover:border-primary'
-      } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
-      onClick={() => inputRef.current?.click()}
-      onDragOver={event => {
-        event.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={event => {
-        event.preventDefault();
-        setDragging(false);
-      }}
-      onDrop={event => {
-        event.preventDefault();
-        setDragging(false);
-        void upload(event.dataTransfer.files[0]);
-      }}
-    >
-      {uploading ? (
-        <LoaderCircle className="mx-auto mb-2 h-8 w-8 animate-spin text-primary" />
-      ) : (
-        <FileSpreadsheet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+    <div className="space-y-3">
+      <div
+        className={`cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+          dragging ? 'border-primary bg-primary/5' : 'hover:border-primary'
+        } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={event => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={event => {
+          event.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={event => {
+          event.preventDefault();
+          setDragging(false);
+          void upload(event.dataTransfer.files[0]);
+        }}
+      >
+        {uploading ? (
+          <LoaderCircle className="mx-auto mb-2 h-8 w-8 animate-spin text-primary" />
+        ) : (
+          <FileSpreadsheet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+        )}
+        <p className="mb-2 text-sm text-muted-foreground">
+          {uploading
+            ? 'Anonymizing and importing…'
+            : 'Drop wide schedule PDF here or click to browse'}
+        </p>
+        <Button variant="link" className="h-auto p-0" disabled={uploading}>
+          Select File
+        </Button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          className="hidden"
+          onChange={event => void upload(event.target.files?.[0])}
+        />
+      </div>
+      {lastUpload && (
+        <MyLineCalendar
+          // Remount per upload so the preview resets to the new report.
+          key={`${lastUpload.category}-${lastUpload.month}-${lastUpload.year}-${lastUpload.linesStored}`}
+          userId={userId}
+          line={lastUpload.yourLine}
+          report={lastUpload}
+        />
       )}
-      <p className="mb-2 text-sm text-muted-foreground">
-        {uploading
-          ? 'Anonymizing and importing…'
-          : 'Drop wide schedule PDF here or click to browse'}
-      </p>
-      <Button variant="link" className="h-auto p-0" disabled={uploading}>
-        Select File
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".pdf,application/pdf"
-        className="hidden"
-        onChange={event => void upload(event.target.files?.[0])}
-      />
     </div>
   );
 }

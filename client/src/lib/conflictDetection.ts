@@ -62,6 +62,7 @@ export function detectConflicts(
       pairingNumber:
         event.pairing?.pairingNumber ||
         event.pairingNumber ||
+        event.title ||
         `Pairing ${event.pairingId}`,
     });
   });

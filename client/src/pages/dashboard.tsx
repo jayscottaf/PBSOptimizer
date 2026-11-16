@@ -2145,6 +2145,7 @@ export default function Dashboard() {
                     Wide Schedule
                   </h3>
                   <WideScheduleUpload
+                    userId={currentUser?.id}
                     onUploadSuccess={() => queryClient.invalidateQueries()}
                   />
                   <div className="flex items-center text-xs text-muted-foreground">

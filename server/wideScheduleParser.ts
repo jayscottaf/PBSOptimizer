@@ -6,7 +6,16 @@ export interface WideScheduleEvent {
   type: 'pairing' | 'reserve' | 'vacation' | 'training' | 'other';
   code: string;
   creditHours?: number;
+  /** Start time printed at the block's first day ("18:59"). */
   checkInTime?: string;
+  /** Release time printed at the block's last day ("13:38"). */
+  releaseTime?: string;
+  /**
+   * Day of the period month the block ends on. A block that ends in the
+   * next month ("Jan1" in a DEC report) continues past the month's last day
+   * (Dec 31 = 31, Jan 1 = 32), so period start + (endDay - 1) is its date.
+   */
+  endDay?: number;
 }
 
 export interface ParsedWideScheduleLine {
@@ -63,6 +72,44 @@ const eventType = (code: string): WideScheduleEvent['type'] => {
   if (/WD|TR|CQ/.test(code)) return 'training';
   return 'other';
 };
+
+// Column offsets measured back from a block's code (pairing number or
+// activity like "10WD"), which works for pilot rows and the shifted open-
+// time rows alike: start time -18, release time (or "Nov30" carry-in) -12,
+// credit -6. A carry-out label ("Jan1") sits in the start column beside the
+// release time.
+const START_DX = -18;
+const RELEASE_DX = -12;
+const CREDIT_DX = -6;
+const CLOCK = /^\d{2}:\d{2}$/;
+const MONTH_DAY = /^([A-Z][a-z]{2})(\d{1,2})$/;
+const MONTHS_3 = [
+  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+];
+const daysInMonth = (year: number, month: number) =>
+  new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+/** "Jan1" in a DEC 2026 report -> 32; "Nov30" -> 0; "Dec5" -> 5. */
+function periodDayOfLabel(
+  label: string,
+  periodMonth: number,
+  periodYear: number
+): number | null {
+  const m = label.match(MONTH_DAY);
+  const month = m ? MONTHS_3.indexOf(m[1].toUpperCase()) + 1 : 0;
+  if (!m || month === 0) return null;
+  const day = Number(m[2]);
+  if (month === periodMonth) return day;
+  if (month === (periodMonth % 12) + 1) {
+    return daysInMonth(periodYear, periodMonth) + day;
+  }
+  if (month === ((periodMonth + 10) % 12) + 1) {
+    const prevYear = periodMonth === 1 ? periodYear - 1 : periodYear;
+    return day - daysInMonth(prevYear, month);
+  }
+  return null;
+}
 
 const nearestDay = (y: number, dates: Array<{ day: number; y: number }>) =>
   dates.reduce((best, candidate) =>
@@ -125,33 +172,69 @@ export function parseWideSchedulePageItems(
         .map(item => item.text)
         .filter((flag, flagIndex, all) => all.indexOf(flag) === flagIndex);
 
+      const starts = rowItems
+        .filter(
+          item =>
+            (/^[A-Z]?\d{3,5}$/.test(item.text) &&
+              item.y >= dateItems[0].y - 8) ||
+            SCHEDULE_CODES.has(item.text)
+        )
+        .sort((a, b) => a.y - b.y);
+      const periodMonth = MONTHS_3.indexOf(period[1].toUpperCase()) + 1;
+      const periodYear = Number(period[2]);
+
       const events: WideScheduleEvent[] = [];
-      for (const item of rowItems) {
-        if (/^[A-Z]?\d{3,5}$/.test(item.text) && item.y >= dateItems[0].y - 8) {
-          const samePosition = rowItems.filter(
-            candidate => Math.abs(candidate.y - item.y) <= 1.5
-          );
-          const credit = samePosition
-            .map(candidate => duration(candidate.text))
-            .find(value => value !== undefined);
-          const checkInTime = samePosition.find(candidate =>
-            /^\d{2}:\d{2}$/.test(candidate.text)
-          )?.text;
-          events.push({
-            day: nearestDay(item.y, dateItems),
-            type: 'pairing',
-            code: item.text,
-            ...(credit !== undefined ? { creditHours: credit } : {}),
-            ...(checkInTime ? { checkInTime } : {}),
-          });
-        } else if (SCHEDULE_CODES.has(item.text)) {
-          events.push({
-            day: nearestDay(item.y, dateItems),
-            type: eventType(item.text),
-            code: item.text,
-          });
-        }
-      }
+      starts.forEach((item, startIndex) => {
+        const at = (dx: number) => (candidate: PdfTextItem) =>
+          Math.abs(candidate.x - (item.x + dx)) <= 1.5;
+        const samePosition = rowItems.filter(
+          candidate => Math.abs(candidate.y - item.y) <= 1.5
+        );
+        // Credit has its own column: start/release times ("00:00", "23:59")
+        // also look like durations, so any same-row duration was ambiguous.
+        const credit = samePosition
+          .filter(at(CREDIT_DX))
+          .map(candidate => duration(candidate.text))
+          .find(value => value !== undefined);
+        const checkInTime = samePosition.find(
+          candidate => at(START_DX)(candidate) && CLOCK.test(candidate.text)
+        )?.text;
+        // The release time is the first one printed after this block starts
+        // and before the next block does (same day for one-day blocks).
+        const nextStartY = starts[startIndex + 1]?.y ?? Infinity;
+        const release = rowItems
+          .filter(
+            candidate =>
+              at(RELEASE_DX)(candidate) &&
+              CLOCK.test(candidate.text) &&
+              candidate.y >= item.y - 1.5 &&
+              candidate.y < nextStartY - 1.5
+          )
+          .sort((a, b) => a.y - b.y)[0];
+        const carryOut = release
+          ? rowItems.find(
+              candidate =>
+                at(START_DX)(candidate) &&
+                MONTH_DAY.test(candidate.text) &&
+                Math.abs(candidate.y - release.y) <= 1.5
+            )
+          : undefined;
+        const endDay = carryOut
+          ? periodDayOfLabel(carryOut.text, periodMonth, periodYear)
+          : release
+            ? nearestDay(release.y, dateItems)
+            : null;
+        const isPairing = /^[A-Z]?\d{3,5}$/.test(item.text);
+        events.push({
+          day: nearestDay(item.y, dateItems),
+          type: isPairing ? 'pairing' : eventType(item.text),
+          code: item.text,
+          ...(credit !== undefined ? { creditHours: credit } : {}),
+          ...(checkInTime ? { checkInTime } : {}),
+          ...(release ? { releaseTime: release.text } : {}),
+          ...(endDay !== null ? { endDay } : {}),
+        });
+      });
 
       const uniqueEvents = events.filter(
         (event, eventIndex, all) =>

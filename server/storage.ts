@@ -33,6 +33,7 @@ import {
   type InsertUserCalendarEvent,
   userBidProfiles,
   type UserBidProfile,
+  type CalendarEntryKind,
 } from '../shared/schema';
 import { db } from './db';
 import {
@@ -60,6 +61,7 @@ import {
   lte,
   or,
   sql,
+  isNull,
   inArray,
 } from 'drizzle-orm';
 // Helper functions for decimal field parsing
@@ -299,19 +301,29 @@ export interface IStorage {
     pairingId: number,
     eventId?: number
   ): Promise<void>;
+  addCalendarActivity(entry: {
+    userId: number;
+    kind: CalendarEntryKind;
+    title: string;
+    startDate: Date;
+    endDate: Date;
+    creditHours?: number | null;
+    notes?: string | null;
+  }): Promise<UserCalendarEvent>;
+  removeCalendarEntry(userId: number, eventId: number): Promise<boolean>;
   getUserCalendarEvents(
     userId: number
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]>;
   getUserCalendarEventsForMonth(
     userId: number,
     month: number,
     year: number
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]>;
   getUserCalendarEventsInRange(
     userId: number,
     startDate: Date,
     endDate: Date
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]>;
 
   // Per-pilot bid preference profile (optimizer objective input)
   getBidProfile(userId: number): Promise<UserBidProfile | undefined>;
@@ -2852,16 +2864,88 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
+  /**
+   * A calendar entry that is not a bid-package trip (training, reserve,
+   * vacation, manual events, or a trip whose package was never uploaded).
+   * Re-adding the same entry (same kind and title, starting within 12h)
+   * updates it, so importing a wide schedule twice does not duplicate it.
+   */
+  async addCalendarActivity(entry: {
+    userId: number;
+    kind: CalendarEntryKind;
+    title: string;
+    startDate: Date;
+    endDate: Date;
+    creditHours?: number | null;
+    notes?: string | null;
+  }): Promise<UserCalendarEvent> {
+    const values = {
+      userId: entry.userId,
+      kind: entry.kind,
+      title: entry.title,
+      startDate: entry.startDate,
+      endDate: entry.endDate,
+      creditHours:
+        entry.creditHours === null || entry.creditHours === undefined
+          ? null
+          : entry.creditHours.toFixed(2),
+      notes: entry.notes ?? null,
+    };
+    const sameEntry = findSameDeparture(
+      await db
+        .select()
+        .from(userCalendarEvents)
+        .where(
+          and(
+            eq(userCalendarEvents.userId, entry.userId),
+            isNull(userCalendarEvents.pairingId),
+            eq(userCalendarEvents.kind, entry.kind),
+            eq(userCalendarEvents.title, entry.title)
+          )
+        ),
+      entry.startDate
+    );
+    if (sameEntry) {
+      const [updated] = await db
+        .update(userCalendarEvents)
+        .set(values)
+        .where(eq(userCalendarEvents.id, sameEntry.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(userCalendarEvents)
+      .values(values)
+      .returning();
+    return created;
+  }
+
+  /** Removes one calendar entry of this user; false if it was not theirs. */
+  async removeCalendarEntry(userId: number, eventId: number): Promise<boolean> {
+    const removed = await db
+      .delete(userCalendarEvents)
+      .where(
+        and(
+          eq(userCalendarEvents.id, eventId),
+          eq(userCalendarEvents.userId, userId)
+        )
+      )
+      .returning({ id: userCalendarEvents.id });
+    return removed.length > 0;
+  }
+
   async getUserCalendarEvents(
     userId: number
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]> {
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
         pairing: pairings,
       })
       .from(userCalendarEvents)
-      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      // Left join: training, reserve, vacation and manual entries have no
+      // pairing but still belong on the calendar (and in conflict checks).
+      .leftJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
       .where(eq(userCalendarEvents.userId, userId))
       .orderBy(asc(userCalendarEvents.startDate));
 
@@ -2872,7 +2956,7 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     month: number,
     year: number
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]> {
     const startDate = new Date(year, month - 1, 1); // month is 1-based, Date constructor expects 0-based
     const endDate = new Date(year, month, 0, 23, 59, 59); // Last day of month
 
@@ -2883,7 +2967,9 @@ export class DatabaseStorage implements IStorage {
         pairing: pairings,
       })
       .from(userCalendarEvents)
-      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      // Left join: training, reserve, vacation and manual entries have no
+      // pairing but still belong on the calendar (and in conflict checks).
+      .leftJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
       .where(
         and(
           eq(userCalendarEvents.userId, userId),
@@ -2901,14 +2987,16 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     startDate: Date,
     endDate: Date
-  ): Promise<(UserCalendarEvent & { pairing: Pairing })[]> {
+  ): Promise<(UserCalendarEvent & { pairing: Pairing | null })[]> {
     const result = await db
       .select({
         calendarEvent: userCalendarEvents,
         pairing: pairings,
       })
       .from(userCalendarEvents)
-      .innerJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
+      // Left join: training, reserve, vacation and manual entries have no
+      // pairing but still belong on the calendar (and in conflict checks).
+      .leftJoin(pairings, eq(userCalendarEvents.pairingId, pairings.id))
       .where(
         and(
           eq(userCalendarEvents.userId, userId),

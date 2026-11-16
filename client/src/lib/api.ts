@@ -9,6 +9,8 @@ import {
   loadFullPairingsCache,
 } from './offlineCache';
 import type { DraftBid, SimulationResult } from '@shared/bidTypes';
+import type { CalendarEntryKind } from '@shared/schema';
+import type { LineForCalendar } from './line-calendar';
 
 export interface BidEntryStep {
   expectText: string;
@@ -284,6 +286,9 @@ export const api = {
     }
     return response.json() as Promise<{
       category: string;
+      base: string;
+      aircraft: string;
+      position: string;
       month: string;
       year: number;
       linesStored: number;
@@ -291,7 +296,74 @@ export const api = {
       reserveLines: number;
       openLines: number;
       privacy: string;
+      /** The uploader's own line (by profile seniority), when on the report. */
+      yourLine: LineForCalendar | null;
     }>;
+  },
+
+  /** A pilot's line from a stored wide schedule, as calendar items. */
+  getWideLine: async (params: {
+    month: string;
+    year: number;
+    base: string;
+    aircraft: string;
+    position: string;
+    seniority: number;
+  }): Promise<LineForCalendar> => {
+    const query = new URLSearchParams(
+      Object.entries(params).map(([key, value]) => [key, String(value)])
+    );
+    const response = await fetch(`/api/wide-schedules/line?${query}`, {
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, 'Could not find that line')
+      );
+    }
+    return response.json();
+  },
+
+  /** A calendar entry that is not a bid-package trip. */
+  addCalendarEntry: async (entry: {
+    userId: number;
+    kind: CalendarEntryKind;
+    title: string;
+    startDate: Date;
+    endDate: Date;
+    creditHours?: number | null;
+    notes?: string | null;
+  }) => {
+    const response = await fetch('/api/calendar/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        ...entry,
+        startDate: entry.startDate.toISOString(),
+        endDate: entry.endDate.toISOString(),
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, 'Failed to add calendar entry')
+      );
+    }
+    return response.json();
+  },
+
+  /** Removes one calendar entry (trip departure or activity). */
+  removeCalendarEntry: async (userId: number, eventId: number) => {
+    const response = await fetch(
+      `/api/calendar/entries/${eventId}?userId=${userId}`,
+      { method: 'DELETE', credentials: 'include' }
+    );
+    if (!response.ok) {
+      throw new Error(
+        await getApiErrorMessage(response, 'Failed to remove calendar entry')
+      );
+    }
+    return response.json();
   },
 
   // Pairings

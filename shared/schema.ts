@@ -249,9 +249,16 @@ export const userCalendarEvents = pgTable(
     userId: integer('user_id')
       .references(() => users.id)
       .notNull(),
-    pairingId: integer('pairing_id')
-      .references(() => pairings.id)
-      .notNull(),
+    // Null for entries that are not a bid-package trip: training, reserve,
+    // vacation and manual events (see `kind`), or a trip imported from a
+    // wide schedule when its bid package was never uploaded.
+    pairingId: integer('pairing_id').references(() => pairings.id),
+    /** pairing | training | reserve | vacation | other */
+    kind: text('kind').notNull().default('pairing'),
+    /** Label for non-pairing entries, e.g. "10WD" or "Recurrent sim". */
+    title: text('title'),
+    /** Pay credit for non-pairing entries (training carries credit). */
+    creditHours: decimal('credit_hours', { precision: 5, scale: 2 }),
     startDate: timestamp('start_date').notNull(),
     endDate: timestamp('end_date').notNull(),
     notes: text('notes'),
@@ -403,6 +410,14 @@ export type InsertWideScheduleLine = z.infer<
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
 export type UserCalendarEvent = typeof userCalendarEvents.$inferSelect;
+export const CALENDAR_ENTRY_KINDS = [
+  'pairing',
+  'training',
+  'reserve',
+  'vacation',
+  'other',
+] as const;
+export type CalendarEntryKind = (typeof CALENDAR_ENTRY_KINDS)[number];
 export type InsertUserCalendarEvent = z.infer<
   typeof insertUserCalendarEventSchema
 >;
