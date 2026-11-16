@@ -315,12 +315,16 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     mutationFn: async ({
       userId,
       pairingId,
+      eventId,
     }: {
       userId: number;
       pairingId: number;
+      eventId: number;
     }) => {
+      // eventId: remove only this departure; the trip may be on the
+      // calendar on other dates too.
       const response = await fetch(
-        `/api/users/${userId}/calendar/${pairingId}`,
+        `/api/users/${userId}/calendar/${pairingId}?eventId=${eventId}`,
         {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
@@ -459,8 +463,8 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
     });
   };
 
-  const handleRemoveFromCalendar = (pairingId: number) => {
-    removeFromCalendarMutation.mutate({ userId, pairingId });
+  const handleRemoveFromCalendar = (pairingId: number, eventId: number) => {
+    removeFromCalendarMutation.mutate({ userId, pairingId, eventId });
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -807,7 +811,10 @@ export function CalendarView({ userId, bidPackageId }: CalendarViewProps) {
                             className="absolute top-0 right-0 h-5 w-5 p-0 hover:bg-red-100"
                             onClick={e => {
                               e.stopPropagation();
-                              handleRemoveFromCalendar(event.pairingId);
+                              handleRemoveFromCalendar(
+                                event.pairingId,
+                                event.id
+                              );
                             }}
                             disabled={removeFromCalendarMutation.isPending}
                           >

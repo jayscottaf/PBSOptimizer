@@ -49,6 +49,7 @@ import { parseCategoryStanding } from './lib/category-standing';
 import { parseAircraftCode, normalizedAircraftSqlExpr } from './lib/aircraft';
 import { countOperatingInstances, monthNameToNumber } from './lib/bidSimulator';
 import { ensureWideScheduleStorage } from './lib/wide-schedule-storage';
+import { findSameDeparture } from './lib/calendar-events';
 import {
   eq,
   and,
@@ -293,7 +294,11 @@ export interface IStorage {
   addUserCalendarEvent(
     event: InsertUserCalendarEvent
   ): Promise<UserCalendarEvent>;
-  removeUserCalendarEvent(userId: number, pairingId: number): Promise<void>;
+  removeUserCalendarEvent(
+    userId: number,
+    pairingId: number,
+    eventId?: number
+  ): Promise<void>;
   getUserCalendarEvents(
     userId: number
   ): Promise<(UserCalendarEvent & { pairing: Pairing })[]>;
@@ -2787,18 +2792,22 @@ export class DatabaseStorage implements IStorage {
     endDate: Date;
     notes?: string;
   }): Promise<UserCalendarEvent> {
-    // Check if this user already has a calendar event for this pairing
-    const existing = await db
-      .select()
-      .from(userCalendarEvents)
-      .where(
-        and(
-          eq(userCalendarEvents.userId, data.userId),
-          eq(userCalendarEvents.pairingId, data.pairingId)
-        )
-      );
+    // One entry per departure: matching on pairing alone made a second
+    // chosen date of a multi-departure trip overwrite the first.
+    const sameDeparture = findSameDeparture(
+      await db
+        .select()
+        .from(userCalendarEvents)
+        .where(
+          and(
+            eq(userCalendarEvents.userId, data.userId),
+            eq(userCalendarEvents.pairingId, data.pairingId)
+          )
+        ),
+      data.startDate
+    );
 
-    if (existing.length > 0) {
+    if (sameDeparture) {
       // Update existing event with new times (duty time calculation may have changed)
       const [updated] = await db
         .update(userCalendarEvents)
@@ -2807,7 +2816,7 @@ export class DatabaseStorage implements IStorage {
           endDate: data.endDate,
           notes: data.notes,
         })
-        .where(eq(userCalendarEvents.id, existing[0].id))
+        .where(eq(userCalendarEvents.id, sameDeparture.id))
         .returning();
 
       console.log('Updated existing calendar event with new times:', updated);
@@ -2823,16 +2832,22 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  /**
+   * Removes one calendar entry when `eventId` is given (a trip can be on the
+   * calendar once per departure), otherwise every entry for the pairing.
+   */
   async removeUserCalendarEvent(
     userId: number,
-    pairingId: number
+    pairingId: number,
+    eventId?: number
   ): Promise<void> {
     await db
       .delete(userCalendarEvents)
       .where(
         and(
           eq(userCalendarEvents.userId, userId),
-          eq(userCalendarEvents.pairingId, pairingId)
+          eq(userCalendarEvents.pairingId, pairingId),
+          ...(eventId !== undefined ? [eq(userCalendarEvents.id, eventId)] : [])
         )
       );
   }

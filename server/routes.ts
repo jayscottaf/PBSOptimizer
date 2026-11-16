@@ -2851,8 +2851,12 @@ export async function registerRoutes(app: Express) {
   // Remove pairing from calendar
   app.delete('/api/calendar', async (req, res) => {
     try {
-      const { userId, pairingId } = req.body;
-      await storage.removeUserCalendarEvent(userId, pairingId);
+      const { userId, pairingId, eventId } = req.body;
+      await storage.removeUserCalendarEvent(
+        userId,
+        pairingId,
+        eventId === undefined ? undefined : Number(eventId)
+      );
       res.json({ success: true });
     } catch (error) {
       console.error('Error removing calendar event:', error);
@@ -3259,15 +3263,15 @@ export async function registerRoutes(app: Express) {
     try {
       const userId = parseInt(req.params.userId);
       const pairingId = parseInt(req.params.pairingId);
+      // ?eventId= removes just that departure; without it, every entry for
+      // the pairing (older clients).
+      const eventId =
+        req.query.eventId === undefined ? undefined : Number(req.query.eventId);
+      if (eventId !== undefined && !Number.isInteger(eventId)) {
+        return res.status(400).json({ error: 'Invalid eventId' });
+      }
 
-      await db
-        .delete(userCalendarEvents)
-        .where(
-          and(
-            eq(userCalendarEvents.userId, userId),
-            eq(userCalendarEvents.pairingId, pairingId)
-          )
-        );
+      await storage.removeUserCalendarEvent(userId, pairingId, eventId);
 
       res.json({ success: true });
     } catch (error) {
